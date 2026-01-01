@@ -42,6 +42,7 @@ const expectedTables = [
   "Roles",
   "Users",
   "UserRoles",
+  "UserCredentials",
   "AssetCategories",
   "Locations",
   "Assets",
@@ -140,4 +141,3 @@ try {
 } finally {
   await pool.close();
 }
-
