@@ -14,6 +14,7 @@ const startProcess = (label, cwd, args) => {
     stdio: "inherit",
     shell: true,
     env: { ...process.env },
+    windowsHide: true,
   });
   child.on("error", (err) => {
     process.stderr.write(`[${label}] failed to start: ${String(err)}\n`);
@@ -24,26 +25,37 @@ const startProcess = (label, cwd, args) => {
 const backend = startProcess("backend", backendDir, ["run", "dev"]);
 const frontend = startProcess("frontend", rootDir, ["run", "dev"]);
 
+let shuttingDown = false;
+
 const shutdown = (exitCode) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   const children = [backend, frontend];
   for (const child of children) {
     if (child.pid && !child.killed) {
-      child.kill("SIGINT");
+      if (process.platform === "win32") {
+        spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+          stdio: "ignore",
+          shell: false,
+          windowsHide: true,
+        });
+      } else {
+        child.kill("SIGINT");
+      }
     }
   }
   process.exit(exitCode);
 };
 
 backend.on("exit", (code) => {
-  if (typeof code === "number" && code !== 0) shutdown(code);
+  if (typeof code === "number") shutdown(code);
   shutdown(0);
 });
 
 frontend.on("exit", (code) => {
-  if (typeof code === "number" && code !== 0) shutdown(code);
+  if (typeof code === "number") shutdown(code);
   shutdown(0);
 });
 
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
-

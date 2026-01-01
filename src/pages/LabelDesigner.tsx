@@ -95,7 +95,7 @@ export default function LabelDesigner() {
   });
   const [gridColumns, setGridColumns] = useState(3);
 
-  const updateConfig = (key: keyof LabelConfig, value: any) => {
+  const updateConfig = <K extends keyof LabelConfig>(key: K, value: LabelConfig[K]) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 

@@ -14,7 +14,8 @@ export default tseslint.config(
       "tailwind.config.ts",
     ],
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 2022,
+      sourceType: "module",
       globals: globals.node,
     },
     rules: {

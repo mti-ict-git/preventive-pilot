@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import type { Secret, SignOptions } from "jsonwebtoken";
 import { env } from "../config/env";
 
 export interface JwtClaims {
@@ -8,8 +9,8 @@ export interface JwtClaims {
 }
 
 export const signAccessToken = (claims: JwtClaims) =>
-  jwt.sign(claims, env.JWT_SECRET, {
-    expiresIn: env.JWT_EXPIRES_IN,
+  jwt.sign(claims, env.JWT_SECRET as Secret, {
+    expiresIn: env.JWT_EXPIRES_IN as SignOptions["expiresIn"],
   });
 
 export const verifyAccessToken = (token: string): JwtClaims => {
@@ -27,4 +28,3 @@ export const verifyAccessToken = (token: string): JwtClaims => {
   if (!sub || !username || !roles) throw new Error("Invalid token");
   return { sub, username, roles };
 };
-

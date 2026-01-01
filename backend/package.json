@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "create-local-superadmin": "tsx src/cli/createLocalSuperadmin.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -24,6 +25,7 @@
     "@types/cors": "^2.8.18",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/mssql": "^9.1.8",
     "tsx": "^4.20.5",
     "typescript": "^5.8.3"
   }

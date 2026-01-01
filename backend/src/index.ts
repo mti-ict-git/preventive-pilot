@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import { env } from "./config/env";
 import { authRouter } from "./routes/auth";
-import { ensureLocalSuperadmin } from "./db/users";
 
 const app = express();
 
@@ -22,12 +21,6 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/auth", authRouter);
 
-await ensureLocalSuperadmin({
-  username: env.LOCAL_SUPERADMIN_USERNAME,
-  password: env.LOCAL_SUPERADMIN_PASSWORD,
+app.listen(env.BACKEND_PORT, () => {
+  process.stdout.write(`Backend listening on http://localhost:${env.BACKEND_PORT}\n`);
 });
-
-app.listen(env.PORT, () => {
-  process.stdout.write(`Backend listening on http://localhost:${env.PORT}\n`);
-});
-

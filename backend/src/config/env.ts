@@ -22,7 +22,7 @@ const numberFromString = z
   });
 
 const EnvSchema = z.object({
-  PORT: z.string().optional().default("3001").pipe(numberFromString).pipe(z.number()),
+  BACKEND_PORT: z.string().optional().default("3001").pipe(numberFromString).pipe(z.number()),
   FRONTEND_ORIGIN: z.string().optional().default("http://localhost:8080"),
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES_IN: z.string().optional().default("8h"),
@@ -46,12 +46,8 @@ const EnvSchema = z.object({
   LDAP_CONNECT_TIMEOUT: z.string().optional().default("10000").pipe(numberFromString).pipe(z.number()),
   LDAP_TLS_REJECT_UNAUTHORIZED: z.string().optional().default("true").pipe(booleanFromString).pipe(z.boolean()),
   LDAP_GROUP_SUPERADMIN: z.string().min(1),
-
-  LOCAL_SUPERADMIN_USERNAME: z.string().min(1),
-  LOCAL_SUPERADMIN_PASSWORD: z.string().min(12),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
 
 export const env: Env = EnvSchema.parse(process.env);
-

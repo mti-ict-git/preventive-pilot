@@ -1,4 +1,4 @@
-import { Client, SearchScope } from "ldapts";
+import { Client } from "ldapts";
 import { env } from "../config/env";
 
 const escapeFilterValue = (value: string) =>
@@ -46,7 +46,7 @@ export const authenticateWithLdap = async (
     );
 
     const userSearch = await searchClient.search(env.LDAP_USER_SEARCH_BASE, {
-      scope: "sub" as SearchScope,
+      scope: "sub",
       filter,
       attributes: ["cn", "displayName", "mail", "telephoneNumber", "memberOf"],
     });
@@ -67,7 +67,7 @@ export const authenticateWithLdap = async (
 
     const groupFilter = `(&(objectClass=group)(distinguishedName=${escapeFilterValue(env.LDAP_GROUP_SUPERADMIN)})(member=${escapeFilterValue(userDn)}))`;
     const groupSearch = await searchClient.search(env.LDAP_GROUP_SEARCH_BASE, {
-      scope: "sub" as SearchScope,
+      scope: "sub",
       filter: groupFilter,
       attributes: ["distinguishedName"],
     });
@@ -94,4 +94,3 @@ export const authenticateWithLdap = async (
     await searchClient.unbind().catch(() => undefined);
   }
 };
-

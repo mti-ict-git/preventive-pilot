@@ -44,9 +44,10 @@ const loadUserRoles = async (userId: string) => {
       ].join("\n"),
     );
 
-  return result.recordset
-    .map((r) => (typeof r.RoleName === "string" ? r.RoleName : null))
-    .filter((v): v is string => Boolean(v));
+  const rows = result.recordset as Array<{ RoleName: unknown }>;
+  return rows
+    .map((row) => (typeof row.RoleName === "string" ? row.RoleName : null))
+    .filter((value): value is string => Boolean(value));
 };
 
 export const upsertLdapUser = async (input: {
@@ -252,4 +253,3 @@ export const authenticateLocalUser = async (input: {
     roles,
   };
 };
-
