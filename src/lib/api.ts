@@ -170,6 +170,16 @@ export const apiPatchAssetPm = async (input: {
   });
 };
 
+export const apiBulkSetAssetPmEnabled = async (input: {
+  assetIds: string[];
+  pmEnabled: boolean;
+}): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>("/api/assets/pm/bulk", {
+    method: "POST",
+    body: input,
+  });
+};
+
 export type TaskListItem = {
   id: string;
   taskNumber: string;

@@ -29,6 +29,11 @@ const UpdatePmSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "No updates" });
 
+const BulkSetPmEnabledSchema = z.object({
+  assetIds: z.array(z.string().uuid()).min(1).max(200),
+  pmEnabled: z.boolean(),
+});
+
 export const assetsRouter = Router();
 
 assetsRouter.use(requireAuth);
@@ -84,7 +89,7 @@ assetsRouter.get("/", async (req, res) => {
       "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
       "  AND (@locationId IS NULL OR a.LocationId = @locationId)",
       "  AND (@status IS NULL OR a.AssetStatus = @status)",
-      "  AND (@pmEnabled IS NULL OR s.PMEnabled = @pmEnabled)",
+      "  AND (@pmEnabled IS NULL OR ISNULL(s.PMEnabled, 0) = @pmEnabled)",
       "  AND (",
       "    @search IS NULL",
       "    OR a.Name LIKE @search",
@@ -124,6 +129,73 @@ assetsRouter.get("/", async (req, res) => {
       },
     })),
   });
+});
+
+assetsRouter.post("/pm/bulk", async (req, res) => {
+  const parsed = BulkSetPmEnabledSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const assetIds = Array.from(new Set(parsed.data.assetIds));
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const idSelect = assetIds
+      .map((_, idx) => (idx === 0 ? `SELECT @id${idx} AS AssetId` : `UNION ALL SELECT @id${idx}`))
+      .join("\n");
+
+    const request = tx.request().input("pmEnabled", sql.Bit, parsed.data.pmEnabled ? 1 : 0);
+    for (const [idx, id] of assetIds.entries()) {
+      request.input(`id${idx}`, sql.UniqueIdentifier, id);
+    }
+
+    const existsResult = await request.query(
+      [
+        "WITH ids AS (",
+        idSelect,
+        ")",
+        "SELECT COUNT(1) AS ExistingCount",
+        "FROM ids i",
+        "INNER JOIN pm.Assets a ON a.AssetId = i.AssetId",
+        "WHERE a.IsArchived = 0",
+      ].join("\n"),
+    );
+
+    const countRow = existsResult.recordset[0] as { ExistingCount?: number } | undefined;
+    const existingCount = typeof countRow?.ExistingCount === "number" ? countRow.ExistingCount : 0;
+    if (existingCount !== assetIds.length) {
+      res.status(400).json({ message: "Some assets were not found" });
+      await tx.rollback();
+      return;
+    }
+
+    await request.query(
+      [
+        "WITH ids AS (",
+        idSelect,
+        ")",
+        "MERGE pm.AssetPMSettings WITH (HOLDLOCK) AS target",
+        "USING ids AS source",
+        "ON target.AssetId = source.AssetId",
+        "WHEN MATCHED THEN",
+        "  UPDATE SET",
+        "    PMEnabled = @pmEnabled,",
+        "    UpdatedAt = sysutcdatetime()",
+        "WHEN NOT MATCHED THEN",
+        "  INSERT (AssetId, PMEnabled)",
+        "  VALUES (source.AssetId, @pmEnabled);",
+      ].join("\n"),
+    );
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
 });
 
 assetsRouter.get("/:assetId", async (req, res) => {
@@ -241,7 +313,7 @@ assetsRouter.patch("/:assetId/pm", async (req, res) => {
           "  INSERT (AssetId, PMEnabled, DefaultTemplateId, NextPMDueAt)",
           "  VALUES (",
           "    @assetId,",
-          "    COALESCE(@pmEnabled, 1),",
+          "    COALESCE(@pmEnabled, 0),",
           "    @defaultTemplateId,",
           "    @nextPmDueAt",
           "  );",
@@ -255,4 +327,3 @@ assetsRouter.patch("/:assetId/pm", async (req, res) => {
     throw err;
   }
 });
-

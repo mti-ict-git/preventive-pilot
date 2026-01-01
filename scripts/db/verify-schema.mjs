@@ -61,6 +61,7 @@ const expectedTables = [
   "AuditLog",
   "SystemLog",
   "SnipeSyncRuns",
+  "SnipeItSettings",
 ];
 
 const pool = await sql.connect(config);

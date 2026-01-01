@@ -40,3 +40,21 @@
 - Fixed manual job run endpoint to force-run Snipe-IT sync regardless of scheduler flag.
 - Centralized job run locking to prevent duplicate concurrent runs.
 - Improved Snipe-IT manual run errors (400 when integration not configured).
+
+## 2026-01-01 17:26
+- Added DB-backed Snipe-IT settings endpoints with env fallback.
+- Wired System Settings UI to edit, save, and test Snipe-IT integration.
+- Updated system status and job scheduling to respect DB Snipe-IT sync settings.
+
+## 2026-01-01 17:37
+- Hardened Snipe-IT settings save endpoint when pm.SnipeItSettings is missing.
+- Made system status tolerate missing SnipeSyncRuns table.
+
+## 2026-01-01 17:53
+- Fixed Snipe-IT sync upserts to match existing categories/locations by name.
+- Resolved UNIQUE constraint crash when categories already existed without Snipe IDs.
+
+## 2026-01-01 18:07
+- Fixed Assets page bulk selection to respect current filters.
+- Stabilized Assets page memo dependencies to satisfy hook lint rules.
+- Adjusted assets API PM filtering and default PMEnabled insert behavior.

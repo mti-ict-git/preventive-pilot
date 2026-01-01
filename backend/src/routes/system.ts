@@ -21,6 +21,32 @@ const nullIfBlank = (value: unknown): unknown => {
   return typeof value === "string" && value.trim() === "" ? null : value;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null;
+};
+
+const getSqlErrorNumber = (err: unknown): number | null => {
+  if (!isRecord(err)) return null;
+
+  const directNumber = err.number;
+  if (typeof directNumber === "number") return directNumber;
+
+  const originalError = err.originalError;
+  if (isRecord(originalError) && typeof originalError.number === "number") return originalError.number;
+
+  const precedingErrors = err.precedingErrors;
+  if (Array.isArray(precedingErrors)) {
+    const first = precedingErrors[0];
+    if (isRecord(first) && typeof first.number === "number") return first.number;
+  }
+
+  return null;
+};
+
+const isInvalidObjectNameError = (err: unknown): boolean => {
+  return getSqlErrorNumber(err) === 208;
+};
+
 const normalizeInstanceUrl = (value: string): string => {
   const trimmed = value.replace(/\/+$/, "");
   return trimmed.replace(/\/api\/v1\/?$/i, "");
@@ -109,18 +135,23 @@ systemRouter.get("/status", async (_req, res) => {
     databaseOk = false;
   }
 
-  const snipeLastRun = await db
-    .request()
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  SnipeSyncRunId, StartedAt, CompletedAt, Status, AssetsProcessed, ErrorMessage",
-        "FROM pm.SnipeSyncRuns",
-        "ORDER BY StartedAt DESC",
-      ].join("\n"),
-    );
+  let lastRunRow: Record<string, unknown> | null = null;
+  try {
+    const snipeLastRun = await db
+      .request()
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  SnipeSyncRunId, StartedAt, CompletedAt, Status, AssetsProcessed, ErrorMessage",
+          "FROM pm.SnipeSyncRuns",
+          "ORDER BY StartedAt DESC",
+        ].join("\n"),
+      );
 
-  const lastRunRow = snipeLastRun.recordset[0] as Record<string, unknown> | undefined;
+    lastRunRow = (snipeLastRun.recordset[0] as Record<string, unknown> | undefined) ?? null;
+  } catch {
+    lastRunRow = null;
+  }
 
   const snipeItSettings = await loadEffectiveSnipeItSettings();
 
@@ -177,19 +208,30 @@ systemRouter.put("/snipeit-settings", requireSystemAdmin, async (req, res) => {
   const baseUrl = parsed.data.baseUrl;
   const apiToken = parsed.data.apiToken === undefined ? current.apiToken : parsed.data.apiToken;
 
-  const db = await getDb();
-  await db
-    .request()
-    .input("baseUrl", sql.NVarChar(512), baseUrl)
-    .input("apiToken", sql.NVarChar(2048), apiToken)
-    .input("autoSyncEnabled", sql.Bit, parsed.data.autoSyncEnabled)
-    .input("syncIntervalMinutes", sql.Int, parsed.data.syncIntervalMinutes)
-    .query(
-      [
-        "INSERT INTO pm.SnipeItSettings (BaseUrl, ApiToken, AutoSyncEnabled, SyncIntervalMinutes)",
-        "VALUES (@baseUrl, @apiToken, @autoSyncEnabled, @syncIntervalMinutes)",
-      ].join("\n"),
-    );
+  try {
+    const db = await getDb();
+    await db
+      .request()
+      .input("baseUrl", sql.NVarChar(512), baseUrl)
+      .input("apiToken", sql.NVarChar(2048), apiToken)
+      .input("autoSyncEnabled", sql.Bit, parsed.data.autoSyncEnabled)
+      .input("syncIntervalMinutes", sql.Int, parsed.data.syncIntervalMinutes)
+      .query(
+        [
+          "INSERT INTO pm.SnipeItSettings (BaseUrl, ApiToken, AutoSyncEnabled, SyncIntervalMinutes)",
+          "VALUES (@baseUrl, @apiToken, @autoSyncEnabled, @syncIntervalMinutes)",
+        ].join("\n"),
+      );
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      res.status(503).json({ message: "Database schema missing pm.SnipeItSettings. Run npm run db:apply-schema." });
+      return;
+    }
+
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+    return;
+  }
 
   const updated = await loadEffectiveSnipeItSettings();
   res.json({

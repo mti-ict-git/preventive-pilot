@@ -148,10 +148,11 @@ const upsertCategories = async (categories: SnipeCategory[]): Promise<void> => {
       .query(
         [
           "MERGE pm.AssetCategories WITH (HOLDLOCK) AS target",
-          "USING (SELECT @snipeCategoryId AS SnipeCategoryId) AS source",
-          "ON target.SnipeCategoryId = source.SnipeCategoryId",
+          "USING (SELECT @snipeCategoryId AS SnipeCategoryId, @name AS Name) AS source",
+          "ON target.SnipeCategoryId = source.SnipeCategoryId OR target.Name = source.Name",
           "WHEN MATCHED THEN",
           "  UPDATE SET",
+          "    SnipeCategoryId = source.SnipeCategoryId,",
           "    Name = @name,",
           "    IsActive = 1,",
           "    UpdatedAt = sysutcdatetime()",
@@ -173,10 +174,11 @@ const upsertLocations = async (locations: SnipeLocation[]): Promise<void> => {
       .query(
         [
           "MERGE pm.Locations WITH (HOLDLOCK) AS target",
-          "USING (SELECT @snipeLocationId AS SnipeLocationId) AS source",
-          "ON target.SnipeLocationId = source.SnipeLocationId",
+          "USING (SELECT @snipeLocationId AS SnipeLocationId, @name AS Name) AS source",
+          "ON target.SnipeLocationId = source.SnipeLocationId OR target.Name = source.Name",
           "WHEN MATCHED THEN",
           "  UPDATE SET",
+          "    SnipeLocationId = source.SnipeLocationId,",
           "    Name = @name,",
           "    IsActive = 1,",
           "    UpdatedAt = sysutcdatetime()",
