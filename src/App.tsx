@@ -14,6 +14,7 @@ import Scheduling from "./pages/Scheduling";
 import Notifications from "./pages/Notifications";
 import UserManagement from "./pages/UserManagement";
 import SystemSettings from "./pages/SystemSettings";
+import LabelDesigner from "./pages/LabelDesigner";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
 import { getAccessToken } from "@/lib/auth";
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/settings" element={<SystemSettings />} />
+            <Route path="/label-designer" element={<LabelDesigner />} />
           </Route>
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
