@@ -26,9 +26,8 @@ const Tasks = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
-  const now = new Date();
-
   const listQueryInput = useMemo(() => {
+    const now = new Date();
     if (activeTab === "overdue") {
       return { overdue: true, page: 1, pageSize: 100 };
     }
@@ -51,7 +50,7 @@ const Tasks = () => {
     }
 
     return { page: 1, pageSize: 100 };
-  }, [activeTab, now]);
+  }, [activeTab]);
 
   const tasksQuery = useQuery({
     queryKey: ["tasks", listQueryInput],
@@ -66,7 +65,7 @@ const Tasks = () => {
 
   type UiStatus = "upcoming" | "in_progress" | "due_today" | "overdue" | "completed";
 
-  const getUiStatus = (task: TaskListItem): UiStatus => {
+  const getUiStatus = (task: TaskListItem, now: Date): UiStatus => {
     const due = parseISO(task.scheduledDueAt);
     const status = task.status.toLowerCase();
     if (status === "completed") return "completed";
@@ -89,25 +88,33 @@ const Tasks = () => {
   };
 
   const statItems = useMemo(() => {
+    const now = new Date();
     const items = statsQuery.data?.items ?? [];
     const total = items.length;
-    const dueTodayCount = items.filter((t) => isSameDay(parseISO(t.scheduledDueAt), now) && t.status !== "completed").length;
-    const overdueCount = items.filter((t) => isBefore(parseISO(t.scheduledDueAt), now) && t.status !== "completed").length;
-    const completedCount = items.filter((t) => t.status === "completed").length;
+    const dueTodayCount = items.filter((t) => {
+      const status = t.status.toLowerCase();
+      return isSameDay(parseISO(t.scheduledDueAt), now) && status !== "completed";
+    }).length;
+    const overdueCount = items.filter((t) => {
+      const status = t.status.toLowerCase();
+      return isBefore(parseISO(t.scheduledDueAt), now) && status !== "completed";
+    }).length;
+    const completedCount = items.filter((t) => t.status.toLowerCase() === "completed").length;
     return [
       { label: "Total Tasks", value: total, color: "primary" },
       { label: "Due Today", value: dueTodayCount, color: "warning" },
       { label: "Overdue", value: overdueCount, color: "destructive" },
       { label: "Completed", value: completedCount, color: "success" },
     ];
-  }, [now, statsQuery.data?.items]);
+  }, [statsQuery.data?.items]);
 
   const filteredTasks = useMemo(() => {
+    const now = new Date();
     const items = tasksQuery.data?.items ?? [];
     const q = searchQuery.trim().toLowerCase();
     return items
       .map((task) => {
-        const uiStatus = getUiStatus(task);
+        const uiStatus = getUiStatus(task, now);
         const pic = task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned";
         const dueDate = format(parseISO(task.scheduledDueAt), "yyyy-MM-dd");
         const progress = uiStatus === "completed" ? 100 : uiStatus === "in_progress" ? 50 : 0;

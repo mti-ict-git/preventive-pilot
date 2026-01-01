@@ -39,7 +39,6 @@ import {
   apiListAssets,
   apiPatchAssetPm,
   apiRunJob,
-  type Asset,
   ApiError,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -108,30 +107,6 @@ const Assets = () => {
       });
     },
   });
-
-  const getStatusBadge = (status: string | null) => {
-    if (!status) {
-      return (
-        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
-          Unknown
-        </Badge>
-      );
-    }
-    const styles = {
-      deployed: "bg-success/20 text-success border-success/30",
-      pending: "bg-warning/20 text-warning border-warning/30",
-      archived: "bg-muted text-muted-foreground border-border",
-    };
-    const normalized = status.toLowerCase();
-    return (
-      <Badge
-        variant="outline"
-        className={styles[normalized as keyof typeof styles] ?? "bg-muted text-muted-foreground border-border"}
-      >
-        {status}
-      </Badge>
-    );
-  };
 
   const getPMStatus = (nextPM: string | null, pmEnabled: boolean) => {
     if (!pmEnabled) return { status: "disabled", icon: XCircle, color: "text-muted-foreground" };

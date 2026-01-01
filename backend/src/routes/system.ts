@@ -131,6 +131,47 @@ systemRouter.get("/logs", async (req, res) => {
   });
 });
 
+systemRouter.get("/lookups", async (_req, res) => {
+  const db = await getDb();
+
+  const rolesResult = await db
+    .request()
+    .query(
+      [
+        "SELECT",
+        "  RoleId, Name",
+        "FROM pm.Roles",
+        "ORDER BY Name ASC",
+      ].join("\n"),
+    );
+
+  const categoriesResult = await db
+    .request()
+    .query(
+      [
+        "SELECT",
+        "  CategoryId, Name, IsActive",
+        "FROM pm.AssetCategories",
+        "ORDER BY Name ASC",
+      ].join("\n"),
+    );
+
+  const roleRows = rolesResult.recordset as Array<Record<string, unknown>>;
+  const categoryRows = categoriesResult.recordset as Array<Record<string, unknown>>;
+
+  res.json({
+    roles: roleRows.map((r) => ({
+      id: r.RoleId,
+      name: r.Name,
+    })),
+    assetCategories: categoryRows.map((c) => ({
+      id: c.CategoryId,
+      name: c.Name,
+      isActive: c.IsActive,
+    })),
+  });
+});
+
 systemRouter.post("/jobs/:jobName/run", requireSystemAdmin, async (req, res) => {
   const parsed = StatusJobSchema.safeParse(req.params.jobName);
   if (!parsed.success) {
@@ -164,4 +205,3 @@ systemRouter.post("/jobs/:jobName/run", requireSystemAdmin, async (req, res) => 
     runningJobs[jobName] = false;
   }
 });
-

@@ -270,6 +270,104 @@ export const apiGetComplianceReport = async (input: { from: string; to: string }
   return apiFetchJson<ComplianceReportResponse>(`/api/reports/compliance?${params.toString()}`);
 };
 
+export type LookupRole = {
+  id: string;
+  name: string;
+};
+
+export type LookupAssetCategory = {
+  id: string;
+  name: string;
+  isActive: boolean;
+};
+
+export type LookupsResponse = {
+  roles: LookupRole[];
+  assetCategories: LookupAssetCategory[];
+};
+
+export const apiGetLookups = async (): Promise<LookupsResponse> => {
+  return apiFetchJson<LookupsResponse>("/api/system/lookups");
+};
+
+export type TemplateSummary = {
+  id: string;
+  name: string;
+  description: string | null;
+  intervalDays: number;
+  applicableCategory: { id: string; name: string | null } | null;
+  estimatedDurationMinutes: number | null;
+  requiredRole: { id: string; name: string | null } | null;
+  isActive: boolean;
+  version: number;
+  updatedAt: string;
+};
+
+export type TemplateChecklistItem = {
+  id: string;
+  sortOrder: number;
+  itemText: string;
+  isMandatory: boolean;
+  requiresNotes: boolean;
+  requiresPassFail: boolean;
+  isActive: boolean;
+};
+
+export type TemplateDetail = TemplateSummary & {
+  checklistItems: TemplateChecklistItem[];
+};
+
+export const apiListTemplates = async (input?: { active?: boolean }): Promise<{ items: TemplateSummary[] }> => {
+  const params = new URLSearchParams();
+  if (input?.active !== undefined) params.set("active", input.active ? "true" : "false");
+  const query = params.toString();
+  return apiFetchJson<{ items: TemplateSummary[] }>(`/api/templates${query ? `?${query}` : ""}`);
+};
+
+export const apiGetTemplate = async (templateId: string): Promise<TemplateDetail> => {
+  return apiFetchJson<TemplateDetail>(`/api/templates/${templateId}`);
+};
+
+export type UpsertTemplateChecklistItemInput = {
+  id?: string;
+  sortOrder: number;
+  itemText: string;
+  isMandatory: boolean;
+  requiresNotes: boolean;
+  requiresPassFail: boolean;
+  isActive: boolean;
+};
+
+export type CreateTemplateInput = {
+  name: string;
+  description?: string | null;
+  intervalDays: number;
+  applicableCategoryId?: string | null;
+  estimatedDurationMinutes?: number | null;
+  requiredRoleId?: string | null;
+  isActive: boolean;
+  checklistItems: UpsertTemplateChecklistItemInput[];
+};
+
+export const apiCreateTemplate = async (input: CreateTemplateInput): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>("/api/templates", {
+    method: "POST",
+    body: input,
+  });
+};
+
+export type UpdateTemplateInput = Partial<CreateTemplateInput> & {
+  templateId: string;
+};
+
+export const apiUpdateTemplate = async (input: UpdateTemplateInput): Promise<{ ok: true }> => {
+  const { templateId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/templates/${templateId}`, {
+    method: "PUT",
+    body,
+  });
+};
+
 export type AssignmentRule = {
   RuleId: string;
   Priority: number;

@@ -2,13 +2,11 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Calendar,
   Clock,
   Settings,
   Plus,
   ChevronLeft,
   ChevronRight,
-  Server,
   AlertTriangle,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
