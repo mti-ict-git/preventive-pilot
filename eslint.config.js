@@ -7,6 +7,21 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   { ignores: ["dist"] },
   {
+    files: [
+      "backend/**/*.{ts,tsx}",
+      "scripts/**/*.{ts,tsx,mts,cts,mjs,cjs}",
+      "vite.config.ts",
+      "tailwind.config.ts",
+    ],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.node,
+    },
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
+  {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
     languageOptions: {

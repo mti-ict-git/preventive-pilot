@@ -16,8 +16,15 @@ import UserManagement from "./pages/UserManagement";
 import SystemSettings from "./pages/SystemSettings";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
+import { getAccessToken } from "@/lib/auth";
 
 const queryClient = new QueryClient();
+
+const ProtectedLayout = () => {
+  const token = getAccessToken();
+  if (!token) return <Navigate to="/login" replace />;
+  return <DashboardLayout />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -30,7 +37,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           
           {/* Dashboard Layout Routes */}
-          <Route element={<DashboardLayout />}>
+          <Route element={<ProtectedLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/assets" element={<Assets />} />
             <Route path="/assets/:assetId" element={<AssetDetail />} />
