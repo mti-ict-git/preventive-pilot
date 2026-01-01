@@ -60,6 +60,26 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Database schema (SQL Server)
+
+This repo includes an idempotent SQL Server schema script at `db/schema.sql` and a runner that reads database connection settings from `.env`.
+
+Run:
+
+```sh
+npm run db:apply-schema
+```
+
+Required environment variables:
+
+- `DB_SERVER`
+- `DB_DATABASE`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_PORT`
+- `DB_ENCRYPT`
+- `DB_TRUST_SERVER_CERTIFICATE`
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.

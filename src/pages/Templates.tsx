@@ -39,6 +39,24 @@ interface Template {
   usageCount: number;
 }
 
+interface ChecklistItemInput {
+  id: string;
+  text: string;
+  mandatory: boolean;
+  requiresNotes: boolean;
+  passFailRequired: boolean;
+}
+
+interface TemplateFormData {
+  name: string;
+  description: string;
+  category: string;
+  interval: number;
+  estimatedDuration: string;
+  requiredRole: string;
+  checklistItems: ChecklistItemInput[];
+}
+
 const Templates = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -124,7 +142,7 @@ const Templates = () => {
       template.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleCreateTemplate = (data: any) => {
+  const handleCreateTemplate = (data: TemplateFormData) => {
     const newTemplate: Template = {
       id: templates.length + 1,
       name: data.name,
