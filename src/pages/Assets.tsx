@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import {
   Server,
   Search,
@@ -36,6 +37,7 @@ import {
 const Assets = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useNavigate();
 
   const assets = [
     {
@@ -237,6 +239,7 @@ const Assets = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
                     className="border-border hover:bg-muted/30 transition-colors cursor-pointer group"
+                    onClick={() => navigate(`/assets/${asset.id}`)}
                   >
                     <TableCell>
                       <div className="flex items-center gap-3">

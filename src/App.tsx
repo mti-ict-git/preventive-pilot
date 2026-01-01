@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Assets from "./pages/Assets";
+import AssetDetail from "./pages/AssetDetail";
 import Templates from "./pages/Templates";
 import Tasks from "./pages/Tasks";
 import Reports from "./pages/Reports";
@@ -32,6 +33,7 @@ const App = () => (
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/assets" element={<Assets />} />
+            <Route path="/assets/:assetId" element={<AssetDetail />} />
             <Route path="/templates" element={<Templates />} />
             <Route path="/scheduling" element={<Scheduling />} />
             <Route path="/tasks" element={<Tasks />} />
