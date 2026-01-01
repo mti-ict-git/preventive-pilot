@@ -16,6 +16,7 @@
     "jsonwebtoken": "^9.0.2",
     "ldapts": "^8.0.10",
     "mssql": "^11.0.1",
+    "vite_react_shadcn_ts": "file:..",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -27,4 +28,3 @@
     "typescript": "^5.8.3"
   }
 }
-
