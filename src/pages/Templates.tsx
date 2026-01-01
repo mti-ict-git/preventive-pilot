@@ -22,11 +22,30 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import TemplateFormDialog from "@/components/templates/TemplateFormDialog";
+import TemplateDetailDialog from "@/components/templates/TemplateDetailDialog";
+import { toast } from "@/hooks/use-toast";
+
+interface Template {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+  interval: number;
+  checklistItems: number;
+  estimatedDuration: string;
+  requiredRole: string;
+  lastModified: string;
+  usageCount: number;
+}
 
 const Templates = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
-  const templates = [
+  const [templates, setTemplates] = useState<Template[]>([
     {
       id: 1,
       name: "PM Laptop Quarterly",
@@ -87,16 +106,16 @@ const Templates = () => {
       lastModified: "2025-10-05",
       usageCount: 12,
     },
-  ];
+  ]);
 
   const getCategoryColor = (category: string) => {
-    const colors = {
+    const colors: Record<string, string> = {
       Laptop: "bg-primary/20 text-primary border-primary/30",
       Server: "bg-accent/20 text-accent border-accent/30",
       Network: "bg-warning/20 text-warning border-warning/30",
       Printer: "bg-success/20 text-success border-success/30",
     };
-    return colors[category as keyof typeof colors] || "bg-muted text-muted-foreground";
+    return colors[category] || "bg-muted text-muted-foreground";
   };
 
   const filteredTemplates = templates.filter(
@@ -104,6 +123,50 @@ const Templates = () => {
       template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       template.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleCreateTemplate = (data: any) => {
+    const newTemplate: Template = {
+      id: templates.length + 1,
+      name: data.name,
+      description: data.description,
+      category: data.category,
+      interval: data.interval,
+      checklistItems: data.checklistItems.length,
+      estimatedDuration: data.estimatedDuration || "N/A",
+      requiredRole: data.requiredRole,
+      lastModified: new Date().toISOString().split("T")[0],
+      usageCount: 0,
+    };
+    setTemplates([newTemplate, ...templates]);
+  };
+
+  const handleDuplicate = (template: Template) => {
+    const duplicated: Template = {
+      ...template,
+      id: templates.length + 1,
+      name: `${template.name} (Copy)`,
+      usageCount: 0,
+      lastModified: new Date().toISOString().split("T")[0],
+    };
+    setTemplates([duplicated, ...templates]);
+    toast({
+      title: "Template Duplicated",
+      description: `${duplicated.name} has been created.`,
+    });
+  };
+
+  const handleDelete = (id: number) => {
+    setTemplates(templates.filter((t) => t.id !== id));
+    toast({
+      title: "Template Deleted",
+      description: "The template has been removed.",
+    });
+  };
+
+  const handleTemplateClick = (template: Template) => {
+    setSelectedTemplate(template);
+    setDetailDialogOpen(true);
+  };
 
   return (
     <div className="min-h-screen">
@@ -121,7 +184,10 @@ const Templates = () => {
               className="pl-10 bg-muted/50"
             />
           </div>
-          <Button className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90">
+          <Button
+            onClick={() => setCreateDialogOpen(true)}
+            className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+          >
             <Plus className="w-4 h-4" />
             Create Template
           </Button>
@@ -135,6 +201,7 @@ const Templates = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
+              onClick={() => handleTemplateClick(template)}
               className="glass rounded-xl p-5 hover:border-primary/50 transition-all duration-300 cursor-pointer group"
             >
               <div className="flex items-start justify-between mb-4">
@@ -142,19 +209,38 @@ const Templates = () => {
                   <FileText className="w-6 h-6 text-primary" />
                 </div>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
                       <MoreVertical className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem className="gap-2">
+                    <DropdownMenuItem
+                      className="gap-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedTemplate(template);
+                        setDetailDialogOpen(true);
+                      }}
+                    >
                       <Edit2 className="w-4 h-4" /> Edit Template
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="gap-2">
+                    <DropdownMenuItem
+                      className="gap-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDuplicate(template);
+                      }}
+                    >
                       <Copy className="w-4 h-4" /> Duplicate
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="gap-2 text-destructive">
+                    <DropdownMenuItem
+                      className="gap-2 text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(template.id);
+                      }}
+                    >
                       <Trash2 className="w-4 h-4" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -193,7 +279,45 @@ const Templates = () => {
             </motion.div>
           ))}
         </div>
+
+        {filteredTemplates.length === 0 && (
+          <div className="text-center py-12">
+            <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">No templates found</h3>
+            <p className="text-muted-foreground mb-4">
+              {searchQuery ? "Try a different search term" : "Create your first PM template to get started"}
+            </p>
+            {!searchQuery && (
+              <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Create Template
+              </Button>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Create Template Dialog */}
+      <TemplateFormDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onSubmit={handleCreateTemplate}
+      />
+
+      {/* Template Detail Dialog */}
+      <TemplateDetailDialog
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+        template={selectedTemplate}
+        onEdit={() => {
+          setDetailDialogOpen(false);
+          // Could open edit dialog here
+          toast({
+            title: "Edit Mode",
+            description: "Template editing coming soon.",
+          });
+        }}
+      />
     </div>
   );
 };
