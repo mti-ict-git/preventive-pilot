@@ -14,3 +14,7 @@
 - Applied SQL Server schema changes (SchemaInfo version 2) and verified successfully.
 - Added `npm run dev:full` to run frontend + backend together.
 - Updated backend to use `BACKEND_PORT` (avoids conflict with existing `PORT=8080`).
+
+## 2026-01-01 15:07
+- Removed env-based local superadmin bootstrap; local accounts are DB-backed.
+- Added backend CLI to create local superadmin in the database.

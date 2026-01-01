@@ -13,6 +13,30 @@ const escapeFilterValue = (value: string) =>
     return map[ch] ?? ch;
   });
 
+const normalizeLoginIdentifier = (identifier: string): { raw: string; username: string } => {
+  const trimmed = identifier.trim();
+  const withoutDomain = trimmed.includes("\\") ? trimmed.split("\\").pop() ?? trimmed : trimmed;
+  const username = withoutDomain.includes("@")
+    ? withoutDomain.slice(0, Math.max(0, withoutDomain.indexOf("@")))
+    : withoutDomain;
+  return { raw: withoutDomain, username };
+};
+
+const buildUserSearchFilter = (identifier: string): string => {
+  const normalized = normalizeLoginIdentifier(identifier);
+  const base = env.LDAP_USER_SEARCH_FILTER.replace(
+    "{username}",
+    escapeFilterValue(normalized.username),
+  );
+
+  if (normalized.raw.includes("@")) {
+    const escaped = escapeFilterValue(normalized.raw);
+    return `(|${base}(mail=${escaped})(userPrincipalName=${escaped}))`;
+  }
+
+  return base;
+};
+
 export interface LdapUserProfile {
   username: string;
   dn: string;
@@ -33,17 +57,15 @@ const createClient = () =>
   });
 
 export const authenticateWithLdap = async (
-  username: string,
+  identifier: string,
   password: string,
 ): Promise<LdapUserProfile> => {
+  const normalized = normalizeLoginIdentifier(identifier);
   const searchClient = createClient();
   try {
     await searchClient.bind(env.LDAP_BIND_DN, env.LDAP_BIND_PASSWORD);
 
-    const filter = env.LDAP_USER_SEARCH_FILTER.replace(
-      "{username}",
-      escapeFilterValue(username),
-    );
+    const filter = buildUserSearchFilter(normalized.raw);
 
     const userSearch = await searchClient.search(env.LDAP_USER_SEARCH_BASE, {
       scope: "sub",
@@ -83,7 +105,7 @@ export const authenticateWithLdap = async (
     const phone = typeof userEntry.telephoneNumber === "string" ? userEntry.telephoneNumber : null;
 
     return {
-      username,
+      username: normalized.username,
       dn: userDn,
       displayName,
       email,

@@ -209,13 +209,19 @@ export const ensureLocalSuperadmin = async (input: {
 };
 
 export const authenticateLocalUser = async (input: {
-  username: string;
+  identifier: string;
   password: string;
 }): Promise<UserRecord> => {
+  const trimmed = input.identifier.trim();
+  const usernameCandidate = trimmed.includes("@")
+    ? trimmed.slice(0, Math.max(0, trimmed.indexOf("@")))
+    : null;
+
   const db = await getDb();
   const userResult = await db
     .request()
-    .input("username", sql.NVarChar(128), input.username)
+    .input("identifier", sql.NVarChar(256), trimmed)
+    .input("usernameCandidate", sql.NVarChar(128), usernameCandidate)
     .query(
       [
         "SELECT TOP (1)",
@@ -226,7 +232,13 @@ export const authenticateLocalUser = async (input: {
         "  c.PasswordHash AS PasswordHash",
         "FROM pm.Users u",
         "INNER JOIN pm.UserCredentials c ON c.UserId = u.UserId",
-        "WHERE u.Username = @username AND u.IsActive = 1",
+        "WHERE",
+        "  u.IsActive = 1",
+        "  AND (",
+        "    u.Username = @identifier",
+        "    OR u.Email = @identifier",
+        "    OR (@usernameCandidate IS NOT NULL AND u.Username = @usernameCandidate)",
+        "  )",
       ].join("\n"),
     );
 

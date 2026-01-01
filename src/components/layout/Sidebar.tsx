@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
@@ -18,6 +18,7 @@ import {
   QrCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { clearAccessToken } from "@/lib/auth";
 
 interface NavItem {
   title: string;
@@ -45,6 +46,7 @@ const settingsNav: NavItem[] = [
 const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = location.pathname === item.href;
@@ -165,7 +167,13 @@ const Sidebar = () => {
           )}
         </button>
         
-        <button className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-destructive hover:bg-destructive/10 transition-colors">
+        <button
+          onClick={() => {
+            clearAccessToken();
+            navigate("/login");
+          }}
+          className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
+        >
           <LogOut className="w-5 h-5" />
           <AnimatePresence>
             {!collapsed && (

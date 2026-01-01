@@ -5,11 +5,15 @@ import { Eye, EyeOff, Server, Shield, Wrench, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { apiLogin, type LoginProvider } from "@/lib/api";
+import { setAccessToken } from "@/lib/auth";
 
 const Login = () => {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [provider, setProvider] = useState<LoginProvider>("ldap");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -18,16 +22,30 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Simulate login - replace with actual auth
-    setTimeout(() => {
-      setIsLoading(false);
+
+    try {
+      const result = await apiLogin({
+        identifier,
+        password,
+        provider,
+      });
+
+      setAccessToken(result.accessToken);
       toast({
         title: "Welcome back!",
         description: "Redirecting to dashboard...",
       });
       navigate("/dashboard");
-    }, 1500);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Login failed";
+      toast({
+        title: "Sign-in failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const features = [
@@ -133,16 +151,24 @@ const Login = () => {
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">
+              <Tabs value={provider} onValueChange={(v) => setProvider(v as LoginProvider)}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="ldap">LDAP</TabsTrigger>
+                  <TabsTrigger value="local">Local</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground">Email Address</Label>
+                <Label htmlFor="identifier" className="text-foreground">Username or Email</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="identifier"
+                  type="text"
+                  placeholder="username or name@company.com"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   className="h-12 bg-muted/50 border-border focus:border-primary"
                   required
+                  autoComplete="username"
                 />
               </div>
 
@@ -165,6 +191,7 @@ const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-12 bg-muted/50 border-border focus:border-primary pr-12"
                     required
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"

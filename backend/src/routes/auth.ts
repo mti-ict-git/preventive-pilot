@@ -5,11 +5,18 @@ import { signAccessToken } from "../auth/jwt";
 import { authenticateLocalUser, upsertLdapUser } from "../db/users";
 import { requireAuth } from "../middleware/requireAuth";
 
-const LoginSchema = z.object({
-  username: z.string().min(1),
-  password: z.string().min(1),
-  provider: z.enum(["ldap", "local"]).default("ldap"),
-});
+const LoginSchema = z
+  .object({
+    identifier: z.string().min(1).optional(),
+    username: z.string().min(1).optional(),
+    password: z.string().min(1),
+    provider: z.enum(["ldap", "local"]).default("ldap"),
+  })
+  .transform((data) => ({
+    identifier: (data.identifier ?? data.username ?? "").trim(),
+    password: data.password,
+    provider: data.provider,
+  }));
 
 export const authRouter = Router();
 
@@ -20,10 +27,15 @@ authRouter.post("/login", async (req, res) => {
     return;
   }
 
+  if (!parsed.data.identifier) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
   try {
     if (parsed.data.provider === "local") {
       const user = await authenticateLocalUser({
-        username: parsed.data.username,
+        identifier: parsed.data.identifier,
         password: parsed.data.password,
       });
 
@@ -46,7 +58,7 @@ authRouter.post("/login", async (req, res) => {
       return;
     }
 
-    const profile = await authenticateWithLdap(parsed.data.username, parsed.data.password);
+    const profile = await authenticateWithLdap(parsed.data.identifier, parsed.data.password);
     const roles = profile.isSuperadmin ? ["Superadmin"] : ["Viewer"];
     const user = await upsertLdapUser({
       username: profile.username,
@@ -87,4 +99,3 @@ authRouter.get("/me", requireAuth, async (req, res) => {
     },
   });
 });
-
