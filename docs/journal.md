@@ -25,3 +25,8 @@
 
 ## 2026-01-01 15:20
 - Wired the web login screen to backend auth API and token storage.
+
+## 2026-01-01 15:45
+- Implemented Phase 1 backend APIs for assets, templates, scheduling, tasks, reports, and notifications.
+- Added role-based middleware and enforced admin-only actions for sensitive endpoints.
+- Wired new API routers into the backend entrypoint and validated with lint and backend typecheck.
