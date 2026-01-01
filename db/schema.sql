@@ -23,6 +23,11 @@ BEGIN
   INSERT INTO pm.SchemaInfo (Version) VALUES (2);
 END;
 
+IF (SELECT ISNULL(MAX(Version), 0) FROM pm.SchemaInfo) < 3
+BEGIN
+  INSERT INTO pm.SchemaInfo (Version) VALUES (3);
+END;
+
 IF OBJECT_ID(N'pm.Roles', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.Roles (
@@ -391,6 +396,20 @@ BEGIN
     AssetsProcessed int NULL,
     ErrorMessage nvarchar(2048) NULL,
     CONSTRAINT PK_pm_SnipeSyncRuns PRIMARY KEY CLUSTERED (SnipeSyncRunId)
+  );
+END;
+
+IF OBJECT_ID(N'pm.SnipeItSettings', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.SnipeItSettings (
+    SnipeItSettingsId uniqueidentifier NOT NULL CONSTRAINT DF_pm_SnipeItSettings_Id DEFAULT (newsequentialid()),
+    BaseUrl nvarchar(512) NULL,
+    ApiToken nvarchar(2048) NULL,
+    AutoSyncEnabled bit NOT NULL CONSTRAINT DF_pm_SnipeItSettings_AutoSyncEnabled DEFAULT (0),
+    SyncIntervalMinutes int NOT NULL CONSTRAINT DF_pm_SnipeItSettings_SyncIntervalMinutes DEFAULT (60),
+    CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_SnipeItSettings_CreatedAt DEFAULT (sysutcdatetime()),
+    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_SnipeItSettings_UpdatedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_SnipeItSettings PRIMARY KEY CLUSTERED (SnipeItSettingsId)
   );
 END;
 

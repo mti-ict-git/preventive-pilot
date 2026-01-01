@@ -344,3 +344,32 @@ templatesRouter.put("/:templateId", requireSuperadmin, async (req, res) => {
   }
 });
 
+templatesRouter.delete("/:templateId", requireSuperadmin, async (req, res) => {
+  const templateId = req.params.templateId;
+  if (!z.string().uuid().safeParse(templateId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const updated = await db
+    .request()
+    .input("templateId", sql.UniqueIdentifier, templateId)
+    .query(
+      [
+        "UPDATE pm.PMTemplates",
+        "SET",
+        "  IsActive = 0,",
+        "  Version = Version + 1,",
+        "  UpdatedAt = sysutcdatetime()",
+        "WHERE TemplateId = @templateId",
+      ].join("\n"),
+    );
+
+  if (updated.rowsAffected[0] === 0) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  res.json({ ok: true });
+});

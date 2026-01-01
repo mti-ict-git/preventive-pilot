@@ -31,19 +31,40 @@ type SnipeHardware = {
   assigned_to?: { name?: string | null } | null;
 };
 
-const normalizeBaseUrl = (value: string): string => value.replace(/\/+$/, "");
+export type SnipeSyncRunOptions = {
+  force?: boolean;
+};
 
-const authHeaders = (): HeadersInit => {
-  const token = env.SNIPEIT_API_TOKEN;
-  if (!token) return {};
+type SnipeItSettings = {
+  baseUrl: string | null;
+  apiToken: string | null;
+  autoSyncEnabled: boolean;
+  syncIntervalMinutes: number;
+};
+
+type SnipeItRequestConfig = {
+  apiBaseUrl: string;
+  apiToken: string;
+};
+
+const normalizeInstanceUrl = (value: string): string => {
+  const trimmed = value.replace(/\/+$/, "");
+  return trimmed.replace(/\/api\/v1\/?$/i, "");
+};
+
+const toApiBaseUrl = (instanceUrl: string): string => {
+  return `${normalizeInstanceUrl(instanceUrl)}/api/v1`;
+};
+
+const authHeaders = (token: string): HeadersInit => {
   return {
     Authorization: `Bearer ${token}`,
     Accept: "application/json",
   };
 };
 
-const fetchJson = async <T>(url: string): Promise<T> => {
-  const response = await fetch(url, { headers: authHeaders() });
+const fetchJson = async <T>(config: SnipeItRequestConfig, url: string): Promise<T> => {
+  const response = await fetch(url, { headers: authHeaders(config.apiToken) });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     throw new Error(`Snipe-IT request failed (${response.status}) ${body}`.trim());
@@ -51,19 +72,14 @@ const fetchJson = async <T>(url: string): Promise<T> => {
   return (await response.json()) as T;
 };
 
-const listAll = async <T>(endpoint: string): Promise<T[]> => {
-  const base = env.SNIPEIT_BASE_URL;
-  if (!base) return [];
-
-  const normalized = normalizeBaseUrl(base);
-
+const listAll = async <T>(config: SnipeItRequestConfig, endpoint: string): Promise<T[]> => {
   const limit = 200;
   let offset = 0;
   const items: T[] = [];
 
   for (;;) {
-    const url = `${normalized}${endpoint}${endpoint.includes("?") ? "&" : "?"}limit=${limit}&offset=${offset}`;
-    const page = await fetchJson<SnipeListResponse<T>>(url);
+    const url = `${config.apiBaseUrl}${endpoint}${endpoint.includes("?") ? "&" : "?"}limit=${limit}&offset=${offset}`;
+    const page = await fetchJson<SnipeListResponse<T>>(config, url);
     const rows = page.rows ?? [];
     items.push(...rows);
 
@@ -73,6 +89,53 @@ const listAll = async <T>(endpoint: string): Promise<T[]> => {
   }
 
   return items;
+};
+
+const loadSnipeItSettings = async (): Promise<SnipeItSettings> => {
+  let dbRow: Record<string, unknown> | null = null;
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  BaseUrl, ApiToken, AutoSyncEnabled, SyncIntervalMinutes",
+          "FROM pm.SnipeItSettings",
+          "ORDER BY UpdatedAt DESC",
+        ].join("\n"),
+      );
+    dbRow = (result.recordset[0] as Record<string, unknown> | undefined) ?? null;
+  } catch {
+    dbRow = null;
+  }
+
+  const baseUrl =
+    (typeof dbRow?.BaseUrl === "string" && dbRow.BaseUrl.trim() ? dbRow.BaseUrl.trim() : null) ??
+    (env.SNIPEIT_BASE_URL?.trim() ? env.SNIPEIT_BASE_URL.trim() : null);
+
+  const apiToken =
+    (typeof dbRow?.ApiToken === "string" && dbRow.ApiToken.trim() ? dbRow.ApiToken.trim() : null) ??
+    (env.SNIPEIT_API_TOKEN?.trim() ? env.SNIPEIT_API_TOKEN.trim() : null);
+
+  const autoSyncEnabled =
+    typeof dbRow?.AutoSyncEnabled === "boolean"
+      ? dbRow.AutoSyncEnabled
+      : typeof dbRow?.AutoSyncEnabled === "number"
+        ? dbRow.AutoSyncEnabled === 1
+        : env.JOB_SNIPE_SYNC_ENABLED;
+
+  const syncIntervalMinutes =
+    typeof dbRow?.SyncIntervalMinutes === "number" && Number.isFinite(dbRow.SyncIntervalMinutes)
+      ? dbRow.SyncIntervalMinutes
+      : env.JOB_SNIPE_SYNC_INTERVAL_MINUTES;
+
+  return {
+    baseUrl,
+    apiToken,
+    autoSyncEnabled,
+    syncIntervalMinutes,
+  };
 };
 
 const upsertCategories = async (categories: SnipeCategory[]): Promise<void> => {
@@ -207,15 +270,44 @@ const upsertAssets = async (assets: SnipeHardware[]): Promise<number> => {
   return processed;
 };
 
-export const runSnipeSyncJob = async (): Promise<void> => {
-  if (!env.JOB_SNIPE_SYNC_ENABLED) return;
-  if (!env.SNIPEIT_BASE_URL || !env.SNIPEIT_API_TOKEN) {
+export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<void> => {
+  const settings = await loadSnipeItSettings();
+  if (!options?.force && !settings.autoSyncEnabled) return;
+
+  if (!settings.baseUrl || !settings.apiToken) {
     await writeSystemLog({
       level: "warn",
       message: "Snipe-IT sync skipped: missing SNIPEIT_BASE_URL or SNIPEIT_API_TOKEN",
     });
     return;
   }
+
+  if (!options?.force && settings.syncIntervalMinutes > 0) {
+    const db = await getDb();
+    const lastRun = await db
+      .request()
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  StartedAt",
+          "FROM pm.SnipeSyncRuns",
+          "ORDER BY StartedAt DESC",
+        ].join("\n"),
+      );
+    const lastRow = lastRun.recordset[0] as { StartedAt?: Date } | undefined;
+    if (lastRow?.StartedAt instanceof Date) {
+      const diffMs = Date.now() - lastRow.StartedAt.getTime();
+      const diffMinutes = diffMs / (60 * 1000);
+      if (diffMinutes >= 0 && diffMinutes < settings.syncIntervalMinutes) {
+        return;
+      }
+    }
+  }
+
+  const requestConfig: SnipeItRequestConfig = {
+    apiBaseUrl: toApiBaseUrl(settings.baseUrl),
+    apiToken: settings.apiToken,
+  };
 
   const db = await getDb();
   const started = await db
@@ -234,9 +326,9 @@ export const runSnipeSyncJob = async (): Promise<void> => {
   await writeSystemLog({ level: "info", message: "Snipe-IT sync started", context: jobContext });
 
   try {
-    const categories = await listAll<SnipeCategory>("/api/v1/categories");
-    const locations = await listAll<SnipeLocation>("/api/v1/locations");
-    const assets = await listAll<SnipeHardware>("/api/v1/hardware");
+    const categories = await listAll<SnipeCategory>(requestConfig, "/categories");
+    const locations = await listAll<SnipeLocation>(requestConfig, "/locations");
+    const assets = await listAll<SnipeHardware>(requestConfig, "/hardware");
 
     await upsertCategories(categories);
     await upsertLocations(locations);
@@ -288,4 +380,3 @@ export const runSnipeSyncJob = async (): Promise<void> => {
     throw err;
   }
 };
-

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -23,12 +23,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import TemplateFormDialog from "@/components/templates/TemplateFormDialog";
 import TemplateDetailDialog from "@/components/templates/TemplateDetailDialog";
 import { toast } from "@/hooks/use-toast";
 import {
   ApiError,
   apiCreateTemplate,
+  apiDeleteTemplate,
   apiGetLookups,
   apiGetTemplate,
   apiListTemplates,
@@ -45,6 +56,8 @@ const Templates = () => {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editInitialData, setEditInitialData] = useState<TemplateFormData | undefined>(undefined);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -81,68 +94,13 @@ const Templates = () => {
     },
   });
 
-  const [templates, setTemplates] = useState<Template[]>([
-    {
-      id: 1,
-      name: "PM Laptop Quarterly",
-      description: "Standard quarterly maintenance for laptops and notebooks",
-      category: "Laptop",
-      interval: 90,
-      checklistItems: 12,
-      estimatedDuration: "45 min",
-      requiredRole: "Technician",
-      lastModified: "2025-12-15",
-      usageCount: 156,
+  const deleteMutation = useMutation({
+    mutationFn: (templateId: string) => apiDeleteTemplate(templateId),
+    onSuccess: async (_data, templateId) => {
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
+      await queryClient.invalidateQueries({ queryKey: ["template", templateId] });
     },
-    {
-      id: 2,
-      name: "PM Server Monthly",
-      description: "Monthly server health check and maintenance",
-      category: "Server",
-      interval: 30,
-      checklistItems: 18,
-      estimatedDuration: "2 hours",
-      requiredRole: "Technician",
-      lastModified: "2025-12-20",
-      usageCount: 89,
-    },
-    {
-      id: 3,
-      name: "PM Network Device",
-      description: "Quarterly maintenance for switches and routers",
-      category: "Network",
-      interval: 90,
-      checklistItems: 10,
-      estimatedDuration: "30 min",
-      requiredRole: "Technician",
-      lastModified: "2025-11-10",
-      usageCount: 45,
-    },
-    {
-      id: 4,
-      name: "PM Printer Monthly",
-      description: "Monthly printer cleaning and maintenance",
-      category: "Printer",
-      interval: 30,
-      checklistItems: 8,
-      estimatedDuration: "20 min",
-      requiredRole: "Technician",
-      lastModified: "2025-12-01",
-      usageCount: 234,
-    },
-    {
-      id: 5,
-      name: "PM Server Semi-Annual",
-      description: "Comprehensive server maintenance every 6 months",
-      category: "Server",
-      interval: 180,
-      checklistItems: 25,
-      estimatedDuration: "4 hours",
-      requiredRole: "Senior Technician",
-      lastModified: "2025-10-05",
-      usageCount: 12,
-    },
-  ]);
+  });
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
@@ -190,7 +148,7 @@ const Templates = () => {
     };
   };
 
-  const toEditInitialData = (template: TemplateDetail): TemplateFormData => {
+  const toEditInitialData = useCallback((template: TemplateDetail): TemplateFormData => {
     return {
       name: template.name,
       description: template.description ?? "",
@@ -208,7 +166,14 @@ const Templates = () => {
         isActive: i.isActive,
       })),
     };
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!editDialogOpen) return;
+    if (editInitialData) return;
+    if (!templateDetailQuery.data) return;
+    setEditInitialData(toEditInitialData(templateDetailQuery.data));
+  }, [editDialogOpen, editInitialData, templateDetailQuery.data, toEditInitialData]);
 
   const filteredTemplates = useMemo(() => {
     const items = templatesQuery.data?.items ?? [];
@@ -282,12 +247,30 @@ const Templates = () => {
     }
   };
 
-  const handleDelete = () => {
-    toast({
-      title: "Delete not available",
-      description: "Template deletion is not implemented in the API yet.",
-      variant: "destructive",
-    });
+  const handleDelete = (input: { id: string; name: string }) => {
+    setDeleteTarget(input);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    try {
+      await deleteMutation.mutateAsync(deleteTarget.id);
+      toast({ title: "Template deleted", description: `${deleteTarget.name} has been deactivated.` });
+
+      if (selectedTemplateId === deleteTarget.id) {
+        setDetailDialogOpen(false);
+        setEditDialogOpen(false);
+        setSelectedTemplateId(null);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : "Failed to delete template";
+      toast({ title: "Delete failed", description: message, variant: "destructive" });
+    } finally {
+      setDeleteDialogOpen(false);
+      setDeleteTarget(null);
+    }
   };
 
   const roles = lookupsQuery.data?.roles ?? [];
@@ -345,7 +328,9 @@ const Templates = () => {
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedTemplateId(template.id);
-                        setDetailDialogOpen(true);
+                        setEditInitialData(undefined);
+                        setDetailDialogOpen(false);
+                        setEditDialogOpen(true);
                       }}
                     >
                       <Edit2 className="w-4 h-4" /> Edit Template
@@ -363,7 +348,7 @@ const Templates = () => {
                       className="gap-2 text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDelete();
+                        handleDelete({ id: template.id, name: template.name });
                       }}
                     >
                       <Trash2 className="w-4 h-4" /> Delete
@@ -460,6 +445,36 @@ const Templates = () => {
         assetCategories={assetCategories}
         initialData={editInitialData}
       />
+
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete template</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget ? `Deactivate “${deleteTarget.name}”? Scheduled tasks will not be created from it.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmDelete();
+              }}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

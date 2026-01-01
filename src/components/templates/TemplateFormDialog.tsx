@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -47,6 +47,17 @@ export interface TemplateFormData {
   checklistItems: ChecklistItem[];
 }
 
+const createEmptyTemplateFormData = (): TemplateFormData => ({
+  name: "",
+  description: "",
+  applicableCategoryId: null,
+  intervalDays: 30,
+  estimatedDuration: "",
+  requiredRoleId: null,
+  isActive: true,
+  checklistItems: [],
+});
+
 interface TemplateFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -66,20 +77,15 @@ const TemplateFormDialog = ({
 }: TemplateFormDialogProps) => {
   const noneValue = "__none__";
 
-  const [formData, setFormData] = useState<TemplateFormData>(
-    initialData || {
-      name: "",
-      description: "",
-      applicableCategoryId: null,
-      intervalDays: 30,
-      estimatedDuration: "",
-      requiredRoleId: null,
-      isActive: true,
-      checklistItems: [],
-    }
-  );
+  const [formData, setFormData] = useState<TemplateFormData>(() => initialData ?? createEmptyTemplateFormData());
 
   const [newItemText, setNewItemText] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setFormData(initialData ?? createEmptyTemplateFormData());
+    setNewItemText("");
+  }, [open, initialData]);
 
   const addChecklistItem = () => {
     if (!newItemText.trim()) return;

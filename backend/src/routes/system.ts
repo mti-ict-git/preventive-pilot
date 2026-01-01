@@ -5,9 +5,7 @@ import { env } from "../config/env";
 import { getDb } from "../db/mssql";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireAnyRole } from "../middleware/requireRole";
-import { runReminderEscalationJob } from "../jobs/reminders";
-import { runScheduleCalculationJob } from "../jobs/scheduleCalc";
-import { runSnipeSyncJob } from "../jobs/snipeSync";
+import { runJobNow, type JobName } from "../jobs";
 
 const requireSystemAdmin = requireAnyRole(["Superadmin", "Admin"]);
 
@@ -19,15 +17,81 @@ const LogsQuerySchema = z.object({
   level: z.string().max(16).optional(),
 });
 
-type RunningJobs = {
-  [K in z.infer<typeof StatusJobSchema>]: boolean;
+const nullIfBlank = (value: unknown): unknown => {
+  return typeof value === "string" && value.trim() === "" ? null : value;
 };
 
-const runningJobs: RunningJobs = {
-  "snipe-sync": false,
-  "schedule-calc": false,
-  notifications: false,
+const normalizeInstanceUrl = (value: string): string => {
+  const trimmed = value.replace(/\/+$/, "");
+  return trimmed.replace(/\/api\/v1\/?$/i, "");
 };
+
+const toApiBaseUrl = (instanceUrl: string): string => {
+  return `${normalizeInstanceUrl(instanceUrl)}/api/v1`;
+};
+
+type EffectiveSnipeItSettings = {
+  baseUrl: string | null;
+  apiToken: string | null;
+  autoSyncEnabled: boolean;
+  syncIntervalMinutes: number;
+};
+
+const loadEffectiveSnipeItSettings = async (): Promise<EffectiveSnipeItSettings> => {
+  let dbRow: Record<string, unknown> | null = null;
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  BaseUrl, ApiToken, AutoSyncEnabled, SyncIntervalMinutes",
+          "FROM pm.SnipeItSettings",
+          "ORDER BY UpdatedAt DESC",
+        ].join("\n"),
+      );
+    dbRow = (result.recordset[0] as Record<string, unknown> | undefined) ?? null;
+  } catch {
+    dbRow = null;
+  }
+
+  const baseUrl =
+    (typeof dbRow?.BaseUrl === "string" && dbRow.BaseUrl.trim() ? dbRow.BaseUrl.trim() : null) ??
+    (env.SNIPEIT_BASE_URL?.trim() ? env.SNIPEIT_BASE_URL.trim() : null);
+
+  const apiToken =
+    (typeof dbRow?.ApiToken === "string" && dbRow.ApiToken.trim() ? dbRow.ApiToken.trim() : null) ??
+    (env.SNIPEIT_API_TOKEN?.trim() ? env.SNIPEIT_API_TOKEN.trim() : null);
+
+  const autoSyncEnabled =
+    typeof dbRow?.AutoSyncEnabled === "boolean"
+      ? dbRow.AutoSyncEnabled
+      : typeof dbRow?.AutoSyncEnabled === "number"
+        ? dbRow.AutoSyncEnabled === 1
+        : env.JOB_SNIPE_SYNC_ENABLED;
+
+  const syncIntervalMinutes =
+    typeof dbRow?.SyncIntervalMinutes === "number" && Number.isFinite(dbRow.SyncIntervalMinutes)
+      ? dbRow.SyncIntervalMinutes
+      : env.JOB_SNIPE_SYNC_INTERVAL_MINUTES;
+
+  return {
+    baseUrl,
+    apiToken,
+    autoSyncEnabled,
+    syncIntervalMinutes,
+  };
+};
+
+const SnipeItSettingsUpdateSchema = z.object({
+  baseUrl: z.preprocess(nullIfBlank, z.string().trim().max(512).nullable()),
+  apiToken: z.preprocess(nullIfBlank, z.string().trim().max(2048).nullable()).optional(),
+  autoSyncEnabled: z.boolean(),
+  syncIntervalMinutes: z.number().int().min(1).max(1440),
+});
+
+const SnipeItSettingsTestSchema = SnipeItSettingsUpdateSchema.partial().optional();
 
 export const systemRouter = Router();
 
@@ -58,6 +122,8 @@ systemRouter.get("/status", async (_req, res) => {
 
   const lastRunRow = snipeLastRun.recordset[0] as Record<string, unknown> | undefined;
 
+  const snipeItSettings = await loadEffectiveSnipeItSettings();
+
   res.json({
     backendTime: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
@@ -68,13 +134,14 @@ systemRouter.get("/status", async (_req, res) => {
       enabled: env.JOBS_ENABLED,
       scheduleCalcIntervalMinutes: env.JOB_SCHEDULE_CALC_INTERVAL_MINUTES,
       notificationIntervalMinutes: env.JOB_NOTIFICATION_INTERVAL_MINUTES,
-      snipeSyncEnabled: env.JOB_SNIPE_SYNC_ENABLED,
-      snipeSyncIntervalMinutes: env.JOB_SNIPE_SYNC_INTERVAL_MINUTES,
+      snipeSyncEnabled: snipeItSettings.autoSyncEnabled,
+      snipeSyncIntervalMinutes: snipeItSettings.syncIntervalMinutes,
     },
     snipeIt: {
-      configured: Boolean(env.SNIPEIT_BASE_URL && env.SNIPEIT_API_TOKEN),
-      baseUrl: env.SNIPEIT_BASE_URL ?? null,
-      syncEnabled: env.JOB_SNIPE_SYNC_ENABLED,
+      configured: Boolean(snipeItSettings.baseUrl && snipeItSettings.apiToken),
+      baseUrl: snipeItSettings.baseUrl,
+      autoSyncEnabled: snipeItSettings.autoSyncEnabled,
+      syncIntervalMinutes: snipeItSettings.syncIntervalMinutes,
       lastRun: lastRunRow
         ? {
             id: lastRunRow.SnipeSyncRunId,
@@ -87,6 +154,91 @@ systemRouter.get("/status", async (_req, res) => {
         : null,
     },
   });
+});
+
+systemRouter.get("/snipeit-settings", async (_req, res) => {
+  const settings = await loadEffectiveSnipeItSettings();
+  res.json({
+    baseUrl: settings.baseUrl,
+    apiTokenConfigured: Boolean(settings.apiToken),
+    autoSyncEnabled: settings.autoSyncEnabled,
+    syncIntervalMinutes: settings.syncIntervalMinutes,
+  });
+});
+
+systemRouter.put("/snipeit-settings", requireSystemAdmin, async (req, res) => {
+  const parsed = SnipeItSettingsUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const current = await loadEffectiveSnipeItSettings();
+  const baseUrl = parsed.data.baseUrl;
+  const apiToken = parsed.data.apiToken === undefined ? current.apiToken : parsed.data.apiToken;
+
+  const db = await getDb();
+  await db
+    .request()
+    .input("baseUrl", sql.NVarChar(512), baseUrl)
+    .input("apiToken", sql.NVarChar(2048), apiToken)
+    .input("autoSyncEnabled", sql.Bit, parsed.data.autoSyncEnabled)
+    .input("syncIntervalMinutes", sql.Int, parsed.data.syncIntervalMinutes)
+    .query(
+      [
+        "INSERT INTO pm.SnipeItSettings (BaseUrl, ApiToken, AutoSyncEnabled, SyncIntervalMinutes)",
+        "VALUES (@baseUrl, @apiToken, @autoSyncEnabled, @syncIntervalMinutes)",
+      ].join("\n"),
+    );
+
+  const updated = await loadEffectiveSnipeItSettings();
+  res.json({
+    baseUrl: updated.baseUrl,
+    apiTokenConfigured: Boolean(updated.apiToken),
+    autoSyncEnabled: updated.autoSyncEnabled,
+    syncIntervalMinutes: updated.syncIntervalMinutes,
+  });
+});
+
+systemRouter.post("/snipeit-settings/test", requireSystemAdmin, async (req, res) => {
+  const parsed = SnipeItSettingsTestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const current = await loadEffectiveSnipeItSettings();
+  const override = parsed.data;
+  const baseUrl = override?.baseUrl ?? current.baseUrl;
+  const apiToken = override?.apiToken ?? current.apiToken;
+
+  if (!baseUrl || !apiToken) {
+    res.status(400).json({ message: "Snipe-IT not configured" });
+    return;
+  }
+
+  const apiBaseUrl = toApiBaseUrl(baseUrl);
+  const url = `${apiBaseUrl}/hardware?limit=1&offset=0`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      res.status(400).json({ message: `Snipe-IT test failed (${response.status}) ${body}`.trim() });
+      return;
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(400).json({ message });
+  }
 });
 
 systemRouter.get("/logs", async (req, res) => {
@@ -179,29 +331,21 @@ systemRouter.post("/jobs/:jobName/run", requireSystemAdmin, async (req, res) => 
     return;
   }
 
-  const jobName = parsed.data;
-  if (runningJobs[jobName]) {
+  const jobName = parsed.data as JobName;
+
+  if (jobName === "snipe-sync") {
+    const settings = await loadEffectiveSnipeItSettings();
+    if (!settings.baseUrl || !settings.apiToken) {
+      res.status(400).json({ message: "Snipe-IT not configured" });
+      return;
+    }
+  }
+
+  const started = await runJobNow(jobName, jobName === "snipe-sync" ? { force: true } : undefined);
+  if (!started) {
     res.status(409).json({ message: "Job already running" });
     return;
   }
 
-  if (jobName === "snipe-sync" && !env.JOB_SNIPE_SYNC_ENABLED) {
-    res.status(409).json({ message: "Snipe-IT sync disabled" });
-    return;
-  }
-
-  runningJobs[jobName] = true;
-  try {
-    if (jobName === "snipe-sync") {
-      await runSnipeSyncJob();
-    } else if (jobName === "schedule-calc") {
-      await runScheduleCalculationJob();
-    } else {
-      await runReminderEscalationJob();
-    }
-
-    res.json({ ok: true });
-  } finally {
-    runningJobs[jobName] = false;
-  }
+  res.json({ ok: true });
 });

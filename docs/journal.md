@@ -30,3 +30,13 @@
 - Implemented Phase 1 backend APIs for assets, templates, scheduling, tasks, reports, and notifications.
 - Added role-based middleware and enforced admin-only actions for sensitive endpoints.
 - Wired new API routers into the backend entrypoint and validated with lint and backend typecheck.
+
+## 2026-01-01 16:38
+- Fixed Templates page edit flow to load real template data before opening the edit form.
+- Reset Template form state correctly between create/edit sessions.
+- Implemented template deletion as a deactivation workflow (backend + frontend).
+
+## 2026-01-01 17:05
+- Fixed manual job run endpoint to force-run Snipe-IT sync regardless of scheduler flag.
+- Centralized job run locking to prevent duplicate concurrent runs.
+- Improved Snipe-IT manual run errors (400 when integration not configured).

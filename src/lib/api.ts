@@ -368,6 +368,12 @@ export const apiUpdateTemplate = async (input: UpdateTemplateInput): Promise<{ o
   });
 };
 
+export const apiDeleteTemplate = async (templateId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/templates/${templateId}`, {
+    method: "DELETE",
+  });
+};
+
 export type AssignmentRule = {
   RuleId: string;
   Priority: number;
@@ -517,7 +523,8 @@ export type SystemStatusResponse = {
   snipeIt: {
     configured: boolean;
     baseUrl: string | null;
-    syncEnabled: boolean;
+    autoSyncEnabled: boolean;
+    syncIntervalMinutes: number;
     lastRun: {
       id: string;
       startedAt: string;
@@ -531,6 +538,32 @@ export type SystemStatusResponse = {
 
 export const apiGetSystemStatus = async (): Promise<SystemStatusResponse> => {
   return apiFetchJson<SystemStatusResponse>("/api/system/status");
+};
+
+export type SnipeItSettingsResponse = {
+  baseUrl: string | null;
+  apiTokenConfigured: boolean;
+  autoSyncEnabled: boolean;
+  syncIntervalMinutes: number;
+};
+
+export type UpdateSnipeItSettingsInput = {
+  baseUrl: string | null;
+  apiToken?: string | null;
+  autoSyncEnabled: boolean;
+  syncIntervalMinutes: number;
+};
+
+export const apiGetSnipeItSettings = async (): Promise<SnipeItSettingsResponse> => {
+  return apiFetchJson<SnipeItSettingsResponse>("/api/system/snipeit-settings");
+};
+
+export const apiUpdateSnipeItSettings = async (input: UpdateSnipeItSettingsInput): Promise<SnipeItSettingsResponse> => {
+  return apiFetchJson<SnipeItSettingsResponse>("/api/system/snipeit-settings", { method: "PUT", body: input });
+};
+
+export const apiTestSnipeItSettings = async (input?: Partial<UpdateSnipeItSettingsInput>): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>("/api/system/snipeit-settings/test", input ? { method: "POST", body: input } : { method: "POST" });
 };
 
 export type SystemLogEntry = {

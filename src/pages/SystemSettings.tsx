@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Settings,
   Server,
@@ -19,22 +21,156 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  ApiError,
+  apiGetSnipeItSettings,
+  apiGetSystemLogs,
+  apiGetSystemStatus,
+  apiRunJob,
+  apiTestSnipeItSettings,
+  apiUpdateSnipeItSettings,
+  type UpdateSnipeItSettingsInput,
+} from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 const SystemSettings = () => {
-  const systemStatus = [
-    { name: "Snipe-IT Connection", status: "connected", lastCheck: "2 min ago" },
-    { name: "Database", status: "healthy", lastCheck: "1 min ago" },
-    { name: "Job Scheduler", status: "running", lastCheck: "5 min ago" },
-    { name: "Email Service", status: "connected", lastCheck: "10 min ago" },
-  ];
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const recentLogs = [
-    { type: "info", message: "Snipe-IT sync completed successfully", time: "10:45 AM" },
-    { type: "info", message: "PM Task PM-2026-001 completed by John Doe", time: "10:30 AM" },
-    { type: "warning", message: "API rate limit approaching (80%)", time: "10:15 AM" },
-    { type: "info", message: "Daily backup completed", time: "06:00 AM" },
-    { type: "info", message: "System health check passed", time: "05:00 AM" },
-  ];
+  const systemStatusQuery = useQuery({
+    queryKey: ["system-status"],
+    queryFn: apiGetSystemStatus,
+    refetchInterval: 30_000,
+  });
+
+  const logsQuery = useQuery({
+    queryKey: ["system-logs", { page: 1, pageSize: 5 }],
+    queryFn: () => apiGetSystemLogs({ page: 1, pageSize: 5 }),
+    refetchInterval: 30_000,
+  });
+
+  const snipeSettingsQuery = useQuery({
+    queryKey: ["snipeit-settings"],
+    queryFn: apiGetSnipeItSettings,
+  });
+
+  const [baseUrl, setBaseUrl] = useState<string>("");
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(false);
+  const [syncIntervalMinutes, setSyncIntervalMinutes] = useState<number>(60);
+  const [editToken, setEditToken] = useState<boolean>(false);
+  const [apiToken, setApiToken] = useState<string>("");
+
+  useEffect(() => {
+    const settings = snipeSettingsQuery.data;
+    if (!settings) return;
+    setBaseUrl(settings.baseUrl ?? "");
+    setAutoSyncEnabled(settings.autoSyncEnabled);
+    setSyncIntervalMinutes(settings.syncIntervalMinutes);
+    setEditToken(false);
+    setApiToken("");
+  }, [snipeSettingsQuery.data]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const payload: UpdateSnipeItSettingsInput = {
+        baseUrl: baseUrl.trim() ? baseUrl.trim() : null,
+        autoSyncEnabled,
+        syncIntervalMinutes,
+      };
+      if (editToken) {
+        payload.apiToken = apiToken.trim() ? apiToken.trim() : null;
+      }
+      return apiUpdateSnipeItSettings(payload);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["system-status"] });
+      await queryClient.invalidateQueries({ queryKey: ["snipeit-settings"] });
+      toast({ title: "Settings saved", description: "Snipe-IT settings updated." });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to save settings";
+      toast({ title: "Save failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const payload: Partial<UpdateSnipeItSettingsInput> = {
+        baseUrl: baseUrl.trim() ? baseUrl.trim() : null,
+        autoSyncEnabled,
+        syncIntervalMinutes,
+      };
+      if (editToken) {
+        payload.apiToken = apiToken.trim() ? apiToken.trim() : null;
+      }
+      return apiTestSnipeItSettings(payload);
+    },
+    onSuccess: () => {
+      toast({ title: "Connection ok", description: "Snipe-IT API request succeeded." });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Connection test failed";
+      toast({ title: "Test failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const syncNowMutation = useMutation({
+    mutationFn: async () => apiRunJob("snipe-sync"),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["system-status"] });
+      toast({ title: "Sync started", description: "Snipe-IT sync job triggered." });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to start sync";
+      toast({ title: "Sync failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const systemStatus = useMemo(() => {
+    const data = systemStatusQuery.data;
+    const nowText = data ? new Date(data.backendTime).toLocaleString() : "—";
+    const dbOk = data?.database.ok ?? false;
+    const jobsEnabled = data?.jobs.enabled ?? false;
+    const snipeConfigured = data?.snipeIt.configured ?? false;
+    return [
+      {
+        name: "Snipe-IT Connection",
+        ok: snipeConfigured,
+        status: snipeConfigured ? "configured" : "not configured",
+        lastCheck: nowText,
+      },
+      {
+        name: "Database",
+        ok: dbOk,
+        status: dbOk ? "healthy" : "unhealthy",
+        lastCheck: nowText,
+      },
+      {
+        name: "Job Scheduler",
+        ok: jobsEnabled,
+        status: jobsEnabled ? "running" : "disabled",
+        lastCheck: nowText,
+      },
+      {
+        name: "System",
+        ok: Boolean(data),
+        status: data ? "online" : "loading",
+        lastCheck: nowText,
+      },
+    ];
+  }, [systemStatusQuery.data]);
+
+  const recentLogs = useMemo(() => {
+    const items = logsQuery.data?.items ?? [];
+    return items.slice(0, 5).map((l) => ({
+      type: l.level,
+      message: l.message,
+      time: new Date(l.createdAt).toLocaleTimeString(),
+    }));
+  }, [logsQuery.data]);
+
+  const apiTokenConfigured = snipeSettingsQuery.data?.apiTokenConfigured ?? false;
+  const snipeItUrl = baseUrl.trim() ? baseUrl.trim() : systemStatusQuery.data?.snipeIt.baseUrl;
 
   return (
     <div className="min-h-screen">
@@ -56,14 +192,16 @@ const SystemSettings = () => {
                   <p className="text-sm text-muted-foreground mb-1">{item.name}</p>
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${
-                      item.status === "connected" || item.status === "healthy" || item.status === "running"
-                        ? "bg-success"
-                        : "bg-warning"
+                      item.ok ? "bg-success" : "bg-warning"
                     }`} />
                     <span className="text-sm font-medium text-foreground capitalize">{item.status}</span>
                   </div>
                 </div>
-                <CheckCircle className="w-5 h-5 text-success" />
+                {item.ok ? (
+                  <CheckCircle className="w-5 h-5 text-success" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-warning" />
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-2">Last check: {item.lastCheck}</p>
             </motion.div>
@@ -89,8 +227,20 @@ const SystemSettings = () => {
                 <div className="space-y-2">
                   <Label>Snipe-IT URL</Label>
                   <div className="flex gap-2">
-                    <Input value="https://assets.company.com" className="bg-muted/50" readOnly />
-                    <Button variant="outline" size="icon">
+                    <Input
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      className="bg-muted/50"
+                      placeholder="https://assets.company.com"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      disabled={!snipeItUrl}
+                      onClick={() => {
+                        if (snipeItUrl) window.open(snipeItUrl, "_blank", "noreferrer");
+                      }}
+                    >
                       <ExternalLink className="w-4 h-4" />
                     </Button>
                   </div>
@@ -99,25 +249,84 @@ const SystemSettings = () => {
                 <div className="space-y-2">
                   <Label>API Token</Label>
                   <div className="flex gap-2">
-                    <Input type="password" value="••••••••••••••••" className="bg-muted/50" readOnly />
-                    <Button variant="outline">Update</Button>
+                    <Input
+                      type="password"
+                      value={editToken ? apiToken : apiTokenConfigured ? "••••••••••••••••" : ""}
+                      onChange={(e) => {
+                        if (editToken) setApiToken(e.target.value);
+                      }}
+                      className="bg-muted/50"
+                      placeholder={
+                        editToken
+                          ? apiTokenConfigured
+                            ? "Leave blank to clear or paste a new token"
+                            : "Paste API token"
+                          : apiTokenConfigured
+                            ? "Configured"
+                            : "Not configured"
+                      }
+                      readOnly={!editToken}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEditToken((prev) => !prev);
+                        setApiToken("");
+                      }}
+                    >
+                      {editToken ? "Cancel" : apiTokenConfigured ? "Update" : "Set Token"}
+                    </Button>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                   <div>
                     <p className="font-medium text-foreground">Auto Sync</p>
-                    <p className="text-sm text-muted-foreground">Sync every 15 minutes</p>
+                    <p className="text-sm text-muted-foreground">Sync every {syncIntervalMinutes} minutes</p>
                   </div>
-                  <Switch checked />
+                  <Switch checked={autoSyncEnabled} onCheckedChange={setAutoSyncEnabled} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Sync Interval (minutes)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={1440}
+                    value={String(syncIntervalMinutes)}
+                    onChange={(e) => {
+                      const next = Number(e.target.value);
+                      setSyncIntervalMinutes(Number.isFinite(next) && next > 0 ? Math.floor(next) : 1);
+                    }}
+                    className="bg-muted/50"
+                  />
                 </div>
 
                 <div className="flex gap-2">
-                  <Button className="flex-1 gap-2">
+                  <Button
+                    className="flex-1 gap-2"
+                    onClick={() => saveMutation.mutate()}
+                    disabled={saveMutation.isPending}
+                  >
+                    <Settings className="w-4 h-4" />
+                    Save
+                  </Button>
+                  <Button
+                    className="flex-1 gap-2"
+                    onClick={() => syncNowMutation.mutate()}
+                    disabled={syncNowMutation.isPending}
+                    variant="outline"
+                  >
                     <RefreshCw className="w-4 h-4" />
                     Sync Now
                   </Button>
-                  <Button variant="outline">Test Connection</Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => testMutation.mutate()}
+                    disabled={testMutation.isPending}
+                  >
+                    Test Connection
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -139,10 +348,21 @@ const SystemSettings = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { name: "Asset Sync", schedule: "Every 15 min", lastRun: "10:45 AM", nextRun: "11:00 AM" },
-                  { name: "PM Generation", schedule: "Daily 6 AM", lastRun: "6:00 AM", nextRun: "Tomorrow" },
-                  { name: "Reminder Emails", schedule: "Daily 8 AM", lastRun: "8:00 AM", nextRun: "Tomorrow" },
-                  { name: "Database Backup", schedule: "Daily 2 AM", lastRun: "2:00 AM", nextRun: "Tomorrow" },
+                  {
+                    name: "Asset Sync",
+                    schedule: `Every ${systemStatusQuery.data?.jobs.snipeSyncIntervalMinutes ?? 60} min`,
+                    active: systemStatusQuery.data?.jobs.snipeSyncEnabled ?? false,
+                  },
+                  {
+                    name: "Schedule Calc",
+                    schedule: `Every ${systemStatusQuery.data?.jobs.scheduleCalcIntervalMinutes ?? 10} min`,
+                    active: systemStatusQuery.data?.jobs.enabled ?? false,
+                  },
+                  {
+                    name: "Notifications",
+                    schedule: `Every ${systemStatusQuery.data?.jobs.notificationIntervalMinutes ?? 60} min`,
+                    active: systemStatusQuery.data?.jobs.enabled ?? false,
+                  },
                 ].map((job, index) => (
                   <div
                     key={index}
@@ -153,10 +373,12 @@ const SystemSettings = () => {
                       <p className="text-xs text-muted-foreground">{job.schedule}</p>
                     </div>
                     <div className="text-right">
-                      <Badge variant="outline" className="bg-success/20 text-success border-success/30">
-                        Active
+                      <Badge
+                        variant="outline"
+                        className={job.active ? "bg-success/20 text-success border-success/30" : "bg-muted text-muted-foreground border-border"}
+                      >
+                        {job.active ? "Active" : "Disabled"}
                       </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">Next: {job.nextRun}</p>
                     </div>
                   </div>
                 ))}
@@ -181,7 +403,9 @@ const SystemSettings = () => {
                     </CardTitle>
                     <CardDescription>Recent system activity and events</CardDescription>
                   </div>
-                  <Button variant="outline">View Full Logs</Button>
+                  <Button variant="outline" disabled>
+                    View Full Logs
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -192,7 +416,7 @@ const SystemSettings = () => {
                       className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
                     >
                       <div className={`w-2 h-2 rounded-full ${
-                        log.type === "warning" ? "bg-warning" :
+                        log.type === "warn" ? "bg-warning" :
                         log.type === "error" ? "bg-destructive" : "bg-primary"
                       }`} />
                       <span className="flex-1 text-sm text-foreground">{log.message}</span>
