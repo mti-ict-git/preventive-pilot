@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FileText,
   Plus,
@@ -25,43 +26,60 @@ import {
 import TemplateFormDialog from "@/components/templates/TemplateFormDialog";
 import TemplateDetailDialog from "@/components/templates/TemplateDetailDialog";
 import { toast } from "@/hooks/use-toast";
-
-interface Template {
-  id: number;
-  name: string;
-  description: string;
-  category: string;
-  interval: number;
-  checklistItems: number;
-  estimatedDuration: string;
-  requiredRole: string;
-  lastModified: string;
-  usageCount: number;
-}
-
-interface ChecklistItemInput {
-  id: string;
-  text: string;
-  mandatory: boolean;
-  requiresNotes: boolean;
-  passFailRequired: boolean;
-}
-
-interface TemplateFormData {
-  name: string;
-  description: string;
-  category: string;
-  interval: number;
-  estimatedDuration: string;
-  requiredRole: string;
-  checklistItems: ChecklistItemInput[];
-}
+import {
+  ApiError,
+  apiCreateTemplate,
+  apiGetLookups,
+  apiGetTemplate,
+  apiListTemplates,
+  apiUpdateTemplate,
+  type CreateTemplateInput,
+  type TemplateDetail,
+} from "@/lib/api";
+import type { TemplateFormData } from "@/components/templates/TemplateFormDialog";
 
 const Templates = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editInitialData, setEditInitialData] = useState<TemplateFormData | undefined>(undefined);
+
+  const queryClient = useQueryClient();
+
+  const lookupsQuery = useQuery({
+    queryKey: ["lookups"],
+    queryFn: apiGetLookups,
+    staleTime: 5 * 60_000,
+  });
+
+  const templatesQuery = useQuery({
+    queryKey: ["templates"],
+    queryFn: () => apiListTemplates(),
+  });
+
+  const templateDetailQuery = useQuery({
+    queryKey: ["template", selectedTemplateId],
+    queryFn: () => apiGetTemplate(selectedTemplateId ?? ""),
+    enabled: selectedTemplateId !== null && (detailDialogOpen || editDialogOpen),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (input: CreateTemplateInput) => apiCreateTemplate(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (input: { templateId: string; data: Partial<CreateTemplateInput> }) =>
+      apiUpdateTemplate({ templateId: input.templateId, ...input.data }),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
+      await queryClient.invalidateQueries({ queryKey: ["template", variables.templateId] });
+    },
+  });
 
   const [templates, setTemplates] = useState<Template[]>([
     {
@@ -136,55 +154,144 @@ const Templates = () => {
     return colors[category] || "bg-muted text-muted-foreground";
   };
 
-  const filteredTemplates = templates.filter(
-    (template) =>
-      template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      template.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const parseEstimatedDurationMinutes = (raw: string): number | null => {
+    const value = raw.trim().toLowerCase();
+    if (!value) return null;
+    const match = value.match(/\d+(\.\d+)?/);
+    if (!match) return null;
+    const num = Number(match[0]);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    if (value.includes("hour") || value.includes("hr") || value.endsWith("h")) {
+      return Math.round(num * 60);
+    }
+    return Math.round(num);
+  };
 
-  const handleCreateTemplate = (data: TemplateFormData) => {
-    const newTemplate: Template = {
-      id: templates.length + 1,
+  const toCreateInput = (data: TemplateFormData, includeChecklistIds: boolean): CreateTemplateInput => {
+    return {
       name: data.name,
-      description: data.description,
-      category: data.category,
-      interval: data.interval,
-      checklistItems: data.checklistItems.length,
-      estimatedDuration: data.estimatedDuration || "N/A",
-      requiredRole: data.requiredRole,
-      lastModified: new Date().toISOString().split("T")[0],
-      usageCount: 0,
+      description: data.description ? data.description : null,
+      intervalDays: data.intervalDays,
+      applicableCategoryId: data.applicableCategoryId,
+      estimatedDurationMinutes: parseEstimatedDurationMinutes(data.estimatedDuration),
+      requiredRoleId: data.requiredRoleId,
+      isActive: data.isActive,
+      checklistItems: data.checklistItems.map((item, idx) => {
+        const base = {
+          sortOrder: idx,
+          itemText: item.itemText,
+          isMandatory: item.isMandatory,
+          requiresNotes: item.requiresNotes,
+          requiresPassFail: item.requiresPassFail,
+          isActive: item.isActive,
+        };
+        return includeChecklistIds ? { ...base, id: item.id } : base;
+      }),
     };
-    setTemplates([newTemplate, ...templates]);
   };
 
-  const handleDuplicate = (template: Template) => {
-    const duplicated: Template = {
-      ...template,
-      id: templates.length + 1,
-      name: `${template.name} (Copy)`,
-      usageCount: 0,
-      lastModified: new Date().toISOString().split("T")[0],
+  const toEditInitialData = (template: TemplateDetail): TemplateFormData => {
+    return {
+      name: template.name,
+      description: template.description ?? "",
+      applicableCategoryId: template.applicableCategory?.id ?? null,
+      intervalDays: template.intervalDays,
+      estimatedDuration: template.estimatedDurationMinutes !== null ? `${template.estimatedDurationMinutes} min` : "",
+      requiredRoleId: template.requiredRole?.id ?? null,
+      isActive: template.isActive,
+      checklistItems: template.checklistItems.map((i) => ({
+        id: i.id,
+        itemText: i.itemText,
+        isMandatory: i.isMandatory,
+        requiresNotes: i.requiresNotes,
+        requiresPassFail: i.requiresPassFail,
+        isActive: i.isActive,
+      })),
     };
-    setTemplates([duplicated, ...templates]);
-    toast({
-      title: "Template Duplicated",
-      description: `${duplicated.name} has been created.`,
-    });
   };
 
-  const handleDelete = (id: number) => {
-    setTemplates(templates.filter((t) => t.id !== id));
-    toast({
-      title: "Template Deleted",
-      description: "The template has been removed.",
+  const filteredTemplates = useMemo(() => {
+    const items = templatesQuery.data?.items ?? [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((t) => {
+      const cat = t.applicableCategory?.name ?? "";
+      return t.name.toLowerCase().includes(q) || cat.toLowerCase().includes(q);
     });
+  }, [searchQuery, templatesQuery.data?.items]);
+
+  const handleCreateTemplate = async (data: TemplateFormData) => {
+    try {
+      await createMutation.mutateAsync(toCreateInput(data, false));
+      toast({ title: "Template created", description: `${data.name} has been created.` });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : "Failed to create template";
+      toast({ title: "Create failed", description: message, variant: "destructive" });
+      throw err;
+    }
   };
 
-  const handleTemplateClick = (template: Template) => {
-    setSelectedTemplate(template);
+  const handleTemplateClick = (templateId: string) => {
+    setSelectedTemplateId(templateId);
     setDetailDialogOpen(true);
   };
+
+  const handleEditFromDetail = () => {
+    const detail = templateDetailQuery.data;
+    if (!detail || selectedTemplateId === null) {
+      toast({ title: "Template not loaded", description: "Please try again." });
+      return;
+    }
+    setEditInitialData(toEditInitialData(detail));
+    setDetailDialogOpen(false);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditTemplate = async (data: TemplateFormData) => {
+    if (!selectedTemplateId) {
+      toast({ title: "Edit failed", description: "No template selected", variant: "destructive" });
+      throw new Error("No template selected");
+    }
+
+    try {
+      await updateMutation.mutateAsync({
+        templateId: selectedTemplateId,
+        data: toCreateInput(data, true),
+      });
+      toast({ title: "Template updated", description: `${data.name} has been saved.` });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : "Failed to update template";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+      throw err;
+    }
+  };
+
+  const handleDuplicate = async (templateId: string) => {
+    try {
+      const detail = await apiGetTemplate(templateId);
+      const copiedName = `${detail.name} (Copy)`;
+      const formLike = toEditInitialData(detail);
+      await createMutation.mutateAsync({
+        ...toCreateInput(formLike, false),
+        name: copiedName,
+      });
+      toast({ title: "Template duplicated", description: `${copiedName} has been created.` });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : "Failed to duplicate template";
+      toast({ title: "Duplicate failed", description: message, variant: "destructive" });
+    }
+  };
+
+  const handleDelete = () => {
+    toast({
+      title: "Delete not available",
+      description: "Template deletion is not implemented in the API yet.",
+      variant: "destructive",
+    });
+  };
+
+  const roles = lookupsQuery.data?.roles ?? [];
+  const assetCategories = lookupsQuery.data?.assetCategories ?? [];
 
   return (
     <div className="min-h-screen">
@@ -219,7 +326,7 @@ const Templates = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              onClick={() => handleTemplateClick(template)}
+              onClick={() => handleTemplateClick(template.id)}
               className="glass rounded-xl p-5 hover:border-primary/50 transition-all duration-300 cursor-pointer group"
             >
               <div className="flex items-start justify-between mb-4">
@@ -237,7 +344,7 @@ const Templates = () => {
                       className="gap-2"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedTemplate(template);
+                        setSelectedTemplateId(template.id);
                         setDetailDialogOpen(true);
                       }}
                     >
@@ -247,7 +354,7 @@ const Templates = () => {
                       className="gap-2"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDuplicate(template);
+                        void handleDuplicate(template.id);
                       }}
                     >
                       <Copy className="w-4 h-4" /> Duplicate
@@ -256,7 +363,7 @@ const Templates = () => {
                       className="gap-2 text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDelete(template.id);
+                        handleDelete();
                       }}
                     >
                       <Trash2 className="w-4 h-4" /> Delete
@@ -266,31 +373,41 @@ const Templates = () => {
               </div>
 
               <h3 className="font-semibold text-lg text-foreground mb-1">{template.name}</h3>
-              <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{template.description}</p>
+              <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{template.description ?? ""}</p>
 
               <div className="flex items-center gap-2 mb-4">
-                <Badge variant="outline" className={getCategoryColor(template.category)}>
-                  {template.category}
+                <Badge
+                  variant="outline"
+                  className={getCategoryColor(template.applicableCategory?.name ?? "Any")}
+                >
+                  {template.applicableCategory?.name ?? "Any"}
                 </Badge>
                 <Badge variant="outline" className="bg-secondary/50">
-                  {template.interval} days
+                  {template.intervalDays} days
                 </Badge>
+                {!template.isActive && (
+                  <Badge variant="outline" className="bg-muted/20 text-muted-foreground border-border">
+                    Inactive
+                  </Badge>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
                 <div className="flex items-center gap-2">
                   <CheckSquare className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">{template.checklistItems} items</span>
+                  <span className="text-sm text-muted-foreground">v{template.version}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">{template.estimatedDuration}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {template.estimatedDurationMinutes !== null ? `${template.estimatedDurationMinutes} min` : "—"}
+                  </span>
                 </div>
               </div>
 
               <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
-                  Used {template.usageCount} times
+                  Updated {new Date(template.updatedAt).toLocaleDateString()}
                 </span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
@@ -298,7 +415,7 @@ const Templates = () => {
           ))}
         </div>
 
-        {filteredTemplates.length === 0 && (
+        {filteredTemplates.length === 0 && !templatesQuery.isLoading && (
           <div className="text-center py-12">
             <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">No templates found</h3>
@@ -320,21 +437,28 @@ const Templates = () => {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         onSubmit={handleCreateTemplate}
+        roles={roles}
+        assetCategories={assetCategories}
       />
 
       {/* Template Detail Dialog */}
       <TemplateDetailDialog
         open={detailDialogOpen}
         onOpenChange={setDetailDialogOpen}
-        template={selectedTemplate}
-        onEdit={() => {
-          setDetailDialogOpen(false);
-          // Could open edit dialog here
-          toast({
-            title: "Edit Mode",
-            description: "Template editing coming soon.",
-          });
+        template={templateDetailQuery.data ?? null}
+        onEdit={handleEditFromDetail}
+      />
+
+      <TemplateFormDialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) setEditInitialData(undefined);
         }}
+        onSubmit={handleEditTemplate}
+        roles={roles}
+        assetCategories={assetCategories}
+        initialData={editInitialData}
       />
     </div>
   );

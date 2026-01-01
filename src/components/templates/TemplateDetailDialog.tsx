@@ -18,32 +18,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-interface ChecklistItem {
-  id: number;
-  text: string;
-  mandatory: boolean;
-  requiresNotes: boolean;
-  passFailRequired: boolean;
-}
-
-interface Template {
-  id: number;
-  name: string;
-  description: string;
-  category: string;
-  interval: number;
-  checklistItems: number | ChecklistItem[];
-  estimatedDuration: string;
-  requiredRole: string;
-  lastModified: string;
-  usageCount: number;
-}
+import type { TemplateDetail } from "@/lib/api";
 
 interface TemplateDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  template: Template | null;
+  template: TemplateDetail | null;
   onEdit: () => void;
 }
 
@@ -65,23 +45,10 @@ const TemplateDetailDialog = ({
     return colors[category] || "bg-muted text-muted-foreground";
   };
 
-  // Mock checklist items for display
-  const mockChecklistItems: ChecklistItem[] = [
-    { id: 1, text: "Visual inspection of external components", mandatory: true, requiresNotes: false, passFailRequired: true },
-    { id: 2, text: "Clean dust from vents and fans", mandatory: true, requiresNotes: false, passFailRequired: true },
-    { id: 3, text: "Check power supply and cables", mandatory: true, requiresNotes: false, passFailRequired: true },
-    { id: 4, text: "Verify operating system updates", mandatory: true, requiresNotes: true, passFailRequired: true },
-    { id: 5, text: "Run hardware diagnostics", mandatory: true, requiresNotes: true, passFailRequired: true },
-    { id: 6, text: "Check antivirus and security software", mandatory: true, requiresNotes: false, passFailRequired: true },
-    { id: 7, text: "Verify backup configuration", mandatory: false, requiresNotes: true, passFailRequired: false },
-    { id: 8, text: "Check disk space and cleanup if needed", mandatory: true, requiresNotes: false, passFailRequired: true },
-    { id: 9, text: "Test network connectivity", mandatory: true, requiresNotes: false, passFailRequired: true },
-    { id: 10, text: "Document any issues found", mandatory: false, requiresNotes: true, passFailRequired: false },
-  ];
-
-  const checklistItems = Array.isArray(template.checklistItems) 
-    ? template.checklistItems 
-    : mockChecklistItems.slice(0, typeof template.checklistItems === 'number' ? template.checklistItems : 10);
+  const checklistItems = template.checklistItems ?? [];
+  const categoryName = template.applicableCategory?.name ?? "Any";
+  const roleName = template.requiredRole?.name ?? "Any";
+  const durationText = template.estimatedDurationMinutes !== null ? `${template.estimatedDurationMinutes} min` : "—";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -95,7 +62,7 @@ const TemplateDetailDialog = ({
               <DialogTitle className="text-xl font-bold text-foreground mb-2">
                 {template.name}
               </DialogTitle>
-              <p className="text-sm text-muted-foreground">{template.description}</p>
+              <p className="text-sm text-muted-foreground">{template.description ?? ""}</p>
             </div>
           </div>
         </DialogHeader>
@@ -109,8 +76,8 @@ const TemplateDetailDialog = ({
                   <Tag className="w-4 h-4" />
                   <span className="text-xs">Category</span>
                 </div>
-                <Badge variant="outline" className={getCategoryColor(template.category)}>
-                  {template.category}
+                <Badge variant="outline" className={getCategoryColor(categoryName)}>
+                  {categoryName}
                 </Badge>
               </div>
 
@@ -119,7 +86,7 @@ const TemplateDetailDialog = ({
                   <Calendar className="w-4 h-4" />
                   <span className="text-xs">Interval</span>
                 </div>
-                <p className="font-semibold text-foreground">{template.interval} days</p>
+                <p className="font-semibold text-foreground">{template.intervalDays} days</p>
               </div>
 
               <div className="glass rounded-lg p-3">
@@ -127,7 +94,7 @@ const TemplateDetailDialog = ({
                   <Clock className="w-4 h-4" />
                   <span className="text-xs">Duration</span>
                 </div>
-                <p className="font-semibold text-foreground">{template.estimatedDuration}</p>
+                <p className="font-semibold text-foreground">{durationText}</p>
               </div>
 
               <div className="glass rounded-lg p-3">
@@ -135,7 +102,7 @@ const TemplateDetailDialog = ({
                   <User className="w-4 h-4" />
                   <span className="text-xs">Required Role</span>
                 </div>
-                <p className="font-semibold text-foreground">{template.requiredRole}</p>
+                <p className="font-semibold text-foreground">{roleName}</p>
               </div>
 
               <div className="glass rounded-lg p-3">
@@ -149,9 +116,9 @@ const TemplateDetailDialog = ({
               <div className="glass rounded-lg p-3">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <FileText className="w-4 h-4" />
-                  <span className="text-xs">Usage Count</span>
+                  <span className="text-xs">Version</span>
                 </div>
-                <p className="font-semibold text-foreground">{template.usageCount} times</p>
+                <p className="font-semibold text-foreground">v{template.version}</p>
               </div>
             </div>
 
@@ -171,15 +138,15 @@ const TemplateDetailDialog = ({
                       {index + 1}.
                     </span>
                     <div className="flex-1">
-                      <p className="text-sm text-foreground">{item.text}</p>
+                      <p className="text-sm text-foreground">{item.itemText}</p>
                       <div className="flex items-center gap-3 mt-2">
-                        {item.mandatory && (
+                        {item.isMandatory && (
                           <span className="flex items-center gap-1 text-xs text-warning">
                             <CheckCircle2 className="w-3 h-3" />
                             Mandatory
                           </span>
                         )}
-                        {item.passFailRequired && (
+                        {item.requiresPassFail && (
                           <span className="flex items-center gap-1 text-xs text-primary">
                             <XCircle className="w-3 h-3" />
                             Pass/Fail
@@ -200,7 +167,7 @@ const TemplateDetailDialog = ({
 
             {/* Last Modified */}
             <div className="text-xs text-muted-foreground pt-4 border-t border-border">
-              Last modified: {template.lastModified}
+              Last modified: {new Date(template.updatedAt).toLocaleString()}
             </div>
           </div>
         </ScrollArea>

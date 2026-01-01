@@ -2,7 +2,6 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
-  Trash2,
   GripVertical,
   X,
 } from "lucide-react";
@@ -26,29 +25,34 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
+import type { LookupAssetCategory, LookupRole } from "@/lib/api";
 
-interface ChecklistItem {
+export interface ChecklistItem {
   id: string;
-  text: string;
-  mandatory: boolean;
+  itemText: string;
+  isMandatory: boolean;
   requiresNotes: boolean;
-  passFailRequired: boolean;
+  requiresPassFail: boolean;
+  isActive: boolean;
 }
 
-interface TemplateFormData {
+export interface TemplateFormData {
   name: string;
   description: string;
-  category: string;
-  interval: number;
+  applicableCategoryId: string | null;
+  intervalDays: number;
   estimatedDuration: string;
-  requiredRole: string;
+  requiredRoleId: string | null;
+  isActive: boolean;
   checklistItems: ChecklistItem[];
 }
 
 interface TemplateFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: TemplateFormData) => void;
+  onSubmit: (data: TemplateFormData) => Promise<void> | void;
+  roles: LookupRole[];
+  assetCategories: LookupAssetCategory[];
   initialData?: TemplateFormData;
 }
 
@@ -56,16 +60,21 @@ const TemplateFormDialog = ({
   open,
   onOpenChange,
   onSubmit,
+  roles,
+  assetCategories,
   initialData,
 }: TemplateFormDialogProps) => {
+  const noneValue = "__none__";
+
   const [formData, setFormData] = useState<TemplateFormData>(
     initialData || {
       name: "",
       description: "",
-      category: "",
-      interval: 30,
+      applicableCategoryId: null,
+      intervalDays: 30,
       estimatedDuration: "",
-      requiredRole: "Technician",
+      requiredRoleId: null,
+      isActive: true,
       checklistItems: [],
     }
   );
@@ -77,10 +86,11 @@ const TemplateFormDialog = ({
     
     const newItem: ChecklistItem = {
       id: crypto.randomUUID(),
-      text: newItemText.trim(),
-      mandatory: true,
+      itemText: newItemText.trim(),
+      isMandatory: true,
       requiresNotes: false,
-      passFailRequired: true,
+      requiresPassFail: true,
+      isActive: true,
     };
     
     setFormData({
@@ -106,24 +116,24 @@ const TemplateFormDialog = ({
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.category || formData.checklistItems.length === 0) {
+    if (!formData.name || formData.checklistItems.length === 0) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields and add at least one checklist item.",
+        description: "Please fill in the required fields and add at least one checklist item.",
         variant: "destructive",
       });
       return;
     }
-    
-    onSubmit(formData);
-    onOpenChange(false);
-    toast({
-      title: "Template Created",
-      description: `${formData.name} has been created successfully.`,
-    });
+
+    try {
+      await onSubmit(formData);
+      onOpenChange(false);
+    } catch {
+      return;
+    }
   };
 
   return (
@@ -162,21 +172,28 @@ const TemplateFormDialog = ({
             </div>
 
             <div>
-              <Label htmlFor="category">Asset Category *</Label>
+              <Label htmlFor="category">Asset Category</Label>
               <Select
-                value={formData.category}
-                onValueChange={(value) => setFormData({ ...formData, category: value })}
+                value={formData.applicableCategoryId ?? noneValue}
+                onValueChange={(value) =>
+                  setFormData({
+                    ...formData,
+                    applicableCategoryId: value === noneValue ? null : value,
+                  })
+                }
               >
                 <SelectTrigger className="mt-1.5 bg-muted/50">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Laptop">Laptop</SelectItem>
-                  <SelectItem value="Server">Server</SelectItem>
-                  <SelectItem value="Network">Network</SelectItem>
-                  <SelectItem value="Printer">Printer</SelectItem>
-                  <SelectItem value="Desktop">Desktop</SelectItem>
-                  <SelectItem value="Mobile">Mobile Device</SelectItem>
+                  <SelectItem value={noneValue}>Any</SelectItem>
+                  {assetCategories
+                    .filter((c) => c.isActive)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -184,8 +201,8 @@ const TemplateFormDialog = ({
             <div>
               <Label htmlFor="interval">Interval (days) *</Label>
               <Select
-                value={formData.interval.toString()}
-                onValueChange={(value) => setFormData({ ...formData, interval: parseInt(value) })}
+                value={String(formData.intervalDays)}
+                onValueChange={(value) => setFormData({ ...formData, intervalDays: Number(value) })}
               >
                 <SelectTrigger className="mt-1.5 bg-muted/50">
                   <SelectValue placeholder="Select interval" />
@@ -213,18 +230,36 @@ const TemplateFormDialog = ({
             <div>
               <Label htmlFor="role">Required Role</Label>
               <Select
-                value={formData.requiredRole}
-                onValueChange={(value) => setFormData({ ...formData, requiredRole: value })}
+                value={formData.requiredRoleId ?? noneValue}
+                onValueChange={(value) =>
+                  setFormData({
+                    ...formData,
+                    requiredRoleId: value === noneValue ? null : value,
+                  })
+                }
               >
                 <SelectTrigger className="mt-1.5 bg-muted/50">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Technician">Technician</SelectItem>
-                  <SelectItem value="Senior Technician">Senior Technician</SelectItem>
-                  <SelectItem value="Supervisor">Supervisor</SelectItem>
+                  <SelectItem value={noneValue}>Any</SelectItem>
+                  {roles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="col-span-2">
+              <div className="flex items-center justify-between mt-1.5 rounded-md border border-border bg-muted/30 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Active</p>
+                  <p className="text-xs text-muted-foreground">Inactive templates won't be scheduled.</p>
+                </div>
+                <Switch checked={formData.isActive} onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })} />
+              </div>
             </div>
           </div>
 
@@ -267,7 +302,7 @@ const TemplateFormDialog = ({
                       <span className="text-sm font-medium text-muted-foreground w-6">
                         {index + 1}.
                       </span>
-                      <span className="flex-1 text-sm text-foreground">{item.text}</span>
+                      <span className="flex-1 text-sm text-foreground">{item.itemText}</span>
                       <Button
                         type="button"
                         variant="ghost"
@@ -282,9 +317,9 @@ const TemplateFormDialog = ({
                     <div className="flex items-center gap-6 pl-10">
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox
-                          checked={item.mandatory}
+                          checked={item.isMandatory}
                           onCheckedChange={(checked) =>
-                            updateChecklistItem(item.id, { mandatory: checked as boolean })
+                            updateChecklistItem(item.id, { isMandatory: checked === true })
                           }
                         />
                         <span className="text-muted-foreground">Mandatory</span>
@@ -292,9 +327,9 @@ const TemplateFormDialog = ({
                       
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox
-                          checked={item.passFailRequired}
+                          checked={item.requiresPassFail}
                           onCheckedChange={(checked) =>
-                            updateChecklistItem(item.id, { passFailRequired: checked as boolean })
+                            updateChecklistItem(item.id, { requiresPassFail: checked === true })
                           }
                         />
                         <span className="text-muted-foreground">Pass/Fail</span>
@@ -304,7 +339,7 @@ const TemplateFormDialog = ({
                         <Checkbox
                           checked={item.requiresNotes}
                           onCheckedChange={(checked) =>
-                            updateChecklistItem(item.id, { requiresNotes: checked as boolean })
+                            updateChecklistItem(item.id, { requiresNotes: checked === true })
                           }
                         />
                         <span className="text-muted-foreground">Notes Required</span>
