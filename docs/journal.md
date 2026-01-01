@@ -18,3 +18,10 @@
 ## 2026-01-01 15:07
 - Removed env-based local superadmin bootstrap; local accounts are DB-backed.
 - Added backend CLI to create local superadmin in the database.
+
+## 2026-01-01 15:17
+- Updated login to accept username or email (frontend + backend).
+- Enhanced LDAP auth to accept DOMAIN\\user and user@domain formats.
+
+## 2026-01-01 15:20
+- Wired the web login screen to backend auth API and token storage.

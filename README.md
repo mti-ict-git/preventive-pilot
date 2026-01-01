@@ -34,6 +34,9 @@ npm i
 
 # Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
+
+# (Optional) Start frontend + backend together
+npm run dev:full
 ```
 
 **Edit a file directly in GitHub**
@@ -79,6 +82,18 @@ Required environment variables:
 - `DB_PORT`
 - `DB_ENCRYPT`
 - `DB_TRUST_SERVER_CERTIFICATE`
+
+## Backend auth
+
+- Start backend (from repo root): `npm run dev:full` or `npm --prefix backend run dev`
+- Backend base URL: `http://localhost:3001`
+- Configure frontend API base URL with `VITE_API_BASE_URL` (defaults to `http://localhost:3001`)
+
+### Create a local superadmin (DB-backed)
+
+```sh
+npm --prefix backend run create-local-superadmin -- --username <user> --password <password>
+```
 
 ## How can I deploy this project?
 
