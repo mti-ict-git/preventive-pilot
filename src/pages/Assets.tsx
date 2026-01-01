@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Server,
   Search,
@@ -33,97 +34,106 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  apiGetSystemStatus,
+  apiListAssets,
+  apiPatchAssetPm,
+  apiRunJob,
+  type Asset,
+  ApiError,
+} from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 const Assets = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
   const navigate = useNavigate();
 
-  const assets = [
-    {
-      id: "LAPTOP-001",
-      name: "Dell Latitude 5520",
-      category: "Laptop",
-      location: "HQ - Floor 2",
-      status: "deployed",
-      pmEnabled: true,
-      lastPM: "2025-11-15",
-      nextPM: "2026-02-15",
-      pic: "John Doe",
-    },
-    {
-      id: "SRV-WEB-01",
-      name: "HP ProLiant DL380",
-      category: "Server",
-      location: "Data Center - Rack A1",
-      status: "deployed",
-      pmEnabled: true,
-      lastPM: "2025-12-01",
-      nextPM: "2026-01-01",
-      pic: "Sarah Miller",
-    },
-    {
-      id: "SW-CORE-01",
-      name: "Cisco Catalyst 9300",
-      category: "Network",
-      location: "Data Center - Rack B2",
-      status: "deployed",
-      pmEnabled: true,
-      lastPM: "2025-10-20",
-      nextPM: "2025-12-20",
-      pic: "Mike Roberts",
-    },
-    {
-      id: "LAPTOP-045",
-      name: "Lenovo ThinkPad T14",
-      category: "Laptop",
-      location: "HQ - Floor 3",
-      status: "deployed",
-      pmEnabled: true,
-      lastPM: "2025-11-01",
-      nextPM: "2026-02-01",
-      pic: "Lisa Kim",
-    },
-    {
-      id: "PTR-FL3-02",
-      name: "HP LaserJet Pro",
-      category: "Printer",
-      location: "HQ - Floor 3",
-      status: "deployed",
-      pmEnabled: false,
-      lastPM: "2025-09-15",
-      nextPM: null,
-      pic: "Unassigned",
-    },
-    {
-      id: "SRV-DB-01",
-      name: "Dell PowerEdge R740",
-      category: "Server",
-      location: "Data Center - Rack A2",
-      status: "deployed",
-      pmEnabled: true,
-      lastPM: "2025-12-10",
-      nextPM: "2026-01-10",
-      pic: "Sarah Miller",
-    },
-  ];
+  const queryClient = useQueryClient();
 
-  const categories = ["all", "Laptop", "Server", "Network", "Printer"];
+  const systemStatusQuery = useQuery({
+    queryKey: ["system-status"],
+    queryFn: apiGetSystemStatus,
+    refetchInterval: 30_000,
+  });
 
-  const getStatusBadge = (status: string) => {
+  const assetsQuery = useQuery({
+    queryKey: ["assets", { page, pageSize, searchQuery }],
+    queryFn: () => apiListAssets({ page, pageSize, search: searchQuery || undefined }),
+  });
+
+  const assets = assetsQuery.data?.items ?? [];
+
+  const categories = useMemo(() => {
+    const values = new Set<string>();
+    for (const a of assets) {
+      const name = a.category.name;
+      if (name) values.add(name);
+    }
+    return ["all", ...Array.from(values).sort((a, b) => a.localeCompare(b))];
+  }, [assets]);
+
+  const togglePmMutation = useMutation({
+    mutationFn: async (input: { assetId: string; pmEnabled: boolean }) => {
+      return apiPatchAssetPm({ assetId: input.assetId, pmEnabled: input.pmEnabled });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to update asset PM settings";
+      toast({
+        title: "Update failed",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const syncNowMutation = useMutation({
+    mutationFn: async () => apiRunJob("snipe-sync"),
+    onSuccess: async () => {
+      toast({ title: "Sync started", description: "Snipe-IT sync job started." });
+      await queryClient.invalidateQueries({ queryKey: ["system-status"] });
+      await queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to start Snipe-IT sync";
+      toast({
+        title: "Sync failed",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const getStatusBadge = (status: string | null) => {
+    if (!status) {
+      return (
+        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+          Unknown
+        </Badge>
+      );
+    }
     const styles = {
       deployed: "bg-success/20 text-success border-success/30",
       pending: "bg-warning/20 text-warning border-warning/30",
       archived: "bg-muted text-muted-foreground border-border",
     };
+    const normalized = status.toLowerCase();
     return (
-      <Badge variant="outline" className={styles[status as keyof typeof styles]}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <Badge
+        variant="outline"
+        className={styles[normalized as keyof typeof styles] ?? "bg-muted text-muted-foreground border-border"}
+      >
+        {status}
       </Badge>
     );
   };
 
-  const getPMStatus = (lastPM: string | null, nextPM: string | null, pmEnabled: boolean) => {
+  const getPMStatus = (nextPM: string | null, pmEnabled: boolean) => {
     if (!pmEnabled) return { status: "disabled", icon: XCircle, color: "text-muted-foreground" };
     if (!nextPM) return { status: "no schedule", icon: Clock, color: "text-muted-foreground" };
     
@@ -137,12 +147,23 @@ const Assets = () => {
   };
 
   const filteredAssets = assets.filter((asset) => {
-    const matchesCategory = selectedCategory === "all" || asset.category === selectedCategory;
-    const matchesSearch =
-      asset.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      asset.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    const categoryName = asset.category.name ?? "";
+    const matchesCategory = selectedCategory === "all" || categoryName === selectedCategory;
+    return matchesCategory;
   });
+
+  const lastSyncText = (() => {
+    const data = systemStatusQuery.data;
+    const lastRun = data?.snipeIt.lastRun;
+    if (!data) return "Loading system status…";
+    if (!data.snipeIt.configured) return "Snipe-IT not configured";
+    if (!lastRun) return "No sync run recorded";
+    const time = new Date(lastRun.completedAt ?? lastRun.startedAt).toLocaleString();
+    const count = lastRun.assetsProcessed ?? null;
+    return `Last sync: ${time}${count !== null ? ` • ${count} assets` : ""}`;
+  })();
+
+  const snipeItUrl = systemStatusQuery.data?.snipeIt.baseUrl;
 
   return (
     <div className="min-h-screen">
@@ -161,15 +182,29 @@ const Assets = () => {
             </div>
             <div>
               <p className="font-medium text-foreground">Snipe-IT Sync Active</p>
-              <p className="text-sm text-muted-foreground">Last sync: 5 minutes ago • 1,247 assets</p>
+              <p className="text-sm text-muted-foreground">{lastSyncText}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => syncNowMutation.mutate()}
+              disabled={syncNowMutation.isPending}
+            >
               <RefreshCw className="w-4 h-4" />
               Sync Now
             </Button>
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                if (snipeItUrl) window.open(snipeItUrl, "_blank", "noreferrer");
+              }}
+              disabled={!snipeItUrl}
+            >
               <ExternalLink className="w-4 h-4" />
               Open Snipe-IT
             </Button>
@@ -216,6 +251,11 @@ const Assets = () => {
           transition={{ delay: 0.2 }}
           className="glass rounded-xl overflow-hidden"
         >
+          {assetsQuery.isLoading ? (
+            <div className="p-6 text-sm text-muted-foreground">Loading assets…</div>
+          ) : assetsQuery.isError ? (
+            <div className="p-6 text-sm text-destructive">Failed to load assets.</div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
@@ -231,7 +271,8 @@ const Assets = () => {
             </TableHeader>
             <TableBody>
               {filteredAssets.map((asset, index) => {
-                const pmStatus = getPMStatus(asset.lastPM, asset.nextPM, asset.pmEnabled);
+                const pmEnabled = asset.pm.enabled ?? true;
+                const pmStatus = getPMStatus(asset.pm.nextDueAt, pmEnabled);
                 return (
                   <motion.tr
                     key={asset.id}
@@ -246,14 +287,14 @@ const Assets = () => {
                         <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
                           <Server className="w-4 h-4 text-muted-foreground" />
                         </div>
-                        <span className="font-mono text-sm text-foreground">{asset.id}</span>
+                        <span className="font-mono text-sm text-foreground">{asset.assetTag}</span>
                       </div>
                     </TableCell>
                     <TableCell className="font-medium text-foreground">{asset.name}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{asset.category}</Badge>
+                      <Badge variant="secondary">{asset.category.name ?? "—"}</Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{asset.location}</TableCell>
+                    <TableCell className="text-muted-foreground">{asset.location.name ?? "—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <pmStatus.icon className={`w-4 h-4 ${pmStatus.color}`} />
@@ -261,10 +302,22 @@ const Assets = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {asset.nextPM || "—"}
+                      {asset.pm.nextDueAt ? new Date(asset.pm.nextDueAt).toLocaleDateString() : "—"}
                     </TableCell>
                     <TableCell>
-                      <Switch checked={asset.pmEnabled} />
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                      >
+                        <Switch
+                          checked={pmEnabled}
+                          onCheckedChange={(checked) =>
+                            togglePmMutation.mutate({ assetId: asset.id, pmEnabled: checked })
+                          }
+                          disabled={togglePmMutation.isPending}
+                        />
+                      </div>
                     </TableCell>
                     <TableCell>
                       <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -274,18 +327,29 @@ const Assets = () => {
               })}
             </TableBody>
           </Table>
+          )}
         </motion.div>
 
         {/* Pagination */}
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {filteredAssets.length} of {assets.length} assets
+            Showing {filteredAssets.length} assets
           </p>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1 || assetsQuery.isLoading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
               Previous
             </Button>
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={(assetsQuery.data?.items.length ?? 0) < pageSize || assetsQuery.isLoading}
+              onClick={() => setPage((p) => p + 1)}
+            >
               Next
             </Button>
           </div>

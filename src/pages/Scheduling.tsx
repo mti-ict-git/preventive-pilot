@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar,
   Clock,
@@ -14,20 +15,40 @@ import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  apiListAssignmentRules,
+  apiListBlackoutWindows,
+  apiRecalculateSchedules,
+  ApiError,
+} from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 const Scheduling = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date(2026, 0, 1));
 
-  const rules = [
-    { name: "Auto-assign Laptops", category: "Laptop", location: "All", assignTo: "Available Technician" },
-    { name: "Server PM Priority", category: "Server", location: "Data Center", assignTo: "Senior Technician" },
-    { name: "Network Devices", category: "Network", location: "All", assignTo: "Network Team" },
-  ];
+  const queryClient = useQueryClient();
 
-  const blackoutPeriods = [
-    { name: "Year-End Freeze", start: "Dec 20", end: "Jan 5", reason: "Holiday season" },
-    { name: "Q1 Audit", start: "Jan 15", end: "Jan 20", reason: "Annual audit" },
-  ];
+  const rulesQuery = useQuery({
+    queryKey: ["assignment-rules"],
+    queryFn: apiListAssignmentRules,
+  });
+
+  const blackoutQuery = useQuery({
+    queryKey: ["blackout-windows"],
+    queryFn: apiListBlackoutWindows,
+  });
+
+  const recalcMutation = useMutation({
+    mutationFn: async () => apiRecalculateSchedules(),
+    onSuccess: async () => {
+      toast({ title: "Recalculation started", description: "Schedules recalculated." });
+      await queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to recalculate schedules";
+      toast({ title: "Action failed", description: message, variant: "destructive" });
+    },
+  });
 
   const getDaysInMonth = (date: Date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -169,20 +190,29 @@ const Scheduling = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {rules.map((rule, index) => (
-                    <div
-                      key={index}
-                      className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-foreground text-sm">{rule.name}</span>
-                        <Settings className="w-4 h-4 text-muted-foreground" />
+                  {rulesQuery.isLoading ? (
+                    <div className="text-sm text-muted-foreground">Loading rules…</div>
+                  ) : rulesQuery.isError ? (
+                    <div className="text-sm text-destructive">Failed to load rules.</div>
+                  ) : (
+                    (rulesQuery.data?.items ?? []).map((rule) => (
+                      <div
+                        key={rule.RuleId}
+                        className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-foreground text-sm">Priority {rule.Priority}</span>
+                          <Settings className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {rule.CategoryId ? `Category ${rule.CategoryId}` : "Any category"} •{" "}
+                          {rule.LocationId ? `Location ${rule.LocationId}` : "Any location"} •{" "}
+                          {rule.AssetStatus ? rule.AssetStatus : "Any status"} →{" "}
+                          {rule.AssignToUserId ?? rule.AssignToRoleId ?? "Unassigned"}
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {rule.category} • {rule.location} → {rule.assignTo}
-                      </p>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
@@ -203,20 +233,31 @@ const Scheduling = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {blackoutPeriods.map((period, index) => (
-                    <div
-                      key={index}
-                      className="p-3 rounded-lg bg-warning/10 border border-warning/20"
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <AlertTriangle className="w-4 h-4 text-warning" />
-                        <span className="font-medium text-foreground text-sm">{period.name}</span>
+                  {blackoutQuery.isLoading ? (
+                    <div className="text-sm text-muted-foreground">Loading blackout windows…</div>
+                  ) : blackoutQuery.isError ? (
+                    <div className="text-sm text-destructive">Failed to load blackout windows.</div>
+                  ) : (
+                    (blackoutQuery.data?.items ?? []).map((period) => (
+                      <div
+                        key={period.BlackoutWindowId}
+                        className="p-3 rounded-lg bg-warning/10 border border-warning/20"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <AlertTriangle className="w-4 h-4 text-warning" />
+                          <span className="font-medium text-foreground text-sm">{period.Name}</span>
+                          {!period.IsActive && (
+                            <Badge variant="outline" className="bg-muted/20 text-muted-foreground border-border">
+                              Inactive
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(period.StartsAt).toLocaleString()} - {new Date(period.EndsAt).toLocaleString()}
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {period.start} - {period.end} • {period.reason}
-                      </p>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
@@ -227,7 +268,11 @@ const Scheduling = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <Button className="w-full gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90">
+              <Button
+                className="w-full gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                onClick={() => recalcMutation.mutate()}
+                disabled={recalcMutation.isPending}
+              >
                 <Clock className="w-4 h-4" />
                 Recalculate All Schedules
               </Button>

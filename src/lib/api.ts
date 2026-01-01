@@ -200,6 +200,10 @@ export const apiListTasks = async (input: {
   status?: string;
   assigned?: "me" | "unassigned" | "any";
   overdue?: boolean;
+  assetId?: string;
+  templateId?: string;
+  dueFrom?: string;
+  dueTo?: string;
   page?: number;
   pageSize?: number;
 }): Promise<ListTasksResponse> => {
@@ -207,6 +211,10 @@ export const apiListTasks = async (input: {
   if (input.status) params.set("status", input.status);
   if (input.assigned) params.set("assigned", input.assigned);
   if (input.overdue !== undefined) params.set("overdue", input.overdue ? "true" : "false");
+  if (input.assetId) params.set("assetId", input.assetId);
+  if (input.templateId) params.set("templateId", input.templateId);
+  if (input.dueFrom) params.set("dueFrom", input.dueFrom);
+  if (input.dueTo) params.set("dueTo", input.dueTo);
   if (input.page) params.set("page", String(input.page));
   if (input.pageSize) params.set("pageSize", String(input.pageSize));
   const query = params.toString();
