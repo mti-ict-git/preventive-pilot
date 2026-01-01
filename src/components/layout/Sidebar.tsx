@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Wrench,
   LogOut,
+  QrCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ const mainNav: NavItem[] = [
   { title: "PM Tasks", icon: ClipboardList, href: "/tasks", badge: 12 },
   { title: "Reports", icon: BarChart3, href: "/reports" },
   { title: "Notifications", icon: Bell, href: "/notifications" },
+  { title: "Label Designer", icon: QrCode, href: "/label-designer" },
 ];
 
 const settingsNav: NavItem[] = [
