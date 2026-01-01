@@ -8,6 +8,7 @@ import { schedulingRouter } from "./routes/scheduling";
 import { tasksRouter } from "./routes/tasks";
 import { reportsRouter } from "./routes/reports";
 import { notificationsRouter } from "./routes/notifications";
+import { startJobs } from "./jobs";
 
 const app = express();
 
@@ -35,4 +36,5 @@ app.use("/api/notifications", notificationsRouter);
 
 app.listen(env.BACKEND_PORT, () => {
   process.stdout.write(`Backend listening on http://localhost:${env.BACKEND_PORT}\n`);
+  void startJobs();
 });

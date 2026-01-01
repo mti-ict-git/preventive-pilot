@@ -46,6 +46,35 @@ const EnvSchema = z.object({
   LDAP_CONNECT_TIMEOUT: z.string().optional().default("10000").pipe(numberFromString).pipe(z.number()),
   LDAP_TLS_REJECT_UNAUTHORIZED: z.string().optional().default("true").pipe(booleanFromString).pipe(z.boolean()),
   LDAP_GROUP_SUPERADMIN: z.string().min(1),
+
+  JOBS_ENABLED: z.string().optional().default("true").pipe(booleanFromString).pipe(z.boolean()),
+  JOB_SNIPE_SYNC_ENABLED: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
+  SNIPEIT_BASE_URL: z.string().optional(),
+  SNIPEIT_API_TOKEN: z.string().optional(),
+  JOB_SNIPE_SYNC_INTERVAL_MINUTES: z
+    .string()
+    .optional()
+    .default("60")
+    .pipe(numberFromString)
+    .pipe(z.number().int().min(1)),
+  JOB_SCHEDULE_CALC_INTERVAL_MINUTES: z
+    .string()
+    .optional()
+    .default("10")
+    .pipe(numberFromString)
+    .pipe(z.number().int().min(1)),
+  JOB_TASK_HORIZON_DAYS: z
+    .string()
+    .optional()
+    .default("30")
+    .pipe(numberFromString)
+    .pipe(z.number().int().min(1)),
+  JOB_NOTIFICATION_INTERVAL_MINUTES: z
+    .string()
+    .optional()
+    .default("60")
+    .pipe(numberFromString)
+    .pipe(z.number().int().min(1)),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
