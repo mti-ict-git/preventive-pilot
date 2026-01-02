@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ClipboardList,
   Search,
@@ -19,12 +19,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { endOfDay, format, isAfter, isBefore, isSameDay, parseISO, startOfDay } from "date-fns";
-import { apiListTasks, type TaskListItem } from "@/lib/api";
+import { apiGetTask, apiListTasks, apiStartTask, type TaskDetail, type TaskListItem } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 const Tasks = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
+
+  const queryClient = useQueryClient();
 
   const listQueryInput = useMemo(() => {
     const now = new Date();
@@ -117,9 +124,17 @@ const Tasks = () => {
         const uiStatus = getUiStatus(task, now);
         const pic = task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned";
         const dueDate = format(parseISO(task.scheduledDueAt), "yyyy-MM-dd");
-        const progress = uiStatus === "completed" ? 100 : uiStatus === "in_progress" ? 50 : 0;
+        const progress =
+          uiStatus === "completed"
+            ? 100
+            : task.checklistTotal > 0
+              ? Math.round((task.checklistCompleted / task.checklistTotal) * 100)
+              : uiStatus === "in_progress"
+                ? 50
+                : 0;
         return {
           id: task.taskNumber,
+          taskId: task.id,
           asset: task.asset.assetTag,
           assetName: task.asset.name,
           template: task.template.name,
@@ -128,8 +143,8 @@ const Tasks = () => {
           dueDate,
           pic,
           progress,
-          checklistComplete: 0,
-          checklistTotal: 0,
+          checklistComplete: task.checklistCompleted,
+          checklistTotal: task.checklistTotal,
         };
       })
       .filter((task) => {
@@ -210,6 +225,10 @@ const Tasks = () => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
                       className="glass rounded-xl p-5 hover:border-primary/50 transition-all duration-300 cursor-pointer group"
+                      onClick={() => {
+                        setSelectedTaskId(task.taskId);
+                        setTaskDetailOpen(true);
+                      }}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
@@ -267,7 +286,209 @@ const Tasks = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <TaskDetailDialog
+        open={taskDetailOpen}
+        onOpenChange={(next) => {
+          setTaskDetailOpen(next);
+          if (!next) setSelectedTaskId(null);
+        }}
+        taskId={selectedTaskId}
+        onStarted={async () => {
+          await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+        }}
+      />
     </div>
+  );
+};
+
+const TaskDetailDialog = (props: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  taskId: string | null;
+  onStarted: () => Promise<void>;
+}) => {
+  const taskQuery = useQuery({
+    queryKey: ["task", props.taskId],
+    queryFn: () => apiGetTask(props.taskId ?? ""),
+    enabled: props.open && !!props.taskId,
+  });
+
+  const startMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiStartTask(props.taskId);
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      await props.onStarted();
+      toast({ title: "Task started" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Failed to start task",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const task = taskQuery.data;
+
+  const checklistTotal = useMemo(() => {
+    const items = task?.checklistItems ?? [];
+    return items.filter((i) => i.isActive).length;
+  }, [task?.checklistItems]);
+
+  const checklistCompleted = useMemo(() => {
+    const items = task?.checklistItems ?? [];
+    return items.filter((i) => i.isActive && i.result !== null).length;
+  }, [task?.checklistItems]);
+
+  const checklistProgress = checklistTotal > 0 ? Math.round((checklistCompleted / checklistTotal) * 100) : 0;
+
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden glass border-border">
+        <DialogHeader className="pb-4 border-b border-border">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <DialogTitle className="text-xl font-bold text-foreground">
+                {task ? task.taskNumber : "Task"}
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                {task ? `${task.asset.assetTag} • ${task.asset.name} • ${task.template.name}` : ""}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                disabled={!task || startMutation.isPending || task.status.toLowerCase() !== "scheduled"}
+                onClick={() => startMutation.mutate()}
+              >
+                Start
+              </Button>
+              <Button variant="outline" disabled>
+                Complete
+              </Button>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <ScrollArea className="max-h-[70vh]">
+          <div className="py-4 space-y-6">
+            {taskQuery.isLoading ? (
+              <div className="text-sm text-muted-foreground">Loading…</div>
+            ) : taskQuery.isError ? (
+              <div className="text-sm text-destructive">Failed to load task.</div>
+            ) : task ? (
+              <>
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 md:col-span-6 glass rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground">Due</p>
+                    <p className="text-sm text-foreground mt-1">
+                      {format(parseISO(task.scheduledDueAt), "yyyy-MM-dd HH:mm")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-3">Status</p>
+                    <p className="text-sm text-foreground mt-1">{task.status}</p>
+                  </div>
+
+                  <div className="col-span-12 md:col-span-6 glass rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Checklist</p>
+                        <p className="text-sm text-foreground mt-1">
+                          {checklistCompleted}/{checklistTotal}
+                        </p>
+                      </div>
+                      <div className="w-40">
+                        <Progress value={checklistProgress} className="h-2" />
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground mt-3">Assigned</p>
+                    <p className="text-sm text-foreground mt-1">
+                      {task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned"}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Checklist</h3>
+                  <div className="space-y-2">
+                    {task.checklistItems
+                      .filter((i) => i.isActive)
+                      .map((item) => (
+                        <div key={item.id} className="glass rounded-lg p-3">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="text-sm text-foreground">{item.itemText}</p>
+                              <div className="flex items-center gap-3 mt-1">
+                                {item.isMandatory ? (
+                                  <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
+                                    Mandatory
+                                  </Badge>
+                                ) : null}
+                                {item.requiresPassFail ? (
+                                  <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">
+                                    Pass/Fail
+                                  </Badge>
+                                ) : null}
+                                {item.requiresNotes ? (
+                                  <Badge variant="outline" className="bg-accent/20 text-accent border-accent/30">
+                                    Notes
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">Outcome</p>
+                              <p className="text-sm text-foreground mt-1">
+                                {item.result ? String(item.result.outcome) : "—"}
+                              </p>
+                            </div>
+                          </div>
+                          {item.result?.notes ? (
+                            <div className="mt-3 text-sm text-muted-foreground">{item.result.notes}</div>
+                          ) : null}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Evidence</h3>
+                  {task.evidence.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No evidence uploaded.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {task.evidence.map((e) => (
+                        <div key={e.id} className="glass rounded-lg p-3 flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="text-sm text-foreground truncate">{e.fileName ?? e.uri}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {e.contentType ?? ""}
+                              {e.sizeBytes !== null ? ` • ${e.sizeBytes} bytes` : ""}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Uploaded</p>
+                            <p className="text-sm text-foreground mt-1">
+                              {format(parseISO(e.uploadedAt), "yyyy-MM-dd HH:mm")}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
   );
 };
 

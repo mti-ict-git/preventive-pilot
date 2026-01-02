@@ -193,6 +193,8 @@ export type TaskListItem = {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  checklistTotal: number;
+  checklistCompleted: number;
   asset: { id: string; assetTag: string; name: string };
   template: { id: string; name: string };
   assignedTo: {
@@ -233,6 +235,149 @@ export const apiListTasks = async (input: {
   if (input.pageSize) params.set("pageSize", String(input.pageSize));
   const query = params.toString();
   return apiFetchJson<ListTasksResponse>(`/api/tasks${query ? `?${query}` : ""}`);
+};
+
+export type DashboardOverviewResponse = {
+  stats: {
+    totalAssetsInPm: number;
+    upcoming7DaysCount: number;
+    dueTodayCount: number;
+    overdueCount: number;
+  };
+  complianceTrend: Array<{
+    monthStart: string;
+    monthEnd: string;
+    totalDue: number;
+    completedOnTime: number;
+    complianceRate: number | null;
+  }>;
+  overdueByCategory: Array<{ name: string; count: number }>;
+  recentTasks: Array<{
+    id: string;
+    taskNumber: string;
+    status: string;
+    scheduledDueAt: string;
+    asset: { assetTag: string; name: string };
+    template: { name: string };
+    assignedTo: { displayName: string | null; roleName: string | null };
+  }>;
+};
+
+export const apiGetDashboardOverview = async (): Promise<DashboardOverviewResponse> => {
+  return apiFetchJson<DashboardOverviewResponse>("/api/dashboard/overview");
+};
+
+export type TaskUserRef = {
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+};
+
+export type TaskDetailChecklistItem = {
+  id: string;
+  sortOrder: number;
+  itemText: string;
+  isMandatory: boolean;
+  requiresNotes: boolean;
+  requiresPassFail: boolean;
+  isActive: boolean;
+  result: {
+    id: string;
+    outcome: number;
+    notes: string | null;
+    completedAt: string | null;
+    completedBy: TaskUserRef | null;
+  } | null;
+};
+
+export type TaskEvidence = {
+  id: string;
+  fileName: string | null;
+  contentType: string | null;
+  sizeBytes: number | null;
+  uri: string;
+  uploadedAt: string;
+  uploadedBy: TaskUserRef | null;
+};
+
+export type TaskDetail = {
+  id: string;
+  taskNumber: string;
+  status: string;
+  priority: string;
+  scheduledDueAt: string;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  completedBy: TaskUserRef | null;
+  cancelledAt: string | null;
+  cancelledBy: TaskUserRef | null;
+  forceCompleted: boolean | null;
+  asset: { id: string; assetTag: string; name: string };
+  template: { id: string; name: string };
+  assignedTo: {
+    userId: string | null;
+    username: string | null;
+    displayName: string | null;
+    roleId: string | null;
+    roleName: string | null;
+  };
+  checklistItems: TaskDetailChecklistItem[];
+  evidence: TaskEvidence[];
+};
+
+export const apiGetTask = async (taskId: string): Promise<TaskDetail> => {
+  return apiFetchJson<TaskDetail>(`/api/tasks/${taskId}`);
+};
+
+export const apiAssignTask = async (input: {
+  taskId: string;
+  assignedToUserId?: string | null;
+  assignedToRoleId?: string | null;
+  priority?: string;
+  status?: string;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/assign`, {
+    method: "POST",
+    body,
+  });
+};
+
+export const apiStartTask = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/start`, { method: "POST" });
+};
+
+export type CompleteTaskChecklistResultInput = {
+  templateChecklistItemId: string;
+  outcome: number;
+  notes?: string | null;
+};
+
+export const apiCompleteTask = async (input: {
+  taskId: string;
+  checklistResults: CompleteTaskChecklistResultInput[];
+  forceCompleted?: boolean;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/complete`, {
+    method: "POST",
+    body,
+  });
+};
+
+export const apiAddTaskEvidence = async (input: {
+  taskId: string;
+  uri: string;
+  fileName?: string | null;
+  contentType?: string | null;
+  sizeBytes?: number | null;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/evidence`, {
+    method: "POST",
+    body,
+  });
 };
 
 export type OverdueReportItem = {
