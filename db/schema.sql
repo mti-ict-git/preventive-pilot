@@ -399,6 +399,18 @@ BEGIN
   );
 END;
 
+IF OBJECT_ID(N'pm.SystemSettings', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.SystemSettings (
+    SettingKey nvarchar(128) NOT NULL,
+    SettingValueJson nvarchar(max) NULL,
+    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_SystemSettings_UpdatedAt DEFAULT (sysutcdatetime()),
+    UpdatedByUserId uniqueidentifier NULL,
+    CONSTRAINT PK_pm_SystemSettings PRIMARY KEY CLUSTERED (SettingKey),
+    CONSTRAINT FK_pm_SystemSettings_UpdatedByUser FOREIGN KEY (UpdatedByUserId) REFERENCES pm.Users(UserId)
+  );
+END;
+
 IF OBJECT_ID(N'pm.SnipeItSettings', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.SnipeItSettings (

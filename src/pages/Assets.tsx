@@ -46,6 +46,8 @@ import {
 import {
   apiGetSystemStatus,
   apiGetLookups,
+  apiGetAssetsUiSettings,
+  apiUpdateAssetsUiSettings,
   apiBulkSetAssetPmEnabled,
   apiListAssets,
   apiPatchAssetPm,
@@ -57,34 +59,10 @@ import {
 import { toast } from "@/hooks/use-toast";
 
 const EMPTY_ASSETS: Asset[] = [];
-const CATEGORY_VISIBILITY_STORAGE_KEY = "pm.assets.visibleCategoryIds";
-
-const loadVisibleCategoryIds = (): string[] | null => {
-  try {
-    const raw = localStorage.getItem(CATEGORY_VISIBILITY_STORAGE_KEY);
-    if (!raw) return null;
-    if (raw === "all") return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    const values = parsed.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
-    if (values.length === 0) return null;
-    return values;
-  } catch {
-    return null;
-  }
-};
-
-const saveVisibleCategoryIds = (value: string[] | null): void => {
-  if (value === null) {
-    localStorage.setItem(CATEGORY_VISIBILITY_STORAGE_KEY, "all");
-    return;
-  }
-  localStorage.setItem(CATEGORY_VISIBILITY_STORAGE_KEY, JSON.stringify(value));
-};
 
 const Assets = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
-  const [visibleCategoryIds, setVisibleCategoryIds] = useState<string[] | null>(() => loadVisibleCategoryIds());
+  const [visibleCategoryIds, setVisibleCategoryIds] = useState<string[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [page, setPage] = useState(1);
@@ -106,6 +84,34 @@ const Assets = () => {
     staleTime: 60_000,
   });
 
+  const uiSettingsQuery = useQuery({
+    queryKey: ["ui-settings", "assets"],
+    queryFn: apiGetAssetsUiSettings,
+    staleTime: 60_000,
+  });
+
+  const updateUiSettingsMutation = useMutation({
+    mutationFn: apiUpdateAssetsUiSettings,
+    onSuccess: async (data) => {
+      setVisibleCategoryIds(data.visibleCategoryIds);
+      queryClient.setQueryData(["ui-settings", "assets"], data);
+      await queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to save category visibility";
+      toast({ title: "Save failed", description: message, variant: "destructive" });
+      void queryClient.invalidateQueries({ queryKey: ["ui-settings", "assets"] });
+    },
+  });
+
+  const saveUiSettings = updateUiSettingsMutation.mutate;
+  const isSavingUiSettings = updateUiSettingsMutation.isPending;
+
+  useEffect(() => {
+    if (!uiSettingsQuery.isSuccess) return;
+    setVisibleCategoryIds(uiSettingsQuery.data.visibleCategoryIds);
+  }, [uiSettingsQuery.isSuccess, uiSettingsQuery.data?.visibleCategoryIds]);
+
   const allCategories = useMemo((): LookupAssetCategory[] => {
     return lookupsQuery.data?.assetCategories ?? [];
   }, [lookupsQuery.data?.assetCategories]);
@@ -125,9 +131,11 @@ const Assets = () => {
     if (next.length !== visibleCategoryIds.length) {
       const normalized = next.length === allCategoryIds.length ? null : next;
       setVisibleCategoryIds(normalized);
-      saveVisibleCategoryIds(normalized);
+      if (uiSettingsQuery.isSuccess && !isSavingUiSettings) {
+        saveUiSettings({ visibleCategoryIds: normalized });
+      }
     }
-  }, [allCategoryIds, visibleCategoryIds]);
+  }, [allCategoryIds, visibleCategoryIds, uiSettingsQuery.isSuccess, isSavingUiSettings, saveUiSettings]);
 
   useEffect(() => {
     if (selectedCategoryId === "all") return;
@@ -224,8 +232,8 @@ const Assets = () => {
       }
       const normalized = next.length === allIds.length ? null : next;
       setVisibleCategoryIds(normalized);
-      saveVisibleCategoryIds(normalized);
       setPage(1);
+      updateUiSettingsMutation.mutate({ visibleCategoryIds: normalized });
       return;
     }
 
@@ -242,8 +250,8 @@ const Assets = () => {
     }
     const normalized = next.length === allIds.length ? null : next;
     setVisibleCategoryIds(normalized);
-    saveVisibleCategoryIds(normalized);
     setPage(1);
+    updateUiSettingsMutation.mutate({ visibleCategoryIds: normalized });
   };
 
   const togglePmMutation = useMutation({
@@ -420,8 +428,8 @@ const Assets = () => {
                       size="sm"
                       onClick={() => {
                         setVisibleCategoryIds(null);
-                        saveVisibleCategoryIds(null);
                         setPage(1);
+                        updateUiSettingsMutation.mutate({ visibleCategoryIds: null });
                       }}
                       disabled={visibleCategoryIds === null}
                     >

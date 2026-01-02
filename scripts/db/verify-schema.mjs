@@ -61,6 +61,7 @@ const expectedTables = [
   "AuditLog",
   "SystemLog",
   "SnipeSyncRuns",
+  "SystemSettings",
   "SnipeItSettings",
 ];
 

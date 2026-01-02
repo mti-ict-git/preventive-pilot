@@ -62,3 +62,11 @@
 ## 2026-01-01 18:36
 - Added saved category visibility filter for Assets list (frontend + backend).
 - Persisted visible category selection in localStorage with safe normalization.
+
+## 2026-01-02 20:51
+- Verified development environment health (frontend on port 8080, backend on port 3001).
+- Confirmed backend health endpoint returns OK.
+
+## 2026-01-02 21:42
+- Moved Assets visible-category filter from localStorage to DB global setting (pm.SystemSettings).
+- Added system API endpoints to load and update Assets UI settings.

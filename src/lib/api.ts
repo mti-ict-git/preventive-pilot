@@ -554,6 +554,22 @@ export const apiGetSystemStatus = async (): Promise<SystemStatusResponse> => {
   return apiFetchJson<SystemStatusResponse>("/api/system/status");
 };
 
+export type AssetsUiSettingsResponse = {
+  visibleCategoryIds: string[] | null;
+};
+
+export type UpdateAssetsUiSettingsInput = AssetsUiSettingsResponse;
+
+export const apiGetAssetsUiSettings = async (): Promise<AssetsUiSettingsResponse> => {
+  return apiFetchJson<AssetsUiSettingsResponse>("/api/system/ui-settings/assets");
+};
+
+export const apiUpdateAssetsUiSettings = async (
+  input: UpdateAssetsUiSettingsInput,
+): Promise<AssetsUiSettingsResponse> => {
+  return apiFetchJson<AssetsUiSettingsResponse>("/api/system/ui-settings/assets", { method: "PUT", body: input });
+};
+
 export type SnipeItSettingsResponse = {
   baseUrl: string | null;
   apiTokenConfigured: boolean;

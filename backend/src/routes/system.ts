@@ -119,6 +119,50 @@ const SnipeItSettingsUpdateSchema = z.object({
 
 const SnipeItSettingsTestSchema = SnipeItSettingsUpdateSchema.partial().optional();
 
+const AssetsUiSettingsSchema = z.object({
+  visibleCategoryIds: z.array(z.string().uuid()).min(1).nullable(),
+});
+
+const ASSETS_VISIBLE_CATEGORY_IDS_SETTING_KEY = "ui.assets.visibleCategoryIds";
+
+const parseVisibleCategoryIds = (valueJson: string | null): string[] | null => {
+  if (!valueJson || !valueJson.trim()) return null;
+  try {
+    const parsed: unknown = JSON.parse(valueJson);
+    const validated = z.array(z.string().uuid()).min(1).safeParse(parsed);
+    if (!validated.success) return null;
+    return validated.data;
+  } catch {
+    return null;
+  }
+};
+
+const loadAssetsUiSettings = async (): Promise<z.infer<typeof AssetsUiSettingsSchema>> => {
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), ASSETS_VISIBLE_CATEGORY_IDS_SETTING_KEY)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  SettingValueJson",
+          "FROM pm.SystemSettings",
+          "WHERE SettingKey = @settingKey",
+        ].join("\n"),
+      );
+
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
+    return { visibleCategoryIds: parseVisibleCategoryIds(valueJson) };
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      return { visibleCategoryIds: null };
+    }
+    throw err;
+  }
+};
+
 export const systemRouter = Router();
 
 systemRouter.use(requireAuth);
@@ -195,6 +239,63 @@ systemRouter.get("/snipeit-settings", async (_req, res) => {
     autoSyncEnabled: settings.autoSyncEnabled,
     syncIntervalMinutes: settings.syncIntervalMinutes,
   });
+});
+
+systemRouter.get("/ui-settings/assets", async (_req, res) => {
+  try {
+    const settings = await loadAssetsUiSettings();
+    res.json(settings);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+  }
+});
+
+systemRouter.put("/ui-settings/assets", requireSystemAdmin, async (req, res) => {
+  const parsed = AssetsUiSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const valueJson = parsed.data.visibleCategoryIds === null ? null : JSON.stringify(parsed.data.visibleCategoryIds);
+
+  try {
+    const db = await getDb();
+    await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), ASSETS_VISIBLE_CATEGORY_IDS_SETTING_KEY)
+      .input("settingValueJson", sql.NVarChar(sql.MAX), valueJson)
+      .input("updatedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "MERGE pm.SystemSettings WITH (HOLDLOCK) AS target",
+          "USING (SELECT @settingKey AS SettingKey) AS source",
+          "ON target.SettingKey = source.SettingKey",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    SettingValueJson = @settingValueJson,",
+          "    UpdatedAt = sysutcdatetime(),",
+          "    UpdatedByUserId = @updatedByUserId",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (SettingKey, SettingValueJson, UpdatedByUserId)",
+          "  VALUES (@settingKey, @settingValueJson, @updatedByUserId);",
+        ].join("\n"),
+      );
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      res
+        .status(503)
+        .json({ message: "Database schema missing pm.SystemSettings. Run npm run db:apply-schema." });
+      return;
+    }
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+    return;
+  }
+
+  const updated = await loadAssetsUiSettings();
+  res.json(updated);
 });
 
 systemRouter.put("/snipeit-settings", requireSystemAdmin, async (req, res) => {
