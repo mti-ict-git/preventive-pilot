@@ -70,3 +70,6 @@
 ## 2026-01-02 21:42
 - Moved Assets visible-category filter from localStorage to DB global setting (pm.SystemSettings).
 - Added system API endpoints to load and update Assets UI settings.
+
+## 2026-01-02 21:49
+- Restricted Assets UI settings updates to Superadmin only.

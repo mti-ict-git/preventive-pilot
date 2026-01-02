@@ -4,7 +4,7 @@ import sql from "mssql";
 import { env } from "../config/env";
 import { getDb } from "../db/mssql";
 import { requireAuth } from "../middleware/requireAuth";
-import { requireAnyRole } from "../middleware/requireRole";
+import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole";
 import { runJobNow, type JobName } from "../jobs";
 
 const requireSystemAdmin = requireAnyRole(["Superadmin", "Admin"]);
@@ -251,7 +251,7 @@ systemRouter.get("/ui-settings/assets", async (_req, res) => {
   }
 });
 
-systemRouter.put("/ui-settings/assets", requireSystemAdmin, async (req, res) => {
+systemRouter.put("/ui-settings/assets", requireSuperadmin, async (req, res) => {
   const parsed = AssetsUiSettingsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: "Invalid request" });
