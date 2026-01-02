@@ -58,3 +58,7 @@
 - Fixed Assets page bulk selection to respect current filters.
 - Stabilized Assets page memo dependencies to satisfy hook lint rules.
 - Adjusted assets API PM filtering and default PMEnabled insert behavior.
+
+## 2026-01-01 18:36
+- Added saved category visibility filter for Assets list (frontend + backend).
+- Persisted visible category selection in localStorage with safe normalization.

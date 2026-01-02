@@ -136,6 +136,8 @@ export const apiListAssets = async (input: {
   search?: string;
   status?: string;
   pmEnabled?: boolean;
+  categoryId?: string;
+  categoryIds?: string[];
   page?: number;
   pageSize?: number;
 }): Promise<ListAssetsResponse> => {
@@ -143,6 +145,8 @@ export const apiListAssets = async (input: {
   if (input.search) params.set("search", input.search);
   if (input.status) params.set("status", input.status);
   if (input.pmEnabled !== undefined) params.set("pmEnabled", input.pmEnabled ? "true" : "false");
+  if (input.categoryId) params.set("categoryId", input.categoryId);
+  if (input.categoryIds && input.categoryIds.length > 0) params.set("categoryIds", input.categoryIds.join(","));
   if (input.page) params.set("page", String(input.page));
   if (input.pageSize) params.set("pageSize", String(input.pageSize));
 

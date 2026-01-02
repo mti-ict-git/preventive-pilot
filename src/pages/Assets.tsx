@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,19 +45,46 @@ import {
 } from "@/components/ui/table";
 import {
   apiGetSystemStatus,
+  apiGetLookups,
   apiBulkSetAssetPmEnabled,
   apiListAssets,
   apiPatchAssetPm,
   apiRunJob,
   ApiError,
   type Asset,
+  type LookupAssetCategory,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
 const EMPTY_ASSETS: Asset[] = [];
+const CATEGORY_VISIBILITY_STORAGE_KEY = "pm.assets.visibleCategoryIds";
+
+const loadVisibleCategoryIds = (): string[] | null => {
+  try {
+    const raw = localStorage.getItem(CATEGORY_VISIBILITY_STORAGE_KEY);
+    if (!raw) return null;
+    if (raw === "all") return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const values = parsed.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+    if (values.length === 0) return null;
+    return values;
+  } catch {
+    return null;
+  }
+};
+
+const saveVisibleCategoryIds = (value: string[] | null): void => {
+  if (value === null) {
+    localStorage.setItem(CATEGORY_VISIBILITY_STORAGE_KEY, "all");
+    return;
+  }
+  localStorage.setItem(CATEGORY_VISIBILITY_STORAGE_KEY, JSON.stringify(value));
+};
 
 const Assets = () => {
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+  const [visibleCategoryIds, setVisibleCategoryIds] = useState<string[] | null>(() => loadVisibleCategoryIds());
   const [searchQuery, setSearchQuery] = useState("");
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [page, setPage] = useState(1);
@@ -73,14 +100,54 @@ const Assets = () => {
     refetchInterval: 30_000,
   });
 
+  const lookupsQuery = useQuery({
+    queryKey: ["lookups"],
+    queryFn: apiGetLookups,
+    staleTime: 60_000,
+  });
+
+  const allCategories = useMemo((): LookupAssetCategory[] => {
+    return lookupsQuery.data?.assetCategories ?? [];
+  }, [lookupsQuery.data?.assetCategories]);
+
+  const allCategoryIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const c of allCategories) {
+      if (c.id) ids.push(c.id);
+    }
+    return ids;
+  }, [allCategories]);
+
+  useEffect(() => {
+    if (allCategoryIds.length === 0) return;
+    if (visibleCategoryIds === null) return;
+    const next = visibleCategoryIds.filter((id) => allCategoryIds.includes(id));
+    if (next.length !== visibleCategoryIds.length) {
+      const normalized = next.length === allCategoryIds.length ? null : next;
+      setVisibleCategoryIds(normalized);
+      saveVisibleCategoryIds(normalized);
+    }
+  }, [allCategoryIds, visibleCategoryIds]);
+
+  useEffect(() => {
+    if (selectedCategoryId === "all") return;
+    if (visibleCategoryIds === null) return;
+    if (!visibleCategoryIds.includes(selectedCategoryId)) {
+      setSelectedCategoryId("all");
+      setPage(1);
+    }
+  }, [selectedCategoryId, visibleCategoryIds]);
+
   const assetsQuery = useQuery({
-    queryKey: ["assets", { page, pageSize, searchQuery, pmEnabledFilter }],
+    queryKey: ["assets", { page, pageSize, searchQuery, pmEnabledFilter, selectedCategoryId, visibleCategoryIds }],
     queryFn: () =>
       apiListAssets({
         page,
         pageSize,
         search: searchQuery || undefined,
         pmEnabled: pmEnabledFilter === "all" ? undefined : pmEnabledFilter === "enabled",
+        categoryId: selectedCategoryId === "all" ? undefined : selectedCategoryId,
+        categoryIds: visibleCategoryIds ?? undefined,
       }),
   });
 
@@ -88,11 +155,10 @@ const Assets = () => {
 
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
-      const categoryName = asset.category.name ?? "";
-      const matchesCategory = selectedCategory === "all" || categoryName === selectedCategory;
+      const matchesCategory = selectedCategoryId === "all" || asset.category.id === selectedCategoryId;
       return matchesCategory;
     });
-  }, [assets, selectedCategory]);
+  }, [assets, selectedCategoryId]);
 
   const selectedIdsOnPage = useMemo(() => {
     const ids: string[] = [];
@@ -119,14 +185,66 @@ const Assets = () => {
     },
   });
 
-  const categories = useMemo(() => {
-    const values = new Set<string>();
-    for (const a of assets) {
-      const name = a.category.name;
-      if (name) values.add(name);
+  const visibleCategories = useMemo((): LookupAssetCategory[] => {
+    if (visibleCategoryIds === null) return allCategories;
+    const selected = new Set(visibleCategoryIds);
+    return allCategories.filter((c) => selected.has(c.id));
+  }, [allCategories, visibleCategoryIds]);
+
+  const categorySelectItems = useMemo((): Array<{ id: string; name: string }> => {
+    const rows: Array<{ id: string; name: string }> = [{ id: "all", name: "All Categories" }];
+    for (const c of visibleCategories) {
+      rows.push({ id: c.id, name: c.isActive ? c.name : `${c.name} (Inactive)` });
     }
-    return ["all", ...Array.from(values).sort((a, b) => a.localeCompare(b))];
-  }, [assets]);
+    return rows.sort((a, b) => {
+      if (a.id === "all") return -1;
+      if (b.id === "all") return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [visibleCategories]);
+
+  const isCategoryVisible = (categoryId: string): boolean => {
+    if (visibleCategoryIds === null) return true;
+    return visibleCategoryIds.includes(categoryId);
+  };
+
+  const setCategoryVisibility = (categoryId: string, checked: boolean): void => {
+    const allIds = allCategoryIds;
+    const current = visibleCategoryIds;
+
+    if (current === null) {
+      if (checked) return;
+      const next = allIds.filter((id) => id !== categoryId);
+      if (next.length === 0) {
+        toast({
+          title: "Selection required",
+          description: "Keep at least one category visible.",
+        });
+        return;
+      }
+      const normalized = next.length === allIds.length ? null : next;
+      setVisibleCategoryIds(normalized);
+      saveVisibleCategoryIds(normalized);
+      setPage(1);
+      return;
+    }
+
+    const set = new Set(current);
+    if (checked) set.add(categoryId);
+    else set.delete(categoryId);
+    const next = Array.from(set);
+    if (next.length === 0) {
+      toast({
+        title: "Selection required",
+        description: "Keep at least one category visible.",
+      });
+      return;
+    }
+    const normalized = next.length === allIds.length ? null : next;
+    setVisibleCategoryIds(normalized);
+    saveVisibleCategoryIds(normalized);
+    setPage(1);
+  };
 
   const togglePmMutation = useMutation({
     mutationFn: async (input: { assetId: string; pmEnabled: boolean }) => {
@@ -245,14 +363,20 @@ const Assets = () => {
               className="pl-10 bg-muted/50"
             />
           </div>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+          <Select
+            value={selectedCategoryId}
+            onValueChange={(value) => {
+              setSelectedCategoryId(value);
+              setPage(1);
+            }}
+          >
             <SelectTrigger className="w-full md:w-48 bg-muted/50">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat === "all" ? "All Categories" : cat}
+              {categorySelectItems.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -285,6 +409,52 @@ const Assets = () => {
                         <SelectItem value="disabled">Disabled</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium">Visible Categories</div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setVisibleCategoryIds(null);
+                        saveVisibleCategoryIds(null);
+                        setPage(1);
+                      }}
+                      disabled={visibleCategoryIds === null}
+                    >
+                      Show all
+                    </Button>
+                  </div>
+                  <div className="mt-2 max-h-48 overflow-auto rounded-md border border-border p-2">
+                    {allCategories.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No categories loaded.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {allCategories.map((c) => (
+                          <div key={c.id} className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={isCategoryVisible(c.id)}
+                                onCheckedChange={(checked) => setCategoryVisibility(c.id, checked === true)}
+                                aria-label={`Toggle ${c.name}`}
+                              />
+                              <div className="text-sm">
+                                <span>{c.name}</span>
+                                {!c.isActive ? <span className="text-muted-foreground"> (Inactive)</span> : null}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {visibleCategoryIds === null
+                      ? "Showing all categories"
+                      : `Showing ${visibleCategoryIds.length} of ${allCategoryIds.length} categories`}
                   </div>
                 </div>
               </div>

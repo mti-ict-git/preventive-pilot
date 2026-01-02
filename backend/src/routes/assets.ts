@@ -14,12 +14,26 @@ const parseBoolean = (value: unknown): boolean | null => {
 const QuerySchema = z.object({
   search: z.string().optional(),
   categoryId: z.string().uuid().optional(),
+  categoryIds: z.string().optional(),
   locationId: z.string().uuid().optional(),
   status: z.string().optional(),
   pmEnabled: z.string().optional(),
   page: z.string().optional().default("1"),
   pageSize: z.string().optional().default("50"),
 });
+
+const parseUuidList = (value: string | undefined): string[] | null => {
+  if (!value) return null;
+  const parts = value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => Boolean(s));
+  if (parts.length === 0) return null;
+  for (const part of parts) {
+    if (!z.string().uuid().safeParse(part).success) return null;
+  }
+  return parts;
+};
 
 const UpdatePmSchema = z
   .object({
@@ -49,6 +63,17 @@ assetsRouter.get("/", async (req, res) => {
   const pageSize = Math.min(200, Math.max(1, Number(parsed.data.pageSize) || 50));
   const offset = (page - 1) * pageSize;
   const pmEnabled = parseBoolean(parsed.data.pmEnabled);
+  const categoryIds = parseUuidList(parsed.data.categoryIds);
+
+  if (parsed.data.categoryIds && categoryIds === null) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  if (categoryIds && categoryIds.length > 50) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
 
   const db = await getDb();
   const request = db
@@ -57,6 +82,7 @@ assetsRouter.get("/", async (req, res) => {
     .input("limit", sql.Int, pageSize)
     .input("search", sql.NVarChar(256), parsed.data.search ? `%${parsed.data.search}%` : null)
     .input("categoryId", sql.UniqueIdentifier, parsed.data.categoryId ?? null)
+    .input("categoryIds", sql.NVarChar(sql.MAX), categoryIds ? categoryIds.join(",") : null)
     .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("status", sql.NVarChar(64), parsed.data.status ?? null)
     .input("pmEnabled", sql.Bit, pmEnabled);
@@ -86,6 +112,17 @@ assetsRouter.get("/", async (req, res) => {
       "LEFT JOIN pm.Locations l ON l.LocationId = a.LocationId",
       "LEFT JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
       "WHERE a.IsArchived = 0",
+      "  AND (",
+      "    @categoryIds IS NULL",
+      "    OR a.CategoryId IN (",
+      "      SELECT c.CategoryId",
+      "      FROM (",
+      "        SELECT TRY_CONVERT(uniqueidentifier, value) AS CategoryId",
+      "        FROM string_split(@categoryIds, ',')",
+      "      ) c",
+      "      WHERE c.CategoryId IS NOT NULL",
+      "    )",
+      "  )",
       "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
       "  AND (@locationId IS NULL OR a.LocationId = @locationId)",
       "  AND (@status IS NULL OR a.AssetStatus = @status)",
