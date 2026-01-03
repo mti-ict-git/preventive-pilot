@@ -81,3 +81,6 @@
 - Standardized checklist outcomes (0=skip, 1=pass/done, 2=fail) and enforced in API.
 - Updated Tasks UI to use outcome dropdown instead of freeform numeric input.
 - Added DB check constraint to restrict checklist outcome values.
+
+## 2026-01-03 07:00
+- Normalized legacy checklist outcomes before adding DB constraint and clamped API output for older data.

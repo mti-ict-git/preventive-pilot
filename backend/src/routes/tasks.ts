@@ -393,31 +393,45 @@ tasksRouter.get("/:taskId", async (req, res) => {
       roleId: taskRow.AssignedToRoleId,
       roleName: taskRow.AssignedToRoleName,
     },
-    checklistItems: checklistRows.map((r) => ({
-      id: r.TemplateChecklistItemId,
-      sortOrder: r.SortOrder,
-      itemText: r.ItemText,
-      isMandatory: r.IsMandatory,
-      requiresNotes: r.RequiresNotes,
-      requiresPassFail: r.RequiresPassFail,
-      isActive: r.IsActive,
-      result: r.TaskChecklistResultId
-        ? {
-            id: r.TaskChecklistResultId,
-            outcome: r.Outcome,
-            outcomeLabel: outcomeLabelFor(Boolean(r.RequiresPassFail), Number(r.Outcome)),
-            notes: r.Notes,
-            completedAt: r.ResultCompletedAt,
-            completedBy: r.ResultCompletedByUserId
-              ? {
-                  userId: r.ResultCompletedByUserId,
-                  username: r.ResultCompletedByUsername,
-                  displayName: r.ResultCompletedByDisplayName,
-                }
-              : null,
-          }
-        : null,
-    })),
+    checklistItems: checklistRows.map((r) => {
+      const requiresPassFail = bitToBoolean(r.RequiresPassFail);
+      const rawOutcome = Number(r.Outcome);
+      const normalizedOutcome: 0 | 1 | 2 = requiresPassFail
+        ? rawOutcome === 1
+          ? 1
+          : rawOutcome === 2
+            ? 2
+            : 0
+        : rawOutcome === 1 || rawOutcome === 2
+          ? 1
+          : 0;
+
+      return {
+        id: r.TemplateChecklistItemId,
+        sortOrder: r.SortOrder,
+        itemText: r.ItemText,
+        isMandatory: r.IsMandatory,
+        requiresNotes: r.RequiresNotes,
+        requiresPassFail: r.RequiresPassFail,
+        isActive: r.IsActive,
+        result: r.TaskChecklistResultId
+          ? {
+              id: r.TaskChecklistResultId,
+              outcome: normalizedOutcome,
+              outcomeLabel: outcomeLabelFor(requiresPassFail, normalizedOutcome),
+              notes: r.Notes,
+              completedAt: r.ResultCompletedAt,
+              completedBy: r.ResultCompletedByUserId
+                ? {
+                    userId: r.ResultCompletedByUserId,
+                    username: r.ResultCompletedByUsername,
+                    displayName: r.ResultCompletedByDisplayName,
+                  }
+                : null,
+            }
+          : null,
+      };
+    }),
     evidence: evidenceRows.map((r) => ({
       id: r.EvidenceId,
       fileName: r.FileName,
