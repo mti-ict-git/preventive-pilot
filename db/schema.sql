@@ -28,6 +28,11 @@ BEGIN
   INSERT INTO pm.SchemaInfo (Version) VALUES (3);
 END;
 
+IF (SELECT ISNULL(MAX(Version), 0) FROM pm.SchemaInfo) < 4
+BEGIN
+  INSERT INTO pm.SchemaInfo (Version) VALUES (4);
+END;
+
 IF OBJECT_ID(N'pm.Roles', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.Roles (
@@ -289,6 +294,29 @@ BEGIN
     CONSTRAINT FK_pm_PMTaskChecklistResults_TemplateItems FOREIGN KEY (TemplateChecklistItemId) REFERENCES pm.PMTemplateChecklistItems(TemplateChecklistItemId),
     CONSTRAINT FK_pm_PMTaskChecklistResults_CompletedByUser FOREIGN KEY (CompletedByUserId) REFERENCES pm.Users(UserId)
   );
+END;
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.check_constraints cc
+  INNER JOIN sys.objects o ON o.object_id = cc.parent_object_id
+  INNER JOIN sys.schemas s ON s.schema_id = o.schema_id
+  WHERE s.name = N'pm'
+    AND o.name = N'PMTaskChecklistResults'
+    AND cc.name = N'CK_pm_PMTaskChecklistResults_Outcome'
+)
+BEGIN
+  UPDATE r
+  SET Outcome = CASE
+    WHEN i.RequiresPassFail = 0 AND r.Outcome = 2 THEN 1
+    WHEN r.Outcome IN (0, 1, 2) THEN r.Outcome
+    ELSE 0
+  END
+  FROM pm.PMTaskChecklistResults r
+  LEFT JOIN pm.PMTemplateChecklistItems i ON i.TemplateChecklistItemId = r.TemplateChecklistItemId;
+
+  ALTER TABLE pm.PMTaskChecklistResults
+    ADD CONSTRAINT CK_pm_PMTaskChecklistResults_Outcome CHECK (Outcome IN (0, 1, 2));
 END;
 
 IF OBJECT_ID(N'pm.PMTaskEvidence', N'U') IS NULL

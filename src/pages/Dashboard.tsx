@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import {
   Server,
   CheckCircle,
@@ -24,20 +25,29 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { format, parseISO } from "date-fns";
+import { apiGetDashboardOverview } from "@/lib/api";
 
 const Dashboard = () => {
+  const overviewQuery = useQuery({
+    queryKey: ["dashboard", "overview"],
+    queryFn: apiGetDashboardOverview,
+    staleTime: 30_000,
+  });
+
+  const overview = overviewQuery.data;
   const stats = [
     {
       title: "Total Assets in PM",
-      value: "1,247",
-      change: "+12",
-      trend: "up",
+      value: overview ? String(overview.stats.totalAssetsInPm) : "—",
+      change: "",
+      trend: "neutral",
       icon: Server,
       color: "primary",
     },
     {
       title: "Upcoming PM",
-      value: "89",
+      value: overview ? String(overview.stats.upcoming7DaysCount) : "—",
       change: "Next 7 days",
       trend: "neutral",
       icon: Calendar,
@@ -45,7 +55,7 @@ const Dashboard = () => {
     },
     {
       title: "Due Today",
-      value: "12",
+      value: overview ? String(overview.stats.dueTodayCount) : "—",
       change: "Action needed",
       trend: "warning",
       icon: Clock,
@@ -53,43 +63,41 @@ const Dashboard = () => {
     },
     {
       title: "Overdue",
-      value: "5",
-      change: "-3 from last week",
+      value: overview ? String(overview.stats.overdueCount) : "—",
+      change: "",
       trend: "down",
       icon: AlertTriangle,
       color: "destructive",
     },
   ];
 
-  const complianceData = [
-    { name: "Jan", rate: 92 },
-    { name: "Feb", rate: 88 },
-    { name: "Mar", rate: 95 },
-    { name: "Apr", rate: 91 },
-    { name: "May", rate: 94 },
-    { name: "Jun", rate: 97 },
-    { name: "Jul", rate: 96 },
-    { name: "Aug", rate: 98 },
-    { name: "Sep", rate: 95 },
-    { name: "Oct", rate: 97 },
-    { name: "Nov", rate: 96 },
-    { name: "Dec", rate: 98 },
-  ];
+  const complianceData =
+    overview?.complianceTrend.map((row) => {
+      const month = format(parseISO(row.monthStart), "MMM");
+      return { name: month, rate: row.complianceRate !== null ? Math.round(row.complianceRate * 1000) / 10 : 0 };
+    }) ?? [];
 
-  const overdueByCategory = [
-    { name: "Laptops", value: 2, color: "hsl(217, 91%, 60%)" },
-    { name: "Servers", value: 1, color: "hsl(188, 95%, 45%)" },
-    { name: "Network", value: 1, color: "hsl(38, 92%, 50%)" },
-    { name: "Printers", value: 1, color: "hsl(0, 72%, 51%)" },
-  ];
+  const currentMonthCompliance = overview?.complianceTrend.at(-1)?.complianceRate ?? null;
+  const currentMonthComplianceLabel =
+    currentMonthCompliance === null ? "—" : `${Math.round(currentMonthCompliance * 1000) / 10}%`;
 
-  const recentTasks = [
-    { asset: "LAPTOP-001", type: "PM Laptop Q4", status: "completed", pic: "John D." },
-    { asset: "SRV-WEB-01", type: "PM Server Monthly", status: "in_progress", pic: "Sarah M." },
-    { asset: "SW-CORE-01", type: "PM Network Device", status: "overdue", pic: "Mike R." },
-    { asset: "LAPTOP-045", type: "PM Laptop Q4", status: "upcoming", pic: "Lisa K." },
-    { asset: "PTR-FL3-02", type: "PM Printer Monthly", status: "completed", pic: "John D." },
-  ];
+  const colorForIndex = (idx: number): string => {
+    const hue = (idx * 47) % 360;
+    return `hsl(${hue} 72% 51%)`;
+  };
+
+  const overdueByCategory =
+    overview?.overdueByCategory
+      .filter((c) => c.count > 0)
+      .map((c, idx) => ({ name: c.name, value: c.count, color: colorForIndex(idx) })) ?? [];
+
+  const recentTasks =
+    overview?.recentTasks.map((t) => ({
+      asset: t.asset.assetTag,
+      type: t.template.name,
+      status: t.status.toLowerCase(),
+      pic: t.assignedTo.displayName ?? t.assignedTo.roleName ?? "Unassigned",
+    })) ?? [];
 
   const getStatusBadge = (status: string) => {
     const styles = {
@@ -170,7 +178,7 @@ const Dashboard = () => {
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right">
-                <p className="text-3xl font-bold gradient-text">98%</p>
+                <p className="text-3xl font-bold gradient-text">{currentMonthComplianceLabel}</p>
                 <p className="text-sm text-muted-foreground">Current Month</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center">

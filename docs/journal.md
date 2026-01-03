@@ -73,3 +73,11 @@
 
 ## 2026-01-02 21:49
 - Restricted Assets UI settings updates to Superadmin only.
+
+## 2026-01-02 22:15
+- Enabled custom date range selection on Reports page (compliance query).
+
+## 2026-01-03 06:56
+- Standardized checklist outcomes (0=skip, 1=pass/done, 2=fail) and enforced in API.
+- Updated Tasks UI to use outcome dropdown instead of freeform numeric input.
+- Added DB check constraint to restrict checklist outcome values.

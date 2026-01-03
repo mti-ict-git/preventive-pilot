@@ -33,9 +33,11 @@ const AssignSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "No updates" });
 
+const OutcomeSchema = z.number().int().min(0).max(2);
+
 const ChecklistResultSchema = z.object({
   templateChecklistItemId: z.string().uuid(),
-  outcome: z.number().int().min(0).max(255),
+  outcome: OutcomeSchema,
   notes: z.string().max(1024).nullable().optional(),
 });
 
@@ -64,6 +66,20 @@ const canModifyTask = (userId: string, userRoles: readonly string[], task: TaskA
   if (task.AssignedToUserId && task.AssignedToUserId === userId) return true;
   if (task.AssignedToRoleName && userRoles.includes(task.AssignedToRoleName)) return true;
   return false;
+};
+
+const bitToBoolean = (value: unknown): boolean => value === true || value === 1;
+
+type ChecklistOutcomeLabel = "skip" | "pass" | "fail" | "done";
+
+const outcomeLabelFor = (requiresPassFail: boolean, outcome: number): ChecklistOutcomeLabel => {
+  if (requiresPassFail) {
+    if (outcome === 1) return "pass";
+    if (outcome === 2) return "fail";
+    return "skip";
+  }
+  if (outcome === 0) return "skip";
+  return "done";
 };
 
 export const tasksRouter = Router();
@@ -389,6 +405,7 @@ tasksRouter.get("/:taskId", async (req, res) => {
         ? {
             id: r.TaskChecklistResultId,
             outcome: r.Outcome,
+            outcomeLabel: outcomeLabelFor(Boolean(r.RequiresPassFail), Number(r.Outcome)),
             notes: r.Notes,
             completedAt: r.ResultCompletedAt,
             completedBy: r.ResultCompletedByUserId
@@ -573,6 +590,64 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       res.status(403).json({ message: "Forbidden" });
       await tx.rollback();
       return;
+    }
+
+    const templateItemsResult = await tx
+      .request()
+      .input("templateId", sql.UniqueIdentifier, row.TemplateId as string)
+      .query(
+        [
+          "SELECT",
+          "  i.TemplateChecklistItemId AS TemplateChecklistItemId,",
+          "  i.IsMandatory AS IsMandatory,",
+          "  i.RequiresNotes AS RequiresNotes,",
+          "  i.RequiresPassFail AS RequiresPassFail,",
+          "  i.IsActive AS IsActive",
+          "FROM pm.PMTemplateChecklistItems i",
+          "WHERE i.TemplateId = @templateId",
+        ].join("\n"),
+      );
+
+    const templateItems = templateItemsResult.recordset as Array<Record<string, unknown>>;
+    const templateItemById = new Map<string, Record<string, unknown>>(
+      templateItems.map((i) => [String(i.TemplateChecklistItemId), i]),
+    );
+
+    for (const result of parsed.data.checklistResults) {
+      const templateItem = templateItemById.get(result.templateChecklistItemId);
+      if (!templateItem) {
+        res.status(400).json({ message: "Invalid request" });
+        await tx.rollback();
+        return;
+      }
+
+      if (!bitToBoolean(templateItem.IsActive)) {
+        res.status(400).json({ message: "Invalid request" });
+        await tx.rollback();
+        return;
+      }
+
+      const requiresPassFail = bitToBoolean(templateItem.RequiresPassFail);
+      if (!requiresPassFail && result.outcome === 2) {
+        res.status(400).json({ message: "Invalid request" });
+        await tx.rollback();
+        return;
+      }
+
+      if (bitToBoolean(templateItem.IsMandatory) && result.outcome === 0) {
+        res.status(400).json({ message: "Invalid request" });
+        await tx.rollback();
+        return;
+      }
+
+      const notes = result.notes ?? null;
+      if (bitToBoolean(templateItem.RequiresNotes) && result.outcome !== 0) {
+        if (!notes || notes.trim().length === 0) {
+          res.status(400).json({ message: "Invalid request" });
+          await tx.rollback();
+          return;
+        }
+      }
     }
 
     await tx

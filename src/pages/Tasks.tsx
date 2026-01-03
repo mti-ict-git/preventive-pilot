@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -22,7 +22,23 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { endOfDay, format, isAfter, isBefore, isSameDay, parseISO, startOfDay } from "date-fns";
-import { apiGetTask, apiListTasks, apiStartTask, type TaskDetail, type TaskListItem } from "@/lib/api";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  apiAddTaskEvidence,
+  apiCompleteTask,
+  apiGetTask,
+  apiListTasks,
+  apiStartTask,
+  type CompleteTaskChecklistResultInput,
+  type TaskListItem,
+} from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
 const Tasks = () => {
@@ -335,6 +351,112 @@ const TaskDetailDialog = (props: {
 
   const task = taskQuery.data;
 
+  const getOutcomeOptions = (requiresPassFail: boolean) => {
+    if (requiresPassFail) {
+      return [
+        { value: "0", label: "Skip" },
+        { value: "1", label: "Pass" },
+        { value: "2", label: "Fail" },
+      ];
+    }
+    return [
+      { value: "0", label: "Skip" },
+      { value: "1", label: "Done" },
+    ];
+  };
+
+  const [forceCompleted, setForceCompleted] = useState(false);
+  const [checklistDraft, setChecklistDraft] = useState<
+    Record<string, { outcome: 0 | 1 | 2 | null; notes: string }>
+  >({});
+  const [evidenceUri, setEvidenceUri] = useState("");
+
+  useEffect(() => {
+    if (!props.open) return;
+    setForceCompleted(false);
+    const next: Record<string, { outcome: 0 | 1 | 2 | null; notes: string }> = {};
+    for (const item of task?.checklistItems ?? []) {
+      if (!item.isActive) continue;
+      next[item.id] = {
+        outcome: item.result ? item.result.outcome : null,
+        notes: item.result?.notes ?? "",
+      };
+    }
+    setChecklistDraft(next);
+    setEvidenceUri("");
+  }, [props.open, task?.checklistItems]);
+
+  const completeMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      const items = task?.checklistItems ?? [];
+      const results: CompleteTaskChecklistResultInput[] = [];
+      for (const item of items) {
+        if (!item.isActive) continue;
+        const draft = checklistDraft[item.id];
+        const outcome = draft?.outcome ?? null;
+        if (outcome === null) {
+          if (item.isMandatory) {
+            throw new Error("Missing outcome for a mandatory checklist item");
+          }
+          continue;
+        }
+
+        if (!item.requiresPassFail && outcome === 2) {
+          throw new Error("Invalid outcome for this checklist item");
+        }
+
+        if (item.isMandatory && outcome === 0) {
+          throw new Error("Mandatory checklist items cannot be skipped");
+        }
+
+        const notesValue = draft?.notes ?? "";
+        if (item.requiresNotes && outcome !== 0 && notesValue.trim().length === 0) {
+          throw new Error("Notes are required for this checklist item");
+        }
+
+        results.push({
+          templateChecklistItemId: item.id,
+          outcome,
+          notes: notesValue.trim() ? notesValue.trim() : null,
+        });
+      }
+      return apiCompleteTask({ taskId: props.taskId, checklistResults: results, forceCompleted });
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "Task completed" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Failed to complete task",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addEvidenceMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      const uri = evidenceUri.trim();
+      if (!uri) throw new Error("Evidence URI is required");
+      return apiAddTaskEvidence({ taskId: props.taskId, uri });
+    },
+    onSuccess: async () => {
+      setEvidenceUri("");
+      await taskQuery.refetch();
+      toast({ title: "Evidence added" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Failed to add evidence",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
   const checklistTotal = useMemo(() => {
     const items = task?.checklistItems ?? [];
     return items.filter((i) => i.isActive).length;
@@ -369,7 +491,11 @@ const TaskDetailDialog = (props: {
               >
                 Start
               </Button>
-              <Button variant="outline" disabled>
+              <Button
+                variant="outline"
+                disabled={!task || completeMutation.isPending || task.status.toLowerCase() === "completed"}
+                onClick={() => completeMutation.mutate()}
+              >
                 Complete
               </Button>
             </div>
@@ -442,23 +568,79 @@ const TaskDetailDialog = (props: {
                                 ) : null}
                               </div>
                             </div>
-                            <div className="text-right">
+                            <div className="w-48">
                               <p className="text-xs text-muted-foreground">Outcome</p>
-                              <p className="text-sm text-foreground mt-1">
-                                {item.result ? String(item.result.outcome) : "—"}
-                              </p>
+                              <Select
+                                value={
+                                  checklistDraft[item.id]?.outcome === null
+                                    ? ""
+                                    : String(checklistDraft[item.id]?.outcome)
+                                }
+                                onValueChange={(v) => {
+                                  const nextOutcome = v === "" ? null : (Number(v) as 0 | 1 | 2);
+                                  setChecklistDraft((prev) => ({
+                                    ...prev,
+                                    [item.id]: { outcome: nextOutcome, notes: prev[item.id]?.notes ?? "" },
+                                  }));
+                                }}
+                              >
+                                <SelectTrigger className="mt-1 bg-muted/50">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getOutcomeOptions(item.requiresPassFail).map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
-                          {item.result?.notes ? (
-                            <div className="mt-3 text-sm text-muted-foreground">{item.result.notes}</div>
-                          ) : null}
+                          <div className="mt-3">
+                            <p className="text-xs text-muted-foreground">Notes</p>
+                              <Input
+                                value={checklistDraft[item.id]?.notes ?? ""}
+                                onChange={(e) => {
+                                  const nextNotes = e.target.value;
+                                  setChecklistDraft((prev) => ({
+                                    ...prev,
+                                    [item.id]: { outcome: prev[item.id]?.outcome ?? null, notes: nextNotes },
+                                  }));
+                                }}
+                                className="mt-1 bg-muted/50"
+                              />
+                          </div>
                         </div>
                       ))}
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-2">
+                    <Checkbox checked={forceCompleted} onCheckedChange={(v) => setForceCompleted(v === true)} />
+                    <span className="text-sm text-muted-foreground">Force complete</span>
                   </div>
                 </div>
 
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-2">Evidence</h3>
+                  <div className="glass rounded-lg p-3">
+                    <div className="flex flex-col md:flex-row gap-3">
+                      <Input
+                        value={evidenceUri}
+                        onChange={(e) => setEvidenceUri(e.target.value)}
+                        placeholder="Evidence URI (e.g., s3://…, https://…, file://…)"
+                        className="bg-muted/50"
+                      />
+                      <Button
+                        variant="outline"
+                        className="shrink-0"
+                        disabled={addEvidenceMutation.isPending}
+                        onClick={() => addEvidenceMutation.mutate()}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
                   {task.evidence.length === 0 ? (
                     <div className="text-sm text-muted-foreground">No evidence uploaded.</div>
                   ) : (

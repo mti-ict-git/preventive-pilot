@@ -283,7 +283,8 @@ export type TaskDetailChecklistItem = {
   isActive: boolean;
   result: {
     id: string;
-    outcome: number;
+    outcome: 0 | 1 | 2;
+    outcomeLabel: "skip" | "pass" | "fail" | "done";
     notes: string | null;
     completedAt: string | null;
     completedBy: TaskUserRef | null;
@@ -350,7 +351,7 @@ export const apiStartTask = async (taskId: string): Promise<{ ok: true }> => {
 
 export type CompleteTaskChecklistResultInput = {
   templateChecklistItemId: string;
-  outcome: number;
+  outcome: 0 | 1 | 2;
   notes?: string | null;
 };
 
