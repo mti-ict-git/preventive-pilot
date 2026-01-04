@@ -25,6 +25,20 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null;
 };
 
+const bitToBoolean = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if (v === "1" || v === "true") return true;
+    if (v === "0" || v === "false") return false;
+  }
+  if (value instanceof Uint8Array) {
+    return value.length > 0 && value[0] === 1;
+  }
+  return false;
+};
+
 const getSqlErrorNumber = (err: unknown): number | null => {
   if (!isRecord(err)) return null;
 
@@ -462,7 +476,7 @@ systemRouter.get("/lookups", async (_req, res) => {
     assetCategories: categoryRows.map((c) => ({
       id: c.CategoryId,
       name: c.Name,
-      isActive: c.IsActive,
+      isActive: bitToBoolean(c.IsActive),
     })),
   });
 });

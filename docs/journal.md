@@ -84,3 +84,23 @@
 
 ## 2026-01-03 07:00
 - Normalized legacy checklist outcomes before adding DB constraint and clamped API output for older data.
+
+## 2026-01-03 11:01
+- Added bulk selection actions for Assets visible categories filter (active-only, inactive-only, invert, show all).
+
+## 2026-01-03 11:45
+- Added category search input to Assets visible categories filter (More Filters).
+
+## 2026-01-03 11:52
+- Fixed Assets visible categories bulk actions to avoid expanding selection unexpectedly.
+
+## 2026-01-03 21:16
+- Fixed category IsActive parsing so active/inactive bulk filters apply correctly.
+
+## 2026-01-03 21:36
+- Updated active/inactive bulk filters to operate on current selection.
+
+## 2026-01-04 23:28
+- Added Superadmin-only Categories settings sub-page for global Assets category visibility.
+- Added /settings/categories route and sidebar navigation entry.
+- Removed category visibility controls from Assets page for non-admin focus.

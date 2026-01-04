@@ -47,7 +47,6 @@ import {
   apiGetSystemStatus,
   apiGetLookups,
   apiGetAssetsUiSettings,
-  apiUpdateAssetsUiSettings,
   apiBulkSetAssetPmEnabled,
   apiListAssets,
   apiPatchAssetPm,
@@ -62,7 +61,6 @@ const EMPTY_ASSETS: Asset[] = [];
 
 const Assets = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
-  const [visibleCategoryIds, setVisibleCategoryIds] = useState<string[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [page, setPage] = useState(1);
@@ -90,27 +88,7 @@ const Assets = () => {
     staleTime: 60_000,
   });
 
-  const updateUiSettingsMutation = useMutation({
-    mutationFn: apiUpdateAssetsUiSettings,
-    onSuccess: async (data) => {
-      setVisibleCategoryIds(data.visibleCategoryIds);
-      queryClient.setQueryData(["ui-settings", "assets"], data);
-      await queryClient.invalidateQueries({ queryKey: ["assets"] });
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof ApiError ? err.message : "Failed to save category visibility";
-      toast({ title: "Save failed", description: message, variant: "destructive" });
-      void queryClient.invalidateQueries({ queryKey: ["ui-settings", "assets"] });
-    },
-  });
-
-  const saveUiSettings = updateUiSettingsMutation.mutate;
-  const isSavingUiSettings = updateUiSettingsMutation.isPending;
-
-  useEffect(() => {
-    if (!uiSettingsQuery.isSuccess) return;
-    setVisibleCategoryIds(uiSettingsQuery.data.visibleCategoryIds);
-  }, [uiSettingsQuery.isSuccess, uiSettingsQuery.data?.visibleCategoryIds]);
+  const visibleCategoryIds = uiSettingsQuery.data?.visibleCategoryIds ?? null;
 
   const allCategories = useMemo((): LookupAssetCategory[] => {
     return lookupsQuery.data?.assetCategories ?? [];
@@ -123,19 +101,6 @@ const Assets = () => {
     }
     return ids;
   }, [allCategories]);
-
-  useEffect(() => {
-    if (allCategoryIds.length === 0) return;
-    if (visibleCategoryIds === null) return;
-    const next = visibleCategoryIds.filter((id) => allCategoryIds.includes(id));
-    if (next.length !== visibleCategoryIds.length) {
-      const normalized = next.length === allCategoryIds.length ? null : next;
-      setVisibleCategoryIds(normalized);
-      if (uiSettingsQuery.isSuccess && !isSavingUiSettings) {
-        saveUiSettings({ visibleCategoryIds: normalized });
-      }
-    }
-  }, [allCategoryIds, visibleCategoryIds, uiSettingsQuery.isSuccess, isSavingUiSettings, saveUiSettings]);
 
   useEffect(() => {
     if (selectedCategoryId === "all") return;
@@ -211,48 +176,6 @@ const Assets = () => {
     });
   }, [visibleCategories]);
 
-  const isCategoryVisible = (categoryId: string): boolean => {
-    if (visibleCategoryIds === null) return true;
-    return visibleCategoryIds.includes(categoryId);
-  };
-
-  const setCategoryVisibility = (categoryId: string, checked: boolean): void => {
-    const allIds = allCategoryIds;
-    const current = visibleCategoryIds;
-
-    if (current === null) {
-      if (checked) return;
-      const next = allIds.filter((id) => id !== categoryId);
-      if (next.length === 0) {
-        toast({
-          title: "Selection required",
-          description: "Keep at least one category visible.",
-        });
-        return;
-      }
-      const normalized = next.length === allIds.length ? null : next;
-      setVisibleCategoryIds(normalized);
-      setPage(1);
-      updateUiSettingsMutation.mutate({ visibleCategoryIds: normalized });
-      return;
-    }
-
-    const set = new Set(current);
-    if (checked) set.add(categoryId);
-    else set.delete(categoryId);
-    const next = Array.from(set);
-    if (next.length === 0) {
-      toast({
-        title: "Selection required",
-        description: "Keep at least one category visible.",
-      });
-      return;
-    }
-    const normalized = next.length === allIds.length ? null : next;
-    setVisibleCategoryIds(normalized);
-    setPage(1);
-    updateUiSettingsMutation.mutate({ visibleCategoryIds: normalized });
-  };
 
   const togglePmMutation = useMutation({
     mutationFn: async (input: { assetId: string; pmEnabled: boolean }) => {
@@ -291,11 +214,11 @@ const Assets = () => {
   const getPMStatus = (nextPM: string | null, pmEnabled: boolean) => {
     if (!pmEnabled) return { status: "disabled", icon: XCircle, color: "text-muted-foreground" };
     if (!nextPM) return { status: "no schedule", icon: Clock, color: "text-muted-foreground" };
-    
+
     const next = new Date(nextPM);
     const today = new Date();
     const diffDays = Math.ceil((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) return { status: "overdue", icon: XCircle, color: "text-destructive" };
     if (diffDays <= 7) return { status: "due soon", icon: Clock, color: "text-warning" };
     return { status: "on track", icon: CheckCircle, color: "text-success" };
@@ -419,52 +342,6 @@ const Assets = () => {
                     </Select>
                   </div>
                 </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium">Visible Categories</div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setVisibleCategoryIds(null);
-                        setPage(1);
-                        updateUiSettingsMutation.mutate({ visibleCategoryIds: null });
-                      }}
-                      disabled={visibleCategoryIds === null}
-                    >
-                      Show all
-                    </Button>
-                  </div>
-                  <div className="mt-2 max-h-48 overflow-auto rounded-md border border-border p-2">
-                    {allCategories.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">No categories loaded.</div>
-                    ) : (
-                      <div className="space-y-2">
-                        {allCategories.map((c) => (
-                          <div key={c.id} className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                              <Checkbox
-                                checked={isCategoryVisible(c.id)}
-                                onCheckedChange={(checked) => setCategoryVisibility(c.id, checked === true)}
-                                aria-label={`Toggle ${c.name}`}
-                              />
-                              <div className="text-sm">
-                                <span>{c.name}</span>
-                                {!c.isActive ? <span className="text-muted-foreground"> (Inactive)</span> : null}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {visibleCategoryIds === null
-                      ? "Showing all categories"
-                      : `Showing ${visibleCategoryIds.length} of ${allCategoryIds.length} categories`}
-                  </div>
-                </div>
               </div>
             </PopoverContent>
           </Popover>
@@ -514,121 +391,121 @@ const Assets = () => {
           ) : assetsQuery.isError ? (
             <div className="p-6 text-sm text-destructive">Failed to load assets.</div>
           ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-10">
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
-                  >
-                    <Checkbox
-                      checked={isAllSelectedOnPage}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          const next: Record<string, true> = { ...selectedAssetIds };
-                          for (const a of filteredAssets) next[a.id] = true;
-                          setSelectedAssetIds(next);
-                          return;
-                        }
-
-                        const next: Record<string, true> = { ...selectedAssetIds };
-                        for (const a of filteredAssets) {
-                          delete next[a.id];
-                        }
-                        setSelectedAssetIds(next);
-                      }}
-                      aria-label="Select all assets on this page"
-                    />
-                  </div>
-                </TableHead>
-                <TableHead className="text-muted-foreground">Asset ID</TableHead>
-                <TableHead className="text-muted-foreground">Name</TableHead>
-                <TableHead className="text-muted-foreground">Category</TableHead>
-                <TableHead className="text-muted-foreground">Location</TableHead>
-                <TableHead className="text-muted-foreground">PM Status</TableHead>
-                <TableHead className="text-muted-foreground">Next PM</TableHead>
-                <TableHead className="text-muted-foreground">PM Enabled</TableHead>
-                <TableHead className="text-muted-foreground"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAssets.map((asset, index) => {
-                const pmEnabled = asset.pm.enabled === true;
-                const pmStatus = getPMStatus(asset.pm.nextDueAt, pmEnabled);
-                return (
-                  <motion.tr
-                    key={asset.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="border-border hover:bg-muted/30 transition-colors cursor-pointer group"
-                    onClick={() => navigate(`/assets/${asset.id}`)}
-                  >
-                    <TableCell
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="w-10">
+                    <div
                       onClick={(e) => {
                         e.stopPropagation();
                       }}
                     >
                       <Checkbox
-                        checked={Boolean(selectedAssetIds[asset.id])}
+                        checked={isAllSelectedOnPage}
                         onCheckedChange={(checked) => {
-                          setSelectedAssetIds((prev) => {
-                            const next: Record<string, true> = { ...prev };
-                            if (checked) next[asset.id] = true;
-                            else delete next[asset.id];
-                            return next;
-                          });
+                          if (checked) {
+                            const next: Record<string, true> = { ...selectedAssetIds };
+                            for (const a of filteredAssets) next[a.id] = true;
+                            setSelectedAssetIds(next);
+                            return;
+                          }
+
+                          const next: Record<string, true> = { ...selectedAssetIds };
+                          for (const a of filteredAssets) {
+                            delete next[a.id];
+                          }
+                          setSelectedAssetIds(next);
                         }}
-                        aria-label={`Select ${asset.assetTag}`}
+                        aria-label="Select all assets on this page"
                       />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                          <Server className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                        <span className="font-mono text-sm text-foreground">{asset.assetTag}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground">{asset.name}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{asset.category.name ?? "—"}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{asset.location.name ?? "—"}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <pmStatus.icon className={`w-4 h-4 ${pmStatus.color}`} />
-                        <span className={`text-sm capitalize ${pmStatus.color}`}>{pmStatus.status}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {asset.pm.nextDueAt ? new Date(asset.pm.nextDueAt).toLocaleDateString() : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div
+                    </div>
+                  </TableHead>
+                  <TableHead className="text-muted-foreground">Asset ID</TableHead>
+                  <TableHead className="text-muted-foreground">Name</TableHead>
+                  <TableHead className="text-muted-foreground">Category</TableHead>
+                  <TableHead className="text-muted-foreground">Location</TableHead>
+                  <TableHead className="text-muted-foreground">PM Status</TableHead>
+                  <TableHead className="text-muted-foreground">Next PM</TableHead>
+                  <TableHead className="text-muted-foreground">PM Enabled</TableHead>
+                  <TableHead className="text-muted-foreground"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredAssets.map((asset, index) => {
+                  const pmEnabled = asset.pm.enabled === true;
+                  const pmStatus = getPMStatus(asset.pm.nextDueAt, pmEnabled);
+                  return (
+                    <motion.tr
+                      key={asset.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="border-border hover:bg-muted/30 transition-colors cursor-pointer group"
+                      onClick={() => navigate(`/assets/${asset.id}`)}
+                    >
+                      <TableCell
                         onClick={(e) => {
                           e.stopPropagation();
                         }}
                       >
-                        <Switch
-                          checked={pmEnabled}
-                          onCheckedChange={(checked) =>
-                            togglePmMutation.mutate({ assetId: asset.id, pmEnabled: checked })
-                          }
-                          disabled={togglePmMutation.isPending}
+                        <Checkbox
+                          checked={Boolean(selectedAssetIds[asset.id])}
+                          onCheckedChange={(checked) => {
+                            setSelectedAssetIds((prev) => {
+                              const next: Record<string, true> = { ...prev };
+                              if (checked) next[asset.id] = true;
+                              else delete next[asset.id];
+                              return next;
+                            });
+                          }}
+                          aria-label={`Select ${asset.assetTag}`}
                         />
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </TableCell>
-                  </motion.tr>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+                            <Server className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                          <span className="font-mono text-sm text-foreground">{asset.assetTag}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">{asset.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{asset.category.name ?? "—"}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{asset.location.name ?? "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <pmStatus.icon className={`w-4 h-4 ${pmStatus.color}`} />
+                          <span className={`text-sm capitalize ${pmStatus.color}`}>{pmStatus.status}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {asset.pm.nextDueAt ? new Date(asset.pm.nextDueAt).toLocaleDateString() : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                        >
+                          <Switch
+                            checked={pmEnabled}
+                            onCheckedChange={(checked) =>
+                              togglePmMutation.mutate({ assetId: asset.id, pmEnabled: checked })
+                            }
+                            disabled={togglePmMutation.isPending}
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </TableCell>
+                    </motion.tr>
+                  );
+                })}
+              </TableBody>
+            </Table>
           )}
         </motion.div>
 

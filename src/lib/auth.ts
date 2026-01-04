@@ -16,3 +16,61 @@ export const clearAccessToken = () => {
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
 };
 
+export type JwtClaims = {
+  sub: string;
+  username: string;
+  roles: string[];
+};
+
+const decodeBase64Url = (input: string): string | null => {
+  try {
+    const base64 = input.replace(/-/g, "+").replace(/_/g, "/");
+    const padLength = (4 - (base64.length % 4)) % 4;
+    const padded = base64 + "=".repeat(padLength);
+    return atob(padded);
+  } catch {
+    return null;
+  }
+};
+
+const isJwtClaims = (value: unknown): value is JwtClaims => {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+
+  const sub = v.sub;
+  const username = v.username;
+  const roles = v.roles;
+
+  if (typeof sub !== "string") return false;
+  if (typeof username !== "string") return false;
+  if (!Array.isArray(roles)) return false;
+  if (!roles.every((r) => typeof r === "string")) return false;
+
+  return true;
+};
+
+export const getJwtClaims = (): JwtClaims | null => {
+  const token = getAccessToken();
+  if (!token) return null;
+
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+
+  const payloadJson = decodeBase64Url(parts[1]);
+  if (!payloadJson) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(payloadJson);
+    return isJwtClaims(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+export const hasRole = (roleName: string): boolean => {
+  const claims = getJwtClaims();
+  if (!claims) return false;
+  return claims.roles.includes(roleName);
+};
+
+export const isSuperadmin = (): boolean => hasRole("Superadmin");

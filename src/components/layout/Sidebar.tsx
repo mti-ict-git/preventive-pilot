@@ -11,6 +11,7 @@ import {
   Bell,
   Users,
   Settings,
+  Tags,
   ChevronLeft,
   ChevronRight,
   Wrench,
@@ -18,7 +19,7 @@ import {
   QrCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { clearAccessToken } from "@/lib/auth";
+import { clearAccessToken, isSuperadmin } from "@/lib/auth";
 
 interface NavItem {
   title: string;
@@ -47,6 +48,10 @@ const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const adminNav: NavItem[] = isSuperadmin()
+    ? [...settingsNav, { title: "Categories", icon: Tags, href: "/settings/categories" }]
+    : settingsNav;
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = location.pathname === item.href;
@@ -145,7 +150,7 @@ const Sidebar = () => {
               </motion.p>
             )}
           </AnimatePresence>
-          {settingsNav.map((item) => (
+          {adminNav.map((item) => (
             <NavItemComponent key={item.href} item={item} />
           ))}
         </div>

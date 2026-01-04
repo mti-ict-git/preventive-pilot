@@ -1,0 +1,329 @@
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { Navigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Search } from "lucide-react";
+import Header from "@/components/layout/Header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  ApiError,
+  apiGetAssetsUiSettings,
+  apiGetLookups,
+  apiUpdateAssetsUiSettings,
+  type LookupAssetCategory,
+} from "@/lib/api";
+import { isSuperadmin } from "@/lib/auth";
+import { toast } from "@/hooks/use-toast";
+
+type ListFilter = "all" | "selected" | "unselected";
+
+const normalizeVisibleCategoryIds = (
+  ids: string[] | null,
+  allIds: string[],
+): string[] | null => {
+  if (allIds.length === 0) return null;
+  if (ids === null) return null;
+  const next = ids.filter((id) => allIds.includes(id));
+  if (next.length === 0) return null;
+  return next.length === allIds.length ? null : next;
+};
+
+const isSameIdSelection = (a: string[] | null, b: string[] | null): boolean => {
+  if (a === null && b === null) return true;
+  if (a === null || b === null) return false;
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((id) => set.has(id));
+};
+
+const SettingsCategories = () => {
+  const superadmin = isSuperadmin();
+
+  const queryClient = useQueryClient();
+
+  const lookupsQuery = useQuery({
+    queryKey: ["lookups"],
+    queryFn: apiGetLookups,
+    staleTime: 60_000,
+  });
+
+  const uiSettingsQuery = useQuery({
+    queryKey: ["ui-settings", "assets"],
+    queryFn: apiGetAssetsUiSettings,
+    staleTime: 60_000,
+  });
+
+  const allCategories = useMemo((): LookupAssetCategory[] => {
+    return lookupsQuery.data?.assetCategories ?? [];
+  }, [lookupsQuery.data?.assetCategories]);
+
+  const allCategoryIds = useMemo((): string[] => {
+    const ids: string[] = [];
+    for (const c of allCategories) {
+      if (c.id) ids.push(c.id);
+    }
+    return ids;
+  }, [allCategories]);
+
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [listFilter, setListFilter] = useState<ListFilter>("all");
+  const [draftVisibleCategoryIds, setDraftVisibleCategoryIds] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!uiSettingsQuery.isSuccess) return;
+    setDraftVisibleCategoryIds(uiSettingsQuery.data.visibleCategoryIds);
+  }, [uiSettingsQuery.isSuccess, uiSettingsQuery.data?.visibleCategoryIds]);
+
+  const normalizedDraft = useMemo(() => {
+    return normalizeVisibleCategoryIds(draftVisibleCategoryIds, allCategoryIds);
+  }, [draftVisibleCategoryIds, allCategoryIds]);
+
+  const normalizedServer = useMemo(() => {
+    const serverIds = uiSettingsQuery.data?.visibleCategoryIds ?? null;
+    return normalizeVisibleCategoryIds(serverIds, allCategoryIds);
+  }, [uiSettingsQuery.data?.visibleCategoryIds, allCategoryIds]);
+
+  const selectedCount = useMemo(() => {
+    if (allCategoryIds.length === 0) return 0;
+    return normalizedDraft === null ? allCategoryIds.length : normalizedDraft.length;
+  }, [normalizedDraft, allCategoryIds.length]);
+
+  const selectedSet = useMemo(() => {
+    return normalizedDraft === null ? null : new Set(normalizedDraft);
+  }, [normalizedDraft]);
+
+  const setCategorySelected = (categoryId: string, checked: boolean): void => {
+    const allIds = allCategoryIds;
+    const current = normalizedDraft;
+
+    if (allIds.length === 0) return;
+
+    if (current === null) {
+      if (checked) return;
+      const next = allIds.filter((id) => id !== categoryId);
+      if (next.length === 0) {
+        toast({
+          title: "Selection required",
+          description: "Keep at least one category visible.",
+        });
+        return;
+      }
+      setDraftVisibleCategoryIds(next.length === allIds.length ? null : next);
+      return;
+    }
+
+    const set = new Set(current);
+    if (checked) set.add(categoryId);
+    else set.delete(categoryId);
+    const next = Array.from(set);
+    if (next.length === 0) {
+      toast({
+        title: "Selection required",
+        description: "Keep at least one category visible.",
+      });
+      return;
+    }
+    setDraftVisibleCategoryIds(next.length === allIds.length ? null : next);
+  };
+
+  const filteredCategories = useMemo((): LookupAssetCategory[] => {
+    const q = searchQuery.trim().toLowerCase();
+    return allCategories.filter((c) => {
+      const matchesText = !q || c.name.toLowerCase().includes(q);
+      if (!matchesText) return false;
+
+      if (listFilter === "all") return true;
+      const selected = selectedSet === null ? true : selectedSet.has(c.id);
+      return listFilter === "selected" ? selected : !selected;
+    });
+  }, [allCategories, searchQuery, listFilter, selectedSet]);
+
+  const invertSelection = (): void => {
+    const allIds = allCategoryIds;
+    const currentSet = new Set(normalizedDraft === null ? allIds : normalizedDraft);
+    const next = allIds.filter((id) => !currentSet.has(id));
+    if (next.length === 0) {
+      toast({
+        title: "Selection required",
+        description: "Keep at least one category visible.",
+      });
+      return;
+    }
+    setDraftVisibleCategoryIds(next.length === allIds.length ? null : next);
+  };
+
+  const selectAll = (): void => {
+    setDraftVisibleCategoryIds(null);
+  };
+
+  const resetSelection = (): void => {
+    setDraftVisibleCategoryIds(normalizedServer);
+  };
+
+  const hasUnsavedChanges = useMemo(() => {
+    return !isSameIdSelection(normalizedDraft, normalizedServer);
+  }, [normalizedDraft, normalizedServer]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      return apiUpdateAssetsUiSettings({ visibleCategoryIds: normalizedDraft });
+    },
+    onSuccess: async (data) => {
+      queryClient.setQueryData(["ui-settings", "assets"], data);
+      await queryClient.invalidateQueries({ queryKey: ["assets"] });
+      toast({
+        title: "Saved",
+        description: "Visible categories updated for all users.",
+      });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to save category visibility";
+      toast({ title: "Save failed", description: message, variant: "destructive" });
+    },
+  });
+
+  if (!superadmin) return <Navigate to="/settings" replace />;
+
+  return (
+    <div className="min-h-screen">
+      <Header title="Categories" subtitle="Choose which categories appear in Assets" />
+
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-12 gap-4">
+          <div className="col-span-12 md:col-span-8">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="glass">
+                <CardHeader>
+                  <CardTitle>Visible Categories</CardTitle>
+                  <CardDescription>
+                    This setting is global and affects what everyone sees on the Assets page.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-12 gap-4">
+                    <div className="col-span-12 md:col-span-7">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search categories…"
+                          className="pl-10 bg-muted/50"
+                        />
+                      </div>
+                    </div>
+                    <div className="col-span-12 md:col-span-5">
+                      <Tabs value={listFilter} onValueChange={(v) => setListFilter(v as ListFilter)}>
+                        <TabsList className="w-full">
+                          <TabsTrigger value="all" className="flex-1">
+                            All
+                          </TabsTrigger>
+                          <TabsTrigger value="selected" className="flex-1">
+                            Selected
+                          </TabsTrigger>
+                          <TabsTrigger value="unselected" className="flex-1">
+                            Unselected
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={selectAll}>
+                      Select all
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={invertSelection}>
+                      Invert
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={resetSelection}
+                      disabled={!hasUnsavedChanges || saveMutation.isPending}
+                    >
+                      Reset
+                    </Button>
+                    <div className="ml-auto text-sm text-muted-foreground">
+                      {allCategoryIds.length === 0
+                        ? "No categories loaded."
+                        : `${selectedCount} of ${allCategoryIds.length} selected`}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border">
+                    <div className="max-h-[420px] overflow-auto p-2">
+                      {lookupsQuery.isLoading ? (
+                        <div className="p-3 text-sm text-muted-foreground">Loading categories…</div>
+                      ) : filteredCategories.length === 0 ? (
+                        <div className="p-3 text-sm text-muted-foreground">No matching categories.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {filteredCategories.map((c) => (
+                            <div
+                              key={c.id}
+                              className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-muted/30"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Checkbox
+                                  checked={selectedSet === null ? true : selectedSet.has(c.id)}
+                                  onCheckedChange={(checked) =>
+                                    setCategorySelected(c.id, checked === true)
+                                  }
+                                  aria-label={`Toggle ${c.name}`}
+                                />
+                                <div className="min-w-0">
+                                  <div className="text-sm truncate">{c.name}</div>
+                                </div>
+                              </div>
+                              {!c.isActive ? (
+                                <Badge variant="outline" className="shrink-0">
+                                  Inactive
+                                </Badge>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
+
+          <div className="col-span-12 md:col-span-4">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="glass">
+                <CardHeader>
+                  <CardTitle>Save Changes</CardTitle>
+                  <CardDescription>Apply the selection for all users.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button
+                    className="w-full"
+                    onClick={() => saveMutation.mutate()}
+                    disabled={!hasUnsavedChanges || saveMutation.isPending || allCategoryIds.length === 0}
+                  >
+                    {saveMutation.isPending ? "Saving…" : "Save"}
+                  </Button>
+                  <div className="text-xs text-muted-foreground">
+                    Users without Superadmin cannot change this setting.
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SettingsCategories;

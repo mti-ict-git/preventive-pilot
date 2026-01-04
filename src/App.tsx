@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -14,10 +15,11 @@ import Scheduling from "./pages/Scheduling";
 import Notifications from "./pages/Notifications";
 import UserManagement from "./pages/UserManagement";
 import SystemSettings from "./pages/SystemSettings";
+import SettingsCategories from "./pages/SettingsCategories";
 import LabelDesigner from "./pages/LabelDesigner";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
-import { getAccessToken } from "@/lib/auth";
+import { getAccessToken, isSuperadmin } from "@/lib/auth";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +27,11 @@ const ProtectedLayout = () => {
   const token = getAccessToken();
   if (!token) return <Navigate to="/login" replace />;
   return <DashboardLayout />;
+};
+
+const SuperadminRoute = ({ element }: { element: ReactElement }) => {
+  if (!isSuperadmin()) return <Navigate to="/settings" replace />;
+  return element;
 };
 
 const App = () => (
@@ -49,6 +56,7 @@ const App = () => (
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/settings" element={<SystemSettings />} />
+            <Route path="/settings/categories" element={<SuperadminRoute element={<SettingsCategories />} />} />
             <Route path="/label-designer" element={<LabelDesigner />} />
           </Route>
           
