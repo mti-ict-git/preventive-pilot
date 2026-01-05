@@ -160,3 +160,6 @@
 
 ## 2026-01-05 21:57
 - Added evidence import skip-reason breakdown and samples for debugging.
+
+## 2026-01-05 22:27
+- Extended evidence import filename date parsing to support DDMMYYYY.

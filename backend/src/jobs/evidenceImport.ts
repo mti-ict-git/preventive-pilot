@@ -71,24 +71,41 @@ const splitExt = (fileName: string): { base: string; ext: string } => {
   return { base: ext ? fileName.slice(0, -ext.length) : fileName, ext };
 };
 
+const toUtcDateOrNull = (year: number, month: number, day: number): Date | null => {
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 31) return null;
+  const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  if (Number.isNaN(date.getTime())) return null;
+  if (date.getUTCFullYear() !== year) return null;
+  if (date.getUTCMonth() !== month - 1) return null;
+  if (date.getUTCDate() !== day) return null;
+  return date;
+};
+
 const tryExtractDate = (fileName: string): { date: Date; matchIndex: number } | null => {
   const base = path.basename(fileName);
-  const patterns: RegExp[] = [
-    /(20\d{2})[-_\s]?([01]\d)[-_\s]?([0-3]\d)/,
-    /(20\d{2})([01]\d)([0-3]\d)/,
-  ];
-
-  for (const re of patterns) {
+  const ymdPatterns: RegExp[] = [/(20\d{2})[-_\s]?([01]\d)[-_\s]?([0-3]\d)/, /(20\d{2})([01]\d)([0-3]\d)/];
+  for (const re of ymdPatterns) {
     const m = re.exec(base);
     if (!m) continue;
     const year = Number(m[1]);
     const month = Number(m[2]);
     const day = Number(m[3]);
-    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) continue;
-    if (month < 1 || month > 12) continue;
-    if (day < 1 || day > 31) continue;
-    const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
-    if (Number.isNaN(date.getTime())) continue;
+    const date = toUtcDateOrNull(year, month, day);
+    if (!date) continue;
+    return { date, matchIndex: m.index };
+  }
+
+  const dmyPatterns: RegExp[] = [/([0-3]\d)[-_\s]?([01]\d)[-_\s]?(20\d{2})/, /([0-3]\d)([01]\d)(20\d{2})/];
+  for (const re of dmyPatterns) {
+    const m = re.exec(base);
+    if (!m) continue;
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    const year = Number(m[3]);
+    const date = toUtcDateOrNull(year, month, day);
+    if (!date) continue;
     return { date, matchIndex: m.index };
   }
 
