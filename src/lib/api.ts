@@ -838,6 +838,8 @@ export type EvidenceImportRunResult = {
   replacedTasks: number;
   skipReasons: Partial<Record<EvidenceImportSkipReason, number>>;
   skippedSamples: EvidenceImportSkippedSample[];
+  errorStages: Partial<Record<EvidenceImportErrorStage, number>>;
+  errorSamples: EvidenceImportErrorSample[];
 };
 
 export type EvidenceImportSkipReason =
@@ -854,6 +856,21 @@ export type EvidenceImportSkippedSample = {
   assetKey: string | null;
   date: string | null;
   detail: string | null;
+};
+
+export type EvidenceImportErrorStage =
+  | "storage_path_escape"
+  | "stat_failed"
+  | "move_failed"
+  | "task_ensure_failed"
+  | "db_exception";
+
+export type EvidenceImportErrorSample = {
+  fileName: string;
+  stage: EvidenceImportErrorStage;
+  assetKey: string | null;
+  date: string | null;
+  error: string | null;
 };
 
 export const apiRunEvidenceImport = async (input: {

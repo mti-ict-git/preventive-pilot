@@ -163,3 +163,6 @@
 
 ## 2026-01-05 22:27
 - Extended evidence import filename date parsing to support DDMMYYYY.
+
+## 2026-01-05 22:39
+- Added evidence import error-stage breakdown and sample errors in results.

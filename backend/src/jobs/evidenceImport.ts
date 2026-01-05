@@ -15,12 +15,27 @@ export type EvidenceImportSkipReason =
   | "not_regular_file"
   | "duplicate_task";
 
+export type EvidenceImportErrorStage =
+  | "storage_path_escape"
+  | "stat_failed"
+  | "move_failed"
+  | "task_ensure_failed"
+  | "db_exception";
+
 export type EvidenceImportSkippedSample = {
   fileName: string;
   reason: EvidenceImportSkipReason;
   assetKey: string | null;
   date: string | null;
   detail: string | null;
+};
+
+export type EvidenceImportErrorSample = {
+  fileName: string;
+  stage: EvidenceImportErrorStage;
+  assetKey: string | null;
+  date: string | null;
+  error: string | null;
 };
 
 export type EvidenceImportRunResult = {
@@ -32,6 +47,8 @@ export type EvidenceImportRunResult = {
   replacedTasks: number;
   skipReasons: Partial<Record<EvidenceImportSkipReason, number>>;
   skippedSamples: EvidenceImportSkippedSample[];
+  errorStages: Partial<Record<EvidenceImportErrorStage, number>>;
+  errorSamples: EvidenceImportErrorSample[];
 };
 
 export type EvidenceImportRunOptions = {
@@ -394,6 +411,8 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
       replacedTasks: 0,
       skipReasons: {},
       skippedSamples: [],
+      errorStages: {},
+      errorSamples: [],
     };
     await writeSystemLog({
       level: "warn",
@@ -428,6 +447,10 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
   const skippedSamples: EvidenceImportSkippedSample[] = [];
   const skippedSampleLimit = 25;
 
+  const errorStages: Partial<Record<EvidenceImportErrorStage, number>> = {};
+  const errorSamples: EvidenceImportErrorSample[] = [];
+  const errorSampleLimit = 25;
+
   const recordSkip = (input: {
     reason: EvidenceImportSkipReason;
     fileAbs: string;
@@ -444,6 +467,25 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
       assetKey: input.assetKey ?? null,
       date: input.date ? toIsoDate(input.date) : null,
       detail: input.detail ?? null,
+    });
+  };
+
+  const recordError = (input: {
+    stage: EvidenceImportErrorStage;
+    fileAbs: string;
+    assetKey?: string | null;
+    date?: Date | null;
+    error?: string | null;
+  }): void => {
+    errorFiles += 1;
+    errorStages[input.stage] = (errorStages[input.stage] ?? 0) + 1;
+    if (errorSamples.length >= errorSampleLimit) return;
+    errorSamples.push({
+      fileName: path.basename(input.fileAbs),
+      stage: input.stage,
+      assetKey: input.assetKey ?? null,
+      date: input.date ? toIsoDate(input.date) : null,
+      error: input.error ?? null,
     });
   };
 
@@ -486,7 +528,7 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
     const destAbs = await resolveUniqueDestPath(destAbsInitial);
     const storageRel = path.relative(storageRoot, destAbs);
     if (storageRel.startsWith("..")) {
-      errorFiles += 1;
+      recordError({ stage: "storage_path_escape", fileAbs, assetKey, date: dateInfo.date });
       continue;
     }
 
@@ -499,7 +541,7 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
     try {
       st = await fs.promises.stat(fileAbs);
     } catch {
-      errorFiles += 1;
+      recordError({ stage: "stat_failed", fileAbs, assetKey, date: dateInfo.date });
       continue;
     }
 
@@ -510,8 +552,9 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
 
     try {
       await moveFile(fileAbs, destAbs);
-    } catch {
-      errorFiles += 1;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      recordError({ stage: "move_failed", fileAbs, assetKey, date: dateInfo.date, error: message });
       continue;
     }
 
@@ -551,7 +594,13 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
 
       if ("error" in ensured) {
         await tx.rollback();
-        errorFiles += 1;
+        recordError({
+          stage: "task_ensure_failed",
+          fileAbs,
+          assetKey,
+          date: dateInfo.date,
+          error: ensured.error,
+        });
         try {
           await moveFile(destAbs, fileAbs);
         } catch {
@@ -596,8 +645,8 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
       } catch {
         // ignore
       }
-      errorFiles += 1;
       const message = err instanceof Error ? err.message : "Unknown error";
+      recordError({ stage: "db_exception", fileAbs, assetKey, date: dateInfo.date, error: message });
       await writeSystemLog({
         level: "error",
         message: "Evidence import failed for file",
@@ -628,6 +677,7 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
       createdTasks,
       replacedTasks,
       skipReasons,
+      errorStages,
       durationMs,
     },
   });
@@ -641,5 +691,7 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
     replacedTasks,
     skipReasons,
     skippedSamples,
+    errorStages,
+    errorSamples,
   };
 };

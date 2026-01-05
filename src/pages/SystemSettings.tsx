@@ -157,13 +157,23 @@ const SystemSettings = () => {
         .slice(0, 3)
         .map(([k, v]) => `${k}: ${String(v)}`)
         .join(", ");
+      const errors = Object.entries(result.errorStages ?? {})
+        .filter(([, v]) => typeof v === "number" && v > 0)
+        .sort((a, b) => (b[1] as number) - (a[1] as number))
+        .slice(0, 2)
+        .map(([k, v]) => `${k}: ${String(v)}`)
+        .join(", ");
       const sample = (result.skippedSamples ?? [])[0];
       const sampleText = sample
         ? ` Example: ${sample.fileName} (${sample.reason}${sample.assetKey ? `, key=${sample.assetKey}` : ""}${sample.date ? `, date=${sample.date}` : ""}).`
         : "";
+      const errSample = (result.errorSamples ?? [])[0];
+      const errSampleText = errSample
+        ? ` Error example: ${errSample.fileName} (${errSample.stage}${errSample.error ? `, ${errSample.error}` : ""}).`
+        : "";
       toast({
         title: "Import completed",
-        description: `Imported ${result.importedFiles}, skipped ${result.skippedFiles}${reasons ? ` (${reasons})` : ""}, errors ${result.errorFiles}.${sampleText}`,
+        description: `Imported ${result.importedFiles}, skipped ${result.skippedFiles}${reasons ? ` (${reasons})` : ""}, errors ${result.errorFiles}${errors ? ` (${errors})` : ""}.${sampleText}${errSampleText}`,
       });
     },
     onError: (err: unknown) => {
