@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ensureLocalSuperadmin } from "../db/users";
+import { ensureLocalSuperadmin } from "../db/users.js";
 
 const ArgSchema = z.object({
   username: z.string().min(1),
@@ -34,4 +34,3 @@ const main = async (): Promise<void> => {
 };
 
 await main();
-

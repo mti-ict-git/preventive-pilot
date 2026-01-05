@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { getDb } from "../db/mssql";
+import { getDb } from "../db/mssql.js";
 
 export type LogLevel = "info" | "warn" | "error";
 
@@ -22,4 +22,3 @@ export const writeSystemLog = async (input: {
       ].join("\n"),
     );
 };
-

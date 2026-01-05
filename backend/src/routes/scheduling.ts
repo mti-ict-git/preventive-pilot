@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
-import { getDb } from "../db/mssql";
-import { requireAuth } from "../middleware/requireAuth";
-import { requireManager, requireSuperadmin } from "../middleware/requireRole";
+import { getDb } from "../db/mssql.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireManager, requireSuperadmin } from "../middleware/requireRole.js";
 
 const AssignmentRuleSchema = z.object({
   priority: z.number().int().min(0),

@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { verifyAccessToken, type JwtClaims } from "../auth/jwt";
+import { verifyAccessToken, type JwtClaims } from "../auth/jwt.js";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -27,4 +27,3 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
     res.status(401).json({ message: "Unauthorized" });
   }
 };
-

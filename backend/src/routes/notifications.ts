@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
-import { getDb } from "../db/mssql";
-import { requireAuth } from "../middleware/requireAuth";
-import { requireAnyRole } from "../middleware/requireRole";
+import { getDb } from "../db/mssql.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireAnyRole } from "../middleware/requireRole.js";
 
 const requireNotificationAdmin = requireAnyRole(["Superadmin", "Admin"]);
 
@@ -346,4 +346,3 @@ notificationsRouter.get("/log", requireNotificationAdmin, async (req, res) => {
     })),
   });
 });
-

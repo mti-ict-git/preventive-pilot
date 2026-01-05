@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { env } from "../config/env";
+import { env } from "../config/env.js";
 
 const poolPromise = new sql.ConnectionPool({
   server: env.DB_SERVER,
@@ -19,4 +19,3 @@ const poolPromise = new sql.ConnectionPool({
 }).connect();
 
 export const getDb = async () => poolPromise;
-

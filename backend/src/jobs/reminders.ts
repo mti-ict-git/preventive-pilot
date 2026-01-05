@@ -1,6 +1,6 @@
 import sql from "mssql";
-import { getDb } from "../db/mssql";
-import { writeSystemLog } from "./systemLog";
+import { getDb } from "../db/mssql.js";
+import { writeSystemLog } from "./systemLog.js";
 
 type NotificationRuleRow = {
   NotificationRuleId: string;

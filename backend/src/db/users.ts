@@ -1,6 +1,6 @@
 import sql from "mssql";
 import bcrypt from "bcryptjs";
-import { getDb } from "./mssql";
+import { getDb } from "./mssql.js";
 
 export interface UserRecord {
   userId: string;

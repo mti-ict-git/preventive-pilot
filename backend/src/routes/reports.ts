@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
-import { getDb } from "../db/mssql";
-import { requireAuth } from "../middleware/requireAuth";
+import { getDb } from "../db/mssql.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const OverdueQuerySchema = z.object({
   page: z.string().optional().default("1"),
@@ -170,4 +170,3 @@ reportsRouter.get("/compliance", async (req, res) => {
     complianceRate,
   });
 });
-

@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import sql from "mssql";
-import { env } from "../config/env";
-import { getDb } from "../db/mssql";
-import { writeSystemLog } from "./systemLog";
+import { env } from "../config/env.js";
+import { getDb } from "../db/mssql.js";
+import { writeSystemLog } from "./systemLog.js";
 
 type DuplicateAction = "skip" | "replace";
 

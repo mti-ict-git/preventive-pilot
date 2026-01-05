@@ -1,5 +1,5 @@
 import { Client } from "ldapts";
-import { env } from "../config/env";
+import { env } from "../config/env.js";
 
 const escapeFilterValue = (value: string) =>
   value.replace(/[\\()*\0]/g, (ch) => {
