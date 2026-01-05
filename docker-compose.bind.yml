@@ -1,0 +1,5 @@
+services:
+  api:
+    volumes:
+      - ${PM_SHARE_HOST_PATH:-./shared-documents}:/app/shared-documents
+

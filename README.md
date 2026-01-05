@@ -103,6 +103,20 @@ Run:
 docker compose up --build
 ```
 
+### SMB mount (PM folder)
+
+Bind-mount (when the host mounts SMB itself):
+
+```sh
+PM_SHARE_HOST_PATH=/path/to/mounted/share docker compose -f docker-compose.yml -f docker-compose.bind.yml up --build
+```
+
+CIFS mount (Docker mounts SMB directly on Linux):
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.cifs.yml up --build
+```
+
 ### Create a local superadmin (DB-backed)
 
 ```sh

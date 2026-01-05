@@ -151,3 +151,6 @@
 
 ## 2026-01-05 19:39
 - Added same-origin /api proxy setup for Docker web container.
+
+## 2026-01-05 20:50
+- Refined docker-compose overrides for SMB mounting (bind vs CIFS).

@@ -12,7 +12,6 @@ services:
       FRONTEND_ORIGIN: "http://localhost:9102"
     volumes:
       - ./.env:/app/.env:ro
-      - ${PM_SHARE_HOST_PATH:-./shared-documents}:/app/shared-documents
 
   web:
     build:
