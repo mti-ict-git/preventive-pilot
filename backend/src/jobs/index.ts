@@ -4,8 +4,9 @@ import { writeSystemLog } from "./systemLog";
 import { runSnipeSyncJob } from "./snipeSync";
 import { runScheduleCalculationJob } from "./scheduleCalc";
 import { runReminderEscalationJob } from "./reminders";
+import { runEvidenceImportJob } from "./evidenceImport.js";
 
-export type JobName = "snipe-sync" | "schedule-calc" | "notifications";
+export type JobName = "snipe-sync" | "schedule-calc" | "notifications" | "evidence-import";
 
 type RunJobOptions = {
   force?: boolean;
@@ -17,6 +18,7 @@ const runningJobs: Record<JobName, boolean> = {
   "snipe-sync": false,
   "schedule-calc": false,
   notifications: false,
+  "evidence-import": false,
 };
 
 const runJobImpl = async (name: JobName, options?: RunJobOptions): Promise<void> => {
@@ -27,6 +29,11 @@ const runJobImpl = async (name: JobName, options?: RunJobOptions): Promise<void>
 
   if (name === "schedule-calc") {
     await runScheduleCalculationJob();
+    return;
+  }
+
+  if (name === "evidence-import") {
+    await runEvidenceImportJob();
     return;
   }
 
@@ -112,4 +119,8 @@ export const startJobs = async (): Promise<void> => {
 
   schedule("schedule-calc", env.JOB_SCHEDULE_CALC_INTERVAL_MINUTES);
   schedule("notifications", env.JOB_NOTIFICATION_INTERVAL_MINUTES);
+
+  if (env.JOB_EVIDENCE_IMPORT_ENABLED && env.EVIDENCE_IMPORT_ROOT && env.EVIDENCE_STORAGE_ROOT) {
+    schedule("evidence-import", env.JOB_EVIDENCE_IMPORT_INTERVAL_MINUTES);
+  }
 };

@@ -13,6 +13,7 @@ import {
   Shield,
   Activity,
   ExternalLink,
+  Upload,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
@@ -26,12 +27,21 @@ import {
   apiGetSnipeItSettings,
   apiGetSystemLogs,
   apiGetSystemStatus,
+  apiListTemplates,
   apiRunJob,
+  apiRunEvidenceImport,
   apiTestSnipeItSettings,
   apiUpdateSnipeItSettings,
   type UpdateSnipeItSettingsInput,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const SystemSettings = () => {
   const queryClient = useQueryClient();
@@ -54,11 +64,20 @@ const SystemSettings = () => {
     queryFn: apiGetSnipeItSettings,
   });
 
+  const templatesQuery = useQuery({
+    queryKey: ["templates", { active: true }],
+    queryFn: () => apiListTemplates({ active: true }),
+    staleTime: 30_000,
+  });
+
   const [baseUrl, setBaseUrl] = useState<string>("");
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(false);
   const [syncIntervalMinutes, setSyncIntervalMinutes] = useState<number>(60);
   const [editToken, setEditToken] = useState<boolean>(false);
   const [apiToken, setApiToken] = useState<string>("");
+
+  const [importTemplateId, setImportTemplateId] = useState<string>("__asset_default__");
+  const [importDuplicateAction, setImportDuplicateAction] = useState<"skip" | "replace">("skip");
 
   useEffect(() => {
     const settings = snipeSettingsQuery.data;
@@ -123,6 +142,23 @@ const SystemSettings = () => {
     onError: (err: unknown) => {
       const message = err instanceof ApiError ? err.message : "Failed to start sync";
       toast({ title: "Sync failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      const templateId = importTemplateId === "__asset_default__" ? null : importTemplateId;
+      return apiRunEvidenceImport({ templateId, duplicateAction: importDuplicateAction });
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Import completed",
+        description: `Imported ${result.importedFiles}, skipped ${result.skippedFiles}, errors ${result.errorFiles}.`,
+      });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to run import";
+      toast({ title: "Import failed", description: message, variant: "destructive" });
     },
   });
 
@@ -382,6 +418,66 @@ const SystemSettings = () => {
                     </div>
                   </div>
                 ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Evidence Import */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55 }}
+          >
+            <Card className="glass border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground flex items-center gap-2">
+                  <Upload className="w-5 h-5 text-primary" />
+                  Evidence Import
+                </CardTitle>
+                <CardDescription>Move backdated evidence into the correct folder structure</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Template</Label>
+                  <Select value={importTemplateId} onValueChange={setImportTemplateId}>
+                    <SelectTrigger className="bg-muted/50">
+                      <SelectValue placeholder="Select template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__asset_default__">Use asset default template</SelectItem>
+                      {(templatesQuery.data?.items ?? []).map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Duplicates</Label>
+                  <Select
+                    value={importDuplicateAction}
+                    onValueChange={(v) => setImportDuplicateAction(v === "replace" ? "replace" : "skip")}
+                  >
+                    <SelectTrigger className="bg-muted/50">
+                      <SelectValue placeholder="Duplicate handling" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="skip">Skip existing</SelectItem>
+                      <SelectItem value="replace">Replace (delete and recreate task)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button
+                  className="w-full gap-2"
+                  onClick={() => importMutation.mutate()}
+                  disabled={importMutation.isPending || templatesQuery.isLoading}
+                >
+                  <Upload className="w-4 h-4" />
+                  Run Import
+                </Button>
               </CardContent>
             </Card>
           </motion.div>

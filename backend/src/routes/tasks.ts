@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
+import fs from "node:fs";
+import path from "node:path";
 import { getDb } from "../db/mssql";
+import { env } from "../config/env";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireAnyRole } from "../middleware/requireRole";
 
@@ -237,6 +240,88 @@ tasksRouter.get("/", async (req, res) => {
       },
     })),
   });
+});
+
+tasksRouter.get("/evidence/:evidenceId", async (req, res) => {
+  const evidenceId = req.params.evidenceId;
+  if (!z.string().uuid().safeParse(evidenceId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  if (!env.EVIDENCE_STORAGE_ROOT) {
+    res.status(500).json({ message: "Evidence storage not configured" });
+    return;
+  }
+
+  const download = req.query.download === "1" || req.query.download === "true";
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("evidenceId", sql.UniqueIdentifier, evidenceId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  e.EvidenceId AS EvidenceId,",
+        "  e.FileName AS FileName,",
+        "  e.ContentType AS ContentType,",
+        "  e.SizeBytes AS SizeBytes,",
+        "  e.StoragePath AS StoragePath",
+        "FROM pm.PMTaskEvidence e",
+        "WHERE e.EvidenceId = @evidenceId",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const storagePath = typeof row.StoragePath === "string" ? row.StoragePath : null;
+  if (!storagePath) {
+    res.status(404).json({ message: "Evidence file not available" });
+    return;
+  }
+
+  const root = path.resolve(env.EVIDENCE_STORAGE_ROOT);
+  const resolved = path.resolve(root, storagePath);
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (!resolved.startsWith(prefix)) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  let st: fs.Stats;
+  try {
+    st = await fs.promises.stat(resolved);
+  } catch {
+    res.status(404).json({ message: "Evidence file not found" });
+    return;
+  }
+
+  if (!st.isFile()) {
+    res.status(404).json({ message: "Evidence file not found" });
+    return;
+  }
+
+  const contentType = typeof row.ContentType === "string" && row.ContentType.trim() ? row.ContentType : null;
+  const fileName = typeof row.FileName === "string" && row.FileName.trim() ? row.FileName : null;
+
+  if (contentType) res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Length", String(st.size));
+  res.setHeader("Content-Disposition", `${download ? "attachment" : "inline"}${fileName ? `; filename="${fileName.replace(/"/g, "")}"` : ""}`);
+
+  const stream = fs.createReadStream(resolved);
+  stream.on("error", () => {
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Failed to read evidence" });
+      return;
+    }
+    res.end();
+  });
+  stream.pipe(res);
 });
 
 tasksRouter.get("/:taskId", async (req, res) => {

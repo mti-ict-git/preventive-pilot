@@ -39,6 +39,7 @@ import { toast } from "@/hooks/use-toast";
 import { isManager } from "@/lib/auth";
 import {
   ApiError,
+  apiDownloadEvidence,
   apiGetAsset,
   apiGetSystemStatus,
   apiGetTask,
@@ -179,6 +180,39 @@ const AssetDetail = () => {
     if (mb < 1024) return `${mb.toFixed(1)} MB`;
     const gb = mb / 1024;
     return `${gb.toFixed(1)} GB`;
+  };
+
+  const viewEvidence = async (evidenceId: string) => {
+    try {
+      const res = await apiDownloadEvidence({ evidenceId });
+      const blob =
+        res.contentType && res.blob.type !== res.contentType ? new Blob([res.blob], { type: res.contentType }) : res.blob;
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to open evidence";
+      toast({ title: "Evidence error", description: message, variant: "destructive" });
+    }
+  };
+
+  const downloadEvidence = async (evidenceId: string) => {
+    try {
+      const res = await apiDownloadEvidence({ evidenceId, download: true });
+      const blob =
+        res.contentType && res.blob.type !== res.contentType ? new Blob([res.blob], { type: res.contentType }) : res.blob;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.fileName ?? "evidence";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to download evidence";
+      toast({ title: "Evidence error", description: message, variant: "destructive" });
+    }
   };
 
   const getChecklistStatusIcon = (status: string) => {

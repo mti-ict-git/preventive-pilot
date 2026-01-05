@@ -75,6 +75,18 @@ const EnvSchema = z.object({
     .default("60")
     .pipe(numberFromString)
     .pipe(z.number().int().min(1)),
+
+  JOB_EVIDENCE_IMPORT_ENABLED: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
+  JOB_EVIDENCE_IMPORT_INTERVAL_MINUTES: z
+    .string()
+    .optional()
+    .default("60")
+    .pipe(numberFromString)
+    .pipe(z.number().int().min(1)),
+
+  EVIDENCE_IMPORT_ROOT: z.string().optional(),
+  EVIDENCE_STORAGE_ROOT: z.string().optional(),
+  EVIDENCE_IMPORT_MAX_FILES: z.string().optional().default("2000").pipe(numberFromString).pipe(z.number().int().min(1)),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -391,6 +391,62 @@ export const apiAddTaskEvidence = async (input: {
   });
 };
 
+export type DownloadEvidenceResponse = {
+  blob: Blob;
+  fileName: string | null;
+  contentType: string | null;
+};
+
+const parseFilenameFromContentDisposition = (value: string | null): string | null => {
+  if (!value) return null;
+  const match = value.match(/filename\*=UTF-8''([^;]+)|filename="?([^;"]+)"?/i);
+  const encoded = match?.[1] ?? null;
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
+  }
+  const plain = match?.[2] ?? null;
+  return plain ? plain.trim() : null;
+};
+
+export const apiDownloadEvidence = async (input: {
+  evidenceId: string;
+  download?: boolean;
+}): Promise<DownloadEvidenceResponse> => {
+  const params = new URLSearchParams();
+  if (input.download) params.set("download", "1");
+  const query = params.toString();
+
+  const res = await fetch(
+    `${API_BASE_URL}/api/tasks/evidence/${encodeURIComponent(input.evidenceId)}${query ? `?${query}` : ""}`,
+    {
+      headers: buildAuthHeaders(),
+    },
+  );
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const data = (await res.json()) as unknown;
+      const message =
+        typeof data === "object" && data !== null && "message" in data && typeof data.message === "string"
+          ? data.message
+          : "Request failed";
+      throw new ApiError(message, res.status);
+    }
+    throw new ApiError("Request failed", res.status);
+  }
+
+  const blob = await res.blob();
+  const cd = res.headers.get("content-disposition");
+  const fileName = parseFilenameFromContentDisposition(cd);
+  const contentType = res.headers.get("content-type");
+  return { blob, fileName, contentType };
+};
+
 export type OverdueReportItem = {
   id: string;
   taskNumber: string;
@@ -773,4 +829,23 @@ export const apiGetSystemLogs = async (input: { page?: number; pageSize?: number
 
 export const apiRunJob = async (jobName: "snipe-sync" | "schedule-calc" | "notifications"): Promise<{ ok: true }> => {
   return apiFetchJson<{ ok: true }>(`/api/system/jobs/${jobName}/run`, { method: "POST" });
+};
+
+export type EvidenceImportRunResult = {
+  examined: number;
+  importedFiles: number;
+  skippedFiles: number;
+  errorFiles: number;
+  createdTasks: number;
+  replacedTasks: number;
+};
+
+export const apiRunEvidenceImport = async (input: {
+  templateId?: string | null;
+  duplicateAction: "skip" | "replace";
+}): Promise<EvidenceImportRunResult> => {
+  return apiFetchJson<EvidenceImportRunResult>("/api/system/evidence-import/run", {
+    method: "POST",
+    body: input,
+  });
 };

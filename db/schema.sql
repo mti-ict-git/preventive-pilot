@@ -328,12 +328,18 @@ BEGIN
     ContentType nvarchar(128) NULL,
     SizeBytes bigint NULL,
     Uri nvarchar(1024) NOT NULL,
+    StoragePath nvarchar(1024) NULL,
     UploadedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_PMTaskEvidence_UploadedAt DEFAULT (sysutcdatetime()),
     UploadedByUserId uniqueidentifier NULL,
     CONSTRAINT PK_pm_PMTaskEvidence PRIMARY KEY CLUSTERED (EvidenceId),
     CONSTRAINT FK_pm_PMTaskEvidence_Tasks FOREIGN KEY (TaskId) REFERENCES pm.PMTasks(TaskId),
     CONSTRAINT FK_pm_PMTaskEvidence_UploadedByUser FOREIGN KEY (UploadedByUserId) REFERENCES pm.Users(UserId)
   );
+END;
+
+IF COL_LENGTH(N'pm.PMTaskEvidence', N'StoragePath') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTaskEvidence ADD StoragePath nvarchar(1024) NULL;
 END;
 
 IF OBJECT_ID(N'pm.NotificationChannels', N'U') IS NULL

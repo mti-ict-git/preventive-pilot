@@ -125,3 +125,17 @@
 ## 2026-01-05 12:39
 - Disabled bulk PM enable/disable actions for non-managers in the Assets page.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-05 16:19
+- Re-verified bulk PM template assignment and Asset Detail PM history wiring.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-05 17:28
+- Implemented backdated evidence importer job (file move + task/evidence creation + duplicate handling).
+- Added System Settings UI to run evidence import with template and duplicate options.
+- Added system endpoint to trigger evidence import and new env/scheduler toggles.
+- Fixed backend import path resolution for evidence import job wiring.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-05 18:09
+- Configured evidence import and storage roots in .env for Docker-mounted share.

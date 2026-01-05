@@ -6,10 +6,18 @@ import { getDb } from "../db/mssql";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole";
 import { runJobNow, type JobName } from "../jobs";
+import { runEvidenceImportJob } from "../jobs/evidenceImport.js";
 
 const requireSystemAdmin = requireAnyRole(["Superadmin", "Admin"]);
 
 const StatusJobSchema = z.enum(["snipe-sync", "schedule-calc", "notifications"]);
+
+const EvidenceImportRunSchema = z.object({
+  templateId: z.string().uuid().nullable().optional(),
+  duplicateAction: z.enum(["skip", "replace"]).optional().default("skip"),
+  maxFiles: z.number().int().min(1).max(20000).optional(),
+  dryRun: z.boolean().optional(),
+});
 
 const LogsQuerySchema = z.object({
   page: z.string().optional().default("1"),
@@ -505,4 +513,26 @@ systemRouter.post("/jobs/:jobName/run", requireSystemAdmin, async (req, res) => 
   }
 
   res.json({ ok: true });
+});
+
+systemRouter.post("/evidence-import/run", requireSystemAdmin, async (req, res) => {
+  const parsed = EvidenceImportRunSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  if (!env.EVIDENCE_IMPORT_ROOT || !env.EVIDENCE_STORAGE_ROOT) {
+    res.status(400).json({ message: "Evidence import not configured" });
+    return;
+  }
+
+  const result = await runEvidenceImportJob({
+    templateId: parsed.data.templateId ?? null,
+    duplicateAction: parsed.data.duplicateAction,
+    maxFiles: parsed.data.maxFiles,
+    dryRun: parsed.data.dryRun,
+  });
+
+  res.json(result);
 });
