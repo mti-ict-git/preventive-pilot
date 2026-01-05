@@ -8,5 +8,5 @@ volumes:
     driver: local
     driver_opts:
       type: cifs
-      o: username=${DOMAIN_USERNAME},password=${DOMAIN_PASSWORD},vers=${CIFS_VERS:-3.0},uid=${CIFS_UID:-1000},gid=${CIFS_GID:-1000},file_mode=${CIFS_FILE_MODE:-0777},dir_mode=${CIFS_DIR_MODE:-0777}
+      o: username=${DOMAIN_USERNAME},domain=${CIFS_DOMAIN:-mbma},password=${DOMAIN_PASSWORD},sec=${CIFS_SEC:-ntlmssp},vers=${CIFS_VERS:-3.0},uid=${CIFS_UID:-1000},gid=${CIFS_GID:-1000},file_mode=${CIFS_FILE_MODE:-0777},dir_mode=${CIFS_DIR_MODE:-0777},noperm
       device: ${CIFS_SHARE_PATH}
