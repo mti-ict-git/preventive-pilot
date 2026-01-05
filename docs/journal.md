@@ -166,3 +166,12 @@
 
 ## 2026-01-05 22:39
 - Added evidence import error-stage breakdown and sample errors in results.
+
+## 2026-01-06 06:12
+- Added evidence import DB schema precheck for pm.PMTaskEvidence.StoragePath.
+- Improved rollback failure logging for evidence import transactions.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 06:21
+- Applied schema.sql to production database.
+- Verified pm schema and confirmed pm.PMTaskEvidence.StoragePath exists.

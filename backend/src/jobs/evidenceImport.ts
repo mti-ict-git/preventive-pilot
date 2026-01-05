@@ -436,6 +436,16 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
   const files = await listFilesRecursively(importRoot, maxFiles);
   const db = await getDb();
 
+  const schemaResult = await db.request().query(
+    "SELECT COL_LENGTH(N'pm.PMTaskEvidence', N'StoragePath') AS StoragePathLen;",
+  );
+  const schemaRow = schemaResult.recordset[0] as Record<string, unknown> | undefined;
+  const storagePathLen =
+    schemaRow && typeof schemaRow.StoragePathLen === "number" ? schemaRow.StoragePathLen : null;
+  if (storagePathLen === null) {
+    throw new Error("Database schema missing pm.PMTaskEvidence.StoragePath. Run npm run db:apply-schema.");
+  }
+
   let examined = 0;
   let importedFiles = 0;
   let skippedFiles = 0;
@@ -642,8 +652,13 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
     } catch (err: unknown) {
       try {
         await tx.rollback();
-      } catch {
-        // ignore
+      } catch (rollbackErr: unknown) {
+        const rollbackMessage = rollbackErr instanceof Error ? rollbackErr.message : "Unknown error";
+        await writeSystemLog({
+          level: "error",
+          message: "Failed to rollback evidence import transaction",
+          context: { job: "evidence-import", file: destAbs, error: rollbackMessage },
+        });
       }
       const message = err instanceof Error ? err.message : "Unknown error";
       recordError({ stage: "db_exception", fileAbs, assetKey, date: dateInfo.date, error: message });
