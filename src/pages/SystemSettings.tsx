@@ -151,9 +151,19 @@ const SystemSettings = () => {
       return apiRunEvidenceImport({ templateId, duplicateAction: importDuplicateAction });
     },
     onSuccess: (result) => {
+      const reasons = Object.entries(result.skipReasons ?? {})
+        .filter(([, v]) => typeof v === "number" && v > 0)
+        .sort((a, b) => (b[1] as number) - (a[1] as number))
+        .slice(0, 3)
+        .map(([k, v]) => `${k}: ${String(v)}`)
+        .join(", ");
+      const sample = (result.skippedSamples ?? [])[0];
+      const sampleText = sample
+        ? ` Example: ${sample.fileName} (${sample.reason}${sample.assetKey ? `, key=${sample.assetKey}` : ""}${sample.date ? `, date=${sample.date}` : ""}).`
+        : "";
       toast({
         title: "Import completed",
-        description: `Imported ${result.importedFiles}, skipped ${result.skippedFiles}, errors ${result.errorFiles}.`,
+        description: `Imported ${result.importedFiles}, skipped ${result.skippedFiles}${reasons ? ` (${reasons})` : ""}, errors ${result.errorFiles}.${sampleText}`,
       });
     },
     onError: (err: unknown) => {

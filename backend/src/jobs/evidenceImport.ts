@@ -7,6 +7,22 @@ import { writeSystemLog } from "./systemLog.js";
 
 type DuplicateAction = "skip" | "replace";
 
+export type EvidenceImportSkipReason =
+  | "no_date_in_name"
+  | "no_asset_key"
+  | "asset_not_found"
+  | "no_template"
+  | "not_regular_file"
+  | "duplicate_task";
+
+export type EvidenceImportSkippedSample = {
+  fileName: string;
+  reason: EvidenceImportSkipReason;
+  assetKey: string | null;
+  date: string | null;
+  detail: string | null;
+};
+
 export type EvidenceImportRunResult = {
   examined: number;
   importedFiles: number;
@@ -14,6 +30,8 @@ export type EvidenceImportRunResult = {
   errorFiles: number;
   createdTasks: number;
   replacedTasks: number;
+  skipReasons: Partial<Record<EvidenceImportSkipReason, number>>;
+  skippedSamples: EvidenceImportSkippedSample[];
 };
 
 export type EvidenceImportRunOptions = {
@@ -357,6 +375,8 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
       errorFiles: 0,
       createdTasks: 0,
       replacedTasks: 0,
+      skipReasons: {},
+      skippedSamples: [],
     };
     await writeSystemLog({
       level: "warn",
@@ -387,6 +407,29 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
   let createdTasks = 0;
   let replacedTasks = 0;
 
+  const skipReasons: Partial<Record<EvidenceImportSkipReason, number>> = {};
+  const skippedSamples: EvidenceImportSkippedSample[] = [];
+  const skippedSampleLimit = 25;
+
+  const recordSkip = (input: {
+    reason: EvidenceImportSkipReason;
+    fileAbs: string;
+    assetKey?: string | null;
+    date?: Date | null;
+    detail?: string | null;
+  }): void => {
+    skippedFiles += 1;
+    skipReasons[input.reason] = (skipReasons[input.reason] ?? 0) + 1;
+    if (skippedSamples.length >= skippedSampleLimit) return;
+    skippedSamples.push({
+      fileName: path.basename(input.fileAbs),
+      reason: input.reason,
+      assetKey: input.assetKey ?? null,
+      date: input.date ? toIsoDate(input.date) : null,
+      detail: input.detail ?? null,
+    });
+  };
+
   const taskCache = new Map<string, { taskId: string; skip: boolean; created: boolean; replaced: boolean }>();
 
   for (const fileAbs of files) {
@@ -394,25 +437,25 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
 
     const dateInfo = tryExtractDate(path.basename(fileAbs));
     if (!dateInfo) {
-      skippedFiles += 1;
+      recordSkip({ reason: "no_date_in_name", fileAbs });
       continue;
     }
 
     const assetKey = extractAssetKey(path.basename(fileAbs), dateInfo.matchIndex);
     if (!assetKey) {
-      skippedFiles += 1;
+      recordSkip({ reason: "no_asset_key", fileAbs, date: dateInfo.date });
       continue;
     }
 
     const asset = await resolveAsset(assetKey);
     if (!asset) {
-      skippedFiles += 1;
+      recordSkip({ reason: "asset_not_found", fileAbs, assetKey, date: dateInfo.date });
       continue;
     }
 
     const templateId = requestedTemplateId ?? asset.defaultTemplateId;
     if (!templateId) {
-      skippedFiles += 1;
+      recordSkip({ reason: "no_template", fileAbs, assetKey, date: dateInfo.date });
       continue;
     }
 
@@ -444,7 +487,7 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
     }
 
     if (!st.isFile()) {
-      skippedFiles += 1;
+      recordSkip({ reason: "not_regular_file", fileAbs, assetKey, date: dateInfo.date });
       continue;
     }
 
@@ -470,7 +513,13 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
 
       if ("skip" in ensured) {
         await tx.rollback();
-        skippedFiles += 1;
+        recordSkip({
+          reason: "duplicate_task",
+          fileAbs,
+          assetKey,
+          date: dateInfo.date,
+          detail: duplicateAction,
+        });
         try {
           await moveFile(destAbs, fileAbs);
         } catch {
@@ -561,6 +610,7 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
       errorFiles,
       createdTasks,
       replacedTasks,
+      skipReasons,
       durationMs,
     },
   });
@@ -572,5 +622,7 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
     errorFiles,
     createdTasks,
     replacedTasks,
+    skipReasons,
+    skippedSamples,
   };
 };

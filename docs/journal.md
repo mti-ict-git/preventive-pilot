@@ -157,3 +157,6 @@
 
 ## 2026-01-05 20:56
 - Updated CIFS mount options (domain/sec) to fix permission denied.
+
+## 2026-01-05 21:57
+- Added evidence import skip-reason breakdown and samples for debugging.

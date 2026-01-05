@@ -836,6 +836,24 @@ export type EvidenceImportRunResult = {
   errorFiles: number;
   createdTasks: number;
   replacedTasks: number;
+  skipReasons: Partial<Record<EvidenceImportSkipReason, number>>;
+  skippedSamples: EvidenceImportSkippedSample[];
+};
+
+export type EvidenceImportSkipReason =
+  | "no_date_in_name"
+  | "no_asset_key"
+  | "asset_not_found"
+  | "no_template"
+  | "not_regular_file"
+  | "duplicate_task";
+
+export type EvidenceImportSkippedSample = {
+  fileName: string;
+  reason: EvidenceImportSkipReason;
+  assetKey: string | null;
+  date: string | null;
+  detail: string | null;
 };
 
 export const apiRunEvidenceImport = async (input: {
