@@ -87,7 +87,21 @@ Required environment variables:
 
 - Start backend (from repo root): `npm run dev:full` or `npm --prefix backend run dev`
 - Backend base URL: `http://localhost:3001`
-- Configure frontend API base URL with `VITE_API_BASE_URL` (defaults to `http://localhost:3001`)
+- Configure frontend API base URL with `VITE_API_BASE_URL` (defaults to same-origin in production, `http://localhost:3001` in dev)
+
+## Docker (web + api)
+
+This repo ships a docker-compose setup that serves the frontend and proxies API requests via the same origin.
+
+- Web: `http://localhost:9102`
+- API (internal): `http://api:5056`
+- API (from browser): `http://localhost:9102/api/...`
+
+Run:
+
+```sh
+docker compose up --build
+```
 
 ### Create a local superadmin (DB-backed)
 

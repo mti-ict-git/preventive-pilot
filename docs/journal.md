@@ -145,3 +145,9 @@
 
 ## 2026-01-05 18:51
 - Added CIFS-based docker compose override for mounting SMB share in Docker.
+
+## 2026-01-05 19:29
+- Fixed backend ESM imports for Node.js runtime in Docker.
+
+## 2026-01-05 19:39
+- Added same-origin /api proxy setup for Docker web container.
