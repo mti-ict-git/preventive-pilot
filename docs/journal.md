@@ -154,3 +154,6 @@
 
 ## 2026-01-05 20:50
 - Refined docker-compose overrides for SMB mounting (bind vs CIFS).
+
+## 2026-01-05 20:56
+- Updated CIFS mount options (domain/sec) to fix permission denied.
