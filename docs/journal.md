@@ -139,3 +139,9 @@
 
 ## 2026-01-05 18:09
 - Configured evidence import and storage roots in .env for Docker-mounted share.
+
+## 2026-01-05 18:43
+- Added Dockerfiles and docker-compose for web (9102) and api (5056).
+
+## 2026-01-05 18:51
+- Added CIFS-based docker compose override for mounting SMB share in Docker.

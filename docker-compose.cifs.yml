@@ -1,0 +1,14 @@
+services:
+  api:
+    volumes:
+      - ./.env:/app/.env:ro
+      - pm_share:/app/shared-documents
+
+volumes:
+  pm_share:
+    driver: local
+    driver_opts:
+      type: cifs
+      o: username=${DOMAIN_USERNAME},password=${DOMAIN_PASSWORD},vers=${CIFS_VERS:-3.0},uid=${CIFS_UID:-1000},gid=${CIFS_GID:-1000},file_mode=${CIFS_FILE_MODE:-0777},dir_mode=${CIFS_DIR_MODE:-0777}
+      device: ${CIFS_SHARE_PATH}
+
