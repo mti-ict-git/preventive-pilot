@@ -1,7 +1,7 @@
 import { Router } from "express";
 import sql from "mssql";
-import { getDb } from "../db/mssql";
-import { requireAuth } from "../middleware/requireAuth";
+import { getDb } from "../db/mssql.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 export const dashboardRouter = Router();
 
@@ -161,4 +161,3 @@ dashboardRouter.get("/overview", async (_req, res) => {
     recentTasks,
   });
 });
-

@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
-import { getDb } from "../db/mssql";
-import { requireAuth } from "../middleware/requireAuth";
-import { requireManager } from "../middleware/requireRole";
+import { getDb } from "../db/mssql.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireManager } from "../middleware/requireRole.js";
 
 const parseBoolean = (value: unknown): boolean | null => {
   if (value === undefined || value === null) return null;

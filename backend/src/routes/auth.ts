@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { authenticateWithLdap } from "../auth/ldap";
-import { signAccessToken } from "../auth/jwt";
-import { authenticateLocalUser, upsertLdapUser } from "../db/users";
-import { requireAuth } from "../middleware/requireAuth";
+import { authenticateWithLdap } from "../auth/ldap.js";
+import { signAccessToken } from "../auth/jwt.js";
+import { authenticateLocalUser, upsertLdapUser } from "../db/users.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const LoginSchema = z
   .object({

@@ -1,16 +1,16 @@
 import express from "express";
 import cors from "cors";
-import { env } from "./config/env";
-import { authRouter } from "./routes/auth";
-import { assetsRouter } from "./routes/assets";
-import { templatesRouter } from "./routes/templates";
-import { schedulingRouter } from "./routes/scheduling";
-import { tasksRouter } from "./routes/tasks";
-import { reportsRouter } from "./routes/reports";
-import { notificationsRouter } from "./routes/notifications";
-import { systemRouter } from "./routes/system";
-import { dashboardRouter } from "./routes/dashboard";
-import { startJobs } from "./jobs";
+import { env } from "./config/env.js";
+import { authRouter } from "./routes/auth.js";
+import { assetsRouter } from "./routes/assets.js";
+import { templatesRouter } from "./routes/templates.js";
+import { schedulingRouter } from "./routes/scheduling.js";
+import { tasksRouter } from "./routes/tasks.js";
+import { reportsRouter } from "./routes/reports.js";
+import { notificationsRouter } from "./routes/notifications.js";
+import { systemRouter } from "./routes/system.js";
+import { dashboardRouter } from "./routes/dashboard.js";
+import { startJobs } from "./jobs/index.js";
 
 const app = express();
 

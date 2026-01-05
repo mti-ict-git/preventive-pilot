@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
-import { env } from "../config/env";
-import { getDb } from "../db/mssql";
-import { requireAuth } from "../middleware/requireAuth";
-import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole";
-import { runJobNow, type JobName } from "../jobs";
+import { env } from "../config/env.js";
+import { getDb } from "../db/mssql.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole.js";
+import { runJobNow, type JobName } from "../jobs/index.js";
 import { runEvidenceImportJob } from "../jobs/evidenceImport.js";
 
 const requireSystemAdmin = requireAnyRole(["Superadmin", "Admin"]);

@@ -3,10 +3,10 @@ import { z } from "zod";
 import sql from "mssql";
 import fs from "node:fs";
 import path from "node:path";
-import { getDb } from "../db/mssql";
-import { env } from "../config/env";
-import { requireAuth } from "../middleware/requireAuth";
-import { requireAnyRole } from "../middleware/requireRole";
+import { getDb } from "../db/mssql.js";
+import { env } from "../config/env.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireAnyRole } from "../middleware/requireRole.js";
 
 const parseBoolean = (value: unknown): boolean | null => {
   if (value === undefined || value === null) return null;
