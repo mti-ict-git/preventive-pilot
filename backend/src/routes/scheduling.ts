@@ -3,7 +3,7 @@ import { z } from "zod";
 import sql from "mssql";
 import { getDb } from "../db/mssql";
 import { requireAuth } from "../middleware/requireAuth";
-import { requireSuperadmin } from "../middleware/requireRole";
+import { requireManager, requireSuperadmin } from "../middleware/requireRole";
 
 const AssignmentRuleSchema = z.object({
   priority: z.number().int().min(0),
@@ -307,7 +307,7 @@ schedulingRouter.delete(
   },
 );
 
-schedulingRouter.post("/recalculate", requireSuperadmin, async (req, res) => {
+schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
   const parsed = RecalcSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ message: "Invalid request" });
@@ -387,4 +387,3 @@ schedulingRouter.post("/recalculate", requireSuperadmin, async (req, res) => {
     throw err;
   }
 });
-

@@ -391,13 +391,13 @@ const Assets = () => {
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem
                 onClick={() => bulkSetPmEnabledMutation.mutate({ assetIds: selectedIdsOnPage, pmEnabled: true })}
-                disabled={bulkSetPmEnabledMutation.isPending}
+                disabled={!canManage || bulkSetPmEnabledMutation.isPending}
               >
                 Enable PM
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => bulkSetPmEnabledMutation.mutate({ assetIds: selectedIdsOnPage, pmEnabled: false })}
-                disabled={bulkSetPmEnabledMutation.isPending}
+                disabled={!canManage || bulkSetPmEnabledMutation.isPending}
               >
                 Disable PM
               </DropdownMenuItem>

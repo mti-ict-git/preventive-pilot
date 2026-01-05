@@ -117,3 +117,11 @@
 - Added bulk action to assign a PM template to multiple Assets.
 - Updated Asset Detail PM History tab to load real completed task history.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-05 10:56
+- Allowed Admin/Supervisor to trigger schedule recalculation.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-05 12:39
+- Disabled bulk PM enable/disable actions for non-managers in the Assets page.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
