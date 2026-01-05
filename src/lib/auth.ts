@@ -73,4 +73,12 @@ export const hasRole = (roleName: string): boolean => {
   return claims.roles.includes(roleName);
 };
 
+export const hasAnyRole = (roleNames: readonly string[]): boolean => {
+  const claims = getJwtClaims();
+  if (!claims) return false;
+  return roleNames.some((r) => claims.roles.includes(r));
+};
+
 export const isSuperadmin = (): boolean => hasRole("Superadmin");
+
+export const isManager = (): boolean => hasAnyRole(["Superadmin", "Admin", "Supervisor"]);

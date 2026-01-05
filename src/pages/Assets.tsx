@@ -11,6 +11,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  AlertTriangle,
   ExternalLink,
   ChevronRight,
 } from "lucide-react";
@@ -48,24 +49,35 @@ import {
   apiGetLookups,
   apiGetAssetsUiSettings,
   apiBulkSetAssetPmEnabled,
+  apiBulkSetAssetPmTemplate,
   apiListAssets,
+  apiListTemplates,
   apiPatchAssetPm,
   apiRunJob,
   ApiError,
   type Asset,
   type LookupAssetCategory,
+  type TemplateSummary,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { isManager } from "@/lib/auth";
 
 const EMPTY_ASSETS: Asset[] = [];
+
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
+
+const EMPTY_TEMPLATES: TemplateSummary[] = [];
 
 const Assets = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const [pageSize, setPageSize] = useState<number>(50);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Record<string, true>>({});
+  const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
+  const [bulkTemplateValue, setBulkTemplateValue] = useState<string>("none");
   const navigate = useNavigate();
 
   const queryClient = useQueryClient();
@@ -94,14 +106,6 @@ const Assets = () => {
     return lookupsQuery.data?.assetCategories ?? [];
   }, [lookupsQuery.data?.assetCategories]);
 
-  const allCategoryIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const c of allCategories) {
-      if (c.id) ids.push(c.id);
-    }
-    return ids;
-  }, [allCategories]);
-
   useEffect(() => {
     if (selectedCategoryId === "all") return;
     if (visibleCategoryIds === null) return;
@@ -125,6 +129,18 @@ const Assets = () => {
   });
 
   const assets = assetsQuery.data?.items ?? EMPTY_ASSETS;
+
+  const templatesQuery = useQuery({
+    queryKey: ["templates", "active"],
+    queryFn: () => apiListTemplates({ active: true }),
+    staleTime: 60_000,
+  });
+
+  const allTemplates = templatesQuery.data?.items ?? EMPTY_TEMPLATES;
+
+  const missingTemplateCount = useMemo(() => {
+    return assets.filter((a) => a.pm.enabled === true && !a.pm.defaultTemplateId).length;
+  }, [assets]);
 
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
@@ -154,6 +170,22 @@ const Assets = () => {
     },
     onError: (err: unknown) => {
       const message = err instanceof ApiError ? err.message : "Failed to update PM settings";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const bulkSetPmTemplateMutation = useMutation({
+    mutationFn: async (input: { assetIds: string[]; defaultTemplateId: string | null }) => {
+      return apiBulkSetAssetPmTemplate(input);
+    },
+    onSuccess: async () => {
+      setBulkTemplateOpen(false);
+      setSelectedAssetIds({});
+      await queryClient.invalidateQueries({ queryKey: ["assets"] });
+      toast({ title: "Updated", description: "PM template assigned for selected assets." });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to assign PM template";
       toast({ title: "Update failed", description: message, variant: "destructive" });
     },
   });
@@ -237,6 +269,8 @@ const Assets = () => {
 
   const snipeItUrl = systemStatusQuery.data?.snipeIt.baseUrl;
 
+  const canManage = isManager();
+
   return (
     <div className="min-h-screen">
       <Header title="Assets" subtitle="Synchronized from Snipe-IT" />
@@ -254,7 +288,10 @@ const Assets = () => {
             </div>
             <div>
               <p className="font-medium text-foreground">Snipe-IT Sync Active</p>
-              <p className="text-sm text-muted-foreground">{lastSyncText}</p>
+              <p className="text-sm text-muted-foreground">
+                {lastSyncText}
+                {missingTemplateCount > 0 ? ` • ${missingTemplateCount} missing PM template` : ""}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -363,6 +400,15 @@ const Assets = () => {
                 disabled={bulkSetPmEnabledMutation.isPending}
               >
                 Disable PM
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setBulkTemplateValue("none");
+                  setBulkTemplateOpen(true);
+                }}
+                disabled={!canManage || selectedIdsOnPage.length === 0}
+              >
+                Assign PM Template…
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -478,6 +524,12 @@ const Assets = () => {
                         <div className="flex items-center gap-2">
                           <pmStatus.icon className={`w-4 h-4 ${pmStatus.color}`} />
                           <span className={`text-sm capitalize ${pmStatus.color}`}>{pmStatus.status}</span>
+                          {pmEnabled && !asset.pm.defaultTemplateId ? (
+                            <div className="flex items-center gap-1 text-xs text-warning">
+                              <AlertTriangle className="w-4 h-4" />
+                              Missing template
+                            </div>
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -511,9 +563,30 @@ const Assets = () => {
 
         {/* Pagination */}
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Showing {filteredAssets.length} assets
-          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <p className="text-sm text-muted-foreground">Showing {filteredAssets.length} assets</p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Per page</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-28 bg-muted/50" aria-label="Assets per page">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt} value={String(opt)}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -534,6 +607,49 @@ const Assets = () => {
           </div>
         </div>
       </div>
+
+      <Dialog open={bulkTemplateOpen} onOpenChange={setBulkTemplateOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Assign PM Template</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <span className="text-sm text-muted-foreground">Template</span>
+              <Select value={bulkTemplateValue} onValueChange={setBulkTemplateValue}>
+                <SelectTrigger className="bg-muted/50" aria-label="PM template">
+                  <SelectValue placeholder={templatesQuery.isLoading ? "Loading templates…" : "Select template"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {allTemplates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setBulkTemplateOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={bulkSetPmTemplateMutation.isPending || selectedIdsOnPage.length === 0}
+                onClick={() => {
+                  bulkSetPmTemplateMutation.mutate({
+                    assetIds: selectedIdsOnPage,
+                    defaultTemplateId: bulkTemplateValue === "none" ? null : bulkTemplateValue,
+                  });
+                }}
+              >
+                Apply
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

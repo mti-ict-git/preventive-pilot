@@ -184,6 +184,16 @@ export const apiBulkSetAssetPmEnabled = async (input: {
   });
 };
 
+export const apiBulkSetAssetPmTemplate = async (input: {
+  assetIds: string[];
+  defaultTemplateId: string | null;
+}): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>("/api/assets/pm/bulk/template", {
+    method: "POST",
+    body: input,
+  });
+};
+
 export type TaskListItem = {
   id: string;
   taskNumber: string;

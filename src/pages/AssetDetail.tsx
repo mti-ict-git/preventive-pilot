@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Server,
@@ -12,7 +13,6 @@ import {
   XCircle,
   AlertTriangle,
   ExternalLink,
-  Edit2,
   FileText,
   Image,
   Download,
@@ -28,122 +28,163 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
+import { isManager } from "@/lib/auth";
+import {
+  ApiError,
+  apiGetAsset,
+  apiGetSystemStatus,
+  apiGetTask,
+  apiListTasks,
+  apiListTemplates,
+  apiPatchAssetPm,
+  type TaskDetail,
+  type TaskListItem,
+  type TemplateSummary,
+} from "@/lib/api";
+
+const EMPTY_TEMPLATES: TemplateSummary[] = [];
 
 const AssetDetail = () => {
   const { assetId } = useParams();
-  const [pmEnabled, setPmEnabled] = useState(true);
-  const [expandedHistory, setExpandedHistory] = useState<number | null>(0);
+  const [expandedHistoryTaskId, setExpandedHistoryTaskId] = useState<string | null>(null);
 
-  // Mock asset data
-  const asset = {
-    id: assetId || "LAPTOP-001",
-    name: "Dell Latitude 5520",
-    category: "Laptop",
-    manufacturer: "Dell Inc.",
-    model: "Latitude 5520",
-    serial: "SN-DL5520-2024-001",
-    location: "HQ - Floor 2, Desk 42",
-    department: "Engineering",
-    assignedTo: "John Doe",
-    assignedEmail: "john.doe@company.com",
-    status: "Deployed",
-    purchaseDate: "2024-03-15",
-    warrantyExpiry: "2027-03-15",
-    lastPM: "2025-11-15",
-    nextPM: "2026-02-15",
-    pmTemplate: "PM Laptop Quarterly",
-    pmInterval: 90,
-    totalPMCompleted: 3,
-    complianceRate: 100,
-    snipeItUrl: "https://assets.company.com/hardware/1234",
+  const queryClient = useQueryClient();
+
+  const systemStatusQuery = useQuery({
+    queryKey: ["system-status"],
+    queryFn: apiGetSystemStatus,
+    refetchInterval: 30_000,
+  });
+
+  const assetQuery = useQuery({
+    queryKey: ["asset", assetId],
+    queryFn: async () => {
+      if (!assetId) throw new Error("Missing assetId");
+      return apiGetAsset(assetId);
+    },
+    enabled: Boolean(assetId),
+  });
+
+  const templatesQuery = useQuery({
+    queryKey: ["templates"],
+    queryFn: () => apiListTemplates(),
+    staleTime: 60_000,
+  });
+
+  const historyTasksQuery = useQuery({
+    queryKey: ["tasks", "history", assetId],
+    queryFn: async () => {
+      if (!assetId) throw new Error("Missing assetId");
+      return apiListTasks({ assetId, status: "completed", page: 1, pageSize: 50 });
+    },
+    enabled: Boolean(assetId),
+    staleTime: 30_000,
+  });
+
+  const expandedTaskQuery = useQuery({
+    queryKey: ["task", expandedHistoryTaskId],
+    queryFn: async () => {
+      if (!expandedHistoryTaskId) throw new Error("Missing taskId");
+      return apiGetTask(expandedHistoryTaskId);
+    },
+    enabled: Boolean(expandedHistoryTaskId),
+  });
+
+  const patchPmMutation = useMutation({
+    mutationFn: async (input: { pmEnabled?: boolean; defaultTemplateId?: string | null }) => {
+      if (!assetId) throw new Error("Missing assetId");
+      return apiPatchAssetPm({ assetId, ...input });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["asset", assetId] });
+      await queryClient.invalidateQueries({ queryKey: ["assets"] });
+      toast({ title: "Updated", description: "PM settings saved." });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Update failed";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const asset = assetQuery.data;
+  const canManage = isManager();
+  const pmEnabled = asset?.pm.enabled === true;
+
+  const snipeItBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
+  const snipeItHardwareUrl =
+    snipeItBaseUrl && asset?.snipeAssetId
+      ? `${snipeItBaseUrl.replace(/\/$/, "")}/hardware/${asset.snipeAssetId}`
+      : snipeItBaseUrl;
+
+  const categoryId = asset?.category.id ?? null;
+  const allTemplates = templatesQuery.data?.items ?? EMPTY_TEMPLATES;
+  const filteredTemplates = useMemo((): TemplateSummary[] => {
+    if (!asset) return allTemplates;
+
+    const selectedId = asset.pm.defaultTemplateId;
+    return allTemplates.filter((t) => {
+      if (selectedId && t.id === selectedId) return true;
+
+      const applicableCategoryId = t.applicableCategory?.id ?? null;
+      if (!categoryId) return applicableCategoryId === null;
+      return applicableCategoryId === null || applicableCategoryId === categoryId;
+    });
+  }, [allTemplates, asset, categoryId]);
+
+  const selectedTemplate = useMemo((): TemplateSummary | null => {
+    const id = asset?.pm.defaultTemplateId ?? null;
+    if (!id) return null;
+    return allTemplates.find((t) => t.id === id) ?? null;
+  }, [allTemplates, asset?.pm.defaultTemplateId]);
+
+  const historyTasks = useMemo((): TaskListItem[] => {
+    const items = historyTasksQuery.data?.items ?? [];
+    return [...items]
+      .filter((t) => Boolean(t.completedAt))
+      .sort((a, b) => {
+        const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return bTime - aTime;
+      });
+  }, [historyTasksQuery.data?.items]);
+
+  const expandedTask = expandedTaskQuery.data as TaskDetail | undefined;
+
+  const formatDuration = (startedAt: string | null, completedAt: string | null): string => {
+    if (!startedAt || !completedAt) return "—";
+    const start = new Date(startedAt).getTime();
+    const end = new Date(completedAt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "—";
+    const minutes = Math.round((end - start) / 60_000);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes === 0 ? `${hours}h` : `${hours}h ${remainingMinutes}m`;
   };
 
-  const pmHistory = [
-    {
-      id: 1,
-      taskId: "PM-2025-089",
-      template: "PM Laptop Quarterly",
-      completedDate: "2025-11-15",
-      completedBy: "Sarah Miller",
-      duration: "42 min",
-      status: "completed",
-      notes: "All checks passed. Battery health at 92%. Cleaned fan and vents.",
-      checklist: [
-        { item: "Visual inspection for physical damage", status: "pass", mandatory: true, notes: "" },
-        { item: "Clean keyboard and screen", status: "pass", mandatory: true, notes: "" },
-        { item: "Check battery health (>80%)", status: "pass", mandatory: true, notes: "92% health" },
-        { item: "Update BIOS if available", status: "pass", mandatory: false, notes: "Updated to v1.15" },
-        { item: "Run disk health check", status: "pass", mandatory: true, notes: "" },
-        { item: "Verify antivirus definitions", status: "pass", mandatory: true, notes: "" },
-        { item: "Clean internal fans/vents", status: "pass", mandatory: false, notes: "Dust removed" },
-        { item: "Test all ports (USB, HDMI, etc)", status: "pass", mandatory: true, notes: "" },
-        { item: "Verify Windows updates installed", status: "pass", mandatory: true, notes: "" },
-        { item: "Check thermal paste condition", status: "skip", mandatory: false, notes: "Not due yet" },
-      ],
-      evidence: [
-        { name: "battery_health_report.pdf", type: "pdf", size: "245 KB", uploadedAt: "2025-11-15 10:30" },
-        { name: "disk_health_screenshot.png", type: "image", size: "1.2 MB", uploadedAt: "2025-11-15 10:35" },
-        { name: "bios_update_confirmation.png", type: "image", size: "890 KB", uploadedAt: "2025-11-15 10:40" },
-      ],
-    },
-    {
-      id: 2,
-      taskId: "PM-2025-045",
-      template: "PM Laptop Quarterly",
-      completedDate: "2025-08-12",
-      completedBy: "Mike Roberts",
-      duration: "38 min",
-      status: "completed",
-      notes: "Standard maintenance completed. No issues found.",
-      checklist: [
-        { item: "Visual inspection for physical damage", status: "pass", mandatory: true, notes: "" },
-        { item: "Clean keyboard and screen", status: "pass", mandatory: true, notes: "" },
-        { item: "Check battery health (>80%)", status: "pass", mandatory: true, notes: "95% health" },
-        { item: "Update BIOS if available", status: "skip", mandatory: false, notes: "Already current" },
-        { item: "Run disk health check", status: "pass", mandatory: true, notes: "" },
-        { item: "Verify antivirus definitions", status: "pass", mandatory: true, notes: "" },
-        { item: "Clean internal fans/vents", status: "pass", mandatory: false, notes: "" },
-        { item: "Test all ports (USB, HDMI, etc)", status: "pass", mandatory: true, notes: "" },
-        { item: "Verify Windows updates installed", status: "pass", mandatory: true, notes: "" },
-        { item: "Check thermal paste condition", status: "skip", mandatory: false, notes: "" },
-      ],
-      evidence: [
-        { name: "maintenance_log.pdf", type: "pdf", size: "180 KB", uploadedAt: "2025-08-12 14:20" },
-      ],
-    },
-    {
-      id: 3,
-      taskId: "PM-2025-012",
-      template: "PM Laptop Quarterly",
-      completedDate: "2025-05-08",
-      completedBy: "Lisa Kim",
-      duration: "55 min",
-      status: "completed",
-      notes: "Replaced thermal paste. Performance improvement noted.",
-      checklist: [
-        { item: "Visual inspection for physical damage", status: "pass", mandatory: true, notes: "" },
-        { item: "Clean keyboard and screen", status: "pass", mandatory: true, notes: "" },
-        { item: "Check battery health (>80%)", status: "pass", mandatory: true, notes: "98% health" },
-        { item: "Update BIOS if available", status: "pass", mandatory: false, notes: "Updated to v1.12" },
-        { item: "Run disk health check", status: "pass", mandatory: true, notes: "" },
-        { item: "Verify antivirus definitions", status: "pass", mandatory: true, notes: "" },
-        { item: "Clean internal fans/vents", status: "pass", mandatory: false, notes: "" },
-        { item: "Test all ports (USB, HDMI, etc)", status: "pass", mandatory: true, notes: "" },
-        { item: "Verify Windows updates installed", status: "pass", mandatory: true, notes: "" },
-        { item: "Check thermal paste condition", status: "pass", mandatory: false, notes: "Replaced" },
-      ],
-      evidence: [
-        { name: "thermal_paste_replacement.jpg", type: "image", size: "2.1 MB", uploadedAt: "2025-05-08 11:15" },
-        { name: "temperature_before_after.pdf", type: "pdf", size: "320 KB", uploadedAt: "2025-05-08 11:45" },
-      ],
-    },
-  ];
+  const formatBytes = (bytes: number | null): string => {
+    if (bytes === null || !Number.isFinite(bytes) || bytes < 0) return "—";
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    if (mb < 1024) return `${mb.toFixed(1)} MB`;
+    const gb = mb / 1024;
+    return `${gb.toFixed(1)} GB`;
+  };
 
   const getChecklistStatusIcon = (status: string) => {
     switch (status) {
       case "pass":
+      case "done":
         return <CheckCircle className="w-4 h-4 text-success" />;
       case "fail":
         return <XCircle className="w-4 h-4 text-destructive" />;
@@ -158,11 +199,16 @@ const AssetDetail = () => {
     if (!pmEnabled) {
       return <Badge variant="outline" className="bg-muted text-muted-foreground">PM Disabled</Badge>;
     }
-    
-    const nextPM = new Date(asset.nextPM);
+
+    const nextDueAt = asset.pm.nextDueAt;
+    if (!nextDueAt) {
+      return <Badge variant="outline" className="bg-muted text-muted-foreground">Not Scheduled</Badge>;
+    }
+
+    const nextPM = new Date(nextDueAt);
     const today = new Date();
     const diffDays = Math.ceil((nextPM.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) {
       return <Badge variant="outline" className="bg-destructive/20 text-destructive border-destructive/30">Overdue</Badge>;
     }
@@ -172,9 +218,36 @@ const AssetDetail = () => {
     return <Badge variant="outline" className="bg-success/20 text-success border-success/30">On Track</Badge>;
   };
 
+  if (!assetId) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Asset Details" subtitle="Missing asset" />
+        <div className="p-6 text-sm text-muted-foreground">Missing assetId.</div>
+      </div>
+    );
+  }
+
+  if (assetQuery.isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Asset Details" subtitle={assetId} />
+        <div className="p-6 text-sm text-muted-foreground">Loading asset…</div>
+      </div>
+    );
+  }
+
+  if (assetQuery.isError || !asset) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Asset Details" subtitle={assetId} />
+        <div className="p-6 text-sm text-destructive">Failed to load asset.</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
-      <Header title="Asset Details" subtitle={`${asset.id} - ${asset.name}`} />
+      <Header title="Asset Details" subtitle={`${asset.assetTag} - ${asset.name}`} />
 
       <div className="p-6 space-y-6">
         {/* Back Button */}
@@ -201,16 +274,16 @@ const AssetDetail = () => {
                   <h2 className="text-2xl font-bold text-foreground">{asset.name}</h2>
                   {getPMStatusBadge()}
                 </div>
-                <p className="text-muted-foreground font-mono">{asset.id}</p>
+                <p className="text-muted-foreground font-mono">{asset.assetTag}</p>
                 <div className="flex flex-wrap items-center gap-4 mt-3">
-                  <Badge variant="secondary">{asset.category}</Badge>
+                  <Badge variant="secondary">{asset.category.name ?? "—"}</Badge>
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <MapPin className="w-4 h-4" />
-                    {asset.location}
+                    {asset.location.name ?? "—"}
                   </div>
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <User className="w-4 h-4" />
-                    {asset.assignedTo}
+                    {asset.assignedToText ?? "—"}
                   </div>
                 </div>
               </div>
@@ -219,9 +292,20 @@ const AssetDetail = () => {
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
                 <span className="text-sm text-muted-foreground">PM Enabled</span>
-                <Switch checked={pmEnabled} onCheckedChange={setPmEnabled} />
+                <Switch
+                  checked={pmEnabled}
+                  onCheckedChange={(checked) => patchPmMutation.mutate({ pmEnabled: checked })}
+                  disabled={!canManage || patchPmMutation.isPending}
+                />
               </div>
-              <Button variant="outline" className="gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={!snipeItHardwareUrl}
+                onClick={() => {
+                  if (snipeItHardwareUrl) window.open(snipeItHardwareUrl, "_blank", "noreferrer");
+                }}
+              >
                 <ExternalLink className="w-4 h-4" />
                 Open in Snipe-IT
               </Button>
@@ -243,7 +327,9 @@ const AssetDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Last PM</p>
-                <p className="text-lg font-semibold text-foreground">{asset.lastPM}</p>
+                <p className="text-lg font-semibold text-foreground">
+                  {asset.pm.lastCompletedAt ? new Date(asset.pm.lastCompletedAt).toLocaleDateString() : "—"}
+                </p>
               </div>
             </div>
           </motion.div>
@@ -260,7 +346,9 @@ const AssetDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Next PM</p>
-                <p className="text-lg font-semibold text-foreground">{asset.nextPM}</p>
+                <p className="text-lg font-semibold text-foreground">
+                  {asset.pm.nextDueAt ? new Date(asset.pm.nextDueAt).toLocaleDateString() : "—"}
+                </p>
               </div>
             </div>
           </motion.div>
@@ -277,7 +365,7 @@ const AssetDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">PM Completed</p>
-                <p className="text-lg font-semibold text-foreground">{asset.totalPMCompleted}</p>
+                <p className="text-lg font-semibold text-foreground">—</p>
               </div>
             </div>
           </motion.div>
@@ -294,7 +382,7 @@ const AssetDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Compliance</p>
-                <p className="text-lg font-semibold text-foreground">{asset.complianceRate}%</p>
+                <p className="text-lg font-semibold text-foreground">—</p>
               </div>
             </div>
           </motion.div>
@@ -328,14 +416,14 @@ const AssetDetail = () => {
                     {[
                       { label: "Manufacturer", value: asset.manufacturer },
                       { label: "Model", value: asset.model },
-                      { label: "Serial Number", value: asset.serial },
-                      { label: "Category", value: asset.category },
-                      { label: "Status", value: asset.status },
-                      { label: "Department", value: asset.department },
+                      { label: "Serial Number", value: asset.serialNumber },
+                      { label: "Category", value: asset.category.name },
+                      { label: "Status", value: asset.assetStatus },
+                      { label: "Assigned To", value: asset.assignedToText },
                     ].map((item, index) => (
                       <div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-0">
                         <span className="text-muted-foreground">{item.label}</span>
-                        <span className="font-medium text-foreground">{item.value}</span>
+                        <span className="font-medium text-foreground">{item.value ?? "—"}</span>
                       </div>
                     ))}
                   </CardContent>
@@ -356,19 +444,65 @@ const AssetDetail = () => {
                     <CardDescription>Maintenance settings for this asset</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {[
-                      { label: "PM Template", value: asset.pmTemplate },
-                      { label: "Interval", value: `${asset.pmInterval} days` },
-                      { label: "Last Completed", value: asset.lastPM },
-                      { label: "Next Scheduled", value: asset.nextPM },
-                      { label: "Assigned PIC", value: "Auto-assign" },
-                      { label: "PM Status", value: pmEnabled ? "Enabled" : "Disabled" },
-                    ].map((item, index) => (
-                      <div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-0">
-                        <span className="text-muted-foreground">{item.label}</span>
-                        <span className="font-medium text-foreground">{item.value}</span>
+                    {pmEnabled && !asset.pm.defaultTemplateId ? (
+                      <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30">
+                        <AlertTriangle className="w-4 h-4 text-warning mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-sm text-foreground font-medium">PM template is not assigned</p>
+                          <p className="text-xs text-muted-foreground">Select a template to enable scheduling.</p>
+                        </div>
                       </div>
-                    ))}
+                    ) : null}
+
+                    <div className="space-y-2">
+                      <span className="text-muted-foreground">PM Template</span>
+                      <Select
+                        value={asset.pm.defaultTemplateId ?? "none"}
+                        onValueChange={(value) => {
+                          const next = value === "none" ? null : value;
+                          patchPmMutation.mutate({ defaultTemplateId: next });
+                        }}
+                        disabled={!canManage || patchPmMutation.isPending}
+                      >
+                        <SelectTrigger className="bg-muted/50">
+                          <SelectValue placeholder={templatesQuery.isLoading ? "Loading templates…" : "Select template"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {filteredTemplates.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.isActive ? t.name : `${t.name} (Inactive)`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                      <span className="text-muted-foreground">Interval</span>
+                      <span className="font-medium text-foreground">
+                        {selectedTemplate ? `${selectedTemplate.intervalDays} days` : "—"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                      <span className="text-muted-foreground">Last Completed</span>
+                      <span className="font-medium text-foreground">
+                        {asset.pm.lastCompletedAt ? new Date(asset.pm.lastCompletedAt).toLocaleDateString() : "—"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                      <span className="text-muted-foreground">Next Scheduled</span>
+                      <span className="font-medium text-foreground">
+                        {asset.pm.nextDueAt ? new Date(asset.pm.nextDueAt).toLocaleDateString() : "—"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                      <span className="text-muted-foreground">PM Status</span>
+                      <span className="font-medium text-foreground">{pmEnabled ? "Enabled" : "Disabled"}</span>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -390,16 +524,15 @@ const AssetDetail = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="p-4 rounded-lg bg-muted/30">
                         <p className="text-sm text-muted-foreground mb-1">Purchase Date</p>
-                        <p className="text-lg font-semibold text-foreground">{asset.purchaseDate}</p>
+                        <p className="text-lg font-semibold text-foreground">—</p>
                       </div>
                       <div className="p-4 rounded-lg bg-muted/30">
                         <p className="text-sm text-muted-foreground mb-1">Warranty Expiry</p>
-                        <p className="text-lg font-semibold text-foreground">{asset.warrantyExpiry}</p>
+                        <p className="text-lg font-semibold text-foreground">—</p>
                       </div>
                       <div className="p-4 rounded-lg bg-muted/30">
                         <p className="text-sm text-muted-foreground mb-1">Assigned To</p>
-                        <p className="text-lg font-semibold text-foreground">{asset.assignedTo}</p>
-                        <p className="text-sm text-muted-foreground">{asset.assignedEmail}</p>
+                        <p className="text-lg font-semibold text-foreground">{asset.assignedToText ?? "—"}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -410,126 +543,190 @@ const AssetDetail = () => {
 
           {/* PM History Tab */}
           <TabsContent value="history" className="mt-4 space-y-4">
-            {pmHistory.map((pm, index) => (
-              <motion.div
-                key={pm.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="glass rounded-xl overflow-hidden"
-              >
-                {/* History Header */}
-                <div
-                  className="p-5 cursor-pointer hover:bg-muted/30 transition-colors"
-                  onClick={() => setExpandedHistory(expandedHistory === pm.id ? null : pm.id)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center shrink-0">
-                        <CheckCircle className="w-6 h-6 text-success" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-sm text-muted-foreground">{pm.taskId}</span>
-                          <Badge variant="outline" className="bg-success/20 text-success border-success/30">
-                            Completed
-                          </Badge>
-                        </div>
-                        <h3 className="font-semibold text-foreground">{pm.template}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Completed on {pm.completedDate} by {pm.completedBy} • {pm.duration}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right hidden md:block">
-                        <p className="text-sm text-muted-foreground">{pm.checklist.filter(c => c.status === 'pass').length}/{pm.checklist.length} checks passed</p>
-                        <p className="text-sm text-muted-foreground">{pm.evidence.length} evidence files</p>
-                      </div>
-                      {expandedHistory === pm.id ? (
-                        <ChevronUp className="w-5 h-5 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                      )}
-                    </div>
-                  </div>
-                </div>
+            {historyTasksQuery.isLoading ? (
+              <div className="p-6 text-sm text-muted-foreground">Loading PM history…</div>
+            ) : historyTasksQuery.isError ? (
+              <div className="p-6 text-sm text-destructive">Failed to load PM history.</div>
+            ) : historyTasks.length === 0 ? (
+              <div className="p-6 text-sm text-muted-foreground">No completed PM tasks yet.</div>
+            ) : (
+              historyTasks.map((task, index) => {
+                const isExpanded = expandedHistoryTaskId === task.id;
+                const completedDate = task.completedAt ? new Date(task.completedAt).toLocaleDateString() : "—";
+                const duration = formatDuration(task.startedAt, task.completedAt);
+                const showExpandedDetail = isExpanded && expandedTask && expandedTask.id === task.id;
+                const checksLabel = `${task.checklistCompleted}/${task.checklistTotal} checks completed`;
 
-                {/* Expanded Content */}
-                {expandedHistory === pm.id && (
+                return (
                   <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="border-t border-border"
+                    key={task.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="glass rounded-xl overflow-hidden"
                   >
-                    <div className="p-5 space-y-6">
-                      {/* Notes */}
-                      {pm.notes && (
-                        <div className="p-4 rounded-lg bg-muted/30">
-                          <p className="text-sm font-medium text-foreground mb-1">Technician Notes</p>
-                          <p className="text-muted-foreground">{pm.notes}</p>
-                        </div>
-                      )}
-
-                      {/* Checklist */}
-                      <div>
-                        <h4 className="font-semibold text-foreground mb-3">Checklist Results</h4>
-                        <div className="space-y-2">
-                          {pm.checklist.map((item, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                {getChecklistStatusIcon(item.status)}
-                                <span className={`text-sm ${item.status === 'skip' ? 'text-muted-foreground' : 'text-foreground'}`}>
-                                  {item.item}
-                                </span>
-                                {item.mandatory && (
-                                  <Badge variant="outline" className="text-xs">Required</Badge>
-                                )}
-                              </div>
-                              {item.notes && (
-                                <span className="text-sm text-muted-foreground">{item.notes}</span>
-                              )}
+                    <div
+                      className="p-5 cursor-pointer hover:bg-muted/30 transition-colors"
+                      onClick={() => setExpandedHistoryTaskId(isExpanded ? null : task.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-6 h-6 text-success" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-mono text-sm text-muted-foreground">{task.taskNumber}</span>
+                              <Badge variant="outline" className="bg-success/20 text-success border-success/30">
+                                Completed
+                              </Badge>
                             </div>
-                          ))}
+                            <h3 className="font-semibold text-foreground">{task.template.name}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Completed on {completedDate} • {duration}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-
-                      {/* Evidence */}
-                      <div>
-                        <h4 className="font-semibold text-foreground mb-3">Evidence & Attachments</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {pm.evidence.map((file, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer group"
-                            >
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                file.type === 'pdf' ? 'bg-destructive/20' : 'bg-primary/20'
-                              }`}>
-                                {file.type === 'pdf' ? (
-                                  <FileText className={`w-5 h-5 ${file.type === 'pdf' ? 'text-destructive' : 'text-primary'}`} />
-                                ) : (
-                                  <Image className="w-5 h-5 text-primary" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                                <p className="text-xs text-muted-foreground">{file.size} • {file.uploadedAt}</p>
-                              </div>
-                              <Download className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          ))}
+                        <div className="flex items-center gap-4">
+                          <div className="text-right hidden md:block">
+                            <p className="text-sm text-muted-foreground">{checksLabel}</p>
+                            {showExpandedDetail ? (
+                              <p className="text-sm text-muted-foreground">{expandedTask.evidence.length} evidence files</p>
+                            ) : null}
+                          </div>
+                          {isExpanded ? (
+                            <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                          )}
                         </div>
                       </div>
                     </div>
+
+                    {isExpanded ? (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="border-t border-border"
+                      >
+                        <div className="p-5 space-y-6">
+                          {expandedTaskQuery.isLoading ? (
+                            <div className="text-sm text-muted-foreground">Loading details…</div>
+                          ) : expandedTaskQuery.isError ? (
+                            <div className="text-sm text-destructive">Failed to load task details.</div>
+                          ) : showExpandedDetail ? (
+                            <>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="p-4 rounded-lg bg-muted/30">
+                                  <p className="text-sm text-muted-foreground mb-1">Completed By</p>
+                                  <p className="text-lg font-semibold text-foreground">
+                                    {expandedTask.completedBy?.displayName ?? expandedTask.completedBy?.username ?? "—"}
+                                  </p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/30">
+                                  <p className="text-sm text-muted-foreground mb-1">Completed At</p>
+                                  <p className="text-lg font-semibold text-foreground">
+                                    {expandedTask.completedAt ? new Date(expandedTask.completedAt).toLocaleString() : "—"}
+                                  </p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/30">
+                                  <p className="text-sm text-muted-foreground mb-1">Evidence Files</p>
+                                  <p className="text-lg font-semibold text-foreground">{expandedTask.evidence.length}</p>
+                                </div>
+                              </div>
+
+                              <div>
+                                <h4 className="font-semibold text-foreground mb-3">Checklist Results</h4>
+                                <div className="space-y-2">
+                                  {[...expandedTask.checklistItems]
+                                    .sort((a, b) => a.sortOrder - b.sortOrder)
+                                    .map((item) => {
+                                      const outcome = item.result?.outcomeLabel ?? "skip";
+                                      const notes = item.result?.notes;
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          className="flex items-center justify-between p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
+                                        >
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            {getChecklistStatusIcon(outcome)}
+                                            <span
+                                              className={`text-sm truncate ${outcome === "skip" ? "text-muted-foreground" : "text-foreground"}`}
+                                            >
+                                              {item.itemText}
+                                            </span>
+                                            {item.isMandatory ? (
+                                              <Badge variant="outline" className="text-xs shrink-0">
+                                                Required
+                                              </Badge>
+                                            ) : null}
+                                          </div>
+                                          {notes ? <span className="text-sm text-muted-foreground">{notes}</span> : null}
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              </div>
+
+                              <div>
+                                <h4 className="font-semibold text-foreground mb-3">Evidence & Attachments</h4>
+                                {expandedTask.evidence.length === 0 ? (
+                                  <div className="text-sm text-muted-foreground">No evidence uploaded.</div>
+                                ) : (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {expandedTask.evidence.map((file) => {
+                                      const name = file.fileName ?? "Untitled";
+                                      const lower = name.toLowerCase();
+                                      const contentType = file.contentType ?? "";
+                                      const isPdf = contentType.includes("pdf") || lower.endsWith(".pdf");
+                                      const isImage = contentType.startsWith("image/") || lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg");
+                                      const iconBg = isPdf ? "bg-destructive/20" : "bg-primary/20";
+                                      const iconColor = isPdf ? "text-destructive" : "text-primary";
+                                      const uploadedAt = new Date(file.uploadedAt).toLocaleDateString();
+                                      const sizeLabel = formatBytes(file.sizeBytes);
+
+                                      return (
+                                        <a
+                                          key={file.id}
+                                          href={file.uri}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors group"
+                                        >
+                                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${iconBg}`}>
+                                            {isPdf ? (
+                                              <FileText className={`w-5 h-5 ${iconColor}`} />
+                                            ) : isImage ? (
+                                              <Image className={`w-5 h-5 ${iconColor}`} />
+                                            ) : (
+                                              <FileText className={`w-5 h-5 ${iconColor}`} />
+                                            )}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-foreground truncate">{name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                              {sizeLabel} • {uploadedAt}
+                                            </p>
+                                          </div>
+                                          <Download className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-sm text-muted-foreground">No details available.</div>
+                          )}
+                        </div>
+                      </motion.div>
+                    ) : null}
                   </motion.div>
-                )}
-              </motion.div>
-            ))}
+                );
+              })
+            )}
           </TabsContent>
 
           {/* Schedule Tab */}

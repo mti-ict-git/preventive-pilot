@@ -14,3 +14,4 @@ export const requireAnyRole = (roles: readonly string[]) => {
 
 export const requireSuperadmin = requireAnyRole(["Superadmin"]);
 
+export const requireManager = requireAnyRole(["Superadmin", "Admin", "Supervisor"]);

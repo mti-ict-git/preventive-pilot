@@ -104,3 +104,16 @@
 - Added Superadmin-only Categories settings sub-page for global Assets category visibility.
 - Added /settings/categories route and sidebar navigation entry.
 - Removed category visibility controls from Assets page for non-admin focus.
+
+## 2026-01-05 09:01
+- Wired Asset Detail page to real asset/template APIs for PM settings.
+- Added missing PM template warnings in Assets list and Asset Detail.
+- Fixed backend asset PM PATCH to allow clearing template and next due date.
+
+## 2026-01-05 09:29
+- Added Assets per-page selector (50/100/200/500) and increased backend page-size cap.
+
+## 2026-01-05 09:51
+- Added bulk action to assign a PM template to multiple Assets.
+- Updated Asset Detail PM History tab to load real completed task history.
+- Verified with `npm run lint` and `npx tsc --noEmit`.

@@ -3,6 +3,7 @@ import { z } from "zod";
 import sql from "mssql";
 import { getDb } from "../db/mssql";
 import { requireAuth } from "../middleware/requireAuth";
+import { requireManager } from "../middleware/requireRole";
 
 const parseBoolean = (value: unknown): boolean | null => {
   if (value === undefined || value === null) return null;
@@ -48,6 +49,11 @@ const BulkSetPmEnabledSchema = z.object({
   pmEnabled: z.boolean(),
 });
 
+const BulkSetPmTemplateSchema = z.object({
+  assetIds: z.array(z.string().uuid()).min(1).max(200),
+  defaultTemplateId: z.string().uuid().nullable(),
+});
+
 export const assetsRouter = Router();
 
 assetsRouter.use(requireAuth);
@@ -60,7 +66,7 @@ assetsRouter.get("/", async (req, res) => {
   }
 
   const page = Math.max(1, Number(parsed.data.page) || 1);
-  const pageSize = Math.min(200, Math.max(1, Number(parsed.data.pageSize) || 50));
+  const pageSize = Math.min(500, Math.max(1, Number(parsed.data.pageSize) || 50));
   const offset = (page - 1) * pageSize;
   const pmEnabled = parseBoolean(parsed.data.pmEnabled);
   const categoryIds = parseUuidList(parsed.data.categoryIds);
@@ -168,7 +174,7 @@ assetsRouter.get("/", async (req, res) => {
   });
 });
 
-assetsRouter.post("/pm/bulk", async (req, res) => {
+assetsRouter.post("/pm/bulk", requireManager, async (req, res) => {
   const parsed = BulkSetPmEnabledSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: "Invalid request" });
@@ -224,6 +230,92 @@ assetsRouter.post("/pm/bulk", async (req, res) => {
         "WHEN NOT MATCHED THEN",
         "  INSERT (AssetId, PMEnabled)",
         "  VALUES (source.AssetId, @pmEnabled);",
+      ].join("\n"),
+    );
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
+});
+
+assetsRouter.post("/pm/bulk/template", requireManager, async (req, res) => {
+  const parsed = BulkSetPmTemplateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const assetIds = Array.from(new Set(parsed.data.assetIds));
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const idSelect = assetIds
+      .map((_, idx) => (idx === 0 ? `SELECT @id${idx} AS AssetId` : `UNION ALL SELECT @id${idx}`))
+      .join("\n");
+
+    const request = tx
+      .request()
+      .input("defaultTemplateId", sql.UniqueIdentifier, parsed.data.defaultTemplateId ?? null);
+    for (const [idx, id] of assetIds.entries()) {
+      request.input(`id${idx}`, sql.UniqueIdentifier, id);
+    }
+
+    if (parsed.data.defaultTemplateId) {
+      const templateResult = await request.query(
+        [
+          "SELECT TOP (1)",
+          "  TemplateId",
+          "FROM pm.PMTemplates",
+          "WHERE TemplateId = @defaultTemplateId AND IsActive = 1",
+        ].join("\n"),
+      );
+      if (!templateResult.recordset[0]) {
+        res.status(400).json({ message: "Template not found" });
+        await tx.rollback();
+        return;
+      }
+    }
+
+    const existsResult = await request.query(
+      [
+        "WITH ids AS (",
+        idSelect,
+        ")",
+        "SELECT COUNT(1) AS ExistingCount",
+        "FROM ids i",
+        "INNER JOIN pm.Assets a ON a.AssetId = i.AssetId",
+        "WHERE a.IsArchived = 0",
+      ].join("\n"),
+    );
+
+    const countRow = existsResult.recordset[0] as { ExistingCount?: number } | undefined;
+    const existingCount = typeof countRow?.ExistingCount === "number" ? countRow.ExistingCount : 0;
+    if (existingCount !== assetIds.length) {
+      res.status(400).json({ message: "Some assets were not found" });
+      await tx.rollback();
+      return;
+    }
+
+    await request.query(
+      [
+        "WITH ids AS (",
+        idSelect,
+        ")",
+        "MERGE pm.AssetPMSettings WITH (HOLDLOCK) AS target",
+        "USING ids AS source",
+        "ON target.AssetId = source.AssetId",
+        "WHEN MATCHED THEN",
+        "  UPDATE SET",
+        "    DefaultTemplateId = @defaultTemplateId,",
+        "    NextPMDueAt = NULL,",
+        "    UpdatedAt = sysutcdatetime()",
+        "WHEN NOT MATCHED THEN",
+        "  INSERT (AssetId, PMEnabled, DefaultTemplateId)",
+        "  VALUES (source.AssetId, 0, @defaultTemplateId);",
       ].join("\n"),
     );
 
@@ -301,7 +393,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
   });
 });
 
-assetsRouter.patch("/:assetId/pm", async (req, res) => {
+assetsRouter.patch("/:assetId/pm", requireManager, async (req, res) => {
   const assetId = req.params.assetId;
   if (!z.string().uuid().safeParse(assetId).success) {
     res.status(400).json({ message: "Invalid request" });
@@ -313,6 +405,9 @@ assetsRouter.patch("/:assetId/pm", async (req, res) => {
     res.status(400).json({ message: "Invalid request" });
     return;
   }
+
+  const hasDefaultTemplateId = Object.prototype.hasOwnProperty.call(parsed.data, "defaultTemplateId");
+  const hasNextPmDueAt = Object.prototype.hasOwnProperty.call(parsed.data, "nextPmDueAt");
 
   const db = await getDb();
   const tx = new sql.Transaction(db);
@@ -333,7 +428,9 @@ assetsRouter.patch("/:assetId/pm", async (req, res) => {
       .request()
       .input("assetId", sql.UniqueIdentifier, assetId)
       .input("pmEnabled", sql.Bit, parsed.data.pmEnabled ?? null)
+      .input("hasDefaultTemplateId", sql.Bit, hasDefaultTemplateId ? 1 : 0)
       .input("defaultTemplateId", sql.UniqueIdentifier, parsed.data.defaultTemplateId ?? null)
+      .input("hasNextPmDueAt", sql.Bit, hasNextPmDueAt ? 1 : 0)
       .input("nextPmDueAt", sql.DateTime2(0), parsed.data.nextPmDueAt ?? null)
       .query(
         [
@@ -343,8 +440,8 @@ assetsRouter.patch("/:assetId/pm", async (req, res) => {
           "WHEN MATCHED THEN",
           "  UPDATE SET",
           "    PMEnabled = COALESCE(@pmEnabled, target.PMEnabled),",
-          "    DefaultTemplateId = CASE WHEN @defaultTemplateId IS NULL THEN target.DefaultTemplateId ELSE @defaultTemplateId END,",
-          "    NextPMDueAt = CASE WHEN @nextPmDueAt IS NULL THEN target.NextPMDueAt ELSE @nextPmDueAt END,",
+          "    DefaultTemplateId = CASE WHEN @hasDefaultTemplateId = 1 THEN @defaultTemplateId ELSE target.DefaultTemplateId END,",
+          "    NextPMDueAt = CASE WHEN @hasNextPmDueAt = 1 THEN @nextPmDueAt ELSE target.NextPMDueAt END,",
           "    UpdatedAt = sysutcdatetime()",
           "WHEN NOT MATCHED THEN",
           "  INSERT (AssetId, PMEnabled, DefaultTemplateId, NextPMDueAt)",
