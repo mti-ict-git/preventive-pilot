@@ -280,3 +280,18 @@
 - Verified removal of duplicate apiRecalculateSchedules definition in frontend.
 - Ran lint and typecheck: OK.
 - Attempted API verification for MTI-PC-003 via DB; asset not found in current DB.
+## 2026-01-06 17:27
+- Added table header filters on Assets: Asset ID search, Category, Location, PM Enabled.
+- Extended apiListAssets to support locationId.
+- Verified with `npm run lint`, `npx tsc --noEmit`, and backend typecheck.
+## 2026-01-06 17:29
+- Added PM Status header filter and client-side filtering keys.
+- Updated PM status logic: assets with PM enabled but no history show "Not Started".
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+## 2026-01-06 17:35
+- Fixed Assets runtime error by moving getPMStatus above filteredAssets.
+- Verified UI filters render correctly and selection logic remains intact.
+- Ran `npm run lint` and `npx tsc --noEmit`: OK.
+## 2026-01-06 17:37
+- Moved PM Status filter to correct column in Assets header.
+- Verified alignment and behavior with lint and typecheck: OK.

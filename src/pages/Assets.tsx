@@ -71,6 +71,10 @@ const EMPTY_TEMPLATES: TemplateSummary[] = [];
 
 const Assets = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
+  const [pmStatusFilter, setPmStatusFilter] = useState<
+    "all" | "not-started" | "on-track" | "due-soon" | "overdue" | "no-schedule"
+  >("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [page, setPage] = useState(1);
@@ -116,7 +120,10 @@ const Assets = () => {
   }, [selectedCategoryId, visibleCategoryIds]);
 
   const assetsQuery = useQuery({
-    queryKey: ["assets", { page, pageSize, searchQuery, pmEnabledFilter, selectedCategoryId, visibleCategoryIds }],
+    queryKey: [
+      "assets",
+      { page, pageSize, searchQuery, pmEnabledFilter, selectedCategoryId, selectedLocationId, visibleCategoryIds },
+    ],
     queryFn: () =>
       apiListAssets({
         page,
@@ -125,6 +132,7 @@ const Assets = () => {
         pmEnabled: pmEnabledFilter === "all" ? undefined : pmEnabledFilter === "enabled",
         categoryId: selectedCategoryId === "all" ? undefined : selectedCategoryId,
         categoryIds: visibleCategoryIds ?? undefined,
+        locationId: selectedLocationId === "all" ? undefined : selectedLocationId,
       }),
   });
 
@@ -142,12 +150,49 @@ const Assets = () => {
     return assets.filter((a) => a.pm.enabled === true && !a.pm.defaultTemplateId).length;
   }, [assets]);
 
+  const getPMStatus = (
+    lastCompletedAt: string | null,
+    nextPM: string | null,
+    pmEnabled: boolean,
+  ): { status: string; icon: typeof XCircle; color: string } => {
+    if (!pmEnabled) return { status: "disabled", icon: XCircle, color: "text-muted-foreground" };
+
+    if (!lastCompletedAt) {
+      return { status: "not started", icon: Clock, color: "text-muted-foreground" };
+    }
+
+    if (!nextPM) return { status: "no schedule", icon: Clock, color: "text-muted-foreground" };
+
+    const next = new Date(nextPM);
+    const today = new Date();
+    const diffDays = Math.ceil((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return { status: "overdue", icon: XCircle, color: "text-destructive" };
+    if (diffDays <= 7) return { status: "due soon", icon: Clock, color: "text-warning" };
+    return { status: "on track", icon: CheckCircle, color: "text-success" };
+  };
+
   const filteredAssets = useMemo(() => {
+    const toKey = (status: string): "not-started" | "on-track" | "due-soon" | "overdue" | "no-schedule" => {
+      const normalized = status.trim().toLowerCase();
+      if (normalized === "not started") return "not-started";
+      if (normalized === "on track") return "on-track";
+      if (normalized === "due soon") return "due-soon";
+      if (normalized === "overdue") return "overdue";
+      return "no-schedule";
+    };
+
     return assets.filter((asset) => {
       const matchesCategory = selectedCategoryId === "all" || asset.category.id === selectedCategoryId;
-      return matchesCategory;
+      if (!matchesCategory) return false;
+
+      const pmEnabled = asset.pm.enabled === true;
+      const statusInfo = getPMStatus(asset.pm.lastCompletedAt, asset.pm.nextDueAt, pmEnabled);
+      const statusKey = toKey(statusInfo.status);
+      const matchesStatus = pmStatusFilter === "all" || statusKey === pmStatusFilter;
+      return matchesStatus;
     });
-  }, [assets, selectedCategoryId]);
+  }, [assets, selectedCategoryId, pmStatusFilter]);
 
   const selectedIdsOnPage = useMemo(() => {
     const ids: string[] = [];
@@ -208,6 +253,19 @@ const Assets = () => {
     });
   }, [visibleCategories]);
 
+  const locationSelectItems = useMemo((): Array<{ id: string; name: string }> => {
+    const locations = lookupsQuery.data?.locations ?? [];
+    const rows: Array<{ id: string; name: string }> = [{ id: "all", name: "All Locations" }];
+    for (const l of locations) {
+      rows.push({ id: l.id, name: l.isActive ? l.name : `${l.name} (Inactive)` });
+    }
+    return rows.sort((a, b) => {
+      if (a.id === "all") return -1;
+      if (b.id === "all") return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [lookupsQuery.data?.locations]);
+
 
   const togglePmMutation = useMutation({
     mutationFn: async (input: { assetId: string; pmEnabled: boolean }) => {
@@ -243,18 +301,6 @@ const Assets = () => {
     },
   });
 
-  const getPMStatus = (nextPM: string | null, pmEnabled: boolean) => {
-    if (!pmEnabled) return { status: "disabled", icon: XCircle, color: "text-muted-foreground" };
-    if (!nextPM) return { status: "no schedule", icon: Clock, color: "text-muted-foreground" };
-
-    const next = new Date(nextPM);
-    const today = new Date();
-    const diffDays = Math.ceil((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return { status: "overdue", icon: XCircle, color: "text-destructive" };
-    if (diffDays <= 7) return { status: "due soon", icon: Clock, color: "text-warning" };
-    return { status: "on track", icon: CheckCircle, color: "text-success" };
-  };
 
   const lastSyncText = (() => {
     const data = systemStatusQuery.data;
@@ -475,11 +521,110 @@ const Assets = () => {
                   <TableHead className="text-muted-foreground">PM Enabled</TableHead>
                   <TableHead className="text-muted-foreground"></TableHead>
                 </TableRow>
+                <TableRow className="border-border bg-muted/30">
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead>
+                    <Input
+                      placeholder="Filter Asset ID"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setPage(1);
+                      }}
+                      className="h-8"
+                    />
+                  </TableHead>
+                  <TableHead>
+                    
+                  </TableHead>
+                  <TableHead>
+                    <Select
+                      value={selectedCategoryId}
+                      onValueChange={(value) => {
+                        setSelectedCategoryId(value);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categorySelectItems.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableHead>
+                  <TableHead>
+                    <Select
+                      value={selectedLocationId}
+                      onValueChange={(value) => {
+                        setSelectedLocationId(value);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="Location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locationSelectItems.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableHead>
+                  <TableHead>
+                    <Select
+                      value={pmStatusFilter}
+                      onValueChange={(v) => {
+                        setPmStatusFilter(v as typeof pmStatusFilter);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="PM Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="not-started">Not Started</SelectItem>
+                        <SelectItem value="on-track">On Track</SelectItem>
+                        <SelectItem value="due-soon">Due Soon</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                        <SelectItem value="no-schedule">No Schedule</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableHead>
+                  <TableHead></TableHead>
+                  <TableHead></TableHead>
+                  <TableHead>
+                    <Select
+                      value={pmEnabledFilter}
+                      onValueChange={(v) => {
+                        setPmEnabledFilter(v as "all" | "enabled" | "disabled");
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="PM Enabled" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="enabled">Enabled</SelectItem>
+                        <SelectItem value="disabled">Disabled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAssets.map((asset, index) => {
                   const pmEnabled = asset.pm.enabled === true;
-                  const pmStatus = getPMStatus(asset.pm.nextDueAt, pmEnabled);
+                  const pmStatus = getPMStatus(asset.pm.lastCompletedAt, asset.pm.nextDueAt, pmEnabled);
                   return (
                     <motion.tr
                       key={asset.id}

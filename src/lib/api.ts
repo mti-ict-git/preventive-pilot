@@ -136,6 +136,7 @@ export const apiListAssets = async (input: {
   pmEnabled?: boolean;
   categoryId?: string;
   categoryIds?: string[];
+  locationId?: string;
   page?: number;
   pageSize?: number;
 }): Promise<ListAssetsResponse> => {
@@ -145,6 +146,7 @@ export const apiListAssets = async (input: {
   if (input.pmEnabled !== undefined) params.set("pmEnabled", input.pmEnabled ? "true" : "false");
   if (input.categoryId) params.set("categoryId", input.categoryId);
   if (input.categoryIds && input.categoryIds.length > 0) params.set("categoryIds", input.categoryIds.join(","));
+  if (input.locationId) params.set("locationId", input.locationId);
   if (input.page) params.set("page", String(input.page));
   if (input.pageSize) params.set("pageSize", String(input.pageSize));
 
