@@ -175,3 +175,9 @@
 ## 2026-01-06 06:21
 - Applied schema.sql to production database.
 - Verified pm schema and confirmed pm.PMTaskEvidence.StoragePath exists.
+
+## 2026-01-06 06:36
+- Fixed Evidence attachments UI to avoid navigating to Uri (e.g. "imported").
+- Added in-app evidence preview modal with open-new-tab and download actions.
+- Wired evidence preview/download to /api/tasks/evidence/:evidenceId.
+- Verified with `npm run lint` and `npx tsc --noEmit`.

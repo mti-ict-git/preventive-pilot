@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  Eye,
   ExternalLink,
   FileText,
   Image,
@@ -28,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -46,6 +48,7 @@ import {
   apiListTasks,
   apiListTemplates,
   apiPatchAssetPm,
+  type TaskEvidence,
   type TaskDetail,
   type TaskListItem,
   type TemplateSummary,
@@ -56,6 +59,12 @@ const EMPTY_TEMPLATES: TemplateSummary[] = [];
 const AssetDetail = () => {
   const { assetId } = useParams();
   const [expandedHistoryTaskId, setExpandedHistoryTaskId] = useState<string | null>(null);
+  const [previewEvidenceId, setPreviewEvidenceId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState<boolean>(false);
+  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState<string | null>(null);
+  const [previewContentType, setPreviewContentType] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -182,6 +191,54 @@ const AssetDetail = () => {
     return `${gb.toFixed(1)} GB`;
   };
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const closePreview = (): void => {
+    setPreviewOpen(false);
+    setPreviewEvidenceId(null);
+    setPreviewLoading(false);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPreviewFileName(null);
+    setPreviewContentType(null);
+  };
+
+  const openEvidencePreview = async (evidence: TaskEvidence): Promise<void> => {
+    if (evidence.uri !== "imported") {
+      const target = evidence.uri.trim();
+      if (target) window.open(target, "_blank", "noreferrer");
+      return;
+    }
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewEvidenceId(evidence.id);
+    setPreviewFileName(evidence.fileName);
+    setPreviewContentType(evidence.contentType);
+    setPreviewUrl(null);
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    try {
+      const res = await apiDownloadEvidence({ evidenceId: evidence.id });
+      const blob =
+        res.contentType && res.blob.type !== res.contentType ? new Blob([res.blob], { type: res.contentType }) : res.blob;
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      setPreviewFileName((prev) => prev ?? res.fileName);
+      setPreviewContentType((prev) => prev ?? res.contentType);
+    } catch (err: unknown) {
+      closePreview();
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to open evidence";
+      toast({ title: "Evidence error", description: message, variant: "destructive" });
+      return;
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const viewEvidence = async (evidenceId: string) => {
     try {
       const res = await apiDownloadEvidence({ evidenceId });
@@ -282,6 +339,82 @@ const AssetDetail = () => {
   return (
     <div className="min-h-screen">
       <Header title="Asset Details" subtitle={`${asset.assetTag} - ${asset.name}`} />
+
+      <Dialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closePreview();
+            return;
+          }
+          setPreviewOpen(true);
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle className="truncate">{previewFileName ?? "Evidence preview"}</DialogTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    if (previewUrl) {
+                      window.open(previewUrl, "_blank", "noreferrer");
+                      return;
+                    }
+                    if (previewEvidenceId) viewEvidence(previewEvidenceId);
+                  }}
+                  disabled={previewLoading || (!previewUrl && !previewEvidenceId)}
+                  aria-label="Open in new tab"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    if (previewEvidenceId) downloadEvidence(previewEvidenceId);
+                  }}
+                  disabled={previewLoading || !previewEvidenceId}
+                  aria-label="Download"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="w-full">
+            {previewLoading ? (
+              <div className="h-[70vh] flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
+            ) : !previewUrl ? (
+              <div className="h-[70vh] flex items-center justify-center text-sm text-muted-foreground">
+                Preview not available.
+              </div>
+            ) : (previewContentType ?? "").includes("pdf") || (previewFileName ?? "").toLowerCase().endsWith(".pdf") ? (
+              <iframe
+                title={previewFileName ?? "Evidence"}
+                src={previewUrl}
+                className="w-full h-[70vh] rounded-md bg-background"
+              />
+            ) : (previewContentType ?? "").startsWith("image/") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".png") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".jpg") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".jpeg") ? (
+              <div className="h-[70vh] flex items-center justify-center bg-background rounded-md">
+                <img src={previewUrl} alt={previewFileName ?? "Evidence"} className="max-h-[70vh] max-w-full object-contain" />
+              </div>
+            ) : (
+              <div className="h-[70vh] flex items-center justify-center text-sm text-muted-foreground">
+                Preview not supported for this file type.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="p-6 space-y-6">
         {/* Back Button */}
@@ -719,14 +852,18 @@ const AssetDetail = () => {
                                       const iconColor = isPdf ? "text-destructive" : "text-primary";
                                       const uploadedAt = new Date(file.uploadedAt).toLocaleDateString();
                                       const sizeLabel = formatBytes(file.sizeBytes);
+                                      const isImported = file.uri === "imported";
 
                                       return (
-                                        <a
+                                        <div
                                           key={file.id}
-                                          href={file.uri}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors group"
+                                          role="button"
+                                          tabIndex={0}
+                                          onClick={() => openEvidencePreview(file)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") openEvidencePreview(file);
+                                          }}
+                                          className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors group cursor-pointer"
                                         >
                                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${iconBg}`}>
                                             {isPdf ? (
@@ -743,8 +880,54 @@ const AssetDetail = () => {
                                               {sizeLabel} • {uploadedAt}
                                             </p>
                                           </div>
-                                          <Download className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        </a>
+                                          <div className="flex items-center gap-1">
+                                            {isImported ? (
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  openEvidencePreview(file);
+                                                }}
+                                                aria-label="Preview evidence"
+                                              >
+                                                <Eye className="h-4 w-4" />
+                                              </Button>
+                                            ) : (
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const target = file.uri.trim();
+                                                  if (target) window.open(target, "_blank", "noreferrer");
+                                                }}
+                                                aria-label="Open link"
+                                              >
+                                                <ExternalLink className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                            {isImported ? (
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  downloadEvidence(file.id);
+                                                }}
+                                                aria-label="Download evidence"
+                                              >
+                                                <Download className="h-4 w-4" />
+                                              </Button>
+                                            ) : null}
+                                          </div>
+                                        </div>
                                       );
                                     })}
                                   </div>
