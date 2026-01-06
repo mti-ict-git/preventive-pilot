@@ -56,6 +56,30 @@ import {
 
 const EMPTY_TEMPLATES: TemplateSummary[] = [];
 
+const MIME_BY_EXT: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".m4v": "video/x-m4v",
+  ".mov": "video/quicktime",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+};
+
+const inferMimeTypeFromFileName = (fileName: string | null): string | null => {
+  if (!fileName) return null;
+  const extIndex = fileName.lastIndexOf(".");
+  if (extIndex < 0) return null;
+  const ext = fileName.slice(extIndex).toLowerCase();
+  return MIME_BY_EXT[ext] ?? null;
+};
+
 const AssetDetail = () => {
   const { assetId } = useParams();
   const [expandedHistoryTaskId, setExpandedHistoryTaskId] = useState<string | null>(null);
@@ -223,12 +247,13 @@ const AssetDetail = () => {
     setPreviewLoading(true);
     try {
       const res = await apiDownloadEvidence({ evidenceId: evidence.id });
-      const blob =
-        res.contentType && res.blob.type !== res.contentType ? new Blob([res.blob], { type: res.contentType }) : res.blob;
+      const preferredType =
+        res.contentType ?? evidence.contentType ?? inferMimeTypeFromFileName(res.fileName ?? evidence.fileName);
+      const blob = preferredType && res.blob.type !== preferredType ? new Blob([res.blob], { type: preferredType }) : res.blob;
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
       setPreviewFileName((prev) => prev ?? res.fileName);
-      setPreviewContentType((prev) => prev ?? res.contentType);
+      setPreviewContentType((prev) => prev ?? preferredType ?? res.contentType);
     } catch (err: unknown) {
       closePreview();
       const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to open evidence";
@@ -242,8 +267,8 @@ const AssetDetail = () => {
   const viewEvidence = async (evidenceId: string) => {
     try {
       const res = await apiDownloadEvidence({ evidenceId });
-      const blob =
-        res.contentType && res.blob.type !== res.contentType ? new Blob([res.blob], { type: res.contentType }) : res.blob;
+      const preferredType = res.contentType ?? inferMimeTypeFromFileName(res.fileName);
+      const blob = preferredType && res.blob.type !== preferredType ? new Blob([res.blob], { type: preferredType }) : res.blob;
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank", "noreferrer");
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -256,8 +281,8 @@ const AssetDetail = () => {
   const downloadEvidence = async (evidenceId: string) => {
     try {
       const res = await apiDownloadEvidence({ evidenceId, download: true });
-      const blob =
-        res.contentType && res.blob.type !== res.contentType ? new Blob([res.blob], { type: res.contentType }) : res.blob;
+      const preferredType = res.contentType ?? inferMimeTypeFromFileName(res.fileName);
+      const blob = preferredType && res.blob.type !== preferredType ? new Blob([res.blob], { type: preferredType }) : res.blob;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -406,6 +431,22 @@ const AssetDetail = () => {
               (previewFileName ?? "").toLowerCase().endsWith(".jpeg") ? (
               <div className="h-[70vh] flex items-center justify-center bg-background rounded-md">
                 <img src={previewUrl} alt={previewFileName ?? "Evidence"} className="max-h-[70vh] max-w-full object-contain" />
+              </div>
+            ) : (previewContentType ?? "").startsWith("video/") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".mp4") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".mov") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".m4v") ? (
+              <div className="h-[70vh] flex items-center justify-center bg-background rounded-md">
+                <video src={previewUrl} controls className="max-h-[70vh] max-w-full rounded-md" />
+              </div>
+            ) : (previewContentType ?? "").startsWith("audio/") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".mp3") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".wav") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".m4a") ||
+              (previewFileName ?? "").toLowerCase().endsWith(".aac") ? (
+              <div className="h-[70vh] flex flex-col items-center justify-center gap-4 bg-background rounded-md p-6">
+                <div className="text-sm text-muted-foreground truncate w-full text-center">{previewFileName ?? "Audio"}</div>
+                <audio src={previewUrl} controls className="w-full" />
               </div>
             ) : (
               <div className="h-[70vh] flex items-center justify-center text-sm text-muted-foreground">

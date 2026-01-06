@@ -59,6 +59,28 @@ const EvidenceSchema = z.object({
 const managerRoles = ["Superadmin", "Admin", "Supervisor"] as const;
 const requireManager = requireAnyRole(managerRoles);
 
+const MIME_BY_EXT: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".m4v": "video/x-m4v",
+  ".mov": "video/quicktime",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+};
+
+const inferMimeTypeFromFileName = (fileName: string | null): string | null => {
+  if (!fileName) return null;
+  const ext = path.extname(fileName).toLowerCase();
+  return MIME_BY_EXT[ext] ?? null;
+};
+
 type TaskAccessRow = {
   AssignedToUserId: string | null;
   AssignedToRoleName: string | null;
@@ -306,8 +328,9 @@ tasksRouter.get("/evidence/:evidenceId", async (req, res) => {
     return;
   }
 
-  const contentType = typeof row.ContentType === "string" && row.ContentType.trim() ? row.ContentType : null;
+  const contentTypeFromDb = typeof row.ContentType === "string" && row.ContentType.trim() ? row.ContentType : null;
   const fileName = typeof row.FileName === "string" && row.FileName.trim() ? row.FileName : null;
+  const contentType = contentTypeFromDb ?? inferMimeTypeFromFileName(fileName);
 
   if (contentType) res.setHeader("Content-Type", contentType);
   res.setHeader("Content-Length", String(st.size));
