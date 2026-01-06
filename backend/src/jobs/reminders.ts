@@ -41,6 +41,18 @@ type EffectiveMicrosoftGraphSettings = {
   enabled: boolean;
 };
 
+type EffectiveWhatsAppSettings = {
+  enabled: boolean;
+  baseUrl: string | null;
+  target: "single" | "group";
+  defaultNumber: string | null;
+  groupId: string | null;
+  groupName: string | null;
+  mentionNumbers: string[];
+};
+
+const WHATSAPP_SETTINGS_KEY = "notifications.whatsapp";
+
 const renderTemplate = (template: string, data: Record<string, string>): string => {
   let rendered = template;
   for (const [key, value] of Object.entries(data)) {
@@ -160,6 +172,72 @@ const loadEffectiveMicrosoftGraphSettings = async (): Promise<EffectiveMicrosoft
     emailBodyTemplate,
     enabled,
   };
+};
+
+const loadEffectiveWhatsAppSettings = async (): Promise<EffectiveWhatsAppSettings> => {
+  const defaults: EffectiveWhatsAppSettings = {
+    enabled: false,
+    baseUrl: null,
+    target: "group",
+    defaultNumber: null,
+    groupId: null,
+    groupName: null,
+    mentionNumbers: [],
+  };
+
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), WHATSAPP_SETTINGS_KEY)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  SettingValueJson",
+          "FROM pm.SystemSettings",
+          "WHERE SettingKey = @settingKey",
+        ].join("\n"),
+      );
+
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
+    if (!valueJson || !valueJson.trim()) return defaults;
+
+    const parsed: unknown = JSON.parse(valueJson);
+    if (!isRecord(parsed)) return defaults;
+
+    const enabled = typeof parsed.enabled === "boolean" ? parsed.enabled : defaults.enabled;
+    const baseUrlRaw = typeof parsed.baseUrl === "string" && parsed.baseUrl.trim() ? parsed.baseUrl.trim() : null;
+    const baseUrl = baseUrlRaw ? baseUrlRaw.replace(/\/+$/, "") : null;
+
+    const targetRaw = parsed.target;
+    const target: "single" | "group" = targetRaw === "single" || targetRaw === "group" ? targetRaw : defaults.target;
+
+    const defaultNumber =
+      typeof parsed.defaultNumber === "string" && parsed.defaultNumber.trim() ? parsed.defaultNumber.trim() : null;
+    const groupId = typeof parsed.groupId === "string" && parsed.groupId.trim() ? parsed.groupId.trim() : null;
+    const groupName = typeof parsed.groupName === "string" && parsed.groupName.trim() ? parsed.groupName.trim() : null;
+
+    const mentionNumbers: string[] = [];
+    const mentionRaw = parsed.mentionNumbers;
+    if (Array.isArray(mentionRaw)) {
+      for (const m of mentionRaw) {
+        if (typeof m === "string" && m.trim()) mentionNumbers.push(m.trim());
+      }
+    }
+
+    return {
+      enabled,
+      baseUrl,
+      target,
+      defaultNumber,
+      groupId,
+      groupName,
+      mentionNumbers,
+    };
+  } catch {
+    return defaults;
+  }
 };
 
 const getMicrosoftGraphAccessToken = async (settings: EffectiveMicrosoftGraphSettings): Promise<string> => {
@@ -324,8 +402,55 @@ const sendMicrosoftGraphEmail = async (
   }
 };
 
+const sendWhatsAppMessage = async (settings: EffectiveWhatsAppSettings, payload: unknown): Promise<void> => {
+  if (!settings.enabled) {
+    throw new Error("WhatsApp notifications disabled");
+  }
+  if (!settings.baseUrl) {
+    throw new Error("WhatsApp base URL not configured");
+  }
+
+  const message = isRecord(payload) && typeof payload.message === "string" ? payload.message : "";
+  const messageText = message.trim() ? message.trim() : "PM notification";
+  const baseUrl = settings.baseUrl.replace(/\/+$/, "");
+
+  if (settings.target === "single") {
+    if (!settings.defaultNumber) {
+      throw new Error("WhatsApp number not configured");
+    }
+
+    const form = new FormData();
+    form.set("number", settings.defaultNumber);
+    form.set("message", messageText);
+
+    const res = await fetch(`${baseUrl}/send-message`, { method: "POST", body: form });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`WhatsApp send-message failed (${res.status}) ${text}`.trim());
+    }
+    return;
+  }
+
+  if (!settings.groupId && !settings.groupName) {
+    throw new Error("WhatsApp group id/name not configured");
+  }
+
+  const form = new FormData();
+  if (settings.groupId) form.set("id", settings.groupId);
+  if (!settings.groupId && settings.groupName) form.set("name", settings.groupName);
+  form.set("message", messageText);
+  if (settings.mentionNumbers.length > 0) form.set("mention", JSON.stringify(settings.mentionNumbers));
+
+  const res = await fetch(`${baseUrl}/send-group-message`, { method: "POST", body: form });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`WhatsApp send-group-message failed (${res.status}) ${text}`.trim());
+  }
+};
+
 const processQueuedNotifications = async (): Promise<{ attempted: number; sent: number; failed: number }> => {
   const settings = await loadEffectiveMicrosoftGraphSettings();
+  const whatsAppSettings = await loadEffectiveWhatsAppSettings();
 
   const rows = await claimQueuedNotifications(100);
   let sent = 0;
@@ -334,7 +459,8 @@ const processQueuedNotifications = async (): Promise<{ attempted: number; sent: 
   for (const row of rows) {
     const channelType = row.ChannelType.toLowerCase();
     const isEmailChannel = channelType.includes("mail") || channelType.includes("email") || channelType.includes("graph");
-    if (!isEmailChannel) {
+    const isWhatsAppChannel = channelType.includes("whatsapp");
+    if (!isEmailChannel && !isWhatsAppChannel) {
       await updateNotificationStatus(row.NotificationLogId, "failed", `Unsupported channel type: ${row.ChannelType}`);
       failed += 1;
       continue;
@@ -350,7 +476,11 @@ const processQueuedNotifications = async (): Promise<{ attempted: number; sent: 
     }
 
     try {
-      await sendMicrosoftGraphEmail(settings, parsedPayload);
+      if (isWhatsAppChannel) {
+        await sendWhatsAppMessage(whatsAppSettings, parsedPayload);
+      } else {
+        await sendMicrosoftGraphEmail(settings, parsedPayload);
+      }
       await updateNotificationStatus(row.NotificationLogId, "sent", null);
       sent += 1;
     } catch (err: unknown) {

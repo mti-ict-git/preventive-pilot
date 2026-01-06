@@ -108,6 +108,16 @@ type EffectiveMicrosoftGraphSettings = {
   lastConnectionTestAt: string | null;
 };
 
+type EffectiveWhatsAppSettings = {
+  enabled: boolean;
+  baseUrl: string | null;
+  target: "single" | "group";
+  defaultNumber: string | null;
+  groupId: string | null;
+  groupName: string | null;
+  mentionNumbers: string[];
+};
+
 const loadEffectiveSnipeItSettings = async (): Promise<EffectiveSnipeItSettings> => {
   let dbRow: Record<string, unknown> | null = null;
   try {
@@ -370,7 +380,25 @@ const AssetsUiSettingsSchema = z.object({
   visibleCategoryIds: z.array(z.string().uuid()).min(1).nullable(),
 });
 
+const WhatsAppSettingsSchema = z.object({
+  enabled: z.boolean(),
+  baseUrl: z.preprocess(nullIfBlank, z.string().trim().max(512).nullable()),
+  target: z.enum(["single", "group"]),
+  defaultNumber: z.preprocess(nullIfBlank, z.string().trim().max(64).nullable()),
+  groupId: z.preprocess(nullIfBlank, z.string().trim().max(128).nullable()),
+  groupName: z.preprocess(nullIfBlank, z.string().trim().max(256).nullable()),
+  mentionNumbers: z.array(z.string().trim().min(1).max(64)).max(50).optional().default([]),
+});
+
+const WhatsAppSettingsTestSchema = WhatsAppSettingsSchema.partial()
+  .extend({
+    sendTestMessage: z.boolean().optional(),
+  })
+  .optional();
+
 const ASSETS_VISIBLE_CATEGORY_IDS_SETTING_KEY = "ui.assets.visibleCategoryIds";
+
+const WHATSAPP_SETTINGS_KEY = "notifications.whatsapp";
 
 const parseVisibleCategoryIds = (valueJson: string | null): string[] | null => {
   if (!valueJson || !valueJson.trim()) return null;
@@ -410,6 +438,109 @@ const loadAssetsUiSettings = async (): Promise<z.infer<typeof AssetsUiSettingsSc
   }
 };
 
+const parseWhatsAppSettings = (valueJson: string | null): EffectiveWhatsAppSettings => {
+  const defaults: EffectiveWhatsAppSettings = {
+    enabled: false,
+    baseUrl: null,
+    target: "group",
+    defaultNumber: null,
+    groupId: null,
+    groupName: null,
+    mentionNumbers: [],
+  };
+
+  if (!valueJson || !valueJson.trim()) return defaults;
+  try {
+    const parsed: unknown = JSON.parse(valueJson);
+    const validated = WhatsAppSettingsSchema.safeParse(parsed);
+    if (!validated.success) return defaults;
+
+    const data = validated.data;
+    const baseUrl = data.baseUrl ? data.baseUrl.replace(/\/+$/, "") : null;
+    return {
+      enabled: data.enabled,
+      baseUrl,
+      target: data.target,
+      defaultNumber: data.defaultNumber,
+      groupId: data.groupId,
+      groupName: data.groupName,
+      mentionNumbers: data.mentionNumbers ?? [],
+    };
+  } catch {
+    return defaults;
+  }
+};
+
+const loadEffectiveWhatsAppSettings = async (): Promise<EffectiveWhatsAppSettings> => {
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), WHATSAPP_SETTINGS_KEY)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  SettingValueJson",
+          "FROM pm.SystemSettings",
+          "WHERE SettingKey = @settingKey",
+        ].join("\n"),
+      );
+
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
+    return parseWhatsAppSettings(valueJson);
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      return parseWhatsAppSettings(null);
+    }
+    throw err;
+  }
+};
+
+const sendWhatsAppTestMessage = async (settings: EffectiveWhatsAppSettings, message: string): Promise<void> => {
+  if (!settings.baseUrl) {
+    throw new Error("WhatsApp base URL not configured");
+  }
+
+  const baseUrl = settings.baseUrl.replace(/\/+$/, "");
+  const target = settings.target;
+
+  if (target === "single") {
+    if (!settings.defaultNumber) {
+      throw new Error("WhatsApp number not configured");
+    }
+
+    const form = new FormData();
+    form.set("number", settings.defaultNumber);
+    form.set("message", message);
+
+    const res = await fetch(`${baseUrl}/send-message`, { method: "POST", body: form });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`WhatsApp send-message failed (${res.status}) ${text}`.trim());
+    }
+    return;
+  }
+
+  if (!settings.groupId && !settings.groupName) {
+    throw new Error("WhatsApp group id/name not configured");
+  }
+
+  const form = new FormData();
+  if (settings.groupId) form.set("id", settings.groupId);
+  if (!settings.groupId && settings.groupName) form.set("name", settings.groupName);
+  form.set("message", message);
+  if (settings.mentionNumbers.length > 0) {
+    form.set("mention", JSON.stringify(settings.mentionNumbers));
+  }
+
+  const res = await fetch(`${baseUrl}/send-group-message`, { method: "POST", body: form });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`WhatsApp send-group-message failed (${res.status}) ${text}`.trim());
+  }
+};
+
 export const systemRouter = Router();
 
 systemRouter.use(requireAuth);
@@ -446,6 +577,7 @@ systemRouter.get("/status", async (_req, res) => {
 
   const snipeItSettings = await loadEffectiveSnipeItSettings();
   const msGraphSettings = await loadEffectiveMicrosoftGraphSettings();
+  const whatsAppSettings = await loadEffectiveWhatsAppSettings();
 
   res.json({
     backendTime: new Date().toISOString(),
@@ -475,6 +607,15 @@ systemRouter.get("/status", async (_req, res) => {
         tenantId: msGraphSettings.tenantId,
         clientId: msGraphSettings.clientId,
         clientSecretConfigured: msGraphSettings.clientSecretConfigured,
+      },
+      whatsApp: {
+        enabled: whatsAppSettings.enabled,
+        target: whatsAppSettings.target,
+        baseUrl: whatsAppSettings.baseUrl,
+        defaultNumber: whatsAppSettings.defaultNumber,
+        groupId: whatsAppSettings.groupId,
+        groupName: whatsAppSettings.groupName,
+        mentionNumbers: whatsAppSettings.mentionNumbers,
       },
     },
     snipeIt: {
@@ -508,6 +649,11 @@ systemRouter.get("/snipeit-settings", async (_req, res) => {
 
 systemRouter.get("/microsoft-graph-settings", async (_req, res) => {
   const settings = await loadEffectiveMicrosoftGraphSettings();
+  res.json(settings);
+});
+
+systemRouter.get("/whatsapp-settings", async (_req, res) => {
+  const settings = await loadEffectiveWhatsAppSettings();
   res.json(settings);
 });
 
@@ -674,6 +820,57 @@ systemRouter.post("/microsoft-graph-settings/test", requireSystemAdmin, async (r
   }
 });
 
+systemRouter.post("/whatsapp-settings/test", requireSystemAdmin, async (req, res) => {
+  const parsed = WhatsAppSettingsTestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const effective = await loadEffectiveWhatsAppSettings();
+  const enabled = parsed.data?.enabled ?? effective.enabled;
+  const baseUrl = parsed.data?.baseUrl ?? effective.baseUrl;
+  const target = parsed.data?.target ?? effective.target;
+  const defaultNumber = parsed.data?.defaultNumber ?? effective.defaultNumber;
+  const groupId = parsed.data?.groupId ?? effective.groupId;
+  const groupName = parsed.data?.groupName ?? effective.groupName;
+  const mentionNumbers = parsed.data?.mentionNumbers ?? effective.mentionNumbers;
+  const sendTestMessage = parsed.data?.sendTestMessage ?? false;
+
+  if (sendTestMessage && !enabled) {
+    res.status(400).json({ message: "WhatsApp notifications disabled" });
+    return;
+  }
+
+  const resolved: EffectiveWhatsAppSettings = {
+    enabled,
+    baseUrl,
+    target,
+    defaultNumber,
+    groupId,
+    groupName,
+    mentionNumbers,
+  };
+
+  if (!sendTestMessage) {
+    if (!resolved.baseUrl) {
+      res.status(400).json({ message: "WhatsApp base URL not configured" });
+      return;
+    }
+    res.json({ ok: true });
+    return;
+  }
+
+  try {
+    const message = `Preventive Pilot WhatsApp test at ${new Date().toISOString()}`;
+    await sendWhatsAppTestMessage(resolved, message);
+    res.json({ ok: true, testMessageSent: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(400).json({ message });
+  }
+});
+
 systemRouter.get("/ui-settings/assets", async (_req, res) => {
   try {
     const settings = await loadAssetsUiSettings();
@@ -832,6 +1029,60 @@ systemRouter.put("/microsoft-graph-settings", requireSystemAdmin, async (req, re
   }
 
   const updated = await loadEffectiveMicrosoftGraphSettings();
+  res.json(updated);
+});
+
+systemRouter.put("/whatsapp-settings", requireSystemAdmin, async (req, res) => {
+  const parsed = WhatsAppSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const baseUrl = parsed.data.baseUrl ? parsed.data.baseUrl.replace(/\/+$/, "") : null;
+  const stored: EffectiveWhatsAppSettings = {
+    enabled: parsed.data.enabled,
+    baseUrl,
+    target: parsed.data.target,
+    defaultNumber: parsed.data.defaultNumber,
+    groupId: parsed.data.groupId,
+    groupName: parsed.data.groupName,
+    mentionNumbers: parsed.data.mentionNumbers ?? [],
+  };
+
+  try {
+    const db = await getDb();
+    await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), WHATSAPP_SETTINGS_KEY)
+      .input("settingValueJson", sql.NVarChar(sql.MAX), JSON.stringify(stored))
+      .input("updatedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "MERGE pm.SystemSettings WITH (HOLDLOCK) AS target",
+          "USING (SELECT @settingKey AS SettingKey) AS source",
+          "ON target.SettingKey = source.SettingKey",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    SettingValueJson = @settingValueJson,",
+          "    UpdatedAt = sysutcdatetime(),",
+          "    UpdatedByUserId = @updatedByUserId",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (SettingKey, SettingValueJson, UpdatedByUserId)",
+          "  VALUES (@settingKey, @settingValueJson, @updatedByUserId);",
+        ].join("\n"),
+      );
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      res.status(503).json({ message: "Database schema missing pm.SystemSettings. Run npm run db:apply-schema." });
+      return;
+    }
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+    return;
+  }
+
+  const updated = await loadEffectiveWhatsAppSettings();
   res.json(updated);
 });
 

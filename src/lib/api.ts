@@ -1194,6 +1194,16 @@ export type MicrosoftGraphSettingsResponse = {
   lastConnectionTestAt: string | null;
 };
 
+export type WhatsAppSettingsResponse = {
+  enabled: boolean;
+  baseUrl: string | null;
+  target: "single" | "group";
+  defaultNumber: string | null;
+  groupId: string | null;
+  groupName: string | null;
+  mentionNumbers: string[];
+};
+
 export type UpdateSnipeItSettingsInput = {
   baseUrl: string | null;
   apiToken?: string | null;
@@ -1216,13 +1226,21 @@ export type UpdateMicrosoftGraphSettingsInput = {
   enabled: boolean;
 };
 
+export type UpdateWhatsAppSettingsInput = WhatsAppSettingsResponse;
+
 export type TestMicrosoftGraphSettingsInput = Partial<UpdateMicrosoftGraphSettingsInput> & {
   sendTestEmail?: boolean;
+};
+
+export type TestWhatsAppSettingsInput = Partial<UpdateWhatsAppSettingsInput> & {
+  sendTestMessage?: boolean;
 };
 
 export type TestMicrosoftGraphSettingsResponse =
   | { ok: true }
   | { ok: true; accessTokenPresent: boolean; lastConnectionTestAt: string; testEmailSent: boolean };
+
+export type TestWhatsAppSettingsResponse = { ok: true } | { ok: true; testMessageSent: boolean };
 
 export const apiGetSnipeItSettings = async (): Promise<SnipeItSettingsResponse> => {
   return apiFetchJson<SnipeItSettingsResponse>("/api/system/snipeit-settings");
@@ -1240,6 +1258,10 @@ export const apiGetMicrosoftGraphSettings = async (): Promise<MicrosoftGraphSett
   return apiFetchJson<MicrosoftGraphSettingsResponse>("/api/system/microsoft-graph-settings");
 };
 
+export const apiGetWhatsAppSettings = async (): Promise<WhatsAppSettingsResponse> => {
+  return apiFetchJson<WhatsAppSettingsResponse>("/api/system/whatsapp-settings");
+};
+
 export const apiUpdateMicrosoftGraphSettings = async (
   input: UpdateMicrosoftGraphSettingsInput,
 ): Promise<MicrosoftGraphSettingsResponse> => {
@@ -1249,11 +1271,22 @@ export const apiUpdateMicrosoftGraphSettings = async (
   });
 };
 
+export const apiUpdateWhatsAppSettings = async (input: UpdateWhatsAppSettingsInput): Promise<WhatsAppSettingsResponse> => {
+  return apiFetchJson<WhatsAppSettingsResponse>("/api/system/whatsapp-settings", { method: "PUT", body: input });
+};
+
 export const apiTestMicrosoftGraphSettings = async (
   input?: TestMicrosoftGraphSettingsInput,
 ): Promise<TestMicrosoftGraphSettingsResponse> => {
   return apiFetchJson<TestMicrosoftGraphSettingsResponse>(
     "/api/system/microsoft-graph-settings/test",
+    input ? { method: "POST", body: input } : { method: "POST" },
+  );
+};
+
+export const apiTestWhatsAppSettings = async (input?: TestWhatsAppSettingsInput): Promise<TestWhatsAppSettingsResponse> => {
+  return apiFetchJson<TestWhatsAppSettingsResponse>(
+    "/api/system/whatsapp-settings/test",
     input ? { method: "POST", body: input } : { method: "POST" },
   );
 };
