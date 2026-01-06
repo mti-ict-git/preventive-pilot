@@ -191,3 +191,8 @@
 - Added delete support for task evidence and checklist item attachments (API + UI).
 - Allowed CORS `x-filename` header and exposed `Content-Disposition` for evidence endpoints.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 09:46
+- Added template checklist flag: Requires Attachment (DB, API, and UI).
+- Extended Tasks API and UI to enforce required checklist attachments on completion.
+- Verified with `npm run lint` and `npx tsc --noEmit`.

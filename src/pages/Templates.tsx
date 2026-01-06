@@ -141,6 +141,7 @@ const Templates = () => {
           isMandatory: item.isMandatory,
           requiresNotes: item.requiresNotes,
           requiresPassFail: item.requiresPassFail,
+          requiresAttachment: item.requiresAttachment,
           isActive: item.isActive,
         };
         return includeChecklistIds ? { ...base, id: item.id } : base;
@@ -163,6 +164,7 @@ const Templates = () => {
         isMandatory: i.isMandatory,
         requiresNotes: i.requiresNotes,
         requiresPassFail: i.requiresPassFail,
+        requiresAttachment: i.requiresAttachment,
         isActive: i.isActive,
       })),
     };

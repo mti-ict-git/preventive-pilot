@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   XCircle,
   MessageSquare,
+  Paperclip,
 } from "lucide-react";
 import {
   Dialog,
@@ -156,6 +157,12 @@ const TemplateDetailDialog = ({
                           <span className="flex items-center gap-1 text-xs text-accent">
                             <MessageSquare className="w-3 h-3" />
                             Notes Required
+                          </span>
+                        )}
+                        {item.requiresAttachment && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Paperclip className="w-3 h-3" />
+                            Requires Attachment
                           </span>
                         )}
                       </div>

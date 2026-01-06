@@ -992,16 +992,17 @@ tasksRouter.get( "/:taskId", async (req, res) => {
     .request()
     .input("taskId", sql.UniqueIdentifier, taskId)
     .input("templateId", sql.UniqueIdentifier, taskRow.TemplateId as string)
-    .query(
-      [
-        "SELECT",
-        "  i.TemplateChecklistItemId AS TemplateChecklistItemId,",
-        "  i.SortOrder AS SortOrder,",
-        "  i.ItemText AS ItemText,",
-        "  i.IsMandatory AS IsMandatory,",
-        "  i.RequiresNotes AS RequiresNotes,",
-        "  i.RequiresPassFail AS RequiresPassFail,",
-        "  i.IsActive AS IsActive,",
+      .query(
+        [
+          "SELECT",
+          "  i.TemplateChecklistItemId AS TemplateChecklistItemId,",
+          "  i.SortOrder AS SortOrder,",
+          "  i.ItemText AS ItemText,",
+          "  i.IsMandatory AS IsMandatory,",
+          "  i.RequiresNotes AS RequiresNotes,",
+          "  i.RequiresPassFail AS RequiresPassFail,",
+          "  i.RequiresAttachment AS RequiresAttachment,",
+          "  i.IsActive AS IsActive,",
         "  r.TaskChecklistResultId AS TaskChecklistResultId,",
         "  r.Outcome AS Outcome,",
         "  r.Notes AS Notes,",
@@ -1170,6 +1171,7 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         isMandatory: r.IsMandatory,
         requiresNotes: r.RequiresNotes,
         requiresPassFail: r.RequiresPassFail,
+        requiresAttachment: r.RequiresAttachment,
         isActive: r.IsActive,
         evidence: checklistEvidenceByItemId.get(String(r.TemplateChecklistItemId)) ?? [],
         result: r.TaskChecklistResultId
@@ -1374,6 +1376,7 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
           "  i.IsMandatory AS IsMandatory,",
           "  i.RequiresNotes AS RequiresNotes,",
           "  i.RequiresPassFail AS RequiresPassFail,",
+          "  i.RequiresAttachment AS RequiresAttachment,",
           "  i.IsActive AS IsActive",
           "FROM pm.PMTemplateChecklistItems i",
           "WHERE i.TemplateId = @templateId",
@@ -1383,6 +1386,24 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
     const templateItems = templateItemsResult.recordset as Array<Record<string, unknown>>;
     const templateItemById = new Map<string, Record<string, unknown>>(
       templateItems.map((i) => [String(i.TemplateChecklistItemId), i]),
+    );
+
+    const checklistEvidenceResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT",
+          "  e.TemplateChecklistItemId AS TemplateChecklistItemId",
+          "FROM pm.PMTaskChecklistEvidence e",
+          "WHERE e.TaskId = @taskId",
+        ].join("\n"),
+      );
+    const checklistEvidenceRows = checklistEvidenceResult.recordset as Array<Record<string, unknown>>;
+    const checklistEvidenceItemIdSet = new Set<string>(
+      checklistEvidenceRows
+        .map((r) => (typeof r.TemplateChecklistItemId === "string" ? r.TemplateChecklistItemId : null))
+        .filter((v): v is string => v !== null),
     );
 
     for (const result of parsed.data.checklistResults) {
@@ -1415,6 +1436,14 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       const notes = result.notes ?? null;
       if (bitToBoolean(templateItem.RequiresNotes) && result.outcome !== 0) {
         if (!notes || notes.trim().length === 0) {
+          res.status(400).json({ message: "Invalid request" });
+          await tx.rollback();
+          return;
+        }
+      }
+
+      if (bitToBoolean(templateItem.RequiresAttachment) && result.outcome !== 0) {
+        if (!checklistEvidenceItemIdSet.has(result.templateChecklistItemId)) {
           res.status(400).json({ message: "Invalid request" });
           await tx.rollback();
           return;

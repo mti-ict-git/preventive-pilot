@@ -558,6 +558,10 @@ const TaskDetailDialog = (props: {
           throw new Error("Notes are required for this checklist item");
         }
 
+        if (item.requiresAttachment && outcome !== 0 && item.evidence.length === 0) {
+          throw new Error("Attachment is required for this checklist item");
+        }
+
         results.push({
           templateChecklistItemId: item.id,
           outcome,
@@ -707,6 +711,11 @@ const TaskDetailDialog = (props: {
                                 {item.requiresNotes ? (
                                   <Badge variant="outline" className="bg-accent/20 text-accent border-accent/30">
                                     Notes
+                                  </Badge>
+                                ) : null}
+                                {item.requiresAttachment ? (
+                                  <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">
+                                    Attachment
                                   </Badge>
                                 ) : null}
                               </div>

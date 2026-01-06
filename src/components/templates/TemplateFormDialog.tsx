@@ -33,6 +33,7 @@ export interface ChecklistItem {
   isMandatory: boolean;
   requiresNotes: boolean;
   requiresPassFail: boolean;
+  requiresAttachment: boolean;
   isActive: boolean;
 }
 
@@ -96,6 +97,7 @@ const TemplateFormDialog = ({
       isMandatory: true,
       requiresNotes: false,
       requiresPassFail: true,
+      requiresAttachment: false,
       isActive: true,
     };
     
@@ -320,7 +322,7 @@ const TemplateFormDialog = ({
                       </Button>
                     </div>
                     
-                    <div className="flex items-center gap-6 pl-10">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pl-10">
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox
                           checked={item.isMandatory}
@@ -349,6 +351,16 @@ const TemplateFormDialog = ({
                           }
                         />
                         <span className="text-muted-foreground">Notes Required</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={item.requiresAttachment}
+                          onCheckedChange={(checked) =>
+                            updateChecklistItem(item.id, { requiresAttachment: checked === true })
+                          }
+                        />
+                        <span className="text-muted-foreground">Requires Attachment</span>
                       </label>
                     </div>
                   </motion.div>
