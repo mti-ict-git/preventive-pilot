@@ -12,6 +12,7 @@ const ChecklistItemSchema = z.object({
   isMandatory: z.boolean().default(true),
   requiresNotes: z.boolean().default(false),
   requiresPassFail: z.boolean().default(true),
+  requiresAttachment: z.boolean().default(false),
   isActive: z.boolean().default(true),
 });
 
@@ -133,6 +134,7 @@ templatesRouter.get("/:templateId", async (req, res) => {
         "  i.IsMandatory AS IsMandatory,",
         "  i.RequiresNotes AS RequiresNotes,",
         "  i.RequiresPassFail AS RequiresPassFail,",
+        "  i.RequiresAttachment AS RequiresAttachment,",
         "  i.IsActive AS IsActive",
         "FROM pm.PMTemplateChecklistItems i",
         "WHERE i.TemplateId = @templateId",
@@ -163,6 +165,7 @@ templatesRouter.get("/:templateId", async (req, res) => {
       isMandatory: r.IsMandatory,
       requiresNotes: r.RequiresNotes,
       requiresPassFail: r.RequiresPassFail,
+      requiresAttachment: r.RequiresAttachment,
       isActive: r.IsActive,
     })),
   });
@@ -216,14 +219,15 @@ templatesRouter.post("/", requireSuperadmin, async (req, res) => {
         .input("isMandatory", sql.Bit, item.isMandatory ? 1 : 0)
         .input("requiresNotes", sql.Bit, item.requiresNotes ? 1 : 0)
         .input("requiresPassFail", sql.Bit, item.requiresPassFail ? 1 : 0)
+        .input("requiresAttachment", sql.Bit, item.requiresAttachment ? 1 : 0)
         .input("isActive", sql.Bit, item.isActive ? 1 : 0)
         .query(
           [
             "INSERT INTO pm.PMTemplateChecklistItems (",
-            "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, IsActive",
+            "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, RequiresAttachment, IsActive",
             ")",
             "VALUES (",
-            "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @isActive",
+            "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @requiresAttachment, @isActive",
             ")",
           ].join("\n"),
         );
@@ -322,14 +326,15 @@ templatesRouter.put("/:templateId", requireSuperadmin, async (req, res) => {
           .input("isMandatory", sql.Bit, item.isMandatory ? 1 : 0)
           .input("requiresNotes", sql.Bit, item.requiresNotes ? 1 : 0)
           .input("requiresPassFail", sql.Bit, item.requiresPassFail ? 1 : 0)
+          .input("requiresAttachment", sql.Bit, item.requiresAttachment ? 1 : 0)
           .input("isActive", sql.Bit, item.isActive ? 1 : 0)
           .query(
             [
               "INSERT INTO pm.PMTemplateChecklistItems (",
-              "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, IsActive",
+              "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, RequiresAttachment, IsActive",
               ")",
               "VALUES (",
-              "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @isActive",
+              "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @requiresAttachment, @isActive",
               ")",
             ].join("\n"),
           );

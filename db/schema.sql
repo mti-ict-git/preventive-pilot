@@ -186,12 +186,20 @@ BEGIN
     IsMandatory bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_IsMandatory DEFAULT (1),
     RequiresNotes bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_RequiresNotes DEFAULT (0),
     RequiresPassFail bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_RequiresPassFail DEFAULT (1),
+    RequiresAttachment bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_RequiresAttachment DEFAULT (0),
     IsActive bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_IsActive DEFAULT (1),
     CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_CreatedAt DEFAULT (sysutcdatetime()),
     UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_UpdatedAt DEFAULT (sysutcdatetime()),
     CONSTRAINT PK_pm_PMTemplateChecklistItems PRIMARY KEY CLUSTERED (TemplateChecklistItemId),
     CONSTRAINT FK_pm_PMTemplateChecklistItems_Templates FOREIGN KEY (TemplateId) REFERENCES pm.PMTemplates(TemplateId)
   );
+END;
+
+IF COL_LENGTH(N'pm.PMTemplateChecklistItems', N'RequiresAttachment') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTemplateChecklistItems
+    ADD RequiresAttachment bit NOT NULL
+      CONSTRAINT DF_pm_PMTemplateChecklistItems_RequiresAttachment DEFAULT (0) WITH VALUES;
 END;
 
 IF OBJECT_ID(N'pm.AssignmentRules', N'U') IS NULL
