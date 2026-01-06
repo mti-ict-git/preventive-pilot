@@ -13,10 +13,12 @@ import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   apiListAssignmentRules,
   apiListBlackoutWindows,
   apiGetSchedulingCalendar,
+  apiGetSchedulingDayEvents,
   apiRecalculateSchedules,
   ApiError,
 } from "@/lib/api";
@@ -24,6 +26,10 @@ import { toast } from "@/hooks/use-toast";
 
 const Scheduling = () => {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  });
 
   const queryClient = useQueryClient();
 
@@ -57,10 +63,39 @@ const Scheduling = () => {
     return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
   };
 
+  const formatDateKey = (date: Date): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const selectedDateKey = formatDateKey(selectedDate);
+  const selectedDateLabel = selectedDate.toLocaleDateString("en-US", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
+  const goToMonth = (delta: number) => {
+    const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1);
+    setCurrentMonth(next);
+    setSelectedDate((prev) => {
+      if (prev.getFullYear() === next.getFullYear() && prev.getMonth() === next.getMonth()) return prev;
+      return new Date(next.getFullYear(), next.getMonth(), 1);
+    });
+  };
+
   const monthParam = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
   const calendarQuery = useQuery({
     queryKey: ["scheduling", "calendar", { month: monthParam }],
     queryFn: () => apiGetSchedulingCalendar({ month: monthParam }),
+  });
+
+  const dayEventsQuery = useQuery({
+    queryKey: ["scheduling", "day", { date: selectedDateKey }],
+    queryFn: () => apiGetSchedulingDayEvents({ date: selectedDateKey }),
   });
 
   const scheduledTasks = useMemo(() => {
@@ -103,11 +138,7 @@ const Scheduling = () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() =>
-                    setCurrentMonth(
-                      (d) => new Date(d.getFullYear(), d.getMonth() - 1, 1),
-                    )
-                  }
+                  onClick={() => goToMonth(-1)}
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
@@ -117,11 +148,7 @@ const Scheduling = () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() =>
-                    setCurrentMonth(
-                      (d) => new Date(d.getFullYear(), d.getMonth() + 1, 1),
-                    )
-                  }
+                  onClick={() => goToMonth(1)}
                 >
                   <ChevronRight className="w-4 h-4" />
                 </Button>
@@ -148,16 +175,35 @@ const Scheduling = () => {
                   day === today.getDate() &&
                   currentMonth.getMonth() === today.getMonth() &&
                   currentMonth.getFullYear() === today.getFullYear();
+
+                const isSelected =
+                  day === selectedDate.getDate() &&
+                  currentMonth.getMonth() === selectedDate.getMonth() &&
+                  currentMonth.getFullYear() === selectedDate.getFullYear();
                 return (
-                  <motion.div
+                  <motion.button
                     key={day}
+                    type="button"
                     whileHover={{ scale: 1.05 }}
+                    onClick={() => setSelectedDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day))}
+                    aria-label={`Select ${currentMonth.toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                    })} ${day}`}
                     className={`aspect-square rounded-lg p-1 cursor-pointer transition-colors ${
-                      isToday ? "bg-primary/20 border border-primary" : "hover:bg-muted/50"
+                      isSelected
+                        ? "bg-primary/20 border border-primary"
+                        : isToday
+                          ? "bg-accent/30 border border-accent"
+                          : "hover:bg-muted/50"
                     }`}
                   >
                     <div className="h-full flex flex-col">
-                      <span className={`text-sm ${isToday ? "text-primary font-bold" : "text-foreground"}`}>
+                      <span
+                        className={`text-sm ${
+                          isSelected ? "text-primary font-bold" : isToday ? "text-accent-foreground font-semibold" : "text-foreground"
+                        }`}
+                      >
                         {day}
                       </span>
                       {tasks && (
@@ -179,7 +225,7 @@ const Scheduling = () => {
                         </div>
                       )}
                     </div>
-                  </motion.div>
+                  </motion.button>
                 );
               })}
             </div>
@@ -311,6 +357,62 @@ const Scheduling = () => {
                 <Clock className="w-4 h-4" />
                 Recalculate All Schedules
               </Button>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45 }}
+            >
+              <Card className="glass border-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-foreground">Events • {selectedDateLabel}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {dayEventsQuery.isLoading ? (
+                    <div className="text-sm text-muted-foreground">Loading events…</div>
+                  ) : dayEventsQuery.isError ? (
+                    <div className="text-sm text-destructive">Failed to load events.</div>
+                  ) : (dayEventsQuery.data?.items ?? []).length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No tasks scheduled for this day.</div>
+                  ) : (
+                    <ScrollArea className="h-64">
+                      <div className="space-y-2 pr-3">
+                        {(dayEventsQuery.data?.items ?? []).map((item) => {
+                          const dueAt = new Date(item.scheduledDueAt);
+                          const timeText = Number.isNaN(dueAt.getTime()) ? item.scheduledDueAt : dueAt.toLocaleTimeString();
+                          const badgeVariant =
+                            item.bucket === "overdue" ? "destructive" : item.bucket === "due" ? "secondary" : "outline";
+
+                          return (
+                            <div
+                              key={item.id}
+                              className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={badgeVariant} className="capitalize">
+                                      {item.bucket}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">{timeText}</span>
+                                  </div>
+                                  <div className="mt-1 text-sm text-foreground font-medium truncate">{item.taskNumber}</div>
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {item.asset.assetTag} • {item.asset.name}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground truncate">{item.template.name}</div>
+                                </div>
+                                <div className="text-xs text-muted-foreground whitespace-nowrap capitalize">{item.status}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  )}
+                </CardContent>
+              </Card>
             </motion.div>
           </div>
         </div>

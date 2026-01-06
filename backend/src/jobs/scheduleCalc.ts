@@ -166,7 +166,7 @@ export const runScheduleCalculationJob = async (): Promise<void> => {
         "  a.AssetId AS AssetId,",
         "  s.DefaultTemplateId AS TemplateId,",
         "  CAST(",
-        "    COALESCE(s.NextPMDueAt, dateadd(day, t.IntervalDays, sysutcdatetime()))",
+        "    COALESCE(s.NextPMDueAt, dateadd(day, t.IntervalDays, COALESCE(s.LastPMCompletedAt, sysutcdatetime())))",
         "    AS datetime2(0)",
         "  ) AS NextDueAt,",
         "  t.IntervalDays AS IntervalDays,",
@@ -181,7 +181,7 @@ export const runScheduleCalculationJob = async (): Promise<void> => {
         "  AND s.PMEnabled = 1",
         "  AND s.DefaultTemplateId IS NOT NULL",
         "  AND t.IsActive = 1",
-        "  AND COALESCE(s.NextPMDueAt, dateadd(day, t.IntervalDays, sysutcdatetime())) <= dateadd(day, @horizonDays, sysutcdatetime())",
+        "  AND COALESCE(s.NextPMDueAt, dateadd(day, t.IntervalDays, COALESCE(s.LastPMCompletedAt, sysutcdatetime()))) <= dateadd(day, @horizonDays, sysutcdatetime())",
       ].join("\n"),
     );
 

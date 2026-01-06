@@ -237,3 +237,13 @@
 - Added server-generated PDF export for PM History task details.
 - Added PM History detail "Export PDF" button to download the generated report.
 - Verified with `npm run lint`, `npx tsc --noEmit`, and `npm run --prefix backend typecheck`.
+
+## 2026-01-06 12:27
+- Fixed Assets "Next PM" to use computed NextDueAt when missing.
+- Updated scheduling recalculation and schedule job to honor LastPMCompletedAt.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 12:31
+- Added scheduling day selection with default highlight on today.
+- Added right-side event list showing PM tasks for the selected day.
+- Verified with `npm run lint` and `npx tsc --noEmit`.

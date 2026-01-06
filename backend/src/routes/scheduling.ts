@@ -35,6 +35,12 @@ const CalendarQuerySchema = z.object({
     .optional(),
 });
 
+const DayQuerySchema = z.object({
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+});
+
 export const schedulingRouter = Router();
 
 schedulingRouter.use(requireAuth);
@@ -333,7 +339,13 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
           "SELECT",
           "  a.AssetId AS AssetId,",
           "  s.DefaultTemplateId AS DefaultTemplateId,",
-          "  s.NextPMDueAt AS NextPMDueAt,",
+          "  CAST(",
+          "    COALESCE(",
+          "      s.NextPMDueAt,",
+          "      dateadd(day, t.IntervalDays, COALESCE(s.LastPMCompletedAt, sysutcdatetime()))",
+          "    )",
+          "    AS datetime2(0)",
+          "  ) AS NextPMDueAt,",
           "  t.IntervalDays AS IntervalDays",
           "FROM pm.Assets a",
           "INNER JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
@@ -351,9 +363,7 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
     for (const row of rows) {
       const assetId = row.AssetId as string;
       const templateId = row.DefaultTemplateId as string;
-      const intervalDays = Number(row.IntervalDays);
-      const nextDueAt = row.NextPMDueAt as Date | null;
-      const computedNextDueAt = nextDueAt ?? new Date(Date.now() + intervalDays * 24 * 60 * 60 * 1000);
+      const computedNextDueAt = row.NextPMDueAt as Date;
 
       await tx
         .request()
@@ -393,6 +403,127 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
     await tx.rollback().catch(() => undefined);
     throw err;
   }
+});
+
+schedulingRouter.get("/day", async (req, res) => {
+  const parsed = DayQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const [yearPart, monthPart, dayPart] = parsed.data.date.split("-");
+  const year = Number(yearPart);
+  const monthIndex = Number(monthPart) - 1;
+  const day = Number(dayPart);
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(monthIndex) ||
+    !Number.isFinite(day) ||
+    monthIndex < 0 ||
+    monthIndex > 11 ||
+    day < 1 ||
+    day > 31
+  ) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const from = new Date(Date.UTC(year, monthIndex, day, 0, 0, 0));
+  const to = new Date(Date.UTC(year, monthIndex, day + 1, 0, 0, 0));
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("from", sql.DateTime2(0), from)
+    .input("to", sql.DateTime2(0), to)
+    .query(
+      [
+        "DECLARE @todayStart datetime2(0) = dateadd(day, datediff(day, 0, sysutcdatetime()), 0);",
+        "DECLARE @todayEnd datetime2(0) = dateadd(day, 1, @todayStart);",
+        "SELECT",
+        "  t.TaskId AS TaskId,",
+        "  t.TaskNumber AS TaskNumber,",
+        "  t.ScheduledDueAt AS ScheduledDueAt,",
+        "  t.Status AS Status,",
+        "  t.Priority AS Priority,",
+        "  a.AssetId AS AssetId,",
+        "  a.AssetTag AS AssetTag,",
+        "  a.Name AS AssetName,",
+        "  tpl.TemplateId AS TemplateId,",
+        "  tpl.Name AS TemplateName,",
+        "  CASE",
+        "    WHEN t.ScheduledDueAt < @todayStart THEN N'overdue'",
+        "    WHEN t.ScheduledDueAt < @todayEnd THEN N'due'",
+        "    ELSE N'scheduled'",
+        "  END AS Bucket",
+        "FROM pm.PMTasks t",
+        "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "WHERE t.ScheduledDueAt >= @from",
+        "  AND t.ScheduledDueAt < @to",
+        "  AND t.Status NOT IN (N'completed', N'cancelled')",
+        "ORDER BY t.ScheduledDueAt ASC, t.TaskNumber ASC",
+      ].join("\n"),
+    );
+
+  const rows = result.recordset as Array<Record<string, unknown>>;
+  res.json({
+    items: rows
+      .map((r) => {
+        const id = typeof r.TaskId === "string" ? r.TaskId : null;
+        const taskNumber = typeof r.TaskNumber === "string" ? r.TaskNumber : null;
+        const scheduledDueAt = r.ScheduledDueAt instanceof Date ? r.ScheduledDueAt.toISOString() : null;
+        const status = typeof r.Status === "string" ? r.Status : null;
+        const priority = typeof r.Priority === "string" ? r.Priority : null;
+        const assetId = typeof r.AssetId === "string" ? r.AssetId : null;
+        const assetTag = typeof r.AssetTag === "string" ? r.AssetTag : null;
+        const assetName = typeof r.AssetName === "string" ? r.AssetName : null;
+        const templateId = typeof r.TemplateId === "string" ? r.TemplateId : null;
+        const templateName = typeof r.TemplateName === "string" ? r.TemplateName : null;
+        const bucket = typeof r.Bucket === "string" ? r.Bucket : null;
+
+        if (
+          !id ||
+          !taskNumber ||
+          !scheduledDueAt ||
+          !status ||
+          !priority ||
+          !assetId ||
+          !assetTag ||
+          !assetName ||
+          !templateId ||
+          !templateName
+        ) {
+          return null;
+        }
+
+        if (bucket !== "scheduled" && bucket !== "due" && bucket !== "overdue") return null;
+
+        return {
+          id,
+          taskNumber,
+          scheduledDueAt,
+          status,
+          priority,
+          bucket: bucket as "scheduled" | "due" | "overdue",
+          asset: { id: assetId, assetTag, name: assetName },
+          template: { id: templateId, name: templateName },
+        };
+      })
+      .filter(
+        (v): v is {
+          id: string;
+          taskNumber: string;
+          scheduledDueAt: string;
+          status: string;
+          priority: string;
+          bucket: "scheduled" | "due" | "overdue";
+          asset: { id: string; assetTag: string; name: string };
+          template: { id: string; name: string };
+        } => v !== null,
+      ),
+  });
 });
 
 schedulingRouter.get("/calendar", async (req, res) => {

@@ -95,6 +95,10 @@ Required environment variables:
 - Evidence uploads are stored under the existing `Qx YYYY` folder structure.
 - Max upload size is 50MB per file.
 
+## Scheduling
+
+- Open PM Scheduling to view calendar counts and select a day to see tasks.
+
 ## Microsoft Graph notifications
 
 - Configure in Settings → Notification Settings → Microsoft Graph.

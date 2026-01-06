@@ -816,12 +816,31 @@ export type SchedulingCalendarDay = {
   count: number;
 };
 
+export type SchedulingDayEventItem = {
+  id: string;
+  taskNumber: string;
+  scheduledDueAt: string;
+  status: string;
+  priority: string;
+  bucket: "scheduled" | "due" | "overdue";
+  asset: { id: string; assetTag: string; name: string };
+  template: { id: string; name: string };
+};
+
 export const apiGetSchedulingCalendar = async (input: {
   month: string;
 }): Promise<{ items: SchedulingCalendarDay[] }> => {
   const params = new URLSearchParams();
   params.set("month", input.month);
   return apiFetchJson<{ items: SchedulingCalendarDay[] }>(`/api/scheduling/calendar?${params.toString()}`);
+};
+
+export const apiGetSchedulingDayEvents = async (input: {
+  date: string;
+}): Promise<{ items: SchedulingDayEventItem[] }> => {
+  const params = new URLSearchParams();
+  params.set("date", input.date);
+  return apiFetchJson<{ items: SchedulingDayEventItem[] }>(`/api/scheduling/day?${params.toString()}`);
 };
 
 export type TemplateSummary = {
