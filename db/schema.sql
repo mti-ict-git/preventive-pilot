@@ -342,6 +342,26 @@ BEGIN
   ALTER TABLE pm.PMTaskEvidence ADD StoragePath nvarchar(1024) NULL;
 END;
 
+IF OBJECT_ID(N'pm.PMTaskChecklistEvidence', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.PMTaskChecklistEvidence (
+    ChecklistEvidenceId uniqueidentifier NOT NULL CONSTRAINT DF_pm_PMTaskChecklistEvidence_Id DEFAULT (newsequentialid()),
+    TaskId uniqueidentifier NOT NULL,
+    TemplateChecklistItemId uniqueidentifier NOT NULL,
+    FileName nvarchar(256) NULL,
+    ContentType nvarchar(128) NULL,
+    SizeBytes bigint NULL,
+    Uri nvarchar(1024) NOT NULL,
+    StoragePath nvarchar(1024) NULL,
+    UploadedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_PMTaskChecklistEvidence_UploadedAt DEFAULT (sysutcdatetime()),
+    UploadedByUserId uniqueidentifier NULL,
+    CONSTRAINT PK_pm_PMTaskChecklistEvidence PRIMARY KEY CLUSTERED (ChecklistEvidenceId),
+    CONSTRAINT FK_pm_PMTaskChecklistEvidence_Tasks FOREIGN KEY (TaskId) REFERENCES pm.PMTasks(TaskId),
+    CONSTRAINT FK_pm_PMTaskChecklistEvidence_Items FOREIGN KEY (TemplateChecklistItemId) REFERENCES pm.PMTemplateChecklistItems(TemplateChecklistItemId),
+    CONSTRAINT FK_pm_PMTaskChecklistEvidence_UploadedByUser FOREIGN KEY (UploadedByUserId) REFERENCES pm.Users(UserId)
+  );
+END;
+
 IF OBJECT_ID(N'pm.NotificationChannels', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.NotificationChannels (

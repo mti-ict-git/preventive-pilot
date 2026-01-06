@@ -281,6 +281,17 @@ export type TaskUserRef = {
   displayName: string | null;
 };
 
+export type TaskChecklistEvidence = {
+  id: string;
+  templateChecklistItemId: string;
+  fileName: string | null;
+  contentType: string | null;
+  sizeBytes: number | null;
+  uri: string;
+  uploadedAt: string;
+  uploadedBy: TaskUserRef | null;
+};
+
 export type TaskDetailChecklistItem = {
   id: string;
   sortOrder: number;
@@ -289,6 +300,7 @@ export type TaskDetailChecklistItem = {
   requiresNotes: boolean;
   requiresPassFail: boolean;
   isActive: boolean;
+  evidence: TaskChecklistEvidence[];
   result: {
     id: string;
     outcome: 0 | 1 | 2;
@@ -443,6 +455,168 @@ export const apiDownloadEvidence = async (input: {
   const fileName = parseFilenameFromContentDisposition(cd);
   const contentType = res.headers.get("content-type");
   return { blob, fileName, contentType };
+};
+
+export const apiDownloadChecklistEvidence = async (input: {
+  checklistEvidenceId: string;
+  download?: boolean;
+}): Promise<DownloadEvidenceResponse> => {
+  const params = new URLSearchParams();
+  if (input.download) params.set("download", "1");
+  const query = params.toString();
+
+  const res = await fetch(
+    `${API_BASE_URL}/api/tasks/checklist-evidence/${encodeURIComponent(input.checklistEvidenceId)}${
+      query ? `?${query}` : ""
+    }`,
+    {
+      headers: buildAuthHeaders(),
+    },
+  );
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const data = (await res.json()) as unknown;
+      const message =
+        typeof data === "object" && data !== null && "message" in data && typeof data.message === "string"
+          ? data.message
+          : "Request failed";
+      throw new ApiError(message, res.status);
+    }
+    throw new ApiError("Request failed", res.status);
+  }
+
+  const blob = await res.blob();
+  const cd = res.headers.get("content-disposition");
+  const fileName = parseFilenameFromContentDisposition(cd);
+  const contentType = res.headers.get("content-type");
+  return { blob, fileName, contentType };
+};
+
+export const apiDeleteEvidence = async (input: { evidenceId: string }): Promise<{ ok: true }> => {
+  const res = await fetch(`${API_BASE_URL}/api/tasks/evidence/${encodeURIComponent(input.evidenceId)}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const data = (await res.json()) as unknown;
+      const message =
+        typeof data === "object" && data !== null && "message" in data && typeof data.message === "string"
+          ? data.message
+          : "Request failed";
+      throw new ApiError(message, res.status);
+    }
+    throw new ApiError("Request failed", res.status);
+  }
+
+  const data = (await res.json()) as unknown;
+  const ok = typeof data === "object" && data !== null && "ok" in data && data.ok === true;
+  if (!ok) throw new ApiError("Request failed", 500);
+  return { ok: true };
+};
+
+export const apiDeleteChecklistEvidence = async (input: { checklistEvidenceId: string }): Promise<{ ok: true }> => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/tasks/checklist-evidence/${encodeURIComponent(input.checklistEvidenceId)}`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(),
+    },
+  );
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const data = (await res.json()) as unknown;
+      const message =
+        typeof data === "object" && data !== null && "message" in data && typeof data.message === "string"
+          ? data.message
+          : "Request failed";
+      throw new ApiError(message, res.status);
+    }
+    throw new ApiError("Request failed", res.status);
+  }
+
+  const data = (await res.json()) as unknown;
+  const ok = typeof data === "object" && data !== null && "ok" in data && data.ok === true;
+  if (!ok) throw new ApiError("Request failed", 500);
+  return { ok: true };
+};
+
+export const apiUploadTaskEvidenceFile = async (input: {
+  taskId: string;
+  file: File;
+}): Promise<{ id: string }> => {
+  const res = await fetch(`${API_BASE_URL}/api/tasks/${encodeURIComponent(input.taskId)}/evidence/upload`, {
+    method: "POST",
+    headers: {
+      ...buildAuthHeaders(),
+      "Content-Type": input.file.type || "application/octet-stream",
+      "x-filename": input.file.name,
+    },
+    body: input.file,
+  });
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const data = (await res.json()) as unknown;
+      const message =
+        typeof data === "object" && data !== null && "message" in data && typeof data.message === "string"
+          ? data.message
+          : "Request failed";
+      throw new ApiError(message, res.status);
+    }
+    throw new ApiError("Request failed", res.status);
+  }
+
+  const data = (await res.json()) as unknown;
+  const id = typeof data === "object" && data !== null && "id" in data && typeof data.id === "string" ? data.id : null;
+  if (!id) throw new ApiError("Request failed", 500);
+  return { id };
+};
+
+export const apiUploadTaskChecklistEvidenceFile = async (input: {
+  taskId: string;
+  templateChecklistItemId: string;
+  file: File;
+}): Promise<{ id: string }> => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/tasks/${encodeURIComponent(input.taskId)}/checklist-items/${encodeURIComponent(
+      input.templateChecklistItemId,
+    )}/evidence/upload`,
+    {
+      method: "POST",
+      headers: {
+        ...buildAuthHeaders(),
+        "Content-Type": input.file.type || "application/octet-stream",
+        "x-filename": input.file.name,
+      },
+      body: input.file,
+    },
+  );
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const data = (await res.json()) as unknown;
+      const message =
+        typeof data === "object" && data !== null && "message" in data && typeof data.message === "string"
+          ? data.message
+          : "Request failed";
+      throw new ApiError(message, res.status);
+    }
+    throw new ApiError("Request failed", res.status);
+  }
+
+  const data = (await res.json()) as unknown;
+  const id = typeof data === "object" && data !== null && "id" in data && typeof data.id === "string" ? data.id : null;
+  if (!id) throw new ApiError("Request failed", 500);
+  return { id };
 };
 
 export type OverdueReportItem = {

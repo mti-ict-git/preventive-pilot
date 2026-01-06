@@ -181,3 +181,13 @@
 - Added in-app evidence preview modal with open-new-tab and download actions.
 - Wired evidence preview/download to /api/tasks/evidence/:evidenceId.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 08:08
+- Fixed evidence preview rendering by inferring Content-Type from file extension when missing.
+- Extended evidence preview modal to support PDF, images, video, and audio.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 08:55
+- Added delete support for task evidence and checklist item attachments (API + UI).
+- Allowed CORS `x-filename` header and exposed `Content-Disposition` for evidence endpoints.
+- Verified with `npm run lint` and `npx tsc --noEmit`.

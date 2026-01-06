@@ -18,7 +18,8 @@ app.use(
   cors({
     origin: env.FRONTEND_ORIGIN,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-filename"],
+    exposedHeaders: ["Content-Disposition"],
   }),
 );
 

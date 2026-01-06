@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
 import fs from "node:fs";
@@ -61,24 +61,147 @@ const requireManager = requireAnyRole(managerRoles);
 
 const MIME_BY_EXT: Record<string, string> = {
   ".pdf": "application/pdf",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
+  ".json": "application/json",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".webp": "image/webp",
+  ".svg": "image/svg+xml",
   ".mp4": "video/mp4",
   ".m4v": "video/x-m4v",
   ".mov": "video/quicktime",
+  ".webm": "video/webm",
   ".mp3": "audio/mpeg",
   ".wav": "audio/wav",
   ".m4a": "audio/mp4",
   ".aac": "audio/aac",
+  ".zip": "application/zip",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 };
 
 const inferMimeTypeFromFileName = (fileName: string | null): string | null => {
   if (!fileName) return null;
   const ext = path.extname(fileName).toLowerCase();
   return MIME_BY_EXT[ext] ?? null;
+};
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
+const sanitizeSegment = (value: string): string => {
+  return value
+    .replace(/[\\/]/g, "-")
+    .replace(/[<>:"|?*]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const truncate = (value: string, maxLen: number): string => {
+  if (value.length <= maxLen) return value;
+  return value.slice(0, maxLen).trim();
+};
+
+const computeQuarterFolder = (whenUtc: Date): { folder: string; year: number; quarter: 1 | 2 | 3 | 4 } => {
+  const year = whenUtc.getUTCFullYear();
+  const month = whenUtc.getUTCMonth() + 1;
+  const quarter = (month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4) as 1 | 2 | 3 | 4;
+  return { folder: `Q${quarter} ${year}`, year, quarter };
+};
+
+const splitExt = (fileName: string): { base: string; ext: string } => {
+  const ext = path.extname(fileName);
+  return { base: ext ? fileName.slice(0, -ext.length) : fileName, ext };
+};
+
+const resolveUniqueDestPath = async (destAbs: string): Promise<string> => {
+  try {
+    await fs.promises.access(destAbs, fs.constants.F_OK);
+  } catch {
+    return destAbs;
+  }
+
+  const dir = path.dirname(destAbs);
+  const baseName = path.basename(destAbs);
+  const { base, ext } = splitExt(baseName);
+  for (let i = 1; i <= 999; i += 1) {
+    const next = path.join(dir, `${base} (${i})${ext}`);
+    try {
+      await fs.promises.access(next, fs.constants.F_OK);
+    } catch {
+      return next;
+    }
+  }
+  return destAbs;
+};
+
+const resolveStoredFileAbs = (storageRootAbs: string, storagePath: string): string | null => {
+  const root = path.resolve(storageRootAbs);
+  const resolved = path.resolve(root, storagePath);
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (!resolved.startsWith(prefix)) return null;
+  return resolved;
+};
+
+type TaskStorageContext = {
+  taskId: string;
+  taskNumber: string;
+  templateId: string;
+  assetName: string;
+  assetTag: string | null;
+  categoryName: string | null;
+  access: TaskAccessRow;
+};
+
+const getTaskStorageContext = async (taskId: string): Promise<TaskStorageContext | null> => {
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.TaskId AS TaskId,",
+        "  t.TaskNumber AS TaskNumber,",
+        "  t.TemplateId AS TemplateId,",
+        "  a.Name AS AssetName,",
+        "  a.AssetTag AS AssetTag,",
+        "  c.Name AS CategoryName,",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName",
+        "FROM pm.PMTasks t",
+        "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.AssetCategories c ON c.CategoryId = a.CategoryId",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  const taskNumber = typeof row?.TaskNumber === "string" ? row.TaskNumber : null;
+  const templateId = typeof row?.TemplateId === "string" ? row.TemplateId : null;
+  const assetName = typeof row?.AssetName === "string" ? row.AssetName : null;
+  const taskIdRow = typeof row?.TaskId === "string" ? row.TaskId : null;
+  if (!taskIdRow || !taskNumber || !templateId || !assetName) return null;
+
+  return {
+    taskId: taskIdRow,
+    taskNumber,
+    templateId,
+    assetName,
+    assetTag: typeof row?.AssetTag === "string" ? row.AssetTag : null,
+    categoryName: typeof row?.CategoryName === "string" ? row.CategoryName : null,
+    access: {
+      AssignedToUserId: (row?.AssignedToUserId as string | null) ?? null,
+      AssignedToRoleName: (row?.AssignedToRoleName as string | null) ?? null,
+    },
+  };
 };
 
 type TaskAccessRow = {
@@ -347,7 +470,468 @@ tasksRouter.get("/evidence/:evidenceId", async (req, res) => {
   stream.pipe(res);
 });
 
-tasksRouter.get("/:taskId", async (req, res) => {
+tasksRouter.get("/checklist-evidence/:checklistEvidenceId", async (req, res) => {
+  const checklistEvidenceId = req.params.checklistEvidenceId;
+  if (!z.string().uuid().safeParse(checklistEvidenceId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  if (!env.EVIDENCE_STORAGE_ROOT) {
+    res.status(500).json({ message: "Evidence storage not configured" });
+    return;
+  }
+
+  const download = req.query.download === "1" || req.query.download === "true";
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("checklistEvidenceId", sql.UniqueIdentifier, checklistEvidenceId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  e.ChecklistEvidenceId AS ChecklistEvidenceId,",
+        "  e.FileName AS FileName,",
+        "  e.ContentType AS ContentType,",
+        "  e.SizeBytes AS SizeBytes,",
+        "  e.StoragePath AS StoragePath",
+        "FROM pm.PMTaskChecklistEvidence e",
+        "WHERE e.ChecklistEvidenceId = @checklistEvidenceId",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const storagePath = typeof row.StoragePath === "string" ? row.StoragePath : null;
+  if (!storagePath) {
+    res.status(404).json({ message: "Evidence file not available" });
+    return;
+  }
+
+  const root = path.resolve(env.EVIDENCE_STORAGE_ROOT);
+  const resolved = path.resolve(root, storagePath);
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (!resolved.startsWith(prefix)) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  let st: fs.Stats;
+  try {
+    st = await fs.promises.stat(resolved);
+  } catch {
+    res.status(404).json({ message: "Evidence file not found" });
+    return;
+  }
+
+  if (!st.isFile()) {
+    res.status(404).json({ message: "Evidence file not found" });
+    return;
+  }
+
+  const contentTypeFromDb = typeof row.ContentType === "string" && row.ContentType.trim() ? row.ContentType : null;
+  const fileName = typeof row.FileName === "string" && row.FileName.trim() ? row.FileName : null;
+  const contentType = contentTypeFromDb ?? inferMimeTypeFromFileName(fileName);
+
+  if (contentType) res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Length", String(st.size));
+  res.setHeader(
+    "Content-Disposition",
+    `${download ? "attachment" : "inline"}${fileName ? `; filename="${fileName.replace(/"/g, "")}"` : ""}`,
+  );
+
+  const stream = fs.createReadStream(resolved);
+  stream.on("error", () => {
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Failed to read evidence" });
+      return;
+    }
+    res.end();
+  });
+  stream.pipe(res);
+});
+
+tasksRouter.delete("/evidence/:evidenceId", async (req, res) => {
+  const evidenceId = req.params.evidenceId;
+  if (!z.string().uuid().safeParse(evidenceId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("evidenceId", sql.UniqueIdentifier, evidenceId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  e.EvidenceId AS EvidenceId,",
+        "  e.TaskId AS TaskId,",
+        "  e.StoragePath AS StoragePath,",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName",
+        "FROM pm.PMTaskEvidence e",
+        "INNER JOIN pm.PMTasks t ON t.TaskId = e.TaskId",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE e.EvidenceId = @evidenceId",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const accessRow: TaskAccessRow = {
+    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
+    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
+  };
+  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
+  const storagePath = typeof row.StoragePath === "string" ? row.StoragePath : null;
+  await db
+    .request()
+    .input("evidenceId", sql.UniqueIdentifier, evidenceId)
+    .query(["DELETE FROM pm.PMTaskEvidence WHERE EvidenceId = @evidenceId"].join("\n"));
+
+  if (storagePath && env.EVIDENCE_STORAGE_ROOT) {
+    const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
+    if (resolved) {
+      await fs.promises.unlink(resolved).catch(() => undefined);
+    }
+  }
+
+  res.json({ ok: true });
+});
+
+tasksRouter.delete("/checklist-evidence/:checklistEvidenceId", async (req, res) => {
+  const checklistEvidenceId = req.params.checklistEvidenceId;
+  if (!z.string().uuid().safeParse(checklistEvidenceId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("checklistEvidenceId", sql.UniqueIdentifier, checklistEvidenceId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  e.ChecklistEvidenceId AS ChecklistEvidenceId,",
+        "  e.TaskId AS TaskId,",
+        "  e.StoragePath AS StoragePath,",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName",
+        "FROM pm.PMTaskChecklistEvidence e",
+        "INNER JOIN pm.PMTasks t ON t.TaskId = e.TaskId",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE e.ChecklistEvidenceId = @checklistEvidenceId",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const accessRow: TaskAccessRow = {
+    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
+    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
+  };
+  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
+  const storagePath = typeof row.StoragePath === "string" ? row.StoragePath : null;
+  await db
+    .request()
+    .input("checklistEvidenceId", sql.UniqueIdentifier, checklistEvidenceId)
+    .query(["DELETE FROM pm.PMTaskChecklistEvidence WHERE ChecklistEvidenceId = @checklistEvidenceId"].join("\n"));
+
+  if (storagePath && env.EVIDENCE_STORAGE_ROOT) {
+    const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
+    if (resolved) {
+      await fs.promises.unlink(resolved).catch(() => undefined);
+    }
+  }
+
+  res.json({ ok: true });
+});
+
+tasksRouter.post(
+  "/:taskId/evidence/upload",
+  express.raw({ type: "*/*", limit: "50mb" }),
+  async (req, res) => {
+    const taskId = req.params.taskId;
+    if (!z.string().uuid().safeParse(taskId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    if (!env.EVIDENCE_STORAGE_ROOT) {
+      res.status(500).json({ message: "Evidence storage not configured" });
+      return;
+    }
+
+    const fileNameHeader = req.header("x-filename");
+    if (!fileNameHeader) {
+      res.status(400).json({ message: "Missing x-filename" });
+      return;
+    }
+
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf)) {
+      res.status(400).json({ message: "Invalid file body" });
+      return;
+    }
+
+    if (buf.length <= 0) {
+      res.status(400).json({ message: "Empty file" });
+      return;
+    }
+
+    if (buf.length > MAX_UPLOAD_BYTES) {
+      res.status(413).json({ message: "File too large" });
+      return;
+    }
+
+    const ctx = await getTaskStorageContext(taskId);
+    if (!ctx) {
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    if (!canModifyTask(req.user.sub, req.user.roles, ctx.access)) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    const originalName = path.basename(fileNameHeader);
+    const safeName = sanitizeSegment(truncate(originalName, 200));
+    if (!safeName) {
+      res.status(400).json({ message: "Invalid filename" });
+      return;
+    }
+
+    const headerContentType = req.header("content-type");
+    const contentType =
+      headerContentType && headerContentType.trim() ? headerContentType.trim() : inferMimeTypeFromFileName(safeName);
+
+    const now = new Date();
+    const { folder } = computeQuarterFolder(now);
+    const categoryFolder = sanitizeSegment(truncate(ctx.categoryName ?? "Uncategorized", 80));
+    const tag = sanitizeSegment(truncate(ctx.assetTag ?? "no-tag", 80));
+    const assetFolder = sanitizeSegment(truncate(`${ctx.assetName} (${tag})`, 180));
+    const taskFolder = sanitizeSegment(truncate(`Task ${ctx.taskNumber}`, 100));
+
+    const storageRoot = path.resolve(env.EVIDENCE_STORAGE_ROOT);
+    const destAbsInitial = path.join(storageRoot, folder, categoryFolder, assetFolder, "Uploads", taskFolder, safeName);
+    const destAbs = await resolveUniqueDestPath(destAbsInitial);
+    const storageRel = path.relative(storageRoot, destAbs);
+    if (storageRel.startsWith("..")) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    await fs.promises.mkdir(path.dirname(destAbs), { recursive: true });
+    await fs.promises.writeFile(destAbs, buf);
+
+    const db = await getDb();
+    const inserted = await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("fileName", sql.NVarChar(256), safeName)
+      .input("contentType", sql.NVarChar(128), contentType ?? null)
+      .input("sizeBytes", sql.BigInt, buf.length)
+      .input("uri", sql.NVarChar(1024), "stored")
+      .input("storagePath", sql.NVarChar(1024), storageRel)
+      .input("uploadedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "INSERT INTO pm.PMTaskEvidence (",
+          "  TaskId, FileName, ContentType, SizeBytes, Uri, StoragePath, UploadedByUserId",
+          ")",
+          "OUTPUT inserted.EvidenceId AS EvidenceId",
+          "VALUES (",
+          "  @taskId, @fileName, @contentType, @sizeBytes, @uri, @storagePath, @uploadedByUserId",
+          ")",
+        ].join("\n"),
+      );
+
+    const evidenceId = inserted.recordset[0]?.EvidenceId as string | undefined;
+    if (!evidenceId) {
+      res.status(500).json({ message: "Failed to create evidence" });
+      return;
+    }
+
+    res.status(201).json({ id: evidenceId });
+  },
+);
+
+tasksRouter.post(
+  "/:taskId/checklist-items/:templateChecklistItemId/evidence/upload",
+  express.raw({ type: "*/*", limit: "50mb" }),
+  async (req, res) => {
+    const taskId = req.params.taskId;
+    const templateChecklistItemId = req.params.templateChecklistItemId;
+    if (!z.string().uuid().safeParse(taskId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+    if (!z.string().uuid().safeParse(templateChecklistItemId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    if (!env.EVIDENCE_STORAGE_ROOT) {
+      res.status(500).json({ message: "Evidence storage not configured" });
+      return;
+    }
+
+    const fileNameHeader = req.header("x-filename");
+    if (!fileNameHeader) {
+      res.status(400).json({ message: "Missing x-filename" });
+      return;
+    }
+
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf)) {
+      res.status(400).json({ message: "Invalid file body" });
+      return;
+    }
+
+    if (buf.length <= 0) {
+      res.status(400).json({ message: "Empty file" });
+      return;
+    }
+
+    if (buf.length > MAX_UPLOAD_BYTES) {
+      res.status(413).json({ message: "File too large" });
+      return;
+    }
+
+    const ctx = await getTaskStorageContext(taskId);
+    if (!ctx) {
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    if (!canModifyTask(req.user.sub, req.user.roles, ctx.access)) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    const db = await getDb();
+    const itemResult = await db
+      .request()
+      .input("templateChecklistItemId", sql.UniqueIdentifier, templateChecklistItemId)
+      .input("templateId", sql.UniqueIdentifier, ctx.templateId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  i.TemplateChecklistItemId AS TemplateChecklistItemId,",
+          "  i.SortOrder AS SortOrder,",
+          "  i.ItemText AS ItemText",
+          "FROM pm.PMTemplateChecklistItems i",
+          "WHERE i.TemplateChecklistItemId = @templateChecklistItemId",
+          "  AND i.TemplateId = @templateId",
+        ].join("\n"),
+      );
+
+    const itemRow = itemResult.recordset[0] as Record<string, unknown> | undefined;
+    const sortOrder = typeof itemRow?.SortOrder === "number" ? itemRow.SortOrder : Number(itemRow?.SortOrder);
+    const itemText = typeof itemRow?.ItemText === "string" ? itemRow.ItemText : null;
+    if (!Number.isFinite(sortOrder) || itemText === null) {
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    const originalName = path.basename(fileNameHeader);
+    const safeName = sanitizeSegment(truncate(originalName, 200));
+    if (!safeName) {
+      res.status(400).json({ message: "Invalid filename" });
+      return;
+    }
+
+    const headerContentType = req.header("content-type");
+    const contentType =
+      headerContentType && headerContentType.trim() ? headerContentType.trim() : inferMimeTypeFromFileName(safeName);
+
+    const now = new Date();
+    const { folder } = computeQuarterFolder(now);
+    const categoryFolder = sanitizeSegment(truncate(ctx.categoryName ?? "Uncategorized", 80));
+    const tag = sanitizeSegment(truncate(ctx.assetTag ?? "no-tag", 80));
+    const assetFolder = sanitizeSegment(truncate(`${ctx.assetName} (${tag})`, 180));
+    const taskFolder = sanitizeSegment(truncate(`Task ${ctx.taskNumber}`, 100));
+    const itemFolder = sanitizeSegment(truncate(`Checklist ${sortOrder + 1} ${itemText}`, 120));
+
+    const storageRoot = path.resolve(env.EVIDENCE_STORAGE_ROOT);
+    const destAbsInitial = path.join(
+      storageRoot,
+      folder,
+      categoryFolder,
+      assetFolder,
+      "Uploads",
+      taskFolder,
+      "Checklist",
+      itemFolder,
+      safeName,
+    );
+    const destAbs = await resolveUniqueDestPath(destAbsInitial);
+    const storageRel = path.relative(storageRoot, destAbs);
+    if (storageRel.startsWith("..")) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    await fs.promises.mkdir(path.dirname(destAbs), { recursive: true });
+    await fs.promises.writeFile(destAbs, buf);
+
+    const inserted = await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("templateChecklistItemId", sql.UniqueIdentifier, templateChecklistItemId)
+      .input("fileName", sql.NVarChar(256), safeName)
+      .input("contentType", sql.NVarChar(128), contentType ?? null)
+      .input("sizeBytes", sql.BigInt, buf.length)
+      .input("uri", sql.NVarChar(1024), "stored")
+      .input("storagePath", sql.NVarChar(1024), storageRel)
+      .input("uploadedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "INSERT INTO pm.PMTaskChecklistEvidence (",
+          "  TaskId, TemplateChecklistItemId, FileName, ContentType, SizeBytes, Uri, StoragePath, UploadedByUserId",
+          ")",
+          "OUTPUT inserted.ChecklistEvidenceId AS ChecklistEvidenceId",
+          "VALUES (",
+          "  @taskId, @templateChecklistItemId, @fileName, @contentType, @sizeBytes, @uri, @storagePath, @uploadedByUserId",
+          ")",
+        ].join("\n"),
+      );
+
+    const checklistEvidenceId = inserted.recordset[0]?.ChecklistEvidenceId as string | undefined;
+    if (!checklistEvidenceId) {
+      res.status(500).json({ message: "Failed to create evidence" });
+      return;
+    }
+
+    res.status(201).json({ id: checklistEvidenceId });
+  },
+);
+
+tasksRouter.get( "/:taskId", async (req, res) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) {
     res.status(400).json({ message: "Invalid request" });
@@ -457,8 +1041,73 @@ tasksRouter.get("/:taskId", async (req, res) => {
       ].join("\n"),
     );
 
+  const checklistEvidenceResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT",
+        "  e.ChecklistEvidenceId AS ChecklistEvidenceId,",
+        "  e.TemplateChecklistItemId AS TemplateChecklistItemId,",
+        "  e.FileName AS FileName,",
+        "  e.ContentType AS ContentType,",
+        "  e.SizeBytes AS SizeBytes,",
+        "  e.Uri AS Uri,",
+        "  e.UploadedAt AS UploadedAt,",
+        "  e.UploadedByUserId AS UploadedByUserId,",
+        "  u.Username AS UploadedByUsername,",
+        "  u.DisplayName AS UploadedByDisplayName",
+        "FROM pm.PMTaskChecklistEvidence e",
+        "LEFT JOIN pm.Users u ON u.UserId = e.UploadedByUserId",
+        "WHERE e.TaskId = @taskId",
+        "ORDER BY e.UploadedAt DESC",
+      ].join("\n"),
+    );
+
   const checklistRows = checklistResult.recordset as Array<Record<string, unknown>>;
   const evidenceRows = evidenceResult.recordset as Array<Record<string, unknown>>;
+  const checklistEvidenceRows = checklistEvidenceResult.recordset as Array<Record<string, unknown>>;
+
+  const checklistEvidenceByItemId = new Map<
+    string,
+    Array<{
+      id: string;
+      templateChecklistItemId: string;
+      fileName: string | null;
+      contentType: string | null;
+      sizeBytes: number | null;
+      uri: string;
+      uploadedAt: unknown;
+      uploadedBy: { userId: string; username: string | null; displayName: string | null } | null;
+    }>
+  >();
+
+  for (const r of checklistEvidenceRows) {
+    const id = typeof r.ChecklistEvidenceId === "string" ? r.ChecklistEvidenceId : null;
+    const itemId = typeof r.TemplateChecklistItemId === "string" ? r.TemplateChecklistItemId : null;
+    const uri = typeof r.Uri === "string" ? r.Uri : null;
+    if (!id || !itemId || !uri) continue;
+    const next = {
+      id,
+      templateChecklistItemId: itemId,
+      fileName: typeof r.FileName === "string" ? r.FileName : null,
+      contentType: typeof r.ContentType === "string" ? r.ContentType : null,
+      sizeBytes: typeof r.SizeBytes === "number" ? r.SizeBytes : r.SizeBytes ? Number(r.SizeBytes) : null,
+      uri,
+      uploadedAt: r.UploadedAt,
+      uploadedBy:
+        typeof r.UploadedByUserId === "string"
+          ? {
+              userId: r.UploadedByUserId,
+              username: typeof r.UploadedByUsername === "string" ? r.UploadedByUsername : null,
+              displayName: typeof r.UploadedByDisplayName === "string" ? r.UploadedByDisplayName : null,
+            }
+          : null,
+    };
+    const list = checklistEvidenceByItemId.get(itemId);
+    if (list) list.push(next);
+    else checklistEvidenceByItemId.set(itemId, [next]);
+  }
 
   res.json({
     id: taskRow.TaskId,
@@ -522,6 +1171,7 @@ tasksRouter.get("/:taskId", async (req, res) => {
         requiresNotes: r.RequiresNotes,
         requiresPassFail: r.RequiresPassFail,
         isActive: r.IsActive,
+        evidence: checklistEvidenceByItemId.get(String(r.TemplateChecklistItemId)) ?? [],
         result: r.TaskChecklistResultId
           ? {
               id: r.TaskChecklistResultId,

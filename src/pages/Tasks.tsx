@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -33,9 +33,15 @@ import {
 import {
   apiAddTaskEvidence,
   apiCompleteTask,
+  apiDeleteChecklistEvidence,
+  apiDeleteEvidence,
+  apiDownloadChecklistEvidence,
+  apiDownloadEvidence,
   apiGetTask,
   apiListTasks,
   apiStartTask,
+  apiUploadTaskChecklistEvidenceFile,
+  apiUploadTaskEvidenceFile,
   type CompleteTaskChecklistResultInput,
   type TaskListItem,
 } from "@/lib/api";
@@ -370,6 +376,32 @@ const TaskDetailDialog = (props: {
     Record<string, { outcome: 0 | 1 | 2 | null; notes: string }>
   >({});
   const [evidenceUri, setEvidenceUri] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState<string | null>(null);
+  const [previewContentType, setPreviewContentType] = useState<string | null>(null);
+  const [previewKind, setPreviewKind] = useState<"task" | "checklist">("task");
+  const [previewId, setPreviewId] = useState<string | null>(null);
+
+  const taskFileInputRef = useRef<HTMLInputElement | null>(null);
+  const checklistFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingChecklistItemId, setPendingChecklistItemId] = useState<string | null>(null);
+
+  const closePreview = useCallback(() => {
+    setPreviewOpen(false);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPreviewFileName(null);
+    setPreviewContentType(null);
+    setPreviewId(null);
+  }, [previewUrl]);
+
+  useEffect(() => {
+    if (previewOpen) return;
+    if (!previewUrl) return;
+    URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+  }, [previewOpen, previewUrl]);
 
   useEffect(() => {
     if (!props.open) return;
@@ -384,7 +416,118 @@ const TaskDetailDialog = (props: {
     }
     setChecklistDraft(next);
     setEvidenceUri("");
+    closePreview();
+    setPendingChecklistItemId(null);
   }, [props.open, task?.checklistItems]);
+
+  const uploadTaskEvidenceMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!props.taskId) throw new Error("No task selected");
+      if (file.size > 50 * 1024 * 1024) throw new Error("File too large (max 50MB)");
+      return apiUploadTaskEvidenceFile({ taskId: props.taskId, file });
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "File uploaded" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Upload failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const uploadChecklistEvidenceMutation = useMutation({
+    mutationFn: async (input: { templateChecklistItemId: string; file: File }) => {
+      if (!props.taskId) throw new Error("No task selected");
+      if (input.file.size > 50 * 1024 * 1024) throw new Error("File too large (max 50MB)");
+      return apiUploadTaskChecklistEvidenceFile({
+        taskId: props.taskId,
+        templateChecklistItemId: input.templateChecklistItemId,
+        file: input.file,
+      });
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "File uploaded" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Upload failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const openEvidencePreview = useCallback(
+    async (input: {
+      kind: "task" | "checklist";
+      id: string;
+      uri: string;
+      fileName: string | null;
+      contentType: string | null;
+    }) => {
+      const isInternal = input.uri === "imported" || input.uri === "stored" || input.uri === "uploaded";
+      if (!isInternal) {
+        const target = input.uri.trim();
+        if (target) window.open(target, "_blank", "noreferrer");
+        return;
+      }
+
+      const downloaded =
+        input.kind === "task"
+          ? await apiDownloadEvidence({ evidenceId: input.id })
+          : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id });
+      const url = URL.createObjectURL(downloaded.blob);
+      setPreviewKind(input.kind);
+      setPreviewId(input.id);
+      setPreviewUrl(url);
+      setPreviewFileName(downloaded.fileName ?? input.fileName);
+      setPreviewContentType(downloaded.contentType ?? input.contentType);
+      setPreviewOpen(true);
+    },
+    [],
+  );
+
+  const downloadEvidence = useCallback(
+    async (input: { kind: "task" | "checklist"; id: string }) => {
+      const downloaded =
+        input.kind === "task"
+          ? await apiDownloadEvidence({ evidenceId: input.id, download: true })
+          : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id, download: true });
+      const url = URL.createObjectURL(downloaded.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = downloaded.fileName ?? "download";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    },
+    [],
+  );
+
+  const deleteEvidenceMutation = useMutation({
+    mutationFn: async (input: { kind: "task" | "checklist"; id: string }) => {
+      if (input.kind === "task") return apiDeleteEvidence({ evidenceId: input.id });
+      return apiDeleteChecklistEvidence({ checklistEvidenceId: input.id });
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "Attachment deleted" });
+      closePreview();
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Delete failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
 
   const completeMutation = useMutation({
     mutationFn: async () => {
@@ -611,6 +754,75 @@ const TaskDetailDialog = (props: {
                                 className="mt-1 bg-muted/50"
                               />
                           </div>
+
+                          <div className="mt-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs text-muted-foreground">Attachments</p>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={uploadChecklistEvidenceMutation.isPending}
+                                onClick={() => {
+                                  setPendingChecklistItemId(item.id);
+                                  checklistFileInputRef.current?.click();
+                                }}
+                              >
+                                Attach file
+                              </Button>
+                            </div>
+
+                            {item.evidence.length === 0 ? (
+                              <div className="text-xs text-muted-foreground mt-2">No attachments.</div>
+                            ) : (
+                              <div className="space-y-2 mt-2">
+                                {item.evidence.map((e) => (
+                                  <div
+                                    key={e.id}
+                                    className="rounded-md border border-border bg-muted/30 p-2 flex items-center justify-between gap-3"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="text-xs text-foreground truncate">{e.fileName ?? e.uri}</div>
+                                      <div className="text-[11px] text-muted-foreground truncate">
+                                        {e.uploadedBy?.displayName ?? e.uploadedBy?.username ?? ""}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          openEvidencePreview({
+                                            kind: "checklist",
+                                            id: e.id,
+                                            uri: e.uri,
+                                            fileName: e.fileName,
+                                            contentType: e.contentType,
+                                          })
+                                        }
+                                      >
+                                        Preview
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => downloadEvidence({ kind: "checklist", id: e.id })}
+                                      >
+                                        Download
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        disabled={deleteEvidenceMutation.isPending}
+                                        onClick={() => deleteEvidenceMutation.mutate({ kind: "checklist", id: e.id })}
+                                      >
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))}
                   </div>
@@ -625,20 +837,33 @@ const TaskDetailDialog = (props: {
                   <h3 className="text-sm font-semibold text-foreground mb-2">Evidence</h3>
                   <div className="glass rounded-lg p-3">
                     <div className="flex flex-col md:flex-row gap-3">
-                      <Input
-                        value={evidenceUri}
-                        onChange={(e) => setEvidenceUri(e.target.value)}
-                        placeholder="Evidence URI (e.g., s3://…, https://…, file://…)"
-                        className="bg-muted/50"
-                      />
                       <Button
                         variant="outline"
                         className="shrink-0"
-                        disabled={addEvidenceMutation.isPending}
-                        onClick={() => addEvidenceMutation.mutate()}
+                        disabled={uploadTaskEvidenceMutation.isPending}
+                        onClick={() => taskFileInputRef.current?.click()}
                       >
-                        Add
+                        Upload file
                       </Button>
+
+                      <div className="flex-1" />
+
+                      <div className="flex gap-2">
+                        <Input
+                          value={evidenceUri}
+                          onChange={(e) => setEvidenceUri(e.target.value)}
+                          placeholder="Evidence link (optional)"
+                          className="bg-muted/50"
+                        />
+                        <Button
+                          variant="outline"
+                          className="shrink-0"
+                          disabled={addEvidenceMutation.isPending}
+                          onClick={() => addEvidenceMutation.mutate()}
+                        >
+                          Add link
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   {task.evidence.length === 0 ? (
@@ -654,17 +879,131 @@ const TaskDetailDialog = (props: {
                               {e.sizeBytes !== null ? ` • ${e.sizeBytes} bytes` : ""}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <p className="text-xs text-muted-foreground">Uploaded</p>
-                            <p className="text-sm text-foreground mt-1">
-                              {format(parseISO(e.uploadedAt), "yyyy-MM-dd HH:mm")}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                openEvidencePreview({
+                                  kind: "task",
+                                  id: e.id,
+                                  uri: e.uri,
+                                  fileName: e.fileName,
+                                  contentType: e.contentType,
+                                })
+                              }
+                            >
+                              Preview
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => downloadEvidence({ kind: "task", id: e.id })}
+                            >
+                              Download
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={deleteEvidenceMutation.isPending}
+                              onClick={() => deleteEvidenceMutation.mutate({ kind: "task", id: e.id })}
+                            >
+                              Delete
+                            </Button>
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
+
+                <Dialog open={previewOpen} onOpenChange={(o) => (o ? setPreviewOpen(true) : closePreview())}>
+                  <DialogContent className="max-w-4xl">
+                    <DialogHeader>
+                      <DialogTitle className="truncate">
+                        {previewFileName ?? (previewKind === "task" ? "Evidence" : "Checklist attachment")}
+                      </DialogTitle>
+                    </DialogHeader>
+
+                    {previewUrl ? (
+                      (previewContentType ?? "").startsWith("application/pdf") ||
+                      (previewFileName ?? "").toLowerCase().endsWith(".pdf") ? (
+                        <iframe title="Preview" src={previewUrl} className="w-full h-[70vh] rounded-md" />
+                      ) : (previewContentType ?? "").startsWith("image/") ? (
+                        <div className="h-[70vh] flex items-center justify-center bg-background rounded-md">
+                          <img src={previewUrl} alt={previewFileName ?? "preview"} className="max-h-[70vh] max-w-full rounded-md" />
+                        </div>
+                      ) : (previewContentType ?? "").startsWith("video/") ? (
+                        <div className="h-[70vh] flex items-center justify-center bg-background rounded-md">
+                          <video src={previewUrl} controls className="max-h-[70vh] max-w-full rounded-md" />
+                        </div>
+                      ) : (previewContentType ?? "").startsWith("audio/") ? (
+                        <div className="h-[70vh] flex flex-col items-center justify-center gap-4 bg-background rounded-md p-6">
+                          <div className="text-sm text-muted-foreground truncate w-full text-center">
+                            {previewFileName ?? "Audio"}
+                          </div>
+                          <audio src={previewUrl} controls className="w-full" />
+                        </div>
+                      ) : (
+                        <div className="h-[70vh] flex items-center justify-center bg-background rounded-md p-6">
+                          <div className="text-sm text-muted-foreground">Preview not available for this file type.</div>
+                        </div>
+                      )
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Loading preview…</div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="outline" onClick={() => closePreview()}>
+                        Close
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          if (!previewId) return;
+                          deleteEvidenceMutation.mutate({ kind: previewKind, id: previewId });
+                        }}
+                        disabled={!previewId || deleteEvidenceMutation.isPending}
+                      >
+                        Delete
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          if (!previewId) return;
+                          void downloadEvidence({ kind: previewKind, id: previewId });
+                        }}
+                        disabled={!previewId}
+                      >
+                        Download
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <input
+                  ref={taskFileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    e.target.value = "";
+                    if (!file) return;
+                    uploadTaskEvidenceMutation.mutate(file);
+                  }}
+                />
+                <input
+                  ref={checklistFileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    const targetItemId = pendingChecklistItemId;
+                    e.target.value = "";
+                    setPendingChecklistItemId(null);
+                    if (!file || !targetItemId) return;
+                    uploadChecklistEvidenceMutation.mutate({ templateChecklistItemId: targetItemId, file });
+                  }}
+                />
               </>
             ) : null}
           </div>

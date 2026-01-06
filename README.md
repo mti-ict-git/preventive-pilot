@@ -89,6 +89,12 @@ Required environment variables:
 - Backend base URL: `http://localhost:3001`
 - Configure frontend API base URL with `VITE_API_BASE_URL` (defaults to same-origin in production, `http://localhost:3001` in dev)
 
+## Evidence attachments
+
+- Configure server-side file storage with `EVIDENCE_STORAGE_ROOT`.
+- Evidence uploads are stored under the existing `Qx YYYY` folder structure.
+- Max upload size is 50MB per file.
+
 ## Docker (web + api)
 
 This repo ships a docker-compose setup that serves the frontend and proxies API requests via the same origin.
