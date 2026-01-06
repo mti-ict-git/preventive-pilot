@@ -646,10 +646,14 @@ export type OverdueReportResponse = {
 export const apiGetOverdueReport = async (input: {
   page?: number;
   pageSize?: number;
+  locationId?: string;
+  categoryId?: string;
 }): Promise<OverdueReportResponse> => {
   const params = new URLSearchParams();
   if (input.page) params.set("page", String(input.page));
   if (input.pageSize) params.set("pageSize", String(input.pageSize));
+  if (input.locationId) params.set("locationId", input.locationId);
+  if (input.categoryId) params.set("categoryId", input.categoryId);
   const query = params.toString();
   return apiFetchJson<OverdueReportResponse>(`/api/reports/overdue${query ? `?${query}` : ""}`);
 };
@@ -664,9 +668,87 @@ export type ComplianceReportResponse = {
   complianceRate: number | null;
 };
 
-export const apiGetComplianceReport = async (input: { from: string; to: string }): Promise<ComplianceReportResponse> => {
+export const apiGetComplianceReport = async (input: {
+  from: string;
+  to: string;
+  locationId?: string;
+  categoryId?: string;
+}): Promise<ComplianceReportResponse> => {
   const params = new URLSearchParams({ from: input.from, to: input.to });
+  if (input.locationId) params.set("locationId", input.locationId);
+  if (input.categoryId) params.set("categoryId", input.categoryId);
   return apiFetchJson<ComplianceReportResponse>(`/api/reports/compliance?${params.toString()}`);
+};
+
+const apiFetchBlob = async (path: string): Promise<DownloadEvidenceResponse> => {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: buildAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const data = (await res.json()) as unknown;
+      const message =
+        typeof data === "object" && data !== null && "message" in data && typeof data.message === "string"
+          ? data.message
+          : "Request failed";
+      throw new ApiError(message, res.status);
+    }
+    throw new ApiError("Request failed", res.status);
+  }
+
+  const blob = await res.blob();
+  const cd = res.headers.get("content-disposition");
+  const fileName = parseFilenameFromContentDisposition(cd);
+  const contentType = res.headers.get("content-type");
+  return { blob, fileName, contentType };
+};
+
+export const apiDownloadOverdueReportCsv = async (input: {
+  locationId?: string;
+  categoryId?: string;
+}): Promise<DownloadEvidenceResponse> => {
+  const params = new URLSearchParams();
+  if (input.locationId) params.set("locationId", input.locationId);
+  if (input.categoryId) params.set("categoryId", input.categoryId);
+  const query = params.toString();
+  return apiFetchBlob(`/api/reports/overdue/export.csv${query ? `?${query}` : ""}`);
+};
+
+export const apiDownloadComplianceReportCsv = async (input: {
+  from: string;
+  to: string;
+  locationId?: string;
+  categoryId?: string;
+}): Promise<DownloadEvidenceResponse> => {
+  const params = new URLSearchParams({ from: input.from, to: input.to });
+  if (input.locationId) params.set("locationId", input.locationId);
+  if (input.categoryId) params.set("categoryId", input.categoryId);
+  return apiFetchBlob(`/api/reports/compliance/export.csv?${params.toString()}`);
+};
+
+export const apiDownloadSystemLogsCsv = async (input: {
+  from: string;
+  to: string;
+  level?: string;
+  maxRows?: number;
+}): Promise<DownloadEvidenceResponse> => {
+  const params = new URLSearchParams({ from: input.from, to: input.to });
+  if (input.level) params.set("level", input.level);
+  if (input.maxRows !== undefined) params.set("maxRows", String(input.maxRows));
+  return apiFetchBlob(`/api/reports/system-logs/export.csv?${params.toString()}`);
+};
+
+export const apiDownloadAssetsWithoutPmCsv = async (input: {
+  locationId?: string;
+  categoryId?: string;
+}): Promise<DownloadEvidenceResponse> => {
+  const params = new URLSearchParams();
+  if (input.locationId) params.set("locationId", input.locationId);
+  if (input.categoryId) params.set("categoryId", input.categoryId);
+  const query = params.toString();
+  return apiFetchBlob(`/api/reports/assets-without-pm/export.csv${query ? `?${query}` : ""}`);
 };
 
 export type LookupRole = {
@@ -680,9 +762,16 @@ export type LookupAssetCategory = {
   isActive: boolean;
 };
 
+export type LookupLocation = {
+  id: string;
+  name: string;
+  isActive: boolean;
+};
+
 export type LookupsResponse = {
   roles: LookupRole[];
   assetCategories: LookupAssetCategory[];
+  locations: LookupLocation[];
 };
 
 export const apiGetLookups = async (): Promise<LookupsResponse> => {
@@ -921,6 +1010,23 @@ export type SystemStatusResponse = {
     snipeSyncEnabled: boolean;
     snipeSyncIntervalMinutes: number;
   };
+  notifications?: {
+    msGraph?: {
+      enabled: boolean;
+      senderEmail: string | null;
+      useLoggedInUserAsSender: boolean;
+      scope: string[];
+      defaultToRecipients: string[];
+      defaultCcRecipients: string[];
+      defaultBccRecipients: string[];
+      emailSubjectTemplate: string | null;
+      emailBodyTemplate: string | null;
+      lastConnectionTestAt: string | null;
+      tenantId: string | null;
+      clientId: string | null;
+      clientSecretConfigured: boolean;
+    };
+  };
   snipeIt: {
     configured: boolean;
     baseUrl: string | null;
@@ -964,11 +1070,42 @@ export type SnipeItSettingsResponse = {
   syncIntervalMinutes: number;
 };
 
+export type MicrosoftGraphSettingsResponse = {
+  tenantId: string | null;
+  clientId: string | null;
+  clientSecretConfigured: boolean;
+  scope: string[];
+  senderEmail: string | null;
+  useLoggedInUserAsSender: boolean;
+  defaultToRecipients: string[];
+  defaultCcRecipients: string[];
+  defaultBccRecipients: string[];
+  emailSubjectTemplate: string | null;
+  emailBodyTemplate: string | null;
+  enabled: boolean;
+  lastConnectionTestAt: string | null;
+};
+
 export type UpdateSnipeItSettingsInput = {
   baseUrl: string | null;
   apiToken?: string | null;
   autoSyncEnabled: boolean;
   syncIntervalMinutes: number;
+};
+
+export type UpdateMicrosoftGraphSettingsInput = {
+  tenantId: string | null;
+  clientId: string | null;
+  clientSecret?: string | null;
+  scope: string[];
+  senderEmail: string | null;
+  useLoggedInUserAsSender: boolean;
+  defaultToRecipients: string[];
+  defaultCcRecipients: string[];
+  defaultBccRecipients: string[];
+  emailSubjectTemplate: string | null;
+  emailBodyTemplate: string | null;
+  enabled: boolean;
 };
 
 export const apiGetSnipeItSettings = async (): Promise<SnipeItSettingsResponse> => {
@@ -981,6 +1118,28 @@ export const apiUpdateSnipeItSettings = async (input: UpdateSnipeItSettingsInput
 
 export const apiTestSnipeItSettings = async (input?: Partial<UpdateSnipeItSettingsInput>): Promise<{ ok: true }> => {
   return apiFetchJson<{ ok: true }>("/api/system/snipeit-settings/test", input ? { method: "POST", body: input } : { method: "POST" });
+};
+
+export const apiGetMicrosoftGraphSettings = async (): Promise<MicrosoftGraphSettingsResponse> => {
+  return apiFetchJson<MicrosoftGraphSettingsResponse>("/api/system/microsoft-graph-settings");
+};
+
+export const apiUpdateMicrosoftGraphSettings = async (
+  input: UpdateMicrosoftGraphSettingsInput,
+): Promise<MicrosoftGraphSettingsResponse> => {
+  return apiFetchJson<MicrosoftGraphSettingsResponse>("/api/system/microsoft-graph-settings", {
+    method: "PUT",
+    body: input,
+  });
+};
+
+export const apiTestMicrosoftGraphSettings = async (
+  input?: Partial<UpdateMicrosoftGraphSettingsInput>,
+): Promise<{ ok: true } | { ok: true; accessTokenPresent: boolean; lastConnectionTestAt: string }> => {
+  return apiFetchJson<{ ok: true } | { ok: true; accessTokenPresent: boolean; lastConnectionTestAt: string }>(
+    "/api/system/microsoft-graph-settings/test",
+    input ? { method: "POST", body: input } : { method: "POST" },
+  );
 };
 
 export type SystemLogEntry = {

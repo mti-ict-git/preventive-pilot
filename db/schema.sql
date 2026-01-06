@@ -487,6 +487,29 @@ BEGIN
   );
 END;
 
+IF OBJECT_ID(N'pm.MicrosoftGraphSettings', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.MicrosoftGraphSettings (
+    MicrosoftGraphSettingsId uniqueidentifier NOT NULL CONSTRAINT DF_pm_MicrosoftGraphSettings_Id DEFAULT (newsequentialid()),
+    TenantId nvarchar(64) NULL,
+    ClientId nvarchar(64) NULL,
+    ClientSecret nvarchar(2048) NULL,
+    ScopeJson nvarchar(max) NULL,
+    SenderEmail nvarchar(256) NULL,
+    UseLoggedInUserAsSender bit NOT NULL CONSTRAINT DF_pm_MicrosoftGraphSettings_UseLoggedInUserAsSender DEFAULT (0),
+    DefaultToRecipientsJson nvarchar(max) NULL,
+    DefaultCcRecipientsJson nvarchar(max) NULL,
+    DefaultBccRecipientsJson nvarchar(max) NULL,
+    EmailSubjectTemplate nvarchar(512) NULL,
+    EmailBodyTemplate nvarchar(max) NULL,
+    Enabled bit NOT NULL CONSTRAINT DF_pm_MicrosoftGraphSettings_Enabled DEFAULT (0),
+    LastConnectionTestAt datetime2(0) NULL,
+    CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_MicrosoftGraphSettings_CreatedAt DEFAULT (sysutcdatetime()),
+    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_MicrosoftGraphSettings_UpdatedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_MicrosoftGraphSettings PRIMARY KEY CLUSTERED (MicrosoftGraphSettingsId)
+  );
+END;
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_Assets_CategoryId' AND object_id = OBJECT_ID(N'pm.Assets'))
 BEGIN
   CREATE INDEX IX_pm_Assets_CategoryId ON pm.Assets(CategoryId);

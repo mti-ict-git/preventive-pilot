@@ -87,6 +87,19 @@ const EnvSchema = z.object({
   EVIDENCE_IMPORT_ROOT: z.string().optional(),
   EVIDENCE_STORAGE_ROOT: z.string().optional(),
   EVIDENCE_IMPORT_MAX_FILES: z.string().optional().default("2000").pipe(numberFromString).pipe(z.number().int().min(1)),
+
+  MS_GRAPH_TENANT_ID: z.string().optional(),
+  MS_GRAPH_CLIENT_ID: z.string().optional(),
+  MS_GRAPH_CLIENT_SECRET: z.string().optional(),
+  MS_GRAPH_SCOPE: z.string().optional(),
+  MS_GRAPH_SENDER_EMAIL: z.string().optional(),
+  MS_GRAPH_DEFAULT_TO: z.string().optional(),
+  MS_GRAPH_DEFAULT_CC: z.string().optional(),
+  MS_GRAPH_DEFAULT_BCC: z.string().optional(),
+  MS_GRAPH_EMAIL_SUBJECT_TEMPLATE: z.string().optional(),
+  MS_GRAPH_EMAIL_BODY_TEMPLATE: z.string().optional(),
+  MS_GRAPH_USE_LOGGED_IN_USER_AS_SENDER: z.string().optional().default("true").pipe(booleanFromString).pipe(z.boolean()),
+  MS_GRAPH_ENABLED: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

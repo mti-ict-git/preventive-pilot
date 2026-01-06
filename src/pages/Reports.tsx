@@ -2,13 +2,11 @@ import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart3,
   Download,
   FileText,
   Calendar as CalendarIcon,
   TrendingUp,
   AlertTriangle,
-  CheckCircle,
   Server,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
@@ -24,13 +22,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { endOfDay, format, parseISO, startOfDay, subDays } from "date-fns";
-import { apiGetComplianceReport, apiGetOverdueReport, apiGetSystemLogs } from "@/lib/api";
+import {
+  ApiError,
+  apiDownloadAssetsWithoutPmCsv,
+  apiDownloadComplianceReportCsv,
+  apiDownloadOverdueReportCsv,
+  apiDownloadSystemLogsCsv,
+  apiGetComplianceReport,
+  apiGetLookups,
+  apiGetOverdueReport,
+  apiGetSystemLogs,
+} from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import type { DateRange } from "react-day-picker";
 
 const Reports = () => {
   const [periodKey, setPeriodKey] = useState("last30");
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+  const [exporting, setExporting] = useState<{ compliance: boolean; overdue: boolean; logs: boolean; assetsWithoutPm: boolean }>({
+    compliance: false,
+    overdue: false,
+    logs: false,
+    assetsWithoutPm: false,
+  });
 
   const setPeriod = (next: string) => {
     setPeriodKey(next);
@@ -88,15 +104,24 @@ const Reports = () => {
     };
   }, [periodKey, customRange?.from, customRange?.to]);
 
+  const locationId = selectedLocationId === "all" ? undefined : selectedLocationId;
+  const categoryId = selectedCategoryId === "all" ? undefined : selectedCategoryId;
+
+  const lookupsQuery = useQuery({
+    queryKey: ["lookups"],
+    queryFn: apiGetLookups,
+    staleTime: 5 * 60_000,
+  });
+
   const complianceQuery = useQuery({
-    queryKey: ["reports", "compliance", from, to],
-    queryFn: () => apiGetComplianceReport({ from, to }),
+    queryKey: ["reports", "compliance", from, to, locationId ?? null, categoryId ?? null],
+    queryFn: () => apiGetComplianceReport({ from, to, locationId, categoryId }),
     staleTime: 30_000,
   });
 
   const overdueQuery = useQuery({
-    queryKey: ["reports", "overdue"],
-    queryFn: () => apiGetOverdueReport({ page: 1, pageSize: 50 }),
+    queryKey: ["reports", "overdue", locationId ?? null, categoryId ?? null],
+    queryFn: () => apiGetOverdueReport({ page: 1, pageSize: 50, locationId, categoryId }),
     staleTime: 30_000,
   });
 
@@ -134,8 +159,83 @@ const Reports = () => {
     },
   ];
 
-  const reportTypes = [
+  const downloadBlob = (input: { blob: Blob; fileName: string | null }, fallbackName: string) => {
+    const url = URL.createObjectURL(input.blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = input.fileName ?? fallbackName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const exportComplianceCsv = async () => {
+    try {
+      setExporting((prev) => ({ ...prev, compliance: true }));
+      const res = await apiDownloadComplianceReportCsv({ from, to, locationId, categoryId });
+      downloadBlob(res, `compliance-summary_${from.slice(0, 10)}_${to.slice(0, 10)}.csv`);
+      toast({ title: "Exported", description: "Compliance CSV downloaded." });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Export failed";
+      toast({ title: "Export failed", description: message, variant: "destructive" });
+    } finally {
+      setExporting((prev) => ({ ...prev, compliance: false }));
+    }
+  };
+
+  const exportOverdueCsv = async () => {
+    try {
+      setExporting((prev) => ({ ...prev, overdue: true }));
+      const res = await apiDownloadOverdueReportCsv({ locationId, categoryId });
+      downloadBlob(res, `overdue-tasks_${new Date().toISOString().slice(0, 10)}.csv`);
+      toast({ title: "Exported", description: "Overdue tasks CSV downloaded." });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Export failed";
+      toast({ title: "Export failed", description: message, variant: "destructive" });
+    } finally {
+      setExporting((prev) => ({ ...prev, overdue: false }));
+    }
+  };
+
+  const exportLogsCsv = async () => {
+    try {
+      setExporting((prev) => ({ ...prev, logs: true }));
+      const res = await apiDownloadSystemLogsCsv({ from, to, maxRows: 5000 });
+      downloadBlob(res, `system-logs_${from.slice(0, 10)}_${to.slice(0, 10)}.csv`);
+      toast({ title: "Exported", description: "System logs CSV downloaded." });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Export failed";
+      toast({ title: "Export failed", description: message, variant: "destructive" });
+    } finally {
+      setExporting((prev) => ({ ...prev, logs: false }));
+    }
+  };
+
+  const exportAssetsWithoutPmCsv = async () => {
+    try {
+      setExporting((prev) => ({ ...prev, assetsWithoutPm: true }));
+      const res = await apiDownloadAssetsWithoutPmCsv({ locationId, categoryId });
+      downloadBlob(res, `assets-without-pm_${new Date().toISOString().slice(0, 10)}.csv`);
+      toast({ title: "Exported", description: "Assets without PM CSV downloaded." });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Export failed";
+      toast({ title: "Export failed", description: message, variant: "destructive" });
+    } finally {
+      setExporting((prev) => ({ ...prev, assetsWithoutPm: false }));
+    }
+  };
+
+  const reportTypes: Array<{
+    key: "compliance" | "overdue" | "logs" | "assets-without-pm";
+    title: string;
+    description: string;
+    icon: typeof TrendingUp;
+    color: string;
+    action: () => void;
+  }> = [
     {
+      key: "compliance",
       title: "Compliance Summary",
       description: "On-time completion rates within the selected period",
       icon: TrendingUp,
@@ -146,6 +246,7 @@ const Reports = () => {
       },
     },
     {
+      key: "overdue",
       title: "Overdue Tasks",
       description: "Current overdue tasks list (paged)",
       icon: AlertTriangle,
@@ -156,6 +257,7 @@ const Reports = () => {
       },
     },
     {
+      key: "logs",
       title: "System Logs",
       description: "Recent backend activity for audit and troubleshooting",
       icon: FileText,
@@ -166,12 +268,13 @@ const Reports = () => {
       },
     },
     {
+      key: "assets-without-pm",
       title: "Assets Without PM",
-      description: "Not implemented yet",
+      description: "Assets missing PM enablement or a default template",
       icon: Server,
       color: "destructive",
       action: () => {
-        toast({ title: "Not implemented", description: "This report export is not wired yet." });
+        toast({ title: "Tip", description: "Use CSV export for the full list." });
       },
     },
   ];
@@ -199,40 +302,98 @@ const Reports = () => {
         </div>
 
         {/* Report Period Selector */}
-        <div className="flex items-center gap-4">
-          <Select value={periodKey} onValueChange={setPeriod}>
-            <SelectTrigger className="w-48 bg-muted/50">
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="last7">Last 7 days</SelectItem>
-              <SelectItem value="last30">Last 30 days</SelectItem>
-              <SelectItem value="last90">Last 90 days</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => setPeriod("custom")}
-              >
-                <CalendarIcon className="w-4 h-4" />
-                Custom Range
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-0">
-              <Calendar
-                mode="range"
-                selected={customRange}
-                onSelect={setCustomRange}
-                numberOfMonths={2}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+        <div className="grid grid-cols-12 gap-4">
+          <div className="col-span-12 md:col-span-4">
+            <Select value={periodKey} onValueChange={setPeriod}>
+              <SelectTrigger className="w-full bg-muted/50">
+                <SelectValue placeholder="Select period" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="last7">Last 7 days</SelectItem>
+                <SelectItem value="last30">Last 30 days</SelectItem>
+                <SelectItem value="last90">Last 90 days</SelectItem>
+                <SelectItem value="custom">Custom</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-12 md:col-span-4">
+            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+              <SelectTrigger className="w-full bg-muted/50">
+                <SelectValue placeholder="All locations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All locations</SelectItem>
+                {(lookupsQuery.data?.locations ?? [])
+                  .filter((l) => l.isActive)
+                  .map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-12 md:col-span-4">
+            <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+              <SelectTrigger className="w-full bg-muted/50">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {(lookupsQuery.data?.assetCategories ?? [])
+                  .filter((c) => c.isActive)
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="col-span-12 md:col-span-6">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2 w-full" onClick={() => setPeriod("custom")}>
+                  <CalendarIcon className="w-4 h-4" />
+                  Custom Range
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-auto p-0">
+                <Calendar
+                  mode="range"
+                  selected={customRange}
+                  onSelect={setCustomRange}
+                  numberOfMonths={2}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="col-span-12 md:col-span-6 flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setSelectedLocationId("all");
+                setSelectedCategoryId("all");
+              }}
+            >
+              Clear Filters
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => {
+                void complianceQuery.refetch();
+                void overdueQuery.refetch();
+                void logsQuery.refetch();
+                toast({ title: "Reports refreshed" });
+              }}
+            >
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Report Cards */}
@@ -251,13 +412,27 @@ const Reports = () => {
                       <report.icon className={`w-6 h-6 text-${report.color}`} />
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="gap-2" disabled>
-                        <FileText className="w-4 h-4" />
-                        PDF
-                      </Button>
-                      <Button size="sm" variant="outline" className="gap-2" disabled>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (report.key === "compliance") void exportComplianceCsv();
+                          if (report.key === "overdue") void exportOverdueCsv();
+                          if (report.key === "logs") void exportLogsCsv();
+                          if (report.key === "assets-without-pm") void exportAssetsWithoutPmCsv();
+                        }}
+                        disabled={
+                          (report.key === "compliance" && exporting.compliance) ||
+                          (report.key === "overdue" && exporting.overdue) ||
+                          (report.key === "logs" && exporting.logs) ||
+                          (report.key === "assets-without-pm" && exporting.assetsWithoutPm)
+                        }
+                      >
                         <Download className="w-4 h-4" />
-                        Excel
+                        CSV
                       </Button>
                     </div>
                   </div>
@@ -266,7 +441,13 @@ const Reports = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Period: {label}</span>
+                    <span className="text-muted-foreground">
+                      {report.key === "overdue"
+                        ? "Scope: current overdue"
+                        : report.key === "assets-without-pm"
+                          ? "Scope: all assets"
+                          : `Period: ${label}`}
+                    </span>
                     <Button variant="ghost" size="sm" className="text-primary" onClick={report.action}>
                       Generate New
                     </Button>

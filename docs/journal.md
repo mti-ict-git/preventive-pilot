@@ -192,7 +192,23 @@
 - Allowed CORS `x-filename` header and exposed `Content-Disposition` for evidence endpoints.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
-## 2026-01-06 09:46
+## 2026-01-06 10:36
 - Added template checklist flag: Requires Attachment (DB, API, and UI).
 - Extended Tasks API and UI to enforce required checklist attachments on completion.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 10:39
+- Implemented Microsoft Graph notification settings storage in pm.MicrosoftGraphSettings.
+- Added backend system routes to load, update, and test Microsoft Graph settings with env fallback.
+- Created Settings > Notification UI for Microsoft Graph configuration and wired to API.
+- Wired /settings/notifications route and sidebar navigation entry.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 10:40
+- Added Reports filters for location and category.
+- Wired CSV exports for Compliance and Overdue reports.
+- Added CSV exports for System Logs and Assets Without PM reports.
+- Updated Label Designer mock assets to match the API Asset shape.
+- Adjusted label QR encoding to prefer Snipe-IT hardware IDs.
+- Fixed backend lint errors in reports CSV escaping and Graph settings fallback.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

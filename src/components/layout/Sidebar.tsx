@@ -42,6 +42,7 @@ const mainNav: NavItem[] = [
 const settingsNav: NavItem[] = [
   { title: "Users & Roles", icon: Users, href: "/users" },
   { title: "System", icon: Settings, href: "/settings" },
+  { title: "Notification Settings", icon: Bell, href: "/settings/notifications" },
 ];
 
 const Sidebar = () => {

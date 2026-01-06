@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import {
   QrCode,
@@ -8,7 +9,6 @@ import {
   Plus,
   Minus,
   Type,
-  Image,
   Grid3X3,
   Palette,
   RotateCcw,
@@ -32,6 +32,12 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import {
+  apiGetLookups,
+  apiGetSystemStatus,
+  apiListAssets,
+  type Asset as ApiAsset,
+} from "@/lib/api";
 
 interface LabelConfig {
   width: number;
@@ -51,21 +57,7 @@ interface LabelConfig {
   orientation: "portrait" | "landscape";
 }
 
-interface Asset {
-  id: string;
-  assetTag: string;
-  name: string;
-  category: string;
-  location: string;
-}
-
-const mockAssets: Asset[] = [
-  { id: "1", assetTag: "IT-LAP-001", name: "Dell Latitude 5520", category: "Laptop", location: "HQ Floor 2" },
-  { id: "2", assetTag: "IT-LAP-002", name: "ThinkPad X1 Carbon", category: "Laptop", location: "HQ Floor 3" },
-  { id: "3", assetTag: "IT-SRV-001", name: "Dell PowerEdge R740", category: "Server", location: "DC Room A" },
-  { id: "4", assetTag: "IT-MON-001", name: "Dell U2722D", category: "Monitor", location: "HQ Floor 2" },
-  { id: "5", assetTag: "IT-NET-001", name: "Cisco Catalyst 9200", category: "Network", location: "DC Room B" },
-];
+type Asset = ApiAsset;
 
 const labelPresets = [
   { name: "Small (30x20mm)", width: 30, height: 20 },
@@ -75,7 +67,42 @@ const labelPresets = [
 ];
 
 export default function LabelDesigner() {
-  const [selectedAssets, setSelectedAssets] = useState<Asset[]>([mockAssets[0]]);
+  const [selectedAssets, setSelectedAssets] = useState<Asset[]>([]);
+  const [assetSearch, setAssetSearch] = useState<string>("");
+  const [assetCategoryId, setAssetCategoryId] = useState<string>("all");
+  const [assetPage, setAssetPage] = useState<number>(1);
+  const assetPageSize = 200;
+
+  const lookupsQuery = useQuery({
+    queryKey: ["lookups"],
+    queryFn: apiGetLookups,
+    staleTime: 60_000,
+  });
+
+  const systemStatusQuery = useQuery({
+    queryKey: ["system-status"],
+    queryFn: apiGetSystemStatus,
+    staleTime: 30_000,
+  });
+
+  const assetsQuery = useQuery({
+    queryKey: ["label-designer", "assets", { assetSearch, assetCategoryId, assetPage, assetPageSize }],
+    queryFn: () =>
+      apiListAssets({
+        search: assetSearch.trim() ? assetSearch.trim() : undefined,
+        categoryId: assetCategoryId === "all" ? undefined : assetCategoryId,
+        page: assetPage,
+        pageSize: assetPageSize,
+      }),
+  });
+
+  const availableAssets = assetsQuery.data?.items ?? [];
+  const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
+
+  const categoryItems = useMemo(() => {
+    const categories = lookupsQuery.data?.assetCategories ?? [];
+    return [{ id: "all", name: "All Categories" }, ...categories.map((c) => ({ id: c.id, name: c.name }))];
+  }, [lookupsQuery.data?.assetCategories]);
   const [config, setConfig] = useState<LabelConfig>({
     width: 50,
     height: 30,
@@ -150,6 +177,11 @@ export default function LabelDesigner() {
     const isLandscape = config.orientation === "landscape";
     const displayWidth = isLandscape ? config.width : config.height;
     const displayHeight = isLandscape ? config.height : config.width;
+    const snipeHardwareId = asset.snipeAssetId ?? asset.id;
+    const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
+    const qrValue = normalizedBaseUrl
+      ? `${normalizedBaseUrl}/hardware/${snipeHardwareId}`
+      : `https://snipeit.local/hardware/${snipeHardwareId}`;
 
     return (
       <div
@@ -164,7 +196,7 @@ export default function LabelDesigner() {
         }}
       >
         <QRCodeSVG
-          value={`https://snipeit.local/hardware/${asset.id}`}
+          value={qrValue}
           size={config.qrSize * scale}
           level="M"
           includeMargin={false}
@@ -179,10 +211,10 @@ export default function LabelDesigner() {
             <div className="truncate opacity-80">{asset.name}</div>
           )}
           {config.showCategory && (
-            <div className="truncate opacity-60">{asset.category}</div>
+            <div className="truncate opacity-60">{asset.category.name ?? "—"}</div>
           )}
           {config.showLocation && (
-            <div className="truncate opacity-60">{asset.location}</div>
+            <div className="truncate opacity-60">{asset.location.name ?? "—"}</div>
           )}
           {config.showCustomText && config.customText && (
             <div className="truncate opacity-50 italic" style={{ fontSize: (config.fontSize - 1) * (scale / 2) }}>
@@ -495,8 +527,46 @@ export default function LabelDesigner() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {mockAssets.map((asset) => {
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={assetSearch}
+                    onChange={(e) => {
+                      setAssetSearch(e.target.value);
+                      setAssetPage(1);
+                    }}
+                    placeholder="Search assets…"
+                    className="h-8 bg-background/50"
+                  />
+                  <Select
+                    value={assetCategoryId}
+                    onValueChange={(v) => {
+                      setAssetCategoryId(v);
+                      setAssetPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[200px] bg-background/50">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoryItems.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {assetsQuery.isLoading ? (
+                    <div className="text-sm text-muted-foreground">Loading assets…</div>
+                  ) : assetsQuery.isError ? (
+                    <div className="text-sm text-destructive">Failed to load assets.</div>
+                  ) : availableAssets.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No assets found.</div>
+                  ) : (
+                    availableAssets.map((asset) => {
                   const isSelected = selectedAssets.some((a) => a.id === asset.id);
                   return (
                     <motion.div
@@ -531,7 +601,29 @@ export default function LabelDesigner() {
                       </div>
                     </motion.div>
                   );
-                })}
+                    })
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAssetPage((p) => Math.max(1, p - 1))}
+                    disabled={assetPage <= 1 || assetsQuery.isLoading}
+                  >
+                    Prev
+                  </Button>
+                  <div className="text-xs text-muted-foreground">Page {assetPage}</div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAssetPage((p) => p + 1)}
+                    disabled={assetsQuery.isLoading || availableAssets.length < assetPageSize}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

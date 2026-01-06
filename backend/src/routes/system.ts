@@ -85,6 +85,22 @@ type EffectiveSnipeItSettings = {
   syncIntervalMinutes: number;
 };
 
+type EffectiveMicrosoftGraphSettings = {
+  tenantId: string | null;
+  clientId: string | null;
+  clientSecretConfigured: boolean;
+  scope: string[];
+  senderEmail: string | null;
+  useLoggedInUserAsSender: boolean;
+  defaultToRecipients: string[];
+  defaultCcRecipients: string[];
+  defaultBccRecipients: string[];
+  emailSubjectTemplate: string | null;
+  emailBodyTemplate: string | null;
+  enabled: boolean;
+  lastConnectionTestAt: string | null;
+};
+
 const loadEffectiveSnipeItSettings = async (): Promise<EffectiveSnipeItSettings> => {
   let dbRow: Record<string, unknown> | null = null;
   try {
@@ -132,6 +148,183 @@ const loadEffectiveSnipeItSettings = async (): Promise<EffectiveSnipeItSettings>
   };
 };
 
+const loadEffectiveMicrosoftGraphSettings = async (): Promise<EffectiveMicrosoftGraphSettings> => {
+  let dbRow: Record<string, unknown> | null = null;
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  TenantId, ClientId, ClientSecret, ScopeJson, SenderEmail, UseLoggedInUserAsSender,",
+          "  DefaultToRecipientsJson, DefaultCcRecipientsJson, DefaultBccRecipientsJson,",
+          "  EmailSubjectTemplate, EmailBodyTemplate, Enabled, LastConnectionTestAt",
+          "FROM pm.MicrosoftGraphSettings",
+          "ORDER BY UpdatedAt DESC",
+        ].join("\n"),
+      );
+    dbRow = (result.recordset[0] as Record<string, unknown> | undefined) ?? null;
+  } catch {
+    dbRow = null;
+  }
+
+  const parseStringArrayJson = (value: unknown): string[] => {
+    if (typeof value !== "string" || !value.trim()) return [];
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (!Array.isArray(parsed)) return [];
+      const result: string[] = [];
+      for (const item of parsed) {
+        if (typeof item === "string" && item.trim()) result.push(item.trim());
+      }
+      return result;
+    } catch {
+      return [];
+    }
+  };
+
+  const envScope = env.MS_GRAPH_SCOPE?.trim() ?? "";
+  const scopeFromEnv = envScope ? envScope.split(/[\s,]+/).filter((s) => s.length > 0) : [];
+  const dbScopeJsonRaw = dbRow?.ScopeJson;
+  const hasDbScope = typeof dbScopeJsonRaw === "string" && dbScopeJsonRaw.trim().length > 0;
+  const dbScope = parseStringArrayJson(dbScopeJsonRaw);
+
+  const envDefaultTo = env.MS_GRAPH_DEFAULT_TO?.trim() ?? "";
+  const envDefaultCc = env.MS_GRAPH_DEFAULT_CC?.trim() ?? "";
+  const envDefaultBcc = env.MS_GRAPH_DEFAULT_BCC?.trim() ?? "";
+
+  const tenantId =
+    (typeof dbRow?.TenantId === "string" && dbRow.TenantId.trim() ? dbRow.TenantId.trim() : null) ??
+    (env.MS_GRAPH_TENANT_ID?.trim() ? env.MS_GRAPH_TENANT_ID.trim() : null);
+
+  const clientId =
+    (typeof dbRow?.ClientId === "string" && dbRow.ClientId.trim() ? dbRow.ClientId.trim() : null) ??
+    (env.MS_GRAPH_CLIENT_ID?.trim() ? env.MS_GRAPH_CLIENT_ID.trim() : null);
+
+  const clientSecretConfigured =
+    (typeof dbRow?.ClientSecret === "string" && dbRow.ClientSecret.trim().length > 0) ||
+    Boolean(env.MS_GRAPH_CLIENT_SECRET && env.MS_GRAPH_CLIENT_SECRET.trim().length > 0);
+
+  const senderEmail =
+    (typeof dbRow?.SenderEmail === "string" && dbRow.SenderEmail.trim() ? dbRow.SenderEmail.trim() : null) ??
+    (env.MS_GRAPH_SENDER_EMAIL?.trim() ? env.MS_GRAPH_SENDER_EMAIL.trim() : null);
+
+  const useLoggedInUserAsSenderRaw = dbRow?.UseLoggedInUserAsSender;
+  const useLoggedInUserAsSender =
+    typeof useLoggedInUserAsSenderRaw === "boolean"
+      ? useLoggedInUserAsSenderRaw
+      : typeof useLoggedInUserAsSenderRaw === "number"
+        ? useLoggedInUserAsSenderRaw === 1
+        : env.MS_GRAPH_USE_LOGGED_IN_USER_AS_SENDER;
+
+  const defaultToRecipientsJsonRaw = dbRow?.DefaultToRecipientsJson;
+  const defaultCcRecipientsJsonRaw = dbRow?.DefaultCcRecipientsJson;
+  const defaultBccRecipientsJsonRaw = dbRow?.DefaultBccRecipientsJson;
+  const hasDbDefaultTo = typeof defaultToRecipientsJsonRaw === "string" && defaultToRecipientsJsonRaw.trim().length > 0;
+  const hasDbDefaultCc = typeof defaultCcRecipientsJsonRaw === "string" && defaultCcRecipientsJsonRaw.trim().length > 0;
+  const hasDbDefaultBcc = typeof defaultBccRecipientsJsonRaw === "string" && defaultBccRecipientsJsonRaw.trim().length > 0;
+  const defaultToRecipientsDb = parseStringArrayJson(defaultToRecipientsJsonRaw);
+  const defaultCcRecipientsDb = parseStringArrayJson(defaultCcRecipientsJsonRaw);
+  const defaultBccRecipientsDb = parseStringArrayJson(defaultBccRecipientsJsonRaw);
+
+  const defaultToRecipientsEnv = envDefaultTo
+    ? envDefaultTo.split(/[;,]+/).map((v) => v.trim()).filter((v) => v.length > 0)
+    : [];
+  const defaultCcRecipientsEnv = envDefaultCc
+    ? envDefaultCc.split(/[;,]+/).map((v) => v.trim()).filter((v) => v.length > 0)
+    : [];
+  const defaultBccRecipientsEnv = envDefaultBcc
+    ? envDefaultBcc.split(/[;,]+/).map((v) => v.trim()).filter((v) => v.length > 0)
+    : [];
+
+  const emailSubjectTemplate =
+    (typeof dbRow?.EmailSubjectTemplate === "string" && dbRow.EmailSubjectTemplate.trim()
+      ? dbRow.EmailSubjectTemplate.trim()
+      : null) ?? (env.MS_GRAPH_EMAIL_SUBJECT_TEMPLATE?.trim() ? env.MS_GRAPH_EMAIL_SUBJECT_TEMPLATE.trim() : null);
+
+  const emailBodyTemplate =
+    (typeof dbRow?.EmailBodyTemplate === "string" && dbRow.EmailBodyTemplate.trim()
+      ? dbRow.EmailBodyTemplate.trim()
+      : null) ?? (env.MS_GRAPH_EMAIL_BODY_TEMPLATE?.trim() ? env.MS_GRAPH_EMAIL_BODY_TEMPLATE.trim() : null);
+
+  const enabledRaw = dbRow?.Enabled;
+  const enabled =
+    typeof enabledRaw === "boolean"
+      ? enabledRaw
+      : typeof enabledRaw === "number"
+        ? enabledRaw === 1
+        : env.MS_GRAPH_ENABLED;
+
+  const lastConnectionTestAtValue = dbRow?.LastConnectionTestAt;
+  const lastConnectionTestAt =
+    lastConnectionTestAtValue instanceof Date
+      ? lastConnectionTestAtValue.toISOString()
+      : typeof lastConnectionTestAtValue === "string"
+        ? lastConnectionTestAtValue
+        : null;
+
+  return {
+    tenantId,
+    clientId,
+    clientSecretConfigured,
+    scope: hasDbScope ? dbScope : scopeFromEnv,
+    senderEmail,
+    useLoggedInUserAsSender,
+    defaultToRecipients: hasDbDefaultTo ? defaultToRecipientsDb : defaultToRecipientsEnv,
+    defaultCcRecipients: hasDbDefaultCc ? defaultCcRecipientsDb : defaultCcRecipientsEnv,
+    defaultBccRecipients: hasDbDefaultBcc ? defaultBccRecipientsDb : defaultBccRecipientsEnv,
+    emailSubjectTemplate,
+    emailBodyTemplate,
+    enabled,
+    lastConnectionTestAt,
+  };
+};
+
+const loadMicrosoftGraphSecretFromSources = async (): Promise<string | null> => {
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  ClientSecret",
+          "FROM pm.MicrosoftGraphSettings",
+          "ORDER BY UpdatedAt DESC",
+        ].join("\n"),
+      );
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    const value = typeof row?.ClientSecret === "string" ? row.ClientSecret.trim() : "";
+    if (value) return value;
+  } catch (err) {
+    void err;
+  }
+  const envSecret = env.MS_GRAPH_CLIENT_SECRET?.trim() ?? "";
+  return envSecret ? envSecret : null;
+};
+
+const loadMicrosoftGraphLastConnectionTestAt = async (): Promise<Date | null> => {
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  LastConnectionTestAt",
+          "FROM pm.MicrosoftGraphSettings",
+          "ORDER BY UpdatedAt DESC",
+        ].join("\n"),
+      );
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    const value = row?.LastConnectionTestAt;
+    return value instanceof Date ? value : null;
+  } catch {
+    return null;
+  }
+};
+
 const SnipeItSettingsUpdateSchema = z.object({
   baseUrl: z.preprocess(nullIfBlank, z.string().trim().max(512).nullable()),
   apiToken: z.preprocess(nullIfBlank, z.string().trim().max(2048).nullable()).optional(),
@@ -140,6 +333,23 @@ const SnipeItSettingsUpdateSchema = z.object({
 });
 
 const SnipeItSettingsTestSchema = SnipeItSettingsUpdateSchema.partial().optional();
+
+const MicrosoftGraphSettingsUpdateSchema = z.object({
+  tenantId: z.preprocess(nullIfBlank, z.string().trim().max(64).nullable()),
+  clientId: z.preprocess(nullIfBlank, z.string().trim().max(64).nullable()),
+  clientSecret: z.preprocess(nullIfBlank, z.string().trim().max(2048).nullable()).optional(),
+  scope: z.array(z.string().trim().min(1).max(256)).max(20).optional().default([]),
+  senderEmail: z.preprocess(nullIfBlank, z.string().trim().max(256).nullable()),
+  useLoggedInUserAsSender: z.boolean(),
+  defaultToRecipients: z.array(z.string().trim().min(1).max(256)).max(50).optional().default([]),
+  defaultCcRecipients: z.array(z.string().trim().min(1).max(256)).max(50).optional().default([]),
+  defaultBccRecipients: z.array(z.string().trim().min(1).max(256)).max(50).optional().default([]),
+  emailSubjectTemplate: z.preprocess(nullIfBlank, z.string().trim().max(512).nullable()),
+  emailBodyTemplate: z.preprocess(nullIfBlank, z.string().trim().max(20000).nullable()),
+  enabled: z.boolean(),
+});
+
+const MicrosoftGraphSettingsTestSchema = MicrosoftGraphSettingsUpdateSchema.partial().optional();
 
 const AssetsUiSettingsSchema = z.object({
   visibleCategoryIds: z.array(z.string().uuid()).min(1).nullable(),
@@ -220,6 +430,7 @@ systemRouter.get("/status", async (_req, res) => {
   }
 
   const snipeItSettings = await loadEffectiveSnipeItSettings();
+  const msGraphSettings = await loadEffectiveMicrosoftGraphSettings();
 
   res.json({
     backendTime: new Date().toISOString(),
@@ -233,6 +444,23 @@ systemRouter.get("/status", async (_req, res) => {
       notificationIntervalMinutes: env.JOB_NOTIFICATION_INTERVAL_MINUTES,
       snipeSyncEnabled: snipeItSettings.autoSyncEnabled,
       snipeSyncIntervalMinutes: snipeItSettings.syncIntervalMinutes,
+    },
+    notifications: {
+      msGraph: {
+        enabled: msGraphSettings.enabled,
+        senderEmail: msGraphSettings.senderEmail,
+        useLoggedInUserAsSender: msGraphSettings.useLoggedInUserAsSender,
+        scope: msGraphSettings.scope,
+        defaultToRecipients: msGraphSettings.defaultToRecipients,
+        defaultCcRecipients: msGraphSettings.defaultCcRecipients,
+        defaultBccRecipients: msGraphSettings.defaultBccRecipients,
+        emailSubjectTemplate: msGraphSettings.emailSubjectTemplate,
+        emailBodyTemplate: msGraphSettings.emailBodyTemplate,
+        lastConnectionTestAt: msGraphSettings.lastConnectionTestAt,
+        tenantId: msGraphSettings.tenantId,
+        clientId: msGraphSettings.clientId,
+        clientSecretConfigured: msGraphSettings.clientSecretConfigured,
+      },
     },
     snipeIt: {
       configured: Boolean(snipeItSettings.baseUrl && snipeItSettings.apiToken),
@@ -261,6 +489,126 @@ systemRouter.get("/snipeit-settings", async (_req, res) => {
     autoSyncEnabled: settings.autoSyncEnabled,
     syncIntervalMinutes: settings.syncIntervalMinutes,
   });
+});
+
+systemRouter.get("/microsoft-graph-settings", async (_req, res) => {
+  const settings = await loadEffectiveMicrosoftGraphSettings();
+  res.json(settings);
+});
+
+systemRouter.post("/microsoft-graph-settings/test", requireSystemAdmin, async (req, res) => {
+  const parsed = MicrosoftGraphSettingsTestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const effective = await loadEffectiveMicrosoftGraphSettings();
+  const tenantId = parsed.data?.tenantId ?? effective.tenantId;
+  const clientId = parsed.data?.clientId ?? effective.clientId;
+  const senderEmail = parsed.data?.senderEmail ?? effective.senderEmail;
+  const useLoggedInUserAsSender = parsed.data?.useLoggedInUserAsSender ?? effective.useLoggedInUserAsSender;
+  const scope = parsed.data?.scope ?? effective.scope;
+  const defaultToRecipients = parsed.data?.defaultToRecipients ?? effective.defaultToRecipients;
+  const defaultCcRecipients = parsed.data?.defaultCcRecipients ?? effective.defaultCcRecipients;
+  const defaultBccRecipients = parsed.data?.defaultBccRecipients ?? effective.defaultBccRecipients;
+  const emailSubjectTemplate = parsed.data?.emailSubjectTemplate ?? effective.emailSubjectTemplate;
+  const emailBodyTemplate = parsed.data?.emailBodyTemplate ?? effective.emailBodyTemplate;
+  const enabled = parsed.data?.enabled ?? effective.enabled;
+  const clientSecretOverride = parsed.data?.clientSecret ?? null;
+
+  if (!tenantId || !clientId || !senderEmail || scope.length === 0) {
+    res.status(400).json({ message: "Microsoft Graph not fully configured" });
+    return;
+  }
+
+  const clientSecret = clientSecretOverride ?? (await loadMicrosoftGraphSecretFromSources());
+  if (!clientSecret) {
+    res.status(400).json({ message: "Client secret not configured" });
+    return;
+  }
+
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  const body = new URLSearchParams();
+  body.set("client_id", clientId);
+  body.set("client_secret", clientSecret);
+  body.set("scope", scope.join(" "));
+  body.set("grant_type", "client_credentials");
+
+  try {
+    const tokenRes = await fetch(tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+
+    if (!tokenRes.ok) {
+      const text = await tokenRes.text().catch(() => "");
+      res.status(400).json({ message: `Token request failed (${tokenRes.status}) ${text}`.trim() });
+      return;
+    }
+
+    const tokenJson = (await tokenRes.json()) as unknown;
+    const accessToken =
+      typeof tokenJson === "object" && tokenJson !== null && "access_token" in tokenJson &&
+      typeof (tokenJson as { access_token?: unknown }).access_token === "string"
+        ? (tokenJson as { access_token: string }).access_token
+        : "";
+
+    if (!accessToken) {
+      res.status(400).json({ message: "Token response missing access_token" });
+      return;
+    }
+
+    const now = new Date();
+    try {
+      const db = await getDb();
+      await db
+        .request()
+        .input("tenantId", sql.NVarChar(64), tenantId)
+        .input("clientId", sql.NVarChar(64), clientId)
+        .input("clientSecret", sql.NVarChar(2048), clientSecret)
+        .input("scopeJson", sql.NVarChar(sql.MAX), JSON.stringify(scope))
+        .input("senderEmail", sql.NVarChar(256), senderEmail)
+        .input("useLoggedInUserAsSender", sql.Bit, useLoggedInUserAsSender ? 1 : 0)
+        .input("defaultToRecipientsJson", sql.NVarChar(sql.MAX), JSON.stringify(defaultToRecipients))
+        .input("defaultCcRecipientsJson", sql.NVarChar(sql.MAX), JSON.stringify(defaultCcRecipients))
+        .input("defaultBccRecipientsJson", sql.NVarChar(sql.MAX), JSON.stringify(defaultBccRecipients))
+        .input("emailSubjectTemplate", sql.NVarChar(512), emailSubjectTemplate)
+        .input("emailBodyTemplate", sql.NVarChar(sql.MAX), emailBodyTemplate)
+        .input("enabled", sql.Bit, enabled ? 1 : 0)
+        .input("lastConnectionTestAt", sql.DateTime2(0), now)
+        .query(
+          [
+            "INSERT INTO pm.MicrosoftGraphSettings (",
+            "  TenantId, ClientId, ClientSecret, ScopeJson, SenderEmail, UseLoggedInUserAsSender,",
+            "  DefaultToRecipientsJson, DefaultCcRecipientsJson, DefaultBccRecipientsJson,",
+            "  EmailSubjectTemplate, EmailBodyTemplate, Enabled, LastConnectionTestAt",
+            ")",
+            "VALUES (",
+            "  @tenantId, @clientId, @clientSecret, @scopeJson, @senderEmail, @useLoggedInUserAsSender,",
+            "  @defaultToRecipientsJson, @defaultCcRecipientsJson, @defaultBccRecipientsJson,",
+            "  @emailSubjectTemplate, @emailBodyTemplate, @enabled, @lastConnectionTestAt",
+            ");",
+          ].join("\n"),
+        );
+    } catch (err: unknown) {
+      if (isInvalidObjectNameError(err)) {
+        res
+          .status(503)
+          .json({ message: "Database schema missing pm.MicrosoftGraphSettings. Run npm run db:apply-schema." });
+        return;
+      }
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ message });
+      return;
+    }
+
+    res.json({ ok: true, accessTokenPresent: Boolean(accessToken), lastConnectionTestAt: now.toISOString() });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(400).json({ message });
+  }
 });
 
 systemRouter.get("/ui-settings/assets", async (_req, res) => {
@@ -363,6 +711,65 @@ systemRouter.put("/snipeit-settings", requireSystemAdmin, async (req, res) => {
     autoSyncEnabled: updated.autoSyncEnabled,
     syncIntervalMinutes: updated.syncIntervalMinutes,
   });
+});
+
+systemRouter.put("/microsoft-graph-settings", requireSystemAdmin, async (req, res) => {
+  const parsed = MicrosoftGraphSettingsUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const currentSecret = await loadMicrosoftGraphSecretFromSources();
+  const clientSecret = parsed.data.clientSecret === undefined ? currentSecret : parsed.data.clientSecret;
+  const lastTestAt = await loadMicrosoftGraphLastConnectionTestAt();
+
+  try {
+    const db = await getDb();
+    await db
+      .request()
+      .input("tenantId", sql.NVarChar(64), parsed.data.tenantId)
+      .input("clientId", sql.NVarChar(64), parsed.data.clientId)
+      .input("clientSecret", sql.NVarChar(2048), clientSecret)
+      .input("scopeJson", sql.NVarChar(sql.MAX), JSON.stringify(parsed.data.scope ?? []))
+      .input("senderEmail", sql.NVarChar(256), parsed.data.senderEmail)
+      .input("useLoggedInUserAsSender", sql.Bit, parsed.data.useLoggedInUserAsSender ? 1 : 0)
+      .input("defaultToRecipientsJson", sql.NVarChar(sql.MAX), JSON.stringify(parsed.data.defaultToRecipients ?? []))
+      .input("defaultCcRecipientsJson", sql.NVarChar(sql.MAX), JSON.stringify(parsed.data.defaultCcRecipients ?? []))
+      .input("defaultBccRecipientsJson", sql.NVarChar(sql.MAX), JSON.stringify(parsed.data.defaultBccRecipients ?? []))
+      .input("emailSubjectTemplate", sql.NVarChar(512), parsed.data.emailSubjectTemplate)
+      .input("emailBodyTemplate", sql.NVarChar(sql.MAX), parsed.data.emailBodyTemplate)
+      .input("enabled", sql.Bit, parsed.data.enabled ? 1 : 0)
+      .input("lastConnectionTestAt", sql.DateTime2(0), lastTestAt)
+      .query(
+        [
+          "INSERT INTO pm.MicrosoftGraphSettings (",
+          "  TenantId, ClientId, ClientSecret, ScopeJson, SenderEmail, UseLoggedInUserAsSender,",
+          "  DefaultToRecipientsJson, DefaultCcRecipientsJson, DefaultBccRecipientsJson,",
+          "  EmailSubjectTemplate, EmailBodyTemplate, Enabled, LastConnectionTestAt",
+          ")",
+          "VALUES (",
+          "  @tenantId, @clientId, @clientSecret, @scopeJson, @senderEmail, @useLoggedInUserAsSender,",
+          "  @defaultToRecipientsJson, @defaultCcRecipientsJson, @defaultBccRecipientsJson,",
+          "  @emailSubjectTemplate, @emailBodyTemplate, @enabled, @lastConnectionTestAt",
+          ");",
+        ].join("\n"),
+      );
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      res
+        .status(503)
+        .json({ message: "Database schema missing pm.MicrosoftGraphSettings. Run npm run db:apply-schema." });
+      return;
+    }
+
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+    return;
+  }
+
+  const updated = await loadEffectiveMicrosoftGraphSettings();
+  res.json(updated);
 });
 
 systemRouter.post("/snipeit-settings/test", requireSystemAdmin, async (req, res) => {
@@ -473,8 +880,20 @@ systemRouter.get("/lookups", async (_req, res) => {
       ].join("\n"),
     );
 
+  const locationsResult = await db
+    .request()
+    .query(
+      [
+        "SELECT",
+        "  LocationId, Name, IsActive",
+        "FROM pm.Locations",
+        "ORDER BY Name ASC",
+      ].join("\n"),
+    );
+
   const roleRows = rolesResult.recordset as Array<Record<string, unknown>>;
   const categoryRows = categoriesResult.recordset as Array<Record<string, unknown>>;
+  const locationRows = locationsResult.recordset as Array<Record<string, unknown>>;
 
   res.json({
     roles: roleRows.map((r) => ({
@@ -485,6 +904,11 @@ systemRouter.get("/lookups", async (_req, res) => {
       id: c.CategoryId,
       name: c.Name,
       isActive: bitToBoolean(c.IsActive),
+    })),
+    locations: locationRows.map((l) => ({
+      id: l.LocationId,
+      name: l.Name,
+      isActive: bitToBoolean(l.IsActive),
     })),
   });
 });

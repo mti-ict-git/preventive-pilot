@@ -16,6 +16,7 @@ import Notifications from "./pages/Notifications";
 import UserManagement from "./pages/UserManagement";
 import SystemSettings from "./pages/SystemSettings";
 import SettingsCategories from "./pages/SettingsCategories";
+import SettingsNotifications from "./pages/SettingsNotifications";
 import LabelDesigner from "./pages/LabelDesigner";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
@@ -56,6 +57,7 @@ const App = () => (
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/settings" element={<SystemSettings />} />
+            <Route path="/settings/notifications" element={<SettingsNotifications />} />
             <Route path="/settings/categories" element={<SuperadminRoute element={<SettingsCategories />} />} />
             <Route path="/label-designer" element={<LabelDesigner />} />
           </Route>
