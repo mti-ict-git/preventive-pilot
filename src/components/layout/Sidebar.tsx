@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Server,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { clearAccessToken, isSuperadmin } from "@/lib/auth";
+import { apiGetDashboardOverview } from "@/lib/api";
 
 interface NavItem {
   title: string;
@@ -28,12 +30,12 @@ interface NavItem {
   badge?: number;
 }
 
-const mainNav: NavItem[] = [
+const mainNavBase: Omit<NavItem, "badge">[] = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { title: "Assets", icon: Server, href: "/assets" },
   { title: "PM Templates", icon: FileText, href: "/templates" },
   { title: "Scheduling", icon: Calendar, href: "/scheduling" },
-  { title: "PM Tasks", icon: ClipboardList, href: "/tasks", badge: 12 },
+  { title: "PM Tasks", icon: ClipboardList, href: "/tasks" },
   { title: "Reports", icon: BarChart3, href: "/reports" },
   { title: "Notifications", icon: Bell, href: "/notifications" },
   { title: "Label Designer", icon: QrCode, href: "/label-designer" },
@@ -49,6 +51,26 @@ const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const overviewQuery = useQuery({
+    queryKey: ["dashboard", "overview"],
+    queryFn: apiGetDashboardOverview,
+    staleTime: 30_000,
+  });
+
+  const pmTasksBadgeCount = overviewQuery.data
+    ? overviewQuery.data.stats.overdueCount +
+      overviewQuery.data.stats.dueTodayCount +
+      overviewQuery.data.stats.upcoming7DaysCount
+    : null;
+
+  const mainNav: NavItem[] = mainNavBase.map((item) => {
+    if (item.href !== "/tasks") return item;
+    return {
+      ...item,
+      badge: pmTasksBadgeCount && pmTasksBadgeCount > 0 ? pmTasksBadgeCount : undefined,
+    };
+  });
 
   const adminNav: NavItem[] = isSuperadmin()
     ? [...settingsNav, { title: "Categories", icon: Tags, href: "/settings/categories" }]

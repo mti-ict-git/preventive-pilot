@@ -1011,6 +1011,21 @@ export const apiListNotificationChannels = async (): Promise<{ items: Notificati
   return apiFetchJson<{ items: NotificationChannel[] }>("/api/notifications/channels");
 };
 
+export const apiCreateNotificationChannel = async (input: {
+  channelType: string;
+  config?: string | null;
+  isActive?: boolean;
+}): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>("/api/notifications/channels", {
+    method: "POST",
+    body: {
+      channelType: input.channelType,
+      config: input.config ?? null,
+      isActive: input.isActive ?? true,
+    },
+  });
+};
+
 export const apiUpdateNotificationChannel = async (input: {
   channelId: string;
   channelType?: string;
@@ -1031,6 +1046,29 @@ export const apiUpdateNotificationChannel = async (input: {
 
 export const apiListNotificationRules = async (): Promise<{ items: NotificationRule[] }> => {
   return apiFetchJson<{ items: NotificationRule[] }>("/api/notifications/rules");
+};
+
+export const apiCreateNotificationRule = async (input: {
+  ruleName: string;
+  eventType: string;
+  offsetDays?: number | null;
+  escalateAfterDays?: number | null;
+  channelId: string;
+  messageTemplate?: string | null;
+  isActive?: boolean;
+}): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>("/api/notifications/rules", {
+    method: "POST",
+    body: {
+      ruleName: input.ruleName,
+      eventType: input.eventType,
+      offsetDays: input.offsetDays ?? null,
+      escalateAfterDays: input.escalateAfterDays ?? null,
+      channelId: input.channelId,
+      messageTemplate: input.messageTemplate ?? null,
+      isActive: input.isActive ?? true,
+    },
+  });
 };
 
 export const apiUpdateNotificationRule = async (input: {

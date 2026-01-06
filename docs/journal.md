@@ -295,3 +295,19 @@
 ## 2026-01-06 17:37
 - Moved PM Status filter to correct column in Assets header.
 - Verified alignment and behavior with lint and typecheck: OK.
+## 2026-01-06 19:49
+- Enhanced Notifications page with status/channel filters and page size.
+- Added quick actions: Run Now, Send Test Email, Settings link.
+- Implemented load-more appending and payload viewer for log entries.
+- Fixed lint warnings by memoizing query result arrays.
+- Ran `npm run lint` and `npx tsc --noEmit`: OK.
+## 2026-01-06 19:59
+- Added API client functions: create notification channel/rule.
+- Implemented Add/Edit Rule modals (Reminder/Escalation) with validation.
+- Implemented Add/Edit Channel modal; wired chevron/row click to edit.
+- Hooked saves to backend, invalidating queries on success.
+- Ran `npm run lint` and `npx tsc --noEmit`: OK.
+
+## 2026-01-06 19:58
+- Wired sidebar PM Tasks badge to real counts from dashboard overview.
+- Ran `npm run lint` and `npx tsc --noEmit`: OK.
