@@ -98,6 +98,7 @@ Required environment variables:
 ## Scheduling
 
 - Open PM Scheduling to view calendar counts and select a day to see tasks.
+- Calendar/day views include projected upcoming PM occurrences when tasks have not been generated yet.
 
 ## Microsoft Graph notifications
 

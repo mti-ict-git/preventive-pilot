@@ -630,6 +630,30 @@ export const runEvidenceImportJob = async (options?: EvidenceImportRunOptions): 
 
       await tx
         .request()
+        .input("assetId", sql.UniqueIdentifier, asset.assetId)
+        .input("templateId", sql.UniqueIdentifier, templateId)
+        .input("completedAt", sql.DateTime2(0), dateInfo.date)
+        .query(
+          [
+            "UPDATE s",
+            "SET",
+            "  LastPMCompletedAt = CASE",
+            "    WHEN s.LastPMCompletedAt IS NULL OR s.LastPMCompletedAt < @completedAt THEN @completedAt",
+            "    ELSE s.LastPMCompletedAt",
+            "  END,",
+            "  NextPMDueAt = CASE",
+            "    WHEN s.DefaultTemplateId = @templateId AND t.IntervalDays > 0 THEN dateadd(day, t.IntervalDays, @completedAt)",
+            "    ELSE s.NextPMDueAt",
+            "  END,",
+            "  UpdatedAt = sysutcdatetime()",
+            "FROM pm.AssetPMSettings s",
+            "LEFT JOIN pm.PMTemplates t ON t.TemplateId = s.DefaultTemplateId",
+            "WHERE s.AssetId = @assetId",
+          ].join("\n"),
+        );
+
+      await tx
+        .request()
         .input("taskId", sql.UniqueIdentifier, taskId)
         .input("fileName", sql.NVarChar(256), path.basename(destAbs))
         .input("sizeBytes", sql.BigInt, st.size)

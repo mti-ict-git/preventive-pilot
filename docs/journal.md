@@ -247,3 +247,6 @@
 - Added scheduling day selection with default highlight on today.
 - Added right-side event list showing PM tasks for the selected day.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 (time unavailable)
+- Updated Scheduling calendar/day endpoints to include projected PM occurrences when tasks have not been generated yet.
