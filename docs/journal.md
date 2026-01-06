@@ -311,3 +311,8 @@
 ## 2026-01-06 19:58
 - Wired sidebar PM Tasks badge to real counts from dashboard overview.
 - Ran `npm run lint` and `npx tsc --noEmit`: OK.
+
+## 2026-01-06 21:08
+- Expanded backend OpenAPI/Swagger docs for Assets, Tasks, and Notifications routes.
+- Fixed mobile lint errors (no-empty-object-type, no-require-imports).
+- Verified with `npm run lint`, `npx tsc --noEmit`, and backend typecheck.

@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import swaggerUi from "swagger-ui-express";
 import { env } from "./config/env.js";
 import { authRouter } from "./routes/auth.js";
 import { assetsRouter } from "./routes/assets.js";
@@ -13,6 +14,919 @@ import { dashboardRouter } from "./routes/dashboard.js";
 import { startJobs } from "./jobs/index.js";
 
 const app = express();
+
+type OpenApiSchema = {
+  openapi: string;
+  info: { title: string; version: string; description?: string };
+  servers: Array<{ url: string }>;
+  components?: {
+    securitySchemes?: Record<string, unknown>;
+    schemas?: Record<string, unknown>;
+  };
+  security?: Array<Record<string, string[]>>;
+  tags?: Array<{ name: string; description?: string }>;
+  paths: Record<string, unknown>;
+};
+
+const openApiSpec: OpenApiSchema = {
+  openapi: "3.1.0",
+  info: {
+    title: "Preventive Pilot API",
+    version: "1.0.0",
+    description: "REST API for Preventive Pilot (web + mobile clients)",
+  },
+  servers: [{ url: "http://localhost:" + String(env.BACKEND_PORT) }],
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+      },
+    },
+    schemas: {
+      OkResponse: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+        },
+        required: ["ok"],
+        additionalProperties: false,
+      },
+      IdResponse: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+        },
+        required: ["id"],
+        additionalProperties: false,
+      },
+      ErrorResponse: {
+        type: "object",
+        properties: {
+          message: { type: "string" },
+        },
+        required: ["message"],
+        additionalProperties: true,
+      },
+      LoginRequest: {
+        type: "object",
+        properties: {
+          identifier: { type: "string" },
+          username: { type: "string" },
+          password: { type: "string" },
+          provider: { type: "string", enum: ["ldap", "local"], default: "ldap" },
+        },
+        required: ["password"],
+        additionalProperties: false,
+      },
+      LoginResponse: {
+        type: "object",
+        properties: {
+          accessToken: { type: "string" },
+          user: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              username: { type: "string" },
+              displayName: { type: ["string", "null"] },
+              email: { type: ["string", "null"] },
+              roles: { type: "array", items: { type: "string" } },
+            },
+            required: ["id", "username", "roles"],
+          },
+        },
+        required: ["accessToken", "user"],
+      },
+      MeResponse: {
+        type: "object",
+        properties: {
+          user: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              username: { type: "string" },
+              roles: { type: "array", items: { type: "string" } },
+            },
+            required: ["id", "username", "roles"],
+          },
+        },
+        required: ["user"],
+      },
+      PaginatedList: {
+        type: "object",
+        properties: {
+          page: { type: "integer" },
+          pageSize: { type: "integer" },
+          items: { type: "array" },
+        },
+        required: ["page", "pageSize", "items"],
+      },
+      BulkSetPmEnabledRequest: {
+        type: "object",
+        properties: {
+          assetIds: { type: "array", items: { type: "string", format: "uuid" }, minItems: 1, maxItems: 200 },
+          pmEnabled: { type: "boolean" },
+        },
+        required: ["assetIds", "pmEnabled"],
+        additionalProperties: false,
+      },
+      BulkSetPmTemplateRequest: {
+        type: "object",
+        properties: {
+          assetIds: { type: "array", items: { type: "string", format: "uuid" }, minItems: 1, maxItems: 200 },
+          defaultTemplateId: { type: ["string", "null"], format: "uuid" },
+        },
+        required: ["assetIds", "defaultTemplateId"],
+        additionalProperties: false,
+      },
+      UpdateAssetPmRequest: {
+        type: "object",
+        properties: {
+          pmEnabled: { type: "boolean" },
+          defaultTemplateId: { type: ["string", "null"], format: "uuid" },
+          nextPmDueAt: { type: ["string", "null"], format: "date-time" },
+        },
+        additionalProperties: false,
+      },
+      NotificationChannelCreateRequest: {
+        type: "object",
+        properties: {
+          channelType: { type: "string", maxLength: 32 },
+          config: { type: ["string", "null"] },
+          isActive: { type: "boolean", default: true },
+        },
+        required: ["channelType"],
+        additionalProperties: false,
+      },
+      NotificationChannelUpdateRequest: {
+        type: "object",
+        properties: {
+          channelType: { type: "string", maxLength: 32 },
+          config: { type: ["string", "null"] },
+          isActive: { type: "boolean" },
+        },
+        additionalProperties: false,
+      },
+      NotificationRuleCreateRequest: {
+        type: "object",
+        properties: {
+          ruleName: { type: "string", maxLength: 256 },
+          eventType: { type: "string", maxLength: 64 },
+          offsetDays: { type: ["integer", "null"] },
+          escalateAfterDays: { type: ["integer", "null"] },
+          channelId: { type: "string", format: "uuid" },
+          messageTemplate: { type: ["string", "null"] },
+          isActive: { type: "boolean", default: true },
+        },
+        required: ["ruleName", "eventType", "channelId"],
+        additionalProperties: false,
+      },
+      NotificationRuleUpdateRequest: {
+        type: "object",
+        properties: {
+          ruleName: { type: "string", maxLength: 256 },
+          eventType: { type: "string", maxLength: 64 },
+          offsetDays: { type: ["integer", "null"] },
+          escalateAfterDays: { type: ["integer", "null"] },
+          channelId: { type: "string", format: "uuid" },
+          messageTemplate: { type: ["string", "null"] },
+          isActive: { type: "boolean" },
+        },
+        additionalProperties: false,
+      },
+      TaskAssignRequest: {
+        type: "object",
+        properties: {
+          assigneeUserId: { type: ["string", "null"], format: "uuid" },
+        },
+        required: ["assigneeUserId"],
+        additionalProperties: false,
+      },
+    },
+  },
+  security: [{ bearerAuth: [] }],
+  tags: [
+    { name: "Health" },
+    { name: "Auth" },
+    { name: "Assets" },
+    { name: "Tasks" },
+    { name: "Notifications" },
+    { name: "System" },
+  ],
+  paths: {
+    "/health": {
+      get: {
+        tags: ["Health"],
+        summary: "Health check",
+        security: [],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { status: { type: "string" } },
+                  required: ["status"],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/auth/login": {
+      post: {
+        tags: ["Auth"],
+        summary: "Login and receive access token",
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/LoginRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/LoginResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Invalid username or password",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/auth/me": {
+      get: {
+        tags: ["Auth"],
+        summary: "Get current user",
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/MeResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/assets": {
+      get: {
+        tags: ["Assets"],
+        summary: "List assets",
+        parameters: [
+          { name: "search", in: "query", required: false, schema: { type: "string" } },
+          { name: "categoryId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "categoryIds", in: "query", required: false, schema: { type: "string" } },
+          { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "status", in: "query", required: false, schema: { type: "string" } },
+          { name: "pmEnabled", in: "query", required: false, schema: { type: "string", enum: ["true", "false"] } },
+          { name: "page", in: "query", required: false, schema: { type: "integer", default: 1 } },
+          { name: "pageSize", in: "query", required: false, schema: { type: "integer", default: 50 } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/PaginatedList" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/assets/{assetId}": {
+      get: {
+        tags: ["Assets"],
+        summary: "Get asset by id",
+        parameters: [
+          { name: "assetId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": { description: "OK" },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/assets/{assetId}/pm": {
+      patch: {
+        tags: ["Assets"],
+        summary: "Update asset PM settings",
+        parameters: [
+          { name: "assetId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/UpdateAssetPmRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/assets/pm/bulk": {
+      post: {
+        tags: ["Assets"],
+        summary: "Bulk set PM enabled",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/BulkSetPmEnabledRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/assets/pm/bulk/template": {
+      post: {
+        tags: ["Assets"],
+        summary: "Bulk set default PM template",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/BulkSetPmTemplateRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks": {
+      get: {
+        tags: ["Tasks"],
+        summary: "List tasks",
+        parameters: [
+          { name: "status", in: "query", required: false, schema: { type: "string" } },
+          { name: "assigned", in: "query", required: false, schema: { type: "string", enum: ["me", "unassigned", "any"], default: "any" } },
+          { name: "overdue", in: "query", required: false, schema: { type: "string", enum: ["true", "false"] } },
+          { name: "assetId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "templateId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "dueFrom", in: "query", required: false, schema: { type: "string", format: "date-time" } },
+          { name: "dueTo", in: "query", required: false, schema: { type: "string", format: "date-time" } },
+          { name: "page", in: "query", required: false, schema: { type: "integer", default: 1 } },
+          { name: "pageSize", in: "query", required: false, schema: { type: "integer", default: 50 } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/PaginatedList" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/evidence/{evidenceId}": {
+      get: {
+        tags: ["Tasks"],
+        summary: "Download task evidence",
+        parameters: [
+          { name: "evidenceId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": { description: "OK" },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+      delete: {
+        tags: ["Tasks"],
+        summary: "Delete task evidence",
+        parameters: [
+          { name: "evidenceId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/checklist-evidence/{checklistEvidenceId}": {
+      get: {
+        tags: ["Tasks"],
+        summary: "Download checklist item evidence",
+        parameters: [
+          {
+            name: "checklistEvidenceId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: {
+          "200": { description: "OK" },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+      delete: {
+        tags: ["Tasks"],
+        summary: "Delete checklist item evidence",
+        parameters: [
+          {
+            name: "checklistEvidenceId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/{taskId}/export.pdf": {
+      get: {
+        tags: ["Tasks"],
+        summary: "Export task PDF",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": { description: "OK", content: { "application/pdf": { schema: { type: "string", format: "binary" } } } },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/{taskId}/assign": {
+      post: {
+        tags: ["Tasks"],
+        summary: "Assign/unassign a task",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/TaskAssignRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/{taskId}/start": {
+      post: {
+        tags: ["Tasks"],
+        summary: "Start a task",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/{taskId}/complete": {
+      post: {
+        tags: ["Tasks"],
+        summary: "Complete a task",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/{taskId}/evidence": {
+      post: {
+        tags: ["Tasks"],
+        summary: "Upload task evidence",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                properties: {
+                  file: { type: "string", format: "binary" },
+                },
+                required: ["file"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "OK" },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/notifications/channels": {
+      get: {
+        tags: ["Notifications"],
+        summary: "List notification channels",
+        responses: {
+          "200": { description: "OK" },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+      post: {
+        tags: ["Notifications"],
+        summary: "Create notification channel",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/NotificationChannelCreateRequest" } },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Created",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/notifications/channels/{channelId}": {
+      put: {
+        tags: ["Notifications"],
+        summary: "Update notification channel",
+        parameters: [
+          { name: "channelId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/NotificationChannelUpdateRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/notifications/rules": {
+      get: {
+        tags: ["Notifications"],
+        summary: "List notification rules",
+        responses: {
+          "200": { description: "OK" },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+      post: {
+        tags: ["Notifications"],
+        summary: "Create notification rule",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/NotificationRuleCreateRequest" } },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Created",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/notifications/rules/{ruleId}": {
+      put: {
+        tags: ["Notifications"],
+        summary: "Update notification rule",
+        parameters: [
+          { name: "ruleId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/NotificationRuleUpdateRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/notifications/log": {
+      get: {
+        tags: ["Notifications"],
+        summary: "List notification log entries",
+        parameters: [
+          { name: "page", in: "query", required: false, schema: { type: "integer", default: 1 } },
+          { name: "pageSize", in: "query", required: false, schema: { type: "integer", default: 50 } },
+          { name: "taskId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "ruleId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "status", in: "query", required: false, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "OK" },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/system/lookups": {
+      get: {
+        tags: ["System"],
+        summary: "List roles, categories, locations",
+        responses: {
+          "200": { description: "OK" },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+  },
+};
 
 app.use(
   cors({
@@ -28,6 +942,12 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+app.get("/api/docs.json", (_req, res) => {
+  res.json(openApiSpec);
+});
+
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 app.use("/api/auth", authRouter);
 app.use("/api/assets", assetsRouter);
