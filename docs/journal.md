@@ -198,6 +198,30 @@
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-06 10:39
+## 2026-01-06 15:44
+- Fixed Next PM off-by-one for annual interval by using dateadd(year, 1).
+- Updated assets, scheduling, tasks, and evidence import queries to apply year-based addition when IntervalDays = 365.
+ - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 16:22
+- Mapped template intervals to calendar units: 30→+1 month, 90→+3 months, 180→+6 months, 365→+1 year.
+- Applied mapping across assets, scheduling job, manual recalc, task completion, and evidence import.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 17:00
+- Queried API for asset MTI-PC-003 and its assigned template.
+- Confirmed template IntervalDays = 180 (Semi-Annual).
+- Noted existing NextPMDueAt stored as 2026-07-04 which conflicts with template.
+
+## 2026-01-06 17:03
+- Added force option to scheduling recalculation to ignore stored NextPMDueAt.
+- Ran forced recalculation across all PM-enabled assets; normalized NextPMDueAt.
+- Verified MTI-PC-003 NextPMDueAt is now 2026-01-03 (aligned to 180 days).
+
+## 2026-01-06 17:07
+- Added Scheduling UI actions: Recalculate All and Recalculate (Force).
+- Implemented frontend API call for forced recalculation and invalidation of calendar/day/assets queries.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 - Implemented Microsoft Graph notification settings storage in pm.MicrosoftGraphSettings.
 - Added backend system routes to load, update, and test Microsoft Graph settings with env fallback.
 - Created Settings > Notification UI for Microsoft Graph configuration and wired to API.
@@ -250,3 +274,9 @@
 
 ## 2026-01-06 (time unavailable)
 - Updated Scheduling calendar/day endpoints to include projected PM occurrences when tasks have not been generated yet.
+## 2026-01-06 17:19
+- Aligned Scheduling calendar/day fallback to calendar-aware intervals (30/90/180→months, 365→year).
+- Updated Assets API Next PM computation to use calendar-aware mapping instead of pure days.
+- Verified removal of duplicate apiRecalculateSchedules definition in frontend.
+- Ran lint and typecheck: OK.
+- Attempted API verification for MTI-PC-003 via DB; asset not found in current DB.

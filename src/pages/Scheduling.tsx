@@ -47,10 +47,30 @@ const Scheduling = () => {
     mutationFn: async () => apiRecalculateSchedules(),
     onSuccess: async () => {
       toast({ title: "Recalculation started", description: "Schedules recalculated." });
-      await queryClient.invalidateQueries({ queryKey: ["assets"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["scheduling", "calendar"] }),
+        queryClient.invalidateQueries({ queryKey: ["scheduling", "day"] }),
+        queryClient.invalidateQueries({ queryKey: ["assets"] }),
+      ]);
     },
     onError: (err: unknown) => {
       const message = err instanceof ApiError ? err.message : "Failed to recalculate schedules";
+      toast({ title: "Action failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const recalcForceMutation = useMutation({
+    mutationFn: async () => apiRecalculateSchedules({ force: true }),
+    onSuccess: async () => {
+      toast({ title: "Forced recalculation", description: "Stored Next PM ignored and recomputed." });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["scheduling", "calendar"] }),
+        queryClient.invalidateQueries({ queryKey: ["scheduling", "day"] }),
+        queryClient.invalidateQueries({ queryKey: ["assets"] }),
+      ]);
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to force recalculate schedules";
       toast({ title: "Action failed", description: message, variant: "destructive" });
     },
   });
@@ -356,6 +376,15 @@ const Scheduling = () => {
               >
                 <Clock className="w-4 h-4" />
                 Recalculate All Schedules
+              </Button>
+              <Button
+                className="mt-2 w-full gap-2"
+                variant="outline"
+                onClick={() => recalcForceMutation.mutate()}
+                disabled={recalcForceMutation.isPending}
+              >
+                <AlertTriangle className="w-4 h-4" />
+                Recalculate (Force)
               </Button>
             </motion.div>
 

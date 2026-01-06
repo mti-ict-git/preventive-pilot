@@ -843,6 +843,15 @@ export const apiGetSchedulingDayEvents = async (input: {
   return apiFetchJson<{ items: SchedulingDayEventItem[] }>(`/api/scheduling/day?${params.toString()}`);
 };
 
+export const apiRecalculateSchedules = async (input: { assetId?: string; force?: boolean }): Promise<{ updated: number }> => {
+  const body = JSON.stringify({ assetId: input.assetId ?? undefined, force: Boolean(input.force) });
+  return apiFetchJson<{ updated: number }>("/api/scheduling/recalculate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+};
+
 export type TemplateSummary = {
   id: string;
   name: string;
@@ -962,12 +971,6 @@ export const apiListBlackoutWindows = async (): Promise<{ items: BlackoutWindow[
   return apiFetchJson<{ items: BlackoutWindow[] }>("/api/scheduling/blackout-windows");
 };
 
-export const apiRecalculateSchedules = async (assetId?: string): Promise<{ ok: true; updated: number } | { ok: true }> => {
-  return apiFetchJson<{ ok: true; updated: number } | { ok: true }>("/api/scheduling/recalculate", {
-    method: "POST",
-    body: assetId ? { assetId } : {},
-  });
-};
 
 export type NotificationChannel = {
   id: string;

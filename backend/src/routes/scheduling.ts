@@ -26,6 +26,7 @@ const BlackoutWindowSchema = z.object({
 
 const RecalcSchema = z.object({
   assetId: z.string().uuid().optional(),
+  force: z.boolean().optional().default(false),
 });
 
 const CalendarQuerySchema = z.object({
@@ -331,6 +332,25 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
   const tx = new sql.Transaction(db);
   await tx.begin();
   try {
+    const nextDueCase = [
+      "      CASE",
+      "        WHEN t.IntervalDays = 30 THEN dateadd(month, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+      "        WHEN t.IntervalDays = 90 THEN dateadd(month, 3, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+      "        WHEN t.IntervalDays = 180 THEN dateadd(month, 6, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+      "        WHEN t.IntervalDays = 365 THEN dateadd(year, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+      "        ELSE dateadd(day, t.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+      "      END",
+    ].join("\n");
+
+    const nextDueExpr = parsed.data.force
+      ? nextDueCase
+      : [
+          "      COALESCE(",
+          "        s.NextPMDueAt,",
+          nextDueCase,
+          "      )",
+        ].join("\n");
+
     const request = tx
       .request()
       .input("assetId", sql.UniqueIdentifier, parsed.data.assetId ?? null)
@@ -341,10 +361,7 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
           "  s.DefaultTemplateId AS DefaultTemplateId,",
           "  COALESCE(h.LastCompletedAt, s.LastPMCompletedAt) AS LastPMCompletedAt,",
           "  CAST(",
-          "    COALESCE(",
-          "      s.NextPMDueAt,",
-          "      dateadd(day, t.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-          "    )",
+          nextDueExpr,
           "    AS datetime2(0)",
           "  ) AS NextPMDueAt,",
           "  t.IntervalDays AS IntervalDays",
@@ -504,7 +521,13 @@ schedulingRouter.get("/day", async (req, res) => {
         "    SELECT CAST(",
         "      COALESCE(",
         "        s.NextPMDueAt,",
-        "        dateadd(day, tpl.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        CASE",
+        "          WHEN tpl.IntervalDays = 30 THEN dateadd(month, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "          WHEN tpl.IntervalDays = 90 THEN dateadd(month, 3, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "          WHEN tpl.IntervalDays = 180 THEN dateadd(month, 6, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "          WHEN tpl.IntervalDays = 365 THEN dateadd(year, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "          ELSE dateadd(day, tpl.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        END",
         "      )",
         "      AS datetime2(0)",
         "    ) AS CandidateDueAt",
@@ -668,7 +691,13 @@ schedulingRouter.get("/calendar", async (req, res) => {
         "    SELECT CAST(",
         "      COALESCE(",
         "        s.NextPMDueAt,",
-        "        dateadd(day, tpl.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        CASE",
+        "          WHEN tpl.IntervalDays = 30 THEN dateadd(month, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "          WHEN tpl.IntervalDays = 90 THEN dateadd(month, 3, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "          WHEN tpl.IntervalDays = 180 THEN dateadd(month, 6, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "          WHEN tpl.IntervalDays = 365 THEN dateadd(year, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "          ELSE dateadd(day, tpl.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        END",
         "      )",
         "      AS datetime2(0)",
         "    ) AS CandidateDueAt",
