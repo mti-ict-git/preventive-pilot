@@ -7,6 +7,7 @@ import { getDb } from "../db/mssql.js";
 import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireAnyRole } from "../middleware/requireRole.js";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const parseBoolean = (value: unknown): boolean | null => {
   if (value === undefined || value === null) return null;
@@ -58,6 +59,375 @@ const EvidenceSchema = z.object({
 
 const managerRoles = ["Superadmin", "Admin", "Supervisor"] as const;
 const requireManager = requireAnyRole(managerRoles);
+
+const writeAuditLog = async (input: {
+  actorUserId: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  metadata: Record<string, unknown>;
+  ipAddress: string | null;
+  userAgent: string | null;
+}): Promise<void> => {
+  const db = await getDb();
+  const metadata = JSON.stringify(input.metadata);
+  await db
+    .request()
+    .input("actorUserId", sql.UniqueIdentifier, input.actorUserId)
+    .input("action", sql.NVarChar(128), input.action)
+    .input("entityType", sql.NVarChar(128), input.entityType)
+    .input("entityId", sql.UniqueIdentifier, input.entityId)
+    .input("metadata", sql.NVarChar(sql.MAX), metadata)
+    .input("ipAddress", sql.NVarChar(64), input.ipAddress)
+    .input("userAgent", sql.NVarChar(512), input.userAgent)
+    .query(
+      [
+        "INSERT INTO pm.AuditLog (",
+        "  ActorUserId, Action, EntityType, EntityId, Metadata, IpAddress, UserAgent",
+        ")",
+        "VALUES (",
+        "  @actorUserId, @action, @entityType, @entityId, @metadata, @ipAddress, @userAgent",
+        ")",
+      ].join("\n"),
+    );
+};
+
+type InspectionChecklistRow = {
+  itemText: string;
+  outcomeLabel: "skip" | "pass" | "fail" | "done";
+  notes: string | null;
+};
+
+const A4_POINTS = { width: 595.28, height: 841.89 } as const;
+
+const wrapText = (input: {
+  text: string;
+  maxWidth: number;
+  font: { widthOfTextAtSize(text: string, size: number): number };
+  fontSize: number;
+}): string[] => {
+  const normalized = input.text.replace(/\s+/g, " ").trim();
+  if (!normalized) return [""];
+  const words = normalized.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  for (const w of words) {
+    const next = current ? `${current} ${w}` : w;
+    if (input.font.widthOfTextAtSize(next, input.fontSize) <= input.maxWidth) {
+      current = next;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = w;
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [""];
+};
+
+const formatDateDmy = (value: Date | null): string => {
+  if (!value) return "";
+  const d = String(value.getUTCDate()).padStart(2, "0");
+  const m = String(value.getUTCMonth() + 1).padStart(2, "0");
+  const y = String(value.getUTCFullYear());
+  return `${d}/${m}/${y}`;
+};
+
+const toDateOrNull = (value: unknown): Date | null => {
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value;
+  if (typeof value === "string") {
+    const d = new Date(value);
+    return Number.isFinite(d.getTime()) ? d : null;
+  }
+  return null;
+};
+
+const buildPmHistoryPdf = async (input: {
+  title: string;
+  name: string;
+  username: string;
+  date: Date | null;
+  assetName: string;
+  rows: InspectionChecklistRow[];
+  evidenceFileNames: string[];
+}): Promise<Uint8Array> => {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  const margin = 32;
+  const headerHeight = 150;
+  const footerHeight = 80;
+
+  const colItem = 210;
+  const colBaik = 35;
+  const colTidak = 35;
+  const colLokasi = 70;
+  const colKeterangan = 120;
+  const colTindak = 70;
+  const tableWidth = colItem + colBaik + colTidak + colLokasi + colKeterangan + colTindak;
+
+  const ensurePage = (): { page: ReturnType<typeof doc.addPage>; yStart: number } => {
+    const page = doc.addPage([A4_POINTS.width, A4_POINTS.height]);
+    return { page, yStart: A4_POINTS.height - margin };
+  };
+
+  const drawHeader = (page: ReturnType<typeof doc.addPage>) => {
+    const top = A4_POINTS.height - margin;
+    const left = margin;
+    page.drawLine({
+      start: { x: left, y: top - 40 },
+      end: { x: A4_POINTS.width - margin, y: top - 40 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
+    const titleSize = 14;
+    const titleWidth = fontBold.widthOfTextAtSize(input.title, titleSize);
+    page.drawText(input.title, {
+      x: Math.max(left, (A4_POINTS.width - titleWidth) / 2),
+      y: top - 65,
+      size: titleSize,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
+
+    const fieldStartY = top - 92;
+    const labelSize = 10;
+    const valueSize = 10;
+    const gapY = 16;
+    const labelX = left;
+    const colonX = left + 62;
+    const valueX = left + 76;
+    const lineX1 = valueX;
+    const lineX2 = left + tableWidth;
+
+    const fields: Array<{ label: string; value: string }> = [
+      { label: "Nama", value: input.name },
+      { label: "Tanggal", value: formatDateDmy(input.date) },
+      { label: "Username", value: input.username },
+      { label: "Assetname", value: input.assetName },
+    ];
+
+    fields.forEach((f, idx) => {
+      const y = fieldStartY - idx * gapY;
+      page.drawText(f.label, { x: labelX, y, size: labelSize, font, color: rgb(0, 0, 0) });
+      page.drawText(":", { x: colonX, y, size: labelSize, font, color: rgb(0, 0, 0) });
+      page.drawText(f.value, { x: valueX, y, size: valueSize, font, color: rgb(0, 0, 0) });
+      page.drawLine({
+        start: { x: lineX1, y: y - 2 },
+        end: { x: lineX2, y: y - 2 },
+        thickness: 0.75,
+        color: rgb(0, 0, 0),
+      });
+    });
+  };
+
+  const drawTableHeader = (page: ReturnType<typeof doc.addPage>, y: number) => {
+    const left = margin;
+    const headerH1 = 18;
+    const headerH2 = 18;
+    page.drawRectangle({ x: left, y: y - headerH1, width: tableWidth, height: headerH1, color: rgb(0.15, 0.15, 0.15) });
+    page.drawRectangle({ x: left, y: y - headerH1 - headerH2, width: tableWidth, height: headerH2, color: rgb(0.94, 0.94, 0.94) });
+
+    const textY1 = y - 13;
+    const textY2 = y - headerH1 - 13;
+    const white = rgb(1, 1, 1);
+    const black = rgb(0, 0, 0);
+    const size1 = 10;
+    const size2 = 9;
+
+    page.drawText("ITEM", { x: left + 6, y: textY1, size: size1, font: fontBold, color: white });
+    page.drawText("Kondisi", { x: left + colItem + 6, y: textY1, size: size1, font: fontBold, color: white });
+    page.drawText("Lokasi", { x: left + colItem + colBaik + colTidak + 6, y: textY1, size: size1, font: fontBold, color: white });
+    page.drawText("Keterangan", { x: left + colItem + colBaik + colTidak + colLokasi + 6, y: textY1, size: size1, font: fontBold, color: white });
+    page.drawText("Tindak\nLanjut", { x: left + colItem + colBaik + colTidak + colLokasi + colKeterangan + 6, y: textY1 - 4, size: 9, font: fontBold, color: white, lineHeight: 10 });
+
+    page.drawText("Baik", { x: left + colItem + 6, y: textY2, size: size2, font: fontBold, color: black });
+    page.drawText("Tidak", { x: left + colItem + colBaik + 6, y: textY2, size: size2, font: fontBold, color: black });
+
+    const yTop = y;
+    const yBottom = y - headerH1 - headerH2;
+    const xs = [
+      left,
+      left + colItem,
+      left + colItem + colBaik,
+      left + colItem + colBaik + colTidak,
+      left + colItem + colBaik + colTidak + colLokasi,
+      left + colItem + colBaik + colTidak + colLokasi + colKeterangan,
+      left + tableWidth,
+    ];
+    for (const x of xs) {
+      page.drawLine({ start: { x, y: yTop }, end: { x, y: yBottom }, thickness: 0.75, color: rgb(0, 0, 0) });
+    }
+    page.drawLine({ start: { x: left, y: yTop }, end: { x: left + tableWidth, y: yTop }, thickness: 0.75, color: rgb(0, 0, 0) });
+    page.drawLine({ start: { x: left, y: y - headerH1 }, end: { x: left + tableWidth, y: y - headerH1 }, thickness: 0.75, color: rgb(0, 0, 0) });
+    page.drawLine({ start: { x: left, y: yBottom }, end: { x: left + tableWidth, y: yBottom }, thickness: 0.75, color: rgb(0, 0, 0) });
+    return yBottom;
+  };
+
+  const drawFooter = (page: ReturnType<typeof doc.addPage>, pageIndex: number, pageCount: number) => {
+    const left = margin;
+    const bottom = margin;
+    const y = bottom + 24;
+    page.drawLine({ start: { x: left, y: y + 40 }, end: { x: left + tableWidth, y: y + 40 }, thickness: 0.75, color: rgb(0, 0, 0) });
+
+    const labelSize = 8;
+    const valueSize = 8;
+    const colW = tableWidth / 3;
+
+    page.drawText("Document Description", { x: left + 2, y: y + 26, size: labelSize, font: fontBold });
+    page.drawText("Document No.", { x: left + colW + 2, y: y + 26, size: labelSize, font: fontBold });
+    page.drawText("Version", { x: left + colW * 2 + 2, y: y + 26, size: labelSize, font: fontBold });
+    page.drawText("Issue Date", { x: left + colW * 2 + 60, y: y + 26, size: labelSize, font: fontBold });
+
+    page.drawText("Form End Device PC Laptop inspection\nChecklist", { x: left + 2, y: y + 10, size: valueSize, font, lineHeight: 10 });
+    page.drawText("MTI-HRM-ICT-FRM-013", { x: left + colW + 2, y: y + 10, size: valueSize, font });
+    page.drawText("Rev.000", { x: left + colW * 2 + 2, y: y + 10, size: valueSize, font });
+    page.drawText("13 Dec 2024", { x: left + colW * 2 + 60, y: y + 10, size: valueSize, font });
+    page.drawText(`${pageIndex}/${pageCount}`, { x: left + tableWidth - 22, y: y + 10, size: valueSize, font });
+  };
+
+  const drawSignatures = (page: ReturnType<typeof doc.addPage>, yTop: number) => {
+    const left = margin;
+    const y = yTop;
+    const blockW = tableWidth / 3;
+    const labelSize = 9;
+    const lineY1 = y - 40;
+    const lineY2 = y - 75;
+    const nameLineY = y - 98;
+    const dateLineY = y - 120;
+
+    const labels = ["Reported By:", "Reviewed By:", "Acknowledge By:"];
+    labels.forEach((t, i) => {
+      page.drawText(t, { x: left + blockW * i + 2, y: y - 14, size: labelSize, font: fontBold });
+      page.drawLine({ start: { x: left + blockW * i + 2, y: lineY1 }, end: { x: left + blockW * (i + 1) - 2, y: lineY1 }, thickness: 0.75, color: rgb(0, 0, 0) });
+      page.drawText("Nama :", { x: left + blockW * i + 2, y: lineY2, size: labelSize, font });
+      page.drawLine({ start: { x: left + blockW * i + 42, y: nameLineY }, end: { x: left + blockW * (i + 1) - 2, y: nameLineY }, thickness: 0.75, color: rgb(0, 0, 0) });
+      page.drawText("Tgl  :", { x: left + blockW * i + 2, y: lineY2 - 22, size: labelSize, font });
+      page.drawLine({ start: { x: left + blockW * i + 42, y: dateLineY }, end: { x: left + blockW * (i + 1) - 2, y: dateLineY }, thickness: 0.75, color: rgb(0, 0, 0) });
+    });
+    return y - 130;
+  };
+
+  const pages: Array<ReturnType<typeof doc.addPage>> = [];
+  const newPage = () => {
+    const { page } = ensurePage();
+    pages.push(page);
+    drawHeader(page);
+    return page;
+  };
+
+  let page = newPage();
+  let y = A4_POINTS.height - margin - headerHeight;
+
+  y = drawTableHeader(page, y);
+
+  const rowFontSize = 9;
+  const cellPadX = 6;
+  const cellPadY = 4;
+
+  const usableBottomY = margin + footerHeight + 170;
+
+  const drawRow = (r: InspectionChecklistRow) => {
+    const left = margin;
+    const itemLines = wrapText({ text: r.itemText, maxWidth: colItem - cellPadX * 2, font, fontSize: rowFontSize });
+    const notesLines = wrapText({ text: r.notes ?? "", maxWidth: colKeterangan - cellPadX * 2, font, fontSize: rowFontSize });
+    const neededLines = Math.max(itemLines.length, notesLines.length, 1);
+    const rowH = cellPadY * 2 + neededLines * 12;
+
+    if (y - rowH < usableBottomY) {
+      page = newPage();
+      y = A4_POINTS.height - margin - headerHeight;
+      y = drawTableHeader(page, y);
+    }
+
+    const top = y;
+    const bottom = y - rowH;
+    const xs = [
+      left,
+      left + colItem,
+      left + colItem + colBaik,
+      left + colItem + colBaik + colTidak,
+      left + colItem + colBaik + colTidak + colLokasi,
+      left + colItem + colBaik + colTidak + colLokasi + colKeterangan,
+      left + tableWidth,
+    ];
+
+    page.drawLine({ start: { x: left, y: top }, end: { x: left + tableWidth, y: top }, thickness: 0.75, color: rgb(0, 0, 0) });
+    page.drawLine({ start: { x: left, y: bottom }, end: { x: left + tableWidth, y: bottom }, thickness: 0.75, color: rgb(0, 0, 0) });
+    for (const x of xs) {
+      page.drawLine({ start: { x, y: top }, end: { x, y: bottom }, thickness: 0.75, color: rgb(0, 0, 0) });
+    }
+
+    const textStartY = top - cellPadY - 10;
+    itemLines.forEach((t, idx) => {
+      page.drawText(t, { x: left + cellPadX, y: textStartY - idx * 12, size: rowFontSize, font });
+    });
+    notesLines.forEach((t, idx) => {
+      page.drawText(t, { x: left + colItem + colBaik + colTidak + colLokasi + cellPadX, y: textStartY - idx * 12, size: rowFontSize, font });
+    });
+
+    const checkboxSize = 10;
+    const checkY = top - cellPadY - 12;
+    const boxY = checkY - 2;
+    const baikBoxX = left + colItem + 12;
+    const tidakBoxX = left + colItem + colBaik + 12;
+
+    const drawCheck = (x: number, checked: boolean) => {
+      page.drawRectangle({ x, y: boxY, width: checkboxSize, height: checkboxSize, borderColor: rgb(0, 0, 0), borderWidth: 0.75 });
+      if (checked) {
+        page.drawText("✓", { x: x + 2, y: boxY + 1, size: 12, font: fontBold });
+      }
+    };
+
+    const isBaik = r.outcomeLabel === "pass" || r.outcomeLabel === "done";
+    const isTidak = r.outcomeLabel === "fail";
+    drawCheck(baikBoxX, isBaik);
+    drawCheck(tidakBoxX, isTidak);
+
+    y = bottom;
+  };
+
+  for (const r of input.rows) drawRow(r);
+
+  if (input.evidenceFileNames.length > 0) {
+    const left = margin;
+    const sectionTitle = "Evidence Files";
+    const titleSize = 10;
+    const lineH = 12;
+    const items = input.evidenceFileNames;
+    const maxWidth = tableWidth;
+
+    const lines: string[] = [];
+    for (const f of items) {
+      const w = wrapText({ text: f, maxWidth: maxWidth - 14, font, fontSize: 9 });
+      for (const l of w) lines.push(l);
+    }
+
+    const neededH = 20 + lines.length * lineH;
+    if (y - neededH < usableBottomY) {
+      page = newPage();
+      y = A4_POINTS.height - margin - headerHeight;
+    }
+
+    page.drawText(sectionTitle, { x: left, y: y - 14, size: titleSize, font: fontBold });
+    y = y - 30;
+    for (const l of lines) {
+      page.drawText(l, { x: left + 12, y, size: 9, font });
+      y -= lineH;
+    }
+  }
+
+  if (y - 170 < margin + footerHeight) {
+    page = newPage();
+    y = A4_POINTS.height - margin - headerHeight;
+  }
+  const yAfterSign = drawSignatures(page, y);
+  y = yAfterSign;
+
+  pages.forEach((p, idx) => drawFooter(p, idx + 1, pages.length));
+
+  return doc.save();
+};
 
 const MIME_BY_EXT: Record<string, string> = {
   ".pdf": "application/pdf",
@@ -1208,6 +1578,157 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         : null,
     })),
   });
+});
+
+tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const taskResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.TaskId AS TaskId,",
+        "  t.TaskNumber AS TaskNumber,",
+        "  t.TemplateId AS TemplateId,",
+        "  a.AssetTag AS AssetTag,",
+        "  a.Name AS AssetName,",
+        "  tpl.Name AS TemplateName,",
+        "  t.CompletedAt AS CompletedAt,",
+        "  t.CompletedByUserId AS CompletedByUserId,",
+        "  cu.Username AS CompletedByUsername,",
+        "  cu.DisplayName AS CompletedByDisplayName",
+        "FROM pm.PMTasks t",
+        "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "LEFT JOIN pm.Users cu ON cu.UserId = t.CompletedByUserId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const taskRow = taskResult.recordset[0] as Record<string, unknown> | undefined;
+  if (!taskRow) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const taskNumber = typeof taskRow.TaskNumber === "string" ? taskRow.TaskNumber : "";
+  const assetNameRaw = typeof taskRow.AssetName === "string" ? taskRow.AssetName : "";
+  const assetTag = typeof taskRow.AssetTag === "string" ? taskRow.AssetTag : null;
+  const assetName = assetTag ? `${assetTag} - ${assetNameRaw}` : assetNameRaw;
+  const completedAt = toDateOrNull(taskRow.CompletedAt);
+  const name =
+    typeof taskRow.CompletedByDisplayName === "string" && taskRow.CompletedByDisplayName.trim()
+      ? taskRow.CompletedByDisplayName
+      : typeof taskRow.CompletedByUsername === "string" && taskRow.CompletedByUsername.trim()
+        ? taskRow.CompletedByUsername
+        : "";
+  const username = typeof taskRow.CompletedByUsername === "string" ? taskRow.CompletedByUsername : "";
+
+  const checklistResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .input("templateId", sql.UniqueIdentifier, taskRow.TemplateId as string)
+    .query(
+      [
+        "SELECT",
+        "  i.SortOrder AS SortOrder,",
+        "  i.ItemText AS ItemText,",
+        "  i.RequiresPassFail AS RequiresPassFail,",
+        "  r.Outcome AS Outcome,",
+        "  r.Notes AS Notes",
+        "FROM pm.PMTemplateChecklistItems i",
+        "LEFT JOIN pm.PMTaskChecklistResults r",
+        "  ON r.TemplateChecklistItemId = i.TemplateChecklistItemId",
+        "  AND r.TaskId = @taskId",
+        "WHERE i.TemplateId = @templateId",
+        "  AND i.IsActive = 1",
+        "ORDER BY i.SortOrder ASC",
+      ].join("\n"),
+    );
+
+  const checklistRows = checklistResult.recordset as Array<Record<string, unknown>>;
+  const rows: InspectionChecklistRow[] = checklistRows.map((r) => {
+    const itemText = typeof r.ItemText === "string" ? r.ItemText : "";
+    const requiresPassFail = bitToBoolean(r.RequiresPassFail);
+    const rawOutcome = typeof r.Outcome === "number" ? r.Outcome : r.Outcome ? Number(r.Outcome) : 0;
+    const normalizedOutcome: 0 | 1 | 2 = requiresPassFail
+      ? rawOutcome === 1
+        ? 1
+        : rawOutcome === 2
+          ? 2
+          : 0
+      : rawOutcome === 1 || rawOutcome === 2
+        ? 1
+        : 0;
+    const outcomeLabel = outcomeLabelFor(requiresPassFail, normalizedOutcome);
+    const notes = typeof r.Notes === "string" ? r.Notes : null;
+    return { itemText, outcomeLabel, notes };
+  });
+
+  const evidenceResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT",
+        "  e.FileName AS FileName",
+        "FROM pm.PMTaskEvidence e",
+        "WHERE e.TaskId = @taskId",
+        "UNION ALL",
+        "SELECT",
+        "  e.FileName AS FileName",
+        "FROM pm.PMTaskChecklistEvidence e",
+        "WHERE e.TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const evidenceRows = evidenceResult.recordset as Array<Record<string, unknown>>;
+  const evidenceFileNames = Array.from(
+    new Set(
+      evidenceRows
+        .map((r) => (typeof r.FileName === "string" ? r.FileName.trim() : ""))
+        .filter((v) => v.length > 0),
+    ),
+  );
+
+  const bytes = await buildPmHistoryPdf({
+    title: "Form End Device PC Laptop Inspection Checklist",
+    name,
+    username,
+    date: completedAt,
+    assetName,
+    rows,
+    evidenceFileNames,
+  });
+
+  const nowIso = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `${sanitizeSegment(taskNumber || "pm-task")}_inspection_${nowIso}.pdf`;
+
+  await writeAuditLog({
+    actorUserId: req.user.sub,
+    action: "task.export",
+    entityType: "task",
+    entityId: taskId,
+    metadata: {
+      format: "pdf",
+      taskNumber: taskNumber || null,
+      checklistItemCount: rows.length,
+      evidenceFileCount: evidenceFileNames.length,
+    },
+    ipAddress: typeof req.ip === "string" ? req.ip : null,
+    userAgent: req.get("user-agent") ?? null,
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename.replace(/"/g, "")}"`);
+  res.send(Buffer.from(bytes));
 });
 
 tasksRouter.post("/:taskId/assign", requireManager, async (req, res) => {

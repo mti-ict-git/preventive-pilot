@@ -42,6 +42,7 @@ import { isManager } from "@/lib/auth";
 import {
   ApiError,
   apiDownloadEvidence,
+  apiDownloadTaskPdf,
   apiGetAsset,
   apiGetSystemStatus,
   apiGetTask,
@@ -89,6 +90,7 @@ const AssetDetail = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string | null>(null);
   const [previewContentType, setPreviewContentType] = useState<string | null>(null);
+  const [exportingPdfTaskId, setExportingPdfTaskId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -294,6 +296,27 @@ const AssetDetail = () => {
     } catch (err: unknown) {
       const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to download evidence";
       toast({ title: "Evidence error", description: message, variant: "destructive" });
+    }
+  };
+
+  const downloadTaskPdf = async (taskId: string): Promise<void> => {
+    setExportingPdfTaskId(taskId);
+    try {
+      const res = await apiDownloadTaskPdf(taskId);
+      const url = URL.createObjectURL(res.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.fileName ?? "pm-history.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      toast({ title: "Export ready", description: "PDF downloaded." });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to export PDF";
+      toast({ title: "Export failed", description: message, variant: "destructive" });
+    } finally {
+      setExportingPdfTaskId((prev) => (prev === taskId ? null : prev));
     }
   };
 
@@ -842,6 +865,23 @@ const AssetDetail = () => {
                                   <p className="text-sm text-muted-foreground mb-1">Evidence Files</p>
                                   <p className="text-lg font-semibold text-foreground">{expandedTask.evidence.length}</p>
                                 </div>
+                              </div>
+
+                              <div className="flex items-center justify-end">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-2"
+                                  disabled={exportingPdfTaskId === task.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void downloadTaskPdf(task.id);
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" />
+                                  {exportingPdfTaskId === task.id ? "Exporting…" : "Export PDF"}
+                                </Button>
                               </div>
 
                               <div>

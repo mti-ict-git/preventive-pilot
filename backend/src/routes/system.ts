@@ -356,7 +356,15 @@ const MicrosoftGraphSettingsUpdateSchema = z.object({
   enabled: z.boolean(),
 });
 
-const MicrosoftGraphSettingsTestSchema = MicrosoftGraphSettingsUpdateSchema.partial().optional();
+const MicrosoftGraphSettingsTestSchema = MicrosoftGraphSettingsUpdateSchema.partial()
+  .extend({
+    sendTestEmail: z.boolean().optional(),
+  })
+  .optional();
+
+const toGraphRecipients = (addresses: string[]) => {
+  return addresses.map((address) => ({ emailAddress: { address } }));
+};
 
 const AssetsUiSettingsSchema = z.object({
   visibleCategoryIds: z.array(z.string().uuid()).min(1).nullable(),
@@ -523,9 +531,15 @@ systemRouter.post("/microsoft-graph-settings/test", requireSystemAdmin, async (r
   const emailBodyTemplate = parsed.data?.emailBodyTemplate ?? effective.emailBodyTemplate;
   const enabled = parsed.data?.enabled ?? effective.enabled;
   const clientSecretOverride = parsed.data?.clientSecret ?? null;
+  const sendTestEmail = parsed.data?.sendTestEmail ?? false;
 
   if (!tenantId || !clientId || !senderEmail || scope.length === 0) {
     res.status(400).json({ message: "Microsoft Graph not fully configured" });
+    return;
+  }
+
+  if (sendTestEmail && !enabled) {
+    res.status(400).json({ message: "Microsoft Graph notifications disabled" });
     return;
   }
 
@@ -565,6 +579,43 @@ systemRouter.post("/microsoft-graph-settings/test", requireSystemAdmin, async (r
     if (!accessToken) {
       res.status(400).json({ message: "Token response missing access_token" });
       return;
+    }
+
+    if (sendTestEmail) {
+      if (defaultToRecipients.length === 0 && defaultCcRecipients.length === 0 && defaultBccRecipients.length === 0) {
+        res.status(400).json({ message: "No recipients configured (default to/cc/bcc)" });
+        return;
+      }
+
+      const sendUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(senderEmail)}/sendMail`;
+      const subject = emailSubjectTemplate?.trim() ? emailSubjectTemplate.trim() : "Microsoft Graph Test Email";
+      const bodyContent = emailBodyTemplate?.trim()
+        ? emailBodyTemplate.trim()
+        : `Test email sent at ${new Date().toISOString()}`;
+
+      const sendRes = await fetch(sendUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: {
+            subject,
+            body: { contentType: "Text", content: bodyContent },
+            toRecipients: toGraphRecipients(defaultToRecipients),
+            ccRecipients: toGraphRecipients(defaultCcRecipients),
+            bccRecipients: toGraphRecipients(defaultBccRecipients),
+          },
+          saveToSentItems: false,
+        }),
+      });
+
+      if (!sendRes.ok) {
+        const text = await sendRes.text().catch(() => "");
+        res.status(400).json({ message: `Graph sendMail failed (${sendRes.status}) ${text}`.trim() });
+        return;
+      }
     }
 
     const now = new Date();
@@ -611,7 +662,12 @@ systemRouter.post("/microsoft-graph-settings/test", requireSystemAdmin, async (r
       return;
     }
 
-    res.json({ ok: true, accessTokenPresent: Boolean(accessToken), lastConnectionTestAt: now.toISOString() });
+    res.json({
+      ok: true,
+      accessTokenPresent: Boolean(accessToken),
+      lastConnectionTestAt: now.toISOString(),
+      testEmailSent: sendTestEmail,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     res.status(400).json({ message });

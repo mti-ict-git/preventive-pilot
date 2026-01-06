@@ -21,6 +21,7 @@ import {
   apiListNotificationChannels,
   apiListNotificationLog,
   apiListNotificationRules,
+  apiRunJob,
   apiUpdateNotificationChannel,
   apiUpdateNotificationRule,
   ApiError,
@@ -46,6 +47,18 @@ const Notifications = () => {
     queryKey: ["notification-log"],
     queryFn: () => apiListNotificationLog({ page: 1, pageSize: 5 }),
     refetchInterval: 30_000,
+  });
+
+  const runNotificationsMutation = useMutation({
+    mutationFn: async () => apiRunJob("notifications"),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["notification-log"] });
+      toast({ title: "Job started", description: "Notifications job triggered." });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to start notifications job";
+      toast({ title: "Job failed", description: message, variant: "destructive" });
+    },
   });
 
   const updateChannelMutation = useMutation({
@@ -302,7 +315,14 @@ const Notifications = () => {
                     <Bell className="w-5 h-5 text-primary" />
                     Recent Activity
                   </CardTitle>
-                  <Button size="sm" variant="ghost">View All</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => runNotificationsMutation.mutate()}
+                    disabled={runNotificationsMutation.isPending}
+                  >
+                    Run Now
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -329,6 +349,9 @@ const Notifications = () => {
                           <p className="text-xs text-muted-foreground mt-1">
                             {new Date(entry.sentAt).toLocaleString()} • {entry.channel.channelType}
                           </p>
+                          {entry.status.toLowerCase() === "failed" && entry.errorMessage ? (
+                            <p className="text-xs text-destructive mt-1 break-words">{entry.errorMessage}</p>
+                          ) : null}
                         </div>
                       </div>
                     </div>

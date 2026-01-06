@@ -705,6 +705,10 @@ const apiFetchBlob = async (path: string): Promise<DownloadEvidenceResponse> => 
   return { blob, fileName, contentType };
 };
 
+export const apiDownloadTaskPdf = async (taskId: string): Promise<DownloadEvidenceResponse> => {
+  return apiFetchBlob(`/api/tasks/${taskId}/export.pdf`);
+};
+
 export const apiDownloadOverdueReportCsv = async (input: {
   locationId?: string;
   categoryId?: string;
@@ -1150,6 +1154,14 @@ export type UpdateMicrosoftGraphSettingsInput = {
   enabled: boolean;
 };
 
+export type TestMicrosoftGraphSettingsInput = Partial<UpdateMicrosoftGraphSettingsInput> & {
+  sendTestEmail?: boolean;
+};
+
+export type TestMicrosoftGraphSettingsResponse =
+  | { ok: true }
+  | { ok: true; accessTokenPresent: boolean; lastConnectionTestAt: string; testEmailSent: boolean };
+
 export const apiGetSnipeItSettings = async (): Promise<SnipeItSettingsResponse> => {
   return apiFetchJson<SnipeItSettingsResponse>("/api/system/snipeit-settings");
 };
@@ -1176,9 +1188,9 @@ export const apiUpdateMicrosoftGraphSettings = async (
 };
 
 export const apiTestMicrosoftGraphSettings = async (
-  input?: Partial<UpdateMicrosoftGraphSettingsInput>,
-): Promise<{ ok: true } | { ok: true; accessTokenPresent: boolean; lastConnectionTestAt: string }> => {
-  return apiFetchJson<{ ok: true } | { ok: true; accessTokenPresent: boolean; lastConnectionTestAt: string }>(
+  input?: TestMicrosoftGraphSettingsInput,
+): Promise<TestMicrosoftGraphSettingsResponse> => {
+  return apiFetchJson<TestMicrosoftGraphSettingsResponse>(
     "/api/system/microsoft-graph-settings/test",
     input ? { method: "POST", body: input } : { method: "POST" },
   );

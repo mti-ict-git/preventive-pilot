@@ -95,6 +95,11 @@ Required environment variables:
 - Evidence uploads are stored under the existing `Qx YYYY` folder structure.
 - Max upload size is 50MB per file.
 
+## Microsoft Graph notifications
+
+- Configure in Settings → Notification Settings → Microsoft Graph.
+- Use Test Connection with the Send test email toggle to verify delivery.
+
 ## Docker (web + api)
 
 This repo ships a docker-compose setup that serves the frontend and proxies API requests via the same origin.

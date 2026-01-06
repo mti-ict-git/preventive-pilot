@@ -204,6 +204,14 @@
 - Wired /settings/notifications route and sidebar navigation entry.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-06 11:23
+- Added Microsoft Graph env fallback keys to .env (secret/body left for local entry).
+
+## 2026-01-06 11:47
+- Fixed notifications job to deliver queued email via Microsoft Graph (not just enqueue).
+- Updated NotificationLog status transitions for queued/sent/failed.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## 2026-01-06 10:40
 - Added Reports filters for location and category.
 - Wired CSV exports for Compliance and Overdue reports.
@@ -217,3 +225,15 @@
 - Removed hardcoded Snipe-IT fallback URL from Label Designer QR codes.
 - Export PDF now opens print dialog (Save as PDF).
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 11:52
+- Added Notifications page button to run notifications job and surface send failures.
+
+## 2026-01-06 12:05
+- Added "Send test email" option to Microsoft Graph connection test in Notification Settings.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 12:08
+- Added server-generated PDF export for PM History task details.
+- Added PM History detail "Export PDF" button to download the generated report.
+- Verified with `npm run lint`, `npx tsc --noEmit`, and `npm run --prefix backend typecheck`.

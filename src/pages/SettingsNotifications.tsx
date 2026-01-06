@@ -15,6 +15,7 @@ import {
   apiGetMicrosoftGraphSettings,
   apiTestMicrosoftGraphSettings,
   apiUpdateMicrosoftGraphSettings,
+  type TestMicrosoftGraphSettingsResponse,
   type UpdateMicrosoftGraphSettingsInput,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -54,6 +55,8 @@ const SettingsNotifications = () => {
   const [defaultBccRecipientsText, setDefaultBccRecipientsText] = useState<string>("");
   const [emailSubjectTemplate, setEmailSubjectTemplate] = useState<string>("");
   const [emailBodyTemplate, setEmailBodyTemplate] = useState<string>("");
+
+  const [sendTestEmail, setSendTestEmail] = useState<boolean>(false);
 
   useEffect(() => {
     const data = settingsQuery.data;
@@ -130,10 +133,19 @@ const SettingsNotifications = () => {
   });
 
   const testMutation = useMutation({
-    mutationFn: async () => apiTestMicrosoftGraphSettings(payload),
-    onSuccess: async () => {
+    mutationFn: async () => apiTestMicrosoftGraphSettings({ ...payload, sendTestEmail }),
+    onSuccess: async (data: TestMicrosoftGraphSettingsResponse) => {
       await queryClient.invalidateQueries({ queryKey: ["settings", "notifications", "ms-graph"] });
-      toast({ title: "Connection ok", description: "Microsoft Graph token request succeeded." });
+
+      const testEmailSent =
+        "testEmailSent" in data && typeof data.testEmailSent === "boolean" ? data.testEmailSent : false;
+
+      toast({
+        title: testEmailSent ? "Test email sent" : "Connection ok",
+        description: testEmailSent
+          ? "Microsoft Graph sendMail succeeded using your configured recipients."
+          : "Microsoft Graph token request succeeded.",
+      });
     },
     onError: (err: unknown) => {
       const message = err instanceof ApiError ? err.message : "Connection test failed";
@@ -300,30 +312,46 @@ const SettingsNotifications = () => {
                     />
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      className="gap-2"
-                      onClick={() => saveMutation.mutate()}
-                      disabled={saveMutation.isPending || settingsQuery.isLoading}
-                    >
-                      <Save className="w-4 h-4" />
-                      Save
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="gap-2"
-                      onClick={() => testMutation.mutate()}
-                      disabled={testMutation.isPending || settingsQuery.isLoading}
-                    >
-                      <Send className="w-4 h-4" />
-                      Test Connection
-                    </Button>
-                    {settingsQuery.isError && (
-                      <span className="text-sm text-destructive">Failed to load settings.</span>
-                    )}
-                    {settingsQuery.isLoading && (
-                      <span className="text-sm text-muted-foreground">Loading…</span>
-                    )}
+                  <div className="grid grid-cols-12 gap-4">
+                    <div className="col-span-12 md:col-span-7 flex flex-wrap items-center gap-2">
+                      <Button
+                        className="gap-2"
+                        onClick={() => saveMutation.mutate()}
+                        disabled={saveMutation.isPending || settingsQuery.isLoading}
+                      >
+                        <Save className="w-4 h-4" />
+                        Save
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => testMutation.mutate()}
+                        disabled={testMutation.isPending || settingsQuery.isLoading}
+                      >
+                        <Send className="w-4 h-4" />
+                        Test Connection
+                      </Button>
+                      {settingsQuery.isError && (
+                        <span className="text-sm text-destructive">Failed to load settings.</span>
+                      )}
+                      {settingsQuery.isLoading && (
+                        <span className="text-sm text-muted-foreground">Loading…</span>
+                      )}
+                    </div>
+
+                    <div className="col-span-12 md:col-span-5">
+                      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Send test email</p>
+                          <p className="text-xs text-muted-foreground">Uses Default To/Cc/Bcc</p>
+                        </div>
+                        <Switch
+                          checked={sendTestEmail}
+                          onCheckedChange={setSendTestEmail}
+                          disabled={testMutation.isPending || settingsQuery.isLoading}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -361,4 +389,3 @@ const SettingsNotifications = () => {
 };
 
 export default SettingsNotifications;
-
