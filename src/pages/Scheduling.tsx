@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -16,13 +16,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   apiListAssignmentRules,
   apiListBlackoutWindows,
+  apiGetSchedulingCalendar,
   apiRecalculateSchedules,
   ApiError,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
 const Scheduling = () => {
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 0, 1));
+  const [currentMonth, setCurrentMonth] = useState(() => new Date());
 
   const queryClient = useQueryClient();
 
@@ -56,20 +57,33 @@ const Scheduling = () => {
     return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
   };
 
-  const scheduledTasks: { [key: number]: { count: number; type: string }[] } = {
-    1: [{ count: 12, type: "due" }],
-    3: [{ count: 5, type: "scheduled" }],
-    5: [{ count: 8, type: "scheduled" }],
-    8: [{ count: 3, type: "scheduled" }],
-    10: [{ count: 15, type: "scheduled" }],
-    12: [{ count: 7, type: "scheduled" }],
-    15: [{ count: 10, type: "scheduled" }],
-    18: [{ count: 4, type: "scheduled" }],
-    20: [{ count: 6, type: "scheduled" }],
-    22: [{ count: 9, type: "scheduled" }],
-    25: [{ count: 11, type: "scheduled" }],
-    28: [{ count: 8, type: "scheduled" }],
-  };
+  const monthParam = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
+  const calendarQuery = useQuery({
+    queryKey: ["scheduling", "calendar", { month: monthParam }],
+    queryFn: () => apiGetSchedulingCalendar({ month: monthParam }),
+  });
+
+  const scheduledTasks = useMemo(() => {
+    const map: Record<number, Array<{ count: number; type: "scheduled" | "due" | "overdue" }>> = {};
+    const items = calendarQuery.data?.items ?? [];
+    for (const item of items) {
+      const date = new Date(`${item.date}T00:00:00`);
+      if (date.getFullYear() !== currentMonth.getFullYear() || date.getMonth() !== currentMonth.getMonth()) continue;
+      const day = date.getDate();
+      const list = map[day] ?? [];
+      list.push({ count: item.count, type: item.type });
+      map[day] = list;
+    }
+
+    for (const day of Object.keys(map)) {
+      map[Number(day)] = map[Number(day)].slice().sort((a, b) => {
+        const order: Record<typeof a.type, number> = { overdue: 0, due: 1, scheduled: 2 };
+        return order[a.type] - order[b.type];
+      });
+    }
+
+    return map;
+  }, [calendarQuery.data, currentMonth]);
 
   return (
     <div className="min-h-screen">
@@ -89,7 +103,11 @@ const Scheduling = () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() - 1)))}
+                  onClick={() =>
+                    setCurrentMonth(
+                      (d) => new Date(d.getFullYear(), d.getMonth() - 1, 1),
+                    )
+                  }
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
@@ -99,7 +117,11 @@ const Scheduling = () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() + 1)))}
+                  onClick={() =>
+                    setCurrentMonth(
+                      (d) => new Date(d.getFullYear(), d.getMonth() + 1, 1),
+                    )
+                  }
                 >
                   <ChevronRight className="w-4 h-4" />
                 </Button>
@@ -121,7 +143,11 @@ const Scheduling = () => {
               {Array.from({ length: getDaysInMonth(currentMonth) }).map((_, i) => {
                 const day = i + 1;
                 const tasks = scheduledTasks[day];
-                const isToday = day === 1 && currentMonth.getMonth() === 0;
+                const today = new Date();
+                const isToday =
+                  day === today.getDate() &&
+                  currentMonth.getMonth() === today.getMonth() &&
+                  currentMonth.getFullYear() === today.getFullYear();
                 return (
                   <motion.div
                     key={day}
@@ -140,7 +166,11 @@ const Scheduling = () => {
                             <div
                               key={idx}
                               className={`text-[10px] px-1 rounded ${
-                                task.type === "due" ? "bg-warning/20 text-warning" : "bg-primary/20 text-primary"
+                                task.type === "overdue"
+                                  ? "bg-destructive/20 text-destructive"
+                                  : task.type === "due"
+                                    ? "bg-warning/20 text-warning"
+                                    : "bg-primary/20 text-primary"
                               }`}
                             >
                               {task.count} PM
@@ -153,6 +183,13 @@ const Scheduling = () => {
                 );
               })}
             </div>
+
+            {calendarQuery.isLoading && (
+              <div className="mt-4 text-sm text-muted-foreground">Loading calendar…</div>
+            )}
+            {calendarQuery.isError && (
+              <div className="mt-4 text-sm text-destructive">Failed to load calendar.</div>
+            )}
 
             <div className="flex items-center gap-6 mt-4 pt-4 border-t border-border">
               <div className="flex items-center gap-2">

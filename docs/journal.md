@@ -212,3 +212,8 @@
 - Adjusted label QR encoding to prefer Snipe-IT hardware IDs.
 - Fixed backend lint errors in reports CSV escaping and Graph settings fallback.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-06 10:56
+- Removed hardcoded Snipe-IT fallback URL from Label Designer QR codes.
+- Export PDF now opens print dialog (Save as PDF).
+- Verified with `npm run lint` and `npx tsc --noEmit`.

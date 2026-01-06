@@ -25,6 +25,13 @@ const LogsQuerySchema = z.object({
   level: z.string().max(16).optional(),
 });
 
+const UsersQuerySchema = z.object({
+  page: z.string().optional().default("1"),
+  pageSize: z.string().optional().default("50"),
+  search: z.string().optional(),
+  isActive: z.enum(["true", "false"]).optional(),
+});
+
 const nullIfBlank = (value: unknown): unknown => {
   return typeof value === "string" && value.trim() === "" ? null : value;
 };
@@ -910,6 +917,151 @@ systemRouter.get("/lookups", async (_req, res) => {
       name: l.Name,
       isActive: bitToBoolean(l.IsActive),
     })),
+  });
+});
+
+systemRouter.get("/users", requireSystemAdmin, async (req, res) => {
+  const parsed = UsersQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const page = Math.max(1, Number(parsed.data.page) || 1);
+  const pageSize = Math.min(200, Math.max(1, Number(parsed.data.pageSize) || 50));
+  const offset = (page - 1) * pageSize;
+  const search = parsed.data.search?.trim() ? `%${parsed.data.search.trim()}%` : null;
+  const isActive = parsed.data.isActive ? (parsed.data.isActive === "true" ? 1 : 0) : null;
+
+  const db = await getDb();
+
+  const totalResult = await db
+    .request()
+    .input("search", sql.NVarChar(256), search)
+    .input("isActive", sql.Bit, isActive)
+    .query(
+      [
+        "SELECT COUNT(1) AS Total",
+        "FROM pm.Users",
+        "WHERE (@isActive IS NULL OR IsActive = @isActive)",
+        "  AND (",
+        "    @search IS NULL",
+        "    OR Username LIKE @search",
+        "    OR COALESCE(DisplayName, N'') LIKE @search",
+        "    OR COALESCE(Email, N'') LIKE @search",
+        "  )",
+      ].join("\n"),
+    );
+
+  const totalRow = totalResult.recordset[0] as Record<string, unknown> | undefined;
+  const total = totalRow && typeof totalRow.Total === "number" ? totalRow.Total : 0;
+
+  const usersResult = await db
+    .request()
+    .input("offset", sql.Int, offset)
+    .input("limit", sql.Int, pageSize)
+    .input("search", sql.NVarChar(256), search)
+    .input("isActive", sql.Bit, isActive)
+    .query(
+      [
+        "SELECT",
+        "  UserId, Username, DisplayName, Email, Phone, IsActive",
+        "FROM pm.Users",
+        "WHERE (@isActive IS NULL OR IsActive = @isActive)",
+        "  AND (",
+        "    @search IS NULL",
+        "    OR Username LIKE @search",
+        "    OR COALESCE(DisplayName, N'') LIKE @search",
+        "    OR COALESCE(Email, N'') LIKE @search",
+        "  )",
+        "ORDER BY Username ASC",
+        "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY",
+      ].join("\n"),
+    );
+
+  const userRows = usersResult.recordset as Array<Record<string, unknown>>;
+  const userIds = userRows
+    .map((r) => (typeof r.UserId === "string" ? r.UserId : null))
+    .filter((v): v is string => Boolean(v));
+
+  const rolesByUserId = new Map<string, string[]>();
+  const completedByUserId = new Map<string, number>();
+
+  if (userIds.length > 0) {
+    const userIdsCsv = userIds.join(",");
+
+    const rolesResult = await db
+      .request()
+      .input("userIdsCsv", sql.NVarChar(8192), userIdsCsv)
+      .query(
+        [
+          "SELECT",
+          "  ur.UserId AS UserId,",
+          "  r.Name AS RoleName",
+          "FROM pm.UserRoles ur",
+          "INNER JOIN pm.Roles r ON r.RoleId = ur.RoleId",
+          "WHERE ur.UserId IN (",
+          "  SELECT TRY_CONVERT(uniqueidentifier, value)",
+          "  FROM string_split(@userIdsCsv, ',')",
+          ")",
+        ].join("\n"),
+      );
+
+    const roleRows = rolesResult.recordset as Array<Record<string, unknown>>;
+    for (const row of roleRows) {
+      const userId = typeof row.UserId === "string" ? row.UserId : null;
+      const roleName = typeof row.RoleName === "string" ? row.RoleName : null;
+      if (!userId || !roleName) continue;
+      const existing = rolesByUserId.get(userId) ?? [];
+      existing.push(roleName);
+      rolesByUserId.set(userId, existing);
+    }
+
+    const completedResult = await db
+      .request()
+      .input("userIdsCsv", sql.NVarChar(8192), userIdsCsv)
+      .query(
+        [
+          "SELECT",
+          "  CompletedByUserId AS UserId,",
+          "  COUNT(1) AS CompletedCount",
+          "FROM pm.PMTasks",
+          "WHERE CompletedAt IS NOT NULL",
+          "  AND CompletedByUserId IS NOT NULL",
+          "  AND CompletedByUserId IN (",
+          "    SELECT TRY_CONVERT(uniqueidentifier, value)",
+          "    FROM string_split(@userIdsCsv, ',')",
+          "  )",
+          "GROUP BY CompletedByUserId",
+        ].join("\n"),
+      );
+
+    const completedRows = completedResult.recordset as Array<Record<string, unknown>>;
+    for (const row of completedRows) {
+      const userId = typeof row.UserId === "string" ? row.UserId : null;
+      const completedCount = typeof row.CompletedCount === "number" ? row.CompletedCount : null;
+      if (!userId || completedCount === null) continue;
+      completedByUserId.set(userId, completedCount);
+    }
+  }
+
+  res.json({
+    page,
+    pageSize,
+    total,
+    items: userRows.map((r) => {
+      const id = typeof r.UserId === "string" ? r.UserId : "";
+      return {
+        id,
+        username: typeof r.Username === "string" ? r.Username : "",
+        displayName: typeof r.DisplayName === "string" ? r.DisplayName : null,
+        email: typeof r.Email === "string" ? r.Email : null,
+        phone: typeof r.Phone === "string" ? r.Phone : null,
+        isActive: bitToBoolean(r.IsActive),
+        roles: rolesByUserId.get(id) ?? [],
+        tasksCompleted: completedByUserId.get(id) ?? 0,
+      };
+    }),
   });
 });
 

@@ -28,6 +28,13 @@ const RecalcSchema = z.object({
   assetId: z.string().uuid().optional(),
 });
 
+const CalendarQuerySchema = z.object({
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "Invalid month")
+    .optional(),
+});
+
 export const schedulingRouter = Router();
 
 schedulingRouter.use(requireAuth);
@@ -386,4 +393,77 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
     await tx.rollback().catch(() => undefined);
     throw err;
   }
+});
+
+schedulingRouter.get("/calendar", async (req, res) => {
+  const parsed = CalendarQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const now = new Date();
+  const defaultMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const month = parsed.data.month ?? defaultMonth;
+
+  const [yearPart, monthPart] = month.split("-");
+  const year = Number(yearPart);
+  const monthIndex = Number(monthPart) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const from = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0));
+  const to = new Date(Date.UTC(year, monthIndex + 1, 1, 0, 0, 0));
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("from", sql.DateTime2(0), from)
+    .input("to", sql.DateTime2(0), to)
+    .query(
+      [
+        "DECLARE @todayStart datetime2(0) = dateadd(day, datediff(day, 0, sysutcdatetime()), 0);",
+        "DECLARE @todayEnd datetime2(0) = dateadd(day, 1, @todayStart);",
+        "SELECT",
+        "  CAST(t.ScheduledDueAt AS date) AS DueDate,",
+        "  CASE",
+        "    WHEN t.ScheduledDueAt < @todayStart THEN N'overdue'",
+        "    WHEN t.ScheduledDueAt < @todayEnd THEN N'due'",
+        "    ELSE N'scheduled'",
+        "  END AS Bucket,",
+        "  COUNT(1) AS Cnt",
+        "FROM pm.PMTasks t",
+        "WHERE t.ScheduledDueAt >= @from",
+        "  AND t.ScheduledDueAt < @to",
+        "  AND t.Status NOT IN (N'completed', N'cancelled')",
+        "GROUP BY CAST(t.ScheduledDueAt AS date),",
+        "  CASE",
+        "    WHEN t.ScheduledDueAt < @todayStart THEN N'overdue'",
+        "    WHEN t.ScheduledDueAt < @todayEnd THEN N'due'",
+        "    ELSE N'scheduled'",
+        "  END",
+        "ORDER BY DueDate ASC",
+      ].join("\n"),
+    );
+
+  const rows = result.recordset as Array<Record<string, unknown>>;
+  res.json({
+    items: rows
+      .map((r) => {
+        const dueDate = r.DueDate instanceof Date ? r.DueDate : null;
+        const bucket = typeof r.Bucket === "string" ? r.Bucket : null;
+        const count = typeof r.Cnt === "number" ? r.Cnt : null;
+        if (!dueDate || !bucket || count === null) return null;
+
+        const date = new Date(Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate()))
+          .toISOString()
+          .slice(0, 10);
+
+        if (bucket !== "scheduled" && bucket !== "due" && bucket !== "overdue") return null;
+        return { date, type: bucket as "scheduled" | "due" | "overdue", count };
+      })
+      .filter((v): v is { date: string; type: "scheduled" | "due" | "overdue"; count: number } => v !== null),
+  });
 });

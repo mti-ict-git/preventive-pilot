@@ -148,7 +148,8 @@ export default function LabelDesigner() {
   };
 
   const handleExport = () => {
-    toast.success("Labels exported as PDF");
+    window.print();
+    toast.success("Print dialog opened (choose Save as PDF)");
   };
 
   const resetConfig = () => {
@@ -177,11 +178,11 @@ export default function LabelDesigner() {
     const isLandscape = config.orientation === "landscape";
     const displayWidth = isLandscape ? config.width : config.height;
     const displayHeight = isLandscape ? config.height : config.width;
-    const snipeHardwareId = asset.snipeAssetId ?? asset.id;
     const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
-    const qrValue = normalizedBaseUrl
-      ? `${normalizedBaseUrl}/hardware/${snipeHardwareId}`
-      : `https://snipeit.local/hardware/${snipeHardwareId}`;
+    const qrValue =
+      normalizedBaseUrl && asset.snipeAssetId !== null
+        ? `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`
+        : `${window.location.origin}/assets/${asset.id}`;
 
     return (
       <div

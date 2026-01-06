@@ -778,6 +778,48 @@ export const apiGetLookups = async (): Promise<LookupsResponse> => {
   return apiFetchJson<LookupsResponse>("/api/system/lookups");
 };
 
+export type UserSummary = {
+  id: string;
+  username: string;
+  displayName: string | null;
+  email: string | null;
+  phone: string | null;
+  isActive: boolean;
+  roles: string[];
+  tasksCompleted: number;
+};
+
+export const apiListUsers = async (input?: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  isActive?: boolean;
+}): Promise<{ page: number; pageSize: number; total: number; items: UserSummary[] }> => {
+  const params = new URLSearchParams();
+  if (input?.page !== undefined) params.set("page", String(input.page));
+  if (input?.pageSize !== undefined) params.set("pageSize", String(input.pageSize));
+  if (input?.search?.trim()) params.set("search", input.search.trim());
+  if (input?.isActive !== undefined) params.set("isActive", input.isActive ? "true" : "false");
+  const query = params.toString();
+  return apiFetchJson<{ page: number; pageSize: number; total: number; items: UserSummary[] }>(
+    `/api/system/users${query ? `?${query}` : ""}`,
+  );
+};
+
+export type SchedulingCalendarDay = {
+  date: string;
+  type: "scheduled" | "due" | "overdue";
+  count: number;
+};
+
+export const apiGetSchedulingCalendar = async (input: {
+  month: string;
+}): Promise<{ items: SchedulingCalendarDay[] }> => {
+  const params = new URLSearchParams();
+  params.set("month", input.month);
+  return apiFetchJson<{ items: SchedulingCalendarDay[] }>(`/api/scheduling/calendar?${params.toString()}`);
+};
+
 export type TemplateSummary = {
   id: string;
   name: string;
