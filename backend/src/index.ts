@@ -32,8 +32,8 @@ const openApiSpec: OpenApiSchema = {
   openapi: "3.1.0",
   info: {
     title: "Preventive Pilot API",
-    version: "1.0.0",
-    description: "REST API for Preventive Pilot (web + mobile clients)",
+    version: "1.0.1",
+    description: "REST API for Preventive Pilot (web + mobile clients). Docs updated 2026-01-07.",
   },
   servers: [{ url: "http://localhost:" + String(env.BACKEND_PORT) }],
   components: {
@@ -45,6 +45,122 @@ const openApiSpec: OpenApiSchema = {
       },
     },
     schemas: {
+      EntityRef: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          name: { type: ["string", "null"] },
+        },
+        required: ["id"],
+        additionalProperties: false,
+      },
+      EntityRefNullable: {
+        type: "object",
+        properties: {
+          id: { type: ["string", "null"] },
+          name: { type: ["string", "null"] },
+        },
+        required: ["id", "name"],
+        additionalProperties: false,
+      },
+      AssetPmInfo: {
+        type: "object",
+        properties: {
+          enabled: { type: ["boolean", "null"] },
+          defaultTemplateId: { type: ["string", "null"], format: "uuid" },
+          lastCompletedAt: { type: ["string", "null"], format: "date-time" },
+          nextDueAt: { type: ["string", "null"], format: "date-time" },
+        },
+        required: ["enabled"],
+        additionalProperties: false,
+      },
+      AssetListItem: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          snipeAssetId: { type: ["string", "null"] },
+          assetTag: { type: ["string", "null"] },
+          name: { type: "string" },
+          manufacturer: { type: ["string", "null"] },
+          model: { type: ["string", "null"] },
+          serialNumber: { type: ["string", "null"] },
+          assetStatus: { type: ["string", "null"] },
+          assignedToText: { type: ["string", "null"] },
+          category: { $ref: "#/components/schemas/EntityRefNullable" },
+          location: { $ref: "#/components/schemas/EntityRefNullable" },
+          pm: { $ref: "#/components/schemas/AssetPmInfo" },
+        },
+        required: ["id", "name", "category", "location", "pm"],
+        additionalProperties: false,
+      },
+      AssetListResponse: {
+        type: "object",
+        properties: {
+          page: { type: "integer" },
+          pageSize: { type: "integer" },
+          items: { type: "array", items: { $ref: "#/components/schemas/AssetListItem" } },
+        },
+        required: ["page", "pageSize", "items"],
+        additionalProperties: false,
+      },
+      AssetDetail: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          snipeAssetId: { type: ["string", "null"] },
+          assetTag: { type: ["string", "null"] },
+          name: { type: "string" },
+          manufacturer: { type: ["string", "null"] },
+          model: { type: ["string", "null"] },
+          serialNumber: { type: ["string", "null"] },
+          assetStatus: { type: ["string", "null"] },
+          assignedToText: { type: ["string", "null"] },
+          category: { oneOf: [{ $ref: "#/components/schemas/EntityRef" }, { type: "null" }] },
+          location: { oneOf: [{ $ref: "#/components/schemas/EntityRef" }, { type: "null" }] },
+          pm: { $ref: "#/components/schemas/AssetPmInfo" },
+        },
+        required: ["id", "name", "pm"],
+        additionalProperties: false,
+      },
+      Role: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Role UUID" },
+          name: { type: "string" },
+        },
+        required: ["id", "name"],
+        additionalProperties: false,
+      },
+      AssetCategory: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Category UUID" },
+          name: { type: "string" },
+          isActive: { type: "boolean" },
+        },
+        required: ["id", "name", "isActive"],
+        additionalProperties: false,
+      },
+      Location: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Location UUID" },
+          name: { type: "string" },
+          isActive: { type: "boolean" },
+        },
+        required: ["id", "name", "isActive"],
+        additionalProperties: false,
+      },
+      LookupsResponse: {
+        type: "object",
+        properties: {
+          roles: { type: "array", items: { $ref: "#/components/schemas/Role" } },
+          assetCategories: { type: "array", items: { $ref: "#/components/schemas/AssetCategory" } },
+          locations: { type: "array", items: { $ref: "#/components/schemas/Location" } },
+        },
+        required: ["roles", "assetCategories", "locations"],
+        additionalProperties: false,
+      },
       OkResponse: {
         type: "object",
         properties: {
@@ -288,21 +404,44 @@ const openApiSpec: OpenApiSchema = {
     "/api/assets": {
       get: {
         tags: ["Assets"],
-        summary: "List assets",
+        summary: "List assets (updated)",
+        description:
+          "Returns a paginated list of assets. Search matches substrings in Name, AssetTag, and SerialNumber. Use categoryId or categoryIds (CSV of UUIDs, max 50) to filter. pageSize is capped at 500.",
         parameters: [
-          { name: "search", in: "query", required: false, schema: { type: "string" } },
+          {
+            name: "search",
+            in: "query",
+            required: false,
+            description: "Substring match on Name, AssetTag, SerialNumber",
+            schema: { type: "string" },
+          },
           { name: "categoryId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
-          { name: "categoryIds", in: "query", required: false, schema: { type: "string" } },
+          {
+            name: "categoryIds",
+            in: "query",
+            required: false,
+            description: "Comma-separated list of category UUIDs (max 50)",
+            schema: { type: "string" },
+            examples: {
+              csv: { summary: "CSV UUIDs", value: "e1f2...,c3d4...,a5b6..." },
+            },
+          },
           { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
-          { name: "status", in: "query", required: false, schema: { type: "string" } },
-          { name: "pmEnabled", in: "query", required: false, schema: { type: "string", enum: ["true", "false"] } },
-          { name: "page", in: "query", required: false, schema: { type: "integer", default: 1 } },
-          { name: "pageSize", in: "query", required: false, schema: { type: "integer", default: 50 } },
+          { name: "status", in: "query", required: false, description: "Exact match on asset status", schema: { type: "string" } },
+          {
+            name: "pmEnabled",
+            in: "query",
+            required: false,
+            description: "Filter by PM enabled",
+            schema: { oneOf: [{ type: "string", enum: ["true", "false"] }, { type: "boolean" }] },
+          },
+          { name: "page", in: "query", required: false, schema: { type: "integer", default: 1, minimum: 1 } },
+          { name: "pageSize", in: "query", required: false, schema: { type: "integer", default: 50, minimum: 1, maximum: 500 } },
         ],
         responses: {
           "200": {
             description: "OK",
-            content: { "application/json": { schema: { $ref: "#/components/schemas/PaginatedList" } } },
+            content: { "application/json": { schema: { $ref: "#/components/schemas/AssetListResponse" } } },
           },
           "400": {
             description: "Invalid request",
@@ -318,12 +457,12 @@ const openApiSpec: OpenApiSchema = {
     "/api/assets/{assetId}": {
       get: {
         tags: ["Assets"],
-        summary: "Get asset by id",
+        summary: "Get asset by id (updated)",
         parameters: [
           { name: "assetId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
         responses: {
-          "200": { description: "OK" },
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/AssetDetail" } } } },
           "400": {
             description: "Invalid request",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
@@ -917,7 +1056,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["System"],
         summary: "List roles, categories, locations",
         responses: {
-          "200": { description: "OK" },
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/LookupsResponse" } } } },
           "401": {
             description: "Unauthorized",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },

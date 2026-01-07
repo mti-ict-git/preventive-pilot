@@ -197,7 +197,24 @@
 - Extended Tasks API and UI to enforce required checklist attachments on completion.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
-## 2026-01-06 10:39
+## 2026-01-07 11:28
+- Updated Swagger for /api/assets: documented search fields (Name, AssetTag, SerialNumber), categoryIds CSV (max 50), and pageSize cap at 500.
+- Added Role, AssetCategory, Location, and LookupsResponse schemas.
+- Documented /api/system/lookups response schema.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-07 11:30
+- Added root script `dev:backend` to run backend dev server.
+- Verified it starts: Backend listening on http://localhost:3001; health at /health.
+
+## 2026-01-07 12:16
+- Refined Swagger with concrete AssetListItem, AssetListResponse, AssetDetail schemas.
+- Updated /api/assets 200 response to AssetListResponse and /api/assets/{assetId} to AssetDetail.
+- Documented pmEnabled oneOf (string|boolean) and categoryIds CSV example.
+- Bumped API version to 1.0.1 in Swagger info.
+
+## 2026-01-07 12:20
+- Tweaked Swagger summaries to display "(updated)" for assets endpoints to make changes visibly obvious in the UI list.
 ## 2026-01-06 15:44
 - Fixed Next PM off-by-one for annual interval by using dateadd(year, 1).
 - Updated assets, scheduling, tasks, and evidence import queries to apply year-based addition when IntervalDays = 365.
