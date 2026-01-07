@@ -42,6 +42,7 @@ import {
   apiStartTask,
   apiPauseTask,
   apiCancelTask,
+  apiResumeTask,
   apiUploadTaskChecklistEvidenceFile,
   apiUploadTaskEvidenceFile,
   type CompleteTaskChecklistResultInput,
@@ -393,6 +394,24 @@ const TaskDetailDialog = (props: {
     },
   });
 
+  const resumeMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiResumeTask(props.taskId);
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "Task resumed" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Failed to resume task",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
   const task = taskQuery.data;
 
   const getOutcomeOptions = (requiresPassFail: boolean) => {
@@ -682,6 +701,13 @@ const TaskDetailDialog = (props: {
                 onClick={() => pauseMutation.mutate()}
               >
                 Pause
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!task || resumeMutation.isPending || task.status.toLowerCase() !== "paused"}
+                onClick={() => resumeMutation.mutate()}
+              >
+                Resume
               </Button>
               <Button
                 variant="destructive"

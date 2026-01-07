@@ -84,6 +84,12 @@
 - Added frontend API functions: apiPauseTask, apiCancelTask
 - Added Pause and Cancel buttons to Task Detail dialog on web
 - Ran lint and typecheck; addressed any arising issues
+2026-01-07 06:30:12 UTC
+- Added backend endpoint: POST /api/tasks/{taskId}/resume
+- Updated backend OpenAPI to document resume action
+- Added frontend API function: apiResumeTask and Resume button on web
+- Mobile app: added Start, Pause, Resume, Stop (Cancel) actions on Task Detail
+- Extended mobile status badge to show Paused status
 - Standardized checklist outcomes (0=skip, 1=pass/done, 2=fail) and enforced in API.
 - Updated Tasks UI to use outcome dropdown instead of freeform numeric input.
 - Added DB check constraint to restrict checklist outcome values.
@@ -192,6 +198,23 @@
 - Fixed evidence preview rendering by inferring Content-Type from file extension when missing.
 - Extended evidence preview modal to support PDF, images, video, and audio.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-07 13:38:26 WIB
+- Implemented JWT refresh tokens on backend (sign/verify, env REFRESH_TOKEN_EXPIRES_IN).
+- Added /api/auth/refresh endpoint and updated OpenAPI schemas and paths.
+- Mobile: store refresh token on login and auto-refresh on 401 in request wrapper.
+- Mobile: clear refresh token on logout.
+- Ran backend typecheck and mobile lint + typecheck; no errors.
+
+## 2026-01-07 13:41:59 WIB
+- Web: added refresh token storage and 401 auto-refresh in apiFetchJson.
+- Web: login now stores refresh token alongside access token.
+- Verified with repo lint and typecheck.
+
+## 2026-01-07 13:44:36 WIB
+- Mobile: added provider selection (LDAP/Local) to Login page.
+- Mobile: AuthProvider accepts optional provider and sends it to /auth/login.
+- Verified mobile lint and typecheck.
 
 ## 2026-01-06 08:55
 - Added delete support for task evidence and checklist item attachments (API + UI).

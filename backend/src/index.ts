@@ -200,6 +200,7 @@ const openApiSpec: OpenApiSchema = {
         type: "object",
         properties: {
           accessToken: { type: "string" },
+          refreshToken: { type: "string" },
           user: {
             type: "object",
             properties: {
@@ -212,7 +213,19 @@ const openApiSpec: OpenApiSchema = {
             required: ["id", "username", "roles"],
           },
         },
-        required: ["accessToken", "user"],
+        required: ["accessToken", "refreshToken", "user"],
+      },
+      RefreshRequest: {
+        type: "object",
+        properties: { refreshToken: { type: "string" } },
+        required: ["refreshToken"],
+        additionalProperties: false,
+      },
+      RefreshResponse: {
+        type: "object",
+        properties: { accessToken: { type: "string" }, refreshToken: { type: "string" } },
+        required: ["accessToken", "refreshToken"],
+        additionalProperties: false,
       },
       MeResponse: {
         type: "object",
@@ -380,6 +393,31 @@ const openApiSpec: OpenApiSchema = {
           },
           "401": {
             description: "Invalid username or password",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/auth/refresh": {
+      post: {
+        tags: ["Auth"],
+        summary: "Refresh access token",
+        security: [],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/RefreshRequest" } } },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/RefreshResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },
@@ -806,6 +844,33 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Pause a task",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/{taskId}/resume": {
+      post: {
+        tags: ["Tasks"],
+        summary: "Resume a task",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],

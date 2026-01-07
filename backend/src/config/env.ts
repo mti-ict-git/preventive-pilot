@@ -26,6 +26,7 @@ const EnvSchema = z.object({
   FRONTEND_ORIGIN: z.string().optional().default("http://localhost:8080"),
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES_IN: z.string().optional().default("8h"),
+  REFRESH_TOKEN_EXPIRES_IN: z.string().optional().default("30d"),
 
   DB_SERVER: z.string().min(1),
   DB_DATABASE: z.string().min(1),

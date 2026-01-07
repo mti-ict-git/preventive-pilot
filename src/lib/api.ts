@@ -1,4 +1,4 @@
-import { getAccessToken } from "@/lib/auth";
+import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearAccessToken, clearRefreshToken } from "@/lib/auth";
 
 const defaultApiBaseUrl = import.meta.env.PROD ? "" : "http://localhost:3001";
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? defaultApiBaseUrl).replace(/\/$/, "");
@@ -7,6 +7,7 @@ export type LoginProvider = "ldap" | "local";
 
 export type LoginResponse = {
   accessToken: string;
+  refreshToken: string;
   user: {
     id: string;
     username: string;
@@ -34,30 +35,57 @@ const apiFetchJson = async <T>(
   path: string,
   init?: Omit<RequestInit, "body"> & { body?: unknown },
 ): Promise<T> => {
-  const hasBody = init?.body !== undefined;
-  const headers: Record<string, string> = {
-    ...(hasBody ? { "Content-Type": "application/json" } : {}),
-    ...buildAuthHeaders(),
-    ...(init?.headers ? (init.headers as Record<string, string>) : {}),
+  const attempt = async (): Promise<Response> => {
+    const hasBody = init?.body !== undefined;
+    const headers: Record<string, string> = {
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
+      ...buildAuthHeaders(),
+      ...(init?.headers ? (init.headers as Record<string, string>) : {}),
+    };
+
+    return fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+      body: hasBody ? JSON.stringify(init?.body) : undefined,
+    });
   };
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-    body: hasBody ? JSON.stringify(init?.body) : undefined,
-  });
+  let res = await attempt();
+  if (res.status === 401) {
+    const rt = getRefreshToken();
+    if (rt) {
+      const refreshRes = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: rt }),
+      });
+      if (refreshRes.ok) {
+        const ct = refreshRes.headers.get("content-type") ?? "";
+        if (ct.includes("application/json")) {
+          const payload = (await refreshRes.json()) as unknown;
+          const at = typeof payload === "object" && payload !== null && "accessToken" in payload && typeof (payload as { accessToken?: unknown }).accessToken === "string" ? (payload as { accessToken: string }).accessToken : null;
+          const nr = typeof payload === "object" && payload !== null && "refreshToken" in payload && typeof (payload as { refreshToken?: unknown }).refreshToken === "string" ? (payload as { refreshToken: string }).refreshToken : null;
+          if (at) setAccessToken(at);
+          if (nr) setRefreshToken(nr);
+          res = await attempt();
+        }
+      } else {
+        clearAccessToken();
+        clearRefreshToken();
+      }
+    }
+  }
 
   if (!res.ok) {
     const contentType = res.headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
       const data = (await res.json()) as unknown;
       const message =
-        typeof data === "object" && data !== null && "message" in data && typeof data.message === "string"
-          ? data.message
+        typeof data === "object" && data !== null && "message" in data && typeof (data as { message?: unknown }).message === "string"
+          ? (data as { message: string }).message
           : "Request failed";
       throw new ApiError(message, res.status);
     }
-
     throw new ApiError("Request failed", res.status);
   }
 
@@ -392,6 +420,10 @@ export const apiPauseTask = async (taskId: string): Promise<{ ok: true }> => {
 
 export const apiCancelTask = async (taskId: string): Promise<{ ok: true }> => {
   return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/cancel`, { method: "POST" });
+};
+
+export const apiResumeTask = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/resume`, { method: "POST" });
 };
 
 export type CompleteTaskChecklistResultInput = {

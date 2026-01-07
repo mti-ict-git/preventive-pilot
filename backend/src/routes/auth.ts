@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authenticateWithLdap } from "../auth/ldap.js";
-import { signAccessToken } from "../auth/jwt.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../auth/jwt.js";
 import { authenticateLocalUser, upsertLdapUser } from "../db/users.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { getDb } from "../db/mssql.js";
@@ -46,9 +46,15 @@ authRouter.post("/login", async (req, res) => {
         username: user.username,
         roles: user.roles,
       });
+      const refreshToken = signRefreshToken({
+        sub: user.userId,
+        username: user.username,
+        roles: user.roles,
+      });
 
       res.json({
         accessToken,
+        refreshToken,
         user: {
           id: user.userId,
           username: user.username,
@@ -76,9 +82,15 @@ authRouter.post("/login", async (req, res) => {
       username: user.username,
       roles: user.roles,
     });
+    const refreshToken = signRefreshToken({
+      sub: user.userId,
+      username: user.username,
+      roles: user.roles,
+    });
 
     res.json({
       accessToken,
+      refreshToken,
       user: {
         id: user.userId,
         username: user.username,
@@ -100,6 +112,25 @@ authRouter.get("/me", requireAuth, async (req, res) => {
       roles: req.user.roles,
     },
   });
+});
+
+const RefreshSchema = z.object({ refreshToken: z.string().min(1) });
+
+authRouter.post("/refresh", async (req, res) => {
+  const parsed = RefreshSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  try {
+    const claims = verifyRefreshToken(parsed.data.refreshToken);
+    const accessToken = signAccessToken({ sub: claims.sub, username: claims.username, roles: claims.roles });
+    const refreshed = signRefreshToken({ sub: claims.sub, username: claims.username, roles: claims.roles });
+    res.json({ accessToken, refreshToken: refreshed });
+  } catch {
+    res.status(401).json({ message: "Unauthorized" });
+  }
 });
 
 const ThemeModeSchema = z.enum(["dark", "light"]);

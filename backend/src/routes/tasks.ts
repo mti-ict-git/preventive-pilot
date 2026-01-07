@@ -1941,6 +1941,60 @@ tasksRouter.post("/:taskId/cancel", async (req, res) => {
 
   res.json({ ok: true });
 });
+
+tasksRouter.post("/:taskId/resume", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const taskAccess = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const row = taskAccess.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const accessRow: TaskAccessRow = {
+    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
+    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
+  };
+  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
+  await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "UPDATE pm.PMTasks",
+        "SET",
+        "  StartedAt = COALESCE(StartedAt, sysutcdatetime()),",
+        "  Status = CASE WHEN Status IN (N'completed', N'cancelled') THEN Status ELSE N'in_progress' END",
+        "WHERE TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  res.json({ ok: true });
+});
+
 tasksRouter.post("/:taskId/complete", async (req, res) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) {

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiLogin, type LoginProvider } from "@/lib/api";
-import { setAccessToken } from "@/lib/auth";
+import { setAccessToken, setRefreshToken } from "@/lib/auth";
 
 const Login = () => {
   const [identifier, setIdentifier] = useState("");
@@ -31,6 +31,7 @@ const Login = () => {
       });
 
       setAccessToken(result.accessToken);
+      setRefreshToken(result.refreshToken);
       toast({
         title: "Welcome back!",
         description: "Redirecting to dashboard...",

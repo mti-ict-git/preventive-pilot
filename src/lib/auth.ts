@@ -1,4 +1,5 @@
 export const AUTH_TOKEN_STORAGE_KEY = "pm_access_token";
+export const REFRESH_TOKEN_STORAGE_KEY = "pm_refresh_token";
 
 export const getAccessToken = (): string | null => {
   try {
@@ -14,6 +15,22 @@ export const setAccessToken = (token: string) => {
 
 export const clearAccessToken = () => {
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+};
+
+export const getRefreshToken = (): string | null => {
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const setRefreshToken = (token: string) => {
+  localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, token);
+};
+
+export const clearRefreshToken = () => {
+  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
 };
 
 export type JwtClaims = {

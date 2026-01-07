@@ -32,6 +32,11 @@ const UsersQuerySchema = z.object({
   isActive: z.enum(["true", "false"]).optional(),
 });
 
+const UpdateUserRolesSchema = z.object({
+  roles: z.array(z.string().min(1).max(64)).max(50),
+  isActive: z.boolean().optional(),
+});
+
 const nullIfBlank = (value: unknown): unknown => {
   return typeof value === "string" && value.trim() === "" ? null : value;
 };
@@ -1370,6 +1375,142 @@ systemRouter.get("/users", requireSystemAdmin, async (req, res) => {
       };
     }),
   });
+});
+
+systemRouter.put("/users/:userId/roles", requireSystemAdmin, async (req, res) => {
+  const userId = req.params.userId;
+  if (!z.string().uuid().safeParse(userId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const parsed = UpdateUserRolesSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const roles = parsed.data.roles.map((r) => r.trim()).filter((r) => r.length > 0);
+  const uniqueRoles = Array.from(new Set(roles));
+
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const userExists = await tx
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query("SELECT TOP (1) 1 AS One FROM pm.Users WHERE UserId = @userId");
+    if (!userExists.recordset[0]) {
+      await tx.rollback();
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    const roleIdByName = new Map<string, string>();
+    for (const roleName of uniqueRoles) {
+      const existing = await tx
+        .request()
+        .input("name", sql.NVarChar(64), roleName)
+        .query("SELECT TOP (1) RoleId FROM pm.Roles WHERE Name = @name");
+      let roleId = existing.recordset[0]?.RoleId as string | undefined;
+      if (!roleId) {
+        const inserted = await tx
+          .request()
+          .input("name", sql.NVarChar(64), roleName)
+          .query("INSERT INTO pm.Roles (Name) OUTPUT inserted.RoleId AS RoleId VALUES (@name)");
+        roleId = inserted.recordset[0]?.RoleId as string | undefined;
+      }
+      if (!roleId) {
+        await tx.rollback();
+        res.status(500).json({ message: "Failed to create role" });
+        return;
+      }
+      roleIdByName.set(roleName, roleId);
+    }
+
+    const currentRolesResult = await tx
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query(
+        [
+          "SELECT ur.RoleId AS RoleId, r.Name AS RoleName",
+          "FROM pm.UserRoles ur",
+          "INNER JOIN pm.Roles r ON r.RoleId = ur.RoleId",
+          "WHERE ur.UserId = @userId",
+        ].join("\n"),
+      );
+    const currentRoleRows = currentRolesResult.recordset as Array<Record<string, unknown>>;
+    const currentRoleNames = new Set<string>(
+      currentRoleRows
+        .map((r) => (typeof r.RoleName === "string" ? r.RoleName : null))
+        .filter((v): v is string => v !== null),
+    );
+
+    for (const name of currentRoleNames) {
+      if (!uniqueRoles.includes(name)) {
+        const roleId = currentRoleRows.find((r) => r.RoleName === name)?.RoleId as string | undefined;
+        if (roleId) {
+          await tx
+            .request()
+            .input("userId", sql.UniqueIdentifier, userId)
+            .input("roleId", sql.UniqueIdentifier, roleId)
+            .query("DELETE FROM pm.UserRoles WHERE UserId = @userId AND RoleId = @roleId");
+        }
+      }
+    }
+
+    for (const name of uniqueRoles) {
+      if (!currentRoleNames.has(name)) {
+        const roleId = roleIdByName.get(name);
+        if (roleId) {
+          await tx
+            .request()
+            .input("userId", sql.UniqueIdentifier, userId)
+            .input("roleId", sql.UniqueIdentifier, roleId)
+            .query(
+              [
+                "IF NOT EXISTS (SELECT 1 FROM pm.UserRoles WHERE UserId = @userId AND RoleId = @roleId)",
+                "BEGIN",
+                "  INSERT INTO pm.UserRoles (UserId, RoleId) VALUES (@userId, @roleId)",
+                "END",
+              ].join("\n"),
+            );
+        }
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(parsed.data, "isActive")) {
+      await tx
+        .request()
+        .input("userId", sql.UniqueIdentifier, userId)
+        .input("isActive", sql.Bit, parsed.data.isActive ? 1 : 0)
+        .query("UPDATE pm.Users SET IsActive = @isActive, UpdatedAt = sysutcdatetime() WHERE UserId = @userId");
+    }
+
+    await tx.commit();
+
+    const finalRolesResult = await db
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query(
+        [
+          "SELECT r.Name AS RoleName",
+          "FROM pm.UserRoles ur",
+          "INNER JOIN pm.Roles r ON r.RoleId = ur.RoleId",
+          "WHERE ur.UserId = @userId",
+        ].join("\n"),
+      );
+    const finalRoleRows = finalRolesResult.recordset as Array<Record<string, unknown>>;
+    const finalRoleNames = finalRoleRows
+      .map((r) => (typeof r.RoleName === "string" ? r.RoleName : null))
+      .filter((v): v is string => v !== null);
+
+    res.json({ ok: true, roles: finalRoleNames });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 systemRouter.post("/jobs/:jobName/run", requireSystemAdmin, async (req, res) => {
