@@ -4,6 +4,8 @@ import { authenticateWithLdap } from "../auth/ldap.js";
 import { signAccessToken } from "../auth/jwt.js";
 import { authenticateLocalUser, upsertLdapUser } from "../db/users.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { getDb } from "../db/mssql.js";
+import sql from "mssql";
 
 const LoginSchema = z
   .object({
@@ -98,4 +100,58 @@ authRouter.get("/me", requireAuth, async (req, res) => {
       roles: req.user.roles,
     },
   });
+});
+
+const ThemeModeSchema = z.enum(["dark", "light"]);
+const PreferencesSchema = z.object({
+  themeMode: ThemeModeSchema.nullable().optional(),
+  themePalette: z.string().trim().max(64).nullable().optional(),
+});
+
+authRouter.get("/me/preferences", requireAuth, async (req, res) => {
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .query(
+      [
+        "SELECT ThemeMode, ThemePalette",
+        "FROM pm.Users",
+        "WHERE UserId = @userId",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as { ThemeMode: unknown; ThemePalette: unknown } | undefined;
+  const themeMode = typeof row?.ThemeMode === "string" ? row?.ThemeMode : null;
+  const themePalette = typeof row?.ThemePalette === "string" ? row?.ThemePalette : null;
+  res.json({ themeMode, themePalette });
+});
+
+authRouter.put("/me/preferences", requireAuth, async (req, res) => {
+  const parsed = PreferencesSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const themeMode = parsed.data.themeMode ?? null;
+  const themePalette = parsed.data.themePalette ?? null;
+
+  await db
+    .request()
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .input("themeMode", sql.NVarChar(16), themeMode)
+    .input("themePalette", sql.NVarChar(64), themePalette)
+    .query(
+      [
+        "UPDATE pm.Users",
+        "SET ThemeMode = @themeMode,",
+        "    ThemePalette = @themePalette,",
+        "    UpdatedAt = sysutcdatetime()",
+        "WHERE UserId = @userId",
+      ].join("\n"),
+    );
+
+  res.json({ ok: true });
 });

@@ -11,14 +11,61 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { clearAccessToken } from "@/lib/auth";
+import { useTheme } from "next-themes";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiGetMyPreferences, apiUpdateMyPreferences, type ThemeMode, type UserPreferencesResponse } from "@/lib/api";
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
 }
 
+const palettes: ReadonlyArray<{ key: string; label: string }> = [
+  { key: "industrial", label: "Industrial" },
+  { key: "emerald", label: "Emerald" },
+  { key: "amber", label: "Amber" },
+  { key: "purple", label: "Purple" },
+];
+
+const applyPaletteClass = (palette: string | null) => {
+  const root = document.documentElement;
+  for (const p of ["industrial", "emerald", "amber", "purple"]) {
+    root.classList.remove(`palette-${p}`);
+  }
+  if (palette) root.classList.add(`palette-${palette}`);
+};
+
 const Header = ({ title, subtitle }: HeaderProps) => {
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
+  const [currentPalette, setCurrentPalette] = useState<string | null>(null);
+
+  const prefsQuery = useQuery<UserPreferencesResponse>({
+    queryKey: ["me", "preferences"],
+    queryFn: apiGetMyPreferences,
+  });
+
+  useEffect(() => {
+    const pm = prefsQuery.data?.themeMode ?? null;
+    const pp = prefsQuery.data?.themePalette ?? null;
+    if (pm) setTheme(pm);
+    setCurrentPalette(pp);
+    applyPaletteClass(pp);
+  }, [prefsQuery.data, setTheme]);
+
+  const updatePrefs = useMutation({
+    mutationFn: (input: { themeMode?: ThemeMode | null; themePalette?: string | null }) =>
+      apiUpdateMyPreferences(input),
+    onSuccess: (_data, variables) => {
+      if (variables.themeMode) setTheme(variables.themeMode);
+      if (variables.themePalette !== undefined) {
+        const palette = variables.themePalette ?? null;
+        setCurrentPalette(palette);
+        applyPaletteClass(palette);
+      }
+    },
+  });
   return (
     <header className="h-16 bg-card/50 backdrop-blur-sm border-b border-border px-6 flex items-center justify-between sticky top-0 z-30">
       <div>
@@ -80,8 +127,57 @@ const Header = ({ title, subtitle }: HeaderProps) => {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-            <DropdownMenuItem>Preferences</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+              }}
+            >
+              Theme
+            </DropdownMenuItem>
+            <div className="px-2 py-1.5">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={theme === "dark" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => updatePrefs.mutate({ themeMode: "dark" })}
+                >
+                  Dark
+                </Button>
+                <Button
+                  variant={theme === "light" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => updatePrefs.mutate({ themeMode: "light" })}
+                >
+                  Light
+                </Button>
+              </div>
+            </div>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+              }}
+            >
+              Color Palette
+            </DropdownMenuItem>
+            <div className="px-2 py-1.5 grid grid-cols-2 gap-2">
+              {palettes.map((p) => (
+                <Button
+                  key={p.key}
+                  variant={currentPalette === p.key ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => updatePrefs.mutate({ themePalette: p.key })}
+                >
+                  {p.label}
+                </Button>
+              ))}
+              <Button
+                variant={currentPalette === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => updatePrefs.mutate({ themePalette: null })}
+              >
+                Default
+              </Button>
+            </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive"

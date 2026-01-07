@@ -316,3 +316,17 @@
 - Expanded backend OpenAPI/Swagger docs for Assets, Tasks, and Notifications routes.
 - Fixed mobile lint errors (no-empty-object-type, no-require-imports).
 - Verified with `npm run lint`, `npx tsc --noEmit`, and backend typecheck.
+
+## 2026-01-06 21:18
+- Removed broken Git submodule entry for mobile/field-ready while keeping local files.
+## 2026-01-07 10:36
+- Verified per-user theme preferences: DB schema (ThemeMode/ThemePalette), backend preferences endpoints, and frontend Header integration.
+- Ran `npm run lint` (warnings only) and `npx tsc --noEmit` (OK).
+## 2026-01-07 10:38
+- Verified live DB schema via `npm run db:verify`: pm schema version 4, tables OK, verification passed.
+## 2026-01-07 10:40
+- Applied schema to add missing pm.Users ThemeMode/ThemePalette columns.
+- Verified columns exist via INFORMATION_SCHEMA query.
+## 2026-01-07 10:43
+- Set global default theme to light in App.tsx.
+- Ran `npm run lint` and `npx tsc --noEmit`: OK.

@@ -21,6 +21,7 @@ import LabelDesigner from "./pages/LabelDesigner";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
 import { getAccessToken, isSuperadmin } from "@/lib/auth";
+import { ThemeProvider } from "next-themes";
 
 const queryClient = new QueryClient();
 
@@ -38,10 +39,11 @@ const SuperadminRoute = ({ element }: { element: ReactElement }) => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
           
@@ -66,6 +68,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      </ThemeProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

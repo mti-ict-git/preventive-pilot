@@ -55,12 +55,24 @@ BEGIN
     Phone nvarchar(32) NULL,
     ExternalProvider nvarchar(64) NULL,
     ExternalId nvarchar(128) NULL,
+    ThemeMode nvarchar(16) NULL,
+    ThemePalette nvarchar(64) NULL,
     IsActive bit NOT NULL CONSTRAINT DF_pm_Users_IsActive DEFAULT (1),
     CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_Users_CreatedAt DEFAULT (sysutcdatetime()),
     UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_Users_UpdatedAt DEFAULT (sysutcdatetime()),
     CONSTRAINT PK_pm_Users PRIMARY KEY CLUSTERED (UserId),
     CONSTRAINT UQ_pm_Users_Username UNIQUE (Username)
   );
+END;
+
+IF COL_LENGTH(N'pm.Users', N'ThemeMode') IS NULL
+BEGIN
+  ALTER TABLE pm.Users ADD ThemeMode nvarchar(16) NULL;
+END;
+
+IF COL_LENGTH(N'pm.Users', N'ThemePalette') IS NULL
+BEGIN
+  ALTER TABLE pm.Users ADD ThemePalette nvarchar(64) NULL;
 END;
 
 IF OBJECT_ID(N'pm.UserRoles', N'U') IS NULL

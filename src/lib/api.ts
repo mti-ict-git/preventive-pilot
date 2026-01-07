@@ -104,6 +104,20 @@ export const apiGetMe = async (): Promise<{
   return data as { user: { id: string; username: string; roles: string[] } };
 };
 
+export type ThemeMode = "dark" | "light";
+export type UserPreferencesResponse = { themeMode: ThemeMode | null; themePalette: string | null };
+
+export const apiGetMyPreferences = async (): Promise<UserPreferencesResponse> => {
+  return apiFetchJson<UserPreferencesResponse>("/api/auth/me/preferences");
+};
+
+export const apiUpdateMyPreferences = async (input: {
+  themeMode?: ThemeMode | null;
+  themePalette?: string | null;
+}): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>("/api/auth/me/preferences", { method: "PUT", body: input });
+};
+
 export type Asset = {
   id: string;
   snipeAssetId: number | null;
