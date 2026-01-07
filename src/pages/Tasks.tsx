@@ -40,6 +40,8 @@ import {
   apiGetTask,
   apiListTasks,
   apiStartTask,
+  apiPauseTask,
+  apiCancelTask,
   apiUploadTaskChecklistEvidenceFile,
   apiUploadTaskEvidenceFile,
   type CompleteTaskChecklistResultInput,
@@ -355,6 +357,42 @@ const TaskDetailDialog = (props: {
     },
   });
 
+  const pauseMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiPauseTask(props.taskId);
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "Task paused" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Failed to pause task",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiCancelTask(props.taskId);
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "Task cancelled" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Failed to cancel task",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
   const task = taskQuery.data;
 
   const getOutcomeOptions = (requiresPassFail: boolean) => {
@@ -637,6 +675,20 @@ const TaskDetailDialog = (props: {
                 onClick={() => startMutation.mutate()}
               >
                 Start
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!task || pauseMutation.isPending || task.status.toLowerCase() !== "in_progress"}
+                onClick={() => pauseMutation.mutate()}
+              >
+                Pause
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={!task || cancelMutation.isPending || task.status.toLowerCase() === "completed" || task.status.toLowerCase() === "cancelled"}
+                onClick={() => cancelMutation.mutate()}
+              >
+                Cancel
               </Button>
               <Button
                 variant="outline"

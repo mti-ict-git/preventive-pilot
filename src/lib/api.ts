@@ -386,6 +386,14 @@ export const apiStartTask = async (taskId: string): Promise<{ ok: true }> => {
   return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/start`, { method: "POST" });
 };
 
+export const apiPauseTask = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/pause`, { method: "POST" });
+};
+
+export const apiCancelTask = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/cancel`, { method: "POST" });
+};
+
 export type CompleteTaskChecklistResultInput = {
   templateChecklistItemId: string;
   outcome: 0 | 1 | 2;

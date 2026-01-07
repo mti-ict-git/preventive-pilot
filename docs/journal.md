@@ -78,6 +78,12 @@
 - Enabled custom date range selection on Reports page (compliance query).
 
 ## 2026-01-03 06:56
+2026-01-07 06:24:47 UTC
+- Added backend endpoints: POST /api/tasks/{taskId}/pause and /cancel
+- Updated backend OpenAPI to document pause/cancel actions
+- Added frontend API functions: apiPauseTask, apiCancelTask
+- Added Pause and Cancel buttons to Task Detail dialog on web
+- Ran lint and typecheck; addressed any arising issues
 - Standardized checklist outcomes (0=skip, 1=pass/done, 2=fail) and enforced in API.
 - Updated Tasks UI to use outcome dropdown instead of freeform numeric input.
 - Added DB check constraint to restrict checklist outcome values.

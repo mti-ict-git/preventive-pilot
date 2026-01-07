@@ -95,6 +95,12 @@ Required environment variables:
 - Evidence uploads are stored under the existing `Qx YYYY` folder structure.
 - Max upload size is 50MB per file.
 
+## Task actions (web)
+
+- Task Detail dialog supports Start, Pause, Cancel, and Complete.
+- Start moves task to In Progress; Pause sets task to Paused.
+- Cancel records CancelledBy and timestamp; Complete enforces checklist rules.
+
 ## Scheduling
 
 - Open PM Scheduling to view calendar counts and select a day to see tasks.
