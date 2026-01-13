@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import {
   QrCode,
@@ -33,31 +33,36 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
+  apiGetLabelDesignerUiSettings,
   apiGetLookups,
   apiGetSystemStatus,
   apiListAssets,
+  apiUpdateLabelDesignerUiSettings,
   type Asset as ApiAsset,
+  type LabelDesignerConfig,
+  type LabelDesignerQrPayloadMode,
 } from "@/lib/api";
-
-interface LabelConfig {
-  width: number;
-  height: number;
-  qrSize: number;
-  showAssetTag: boolean;
-  showAssetName: boolean;
-  showCategory: boolean;
-  showLocation: boolean;
-  showCustomText: boolean;
-  customText: string;
-  fontSize: number;
-  padding: number;
-  borderRadius: number;
-  showBorder: boolean;
-  showLogo: boolean;
-  orientation: "portrait" | "landscape";
-}
+import { hasAnyRole } from "@/lib/auth";
 
 type Asset = ApiAsset;
+
+const defaultDesignerConfig: LabelDesignerConfig = {
+  width: 50,
+  height: 30,
+  qrSize: 20,
+  showAssetTag: true,
+  showAssetName: true,
+  showCategory: false,
+  showLocation: false,
+  showCustomText: false,
+  customText: "Property of IT Dept",
+  fontSize: 8,
+  padding: 4,
+  borderRadius: 2,
+  showBorder: true,
+  showLogo: false,
+  orientation: "landscape",
+};
 
 const labelPresets = [
   { name: "Small (30x20mm)", width: 30, height: 20 },
@@ -66,12 +71,25 @@ const labelPresets = [
   { name: "Square (50x50mm)", width: 50, height: 50 },
 ];
 
+const contentToggleItems = [
+  { key: "showAssetTag", label: "Asset Tag" },
+  { key: "showAssetName", label: "Asset Name" },
+  { key: "showCategory", label: "Category" },
+  { key: "showLocation", label: "Location" },
+  { key: "showCustomText", label: "Custom Text" },
+  { key: "showLogo", label: "Company Logo" },
+] as const satisfies ReadonlyArray<{ key: keyof LabelDesignerConfig; label: string }>;
+
 export default function LabelDesigner() {
+  const queryClient = useQueryClient();
   const [selectedAssets, setSelectedAssets] = useState<Asset[]>([]);
   const [assetSearch, setAssetSearch] = useState<string>("");
   const [assetCategoryId, setAssetCategoryId] = useState<string>("all");
   const [assetPage, setAssetPage] = useState<number>(1);
   const assetPageSize = 200;
+
+  const canEditDefaults = hasAnyRole(["Superadmin", "Admin"]);
+  const controlsLocked = !canEditDefaults;
 
   const lookupsQuery = useQuery({
     queryKey: ["lookups"],
@@ -83,6 +101,12 @@ export default function LabelDesigner() {
     queryKey: ["system-status"],
     queryFn: apiGetSystemStatus,
     staleTime: 30_000,
+  });
+
+  const settingsQuery = useQuery({
+    queryKey: ["ui-settings", "label-designer"],
+    queryFn: apiGetLabelDesignerUiSettings,
+    staleTime: 60_000,
   });
 
   const assetsQuery = useQuery({
@@ -97,32 +121,38 @@ export default function LabelDesigner() {
   });
 
   const availableAssets = assetsQuery.data?.items ?? [];
-  const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
 
   const categoryItems = useMemo(() => {
     const categories = lookupsQuery.data?.assetCategories ?? [];
     return [{ id: "all", name: "All Categories" }, ...categories.map((c) => ({ id: c.id, name: c.name }))];
   }, [lookupsQuery.data?.assetCategories]);
-  const [config, setConfig] = useState<LabelConfig>({
-    width: 50,
-    height: 30,
-    qrSize: 20,
-    showAssetTag: true,
-    showAssetName: true,
-    showCategory: false,
-    showLocation: false,
-    showCustomText: false,
-    customText: "Property of IT Dept",
-    fontSize: 8,
-    padding: 4,
-    borderRadius: 2,
-    showBorder: true,
-    showLogo: false,
-    orientation: "landscape",
-  });
-  const [gridColumns, setGridColumns] = useState(3);
+  const [config, setConfig] = useState<LabelDesignerConfig>(defaultDesignerConfig);
+  const [gridColumns, setGridColumns] = useState<number>(3);
+  const [qrPayloadMode, setQrPayloadMode] = useState<LabelDesignerQrPayloadMode>("assetId");
 
-  const updateConfig = <K extends keyof LabelConfig>(key: K, value: LabelConfig[K]) => {
+  useEffect(() => {
+    const data = settingsQuery.data;
+    if (!data) return;
+    setConfig(data.config);
+    setGridColumns(data.gridColumns);
+    setQrPayloadMode(data.qrPayloadMode);
+  }, [settingsQuery.data]);
+
+  const saveDefaultsMutation = useMutation({
+    mutationFn: () => apiUpdateLabelDesignerUiSettings({ qrPayloadMode, gridColumns, config }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ui-settings", "label-designer"] });
+      toast.success("Defaults saved");
+    },
+    onError: () => {
+      toast.error("Failed to save defaults");
+    },
+  });
+
+  const updateConfig = <K extends keyof LabelDesignerConfig>(
+    key: K,
+    value: LabelDesignerConfig[K],
+  ) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -153,24 +183,14 @@ export default function LabelDesigner() {
   };
 
   const resetConfig = () => {
-    setConfig({
-      width: 50,
-      height: 30,
-      qrSize: 20,
-      showAssetTag: true,
-      showAssetName: true,
-      showCategory: false,
-      showLocation: false,
-      showCustomText: false,
-      customText: "Property of IT Dept",
-      fontSize: 8,
-      padding: 4,
-      borderRadius: 2,
-      showBorder: true,
-      showLogo: false,
-      orientation: "landscape",
-    });
+    setConfig(defaultDesignerConfig);
+    setGridColumns(3);
+    setQrPayloadMode("assetId");
     toast.info("Configuration reset to defaults");
+  };
+
+  const handleQrPayloadModeChange = (value: string) => {
+    setQrPayloadMode(value as LabelDesignerQrPayloadMode);
   };
 
   const LabelPreview = ({ asset }: { asset: Asset }) => {
@@ -178,11 +198,18 @@ export default function LabelDesigner() {
     const isLandscape = config.orientation === "landscape";
     const displayWidth = isLandscape ? config.width : config.height;
     const displayHeight = isLandscape ? config.height : config.width;
+    const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
     const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
-    const qrValue =
-      normalizedBaseUrl && asset.snipeAssetId !== null
-        ? `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`
-        : `${window.location.origin}/assets/${asset.id}`;
+
+    let qrValue = asset.id;
+    if (qrPayloadMode === "assetTag") {
+      qrValue = asset.assetTag;
+    } else if (qrPayloadMode === "snipeItUrl") {
+      qrValue =
+        normalizedBaseUrl && asset.snipeAssetId !== null
+          ? `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`
+          : asset.assetTag;
+    }
 
     return (
       <div
@@ -243,7 +270,17 @@ export default function LabelDesigner() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={resetConfig}>
+          {canEditDefaults ? (
+            <Button
+              variant="outline"
+              disabled={saveDefaultsMutation.isPending}
+              onClick={() => saveDefaultsMutation.mutate()}
+            >
+              <Settings2 className="h-4 w-4 mr-2" />
+              Save Defaults
+            </Button>
+          ) : null}
+          <Button variant="outline" onClick={resetConfig} disabled={controlsLocked}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Reset
           </Button>
@@ -297,6 +334,7 @@ export default function LabelDesigner() {
                           size="sm"
                           className="text-xs h-8"
                           onClick={() => applyPreset(preset)}
+                          disabled={controlsLocked}
                         >
                           {preset.name}
                         </Button>
@@ -314,6 +352,7 @@ export default function LabelDesigner() {
                         type="number"
                         value={config.width}
                         onChange={(e) => updateConfig("width", parseInt(e.target.value) || 30)}
+                        disabled={controlsLocked}
                         className="h-8 bg-background/50"
                       />
                     </div>
@@ -323,6 +362,7 @@ export default function LabelDesigner() {
                         type="number"
                         value={config.height}
                         onChange={(e) => updateConfig("height", parseInt(e.target.value) || 20)}
+                        disabled={controlsLocked}
                         className="h-8 bg-background/50"
                       />
                     </div>
@@ -333,7 +373,8 @@ export default function LabelDesigner() {
                     <Label className="text-xs">Orientation</Label>
                     <Select
                       value={config.orientation}
-                      onValueChange={(v: "portrait" | "landscape") => updateConfig("orientation", v)}
+                      onValueChange={(v) => updateConfig("orientation", v as LabelDesignerConfig["orientation"])}
+                      disabled={controlsLocked}
                     >
                       <SelectTrigger className="h-8 bg-background/50">
                         <SelectValue />
@@ -357,8 +398,27 @@ export default function LabelDesigner() {
                       min={10}
                       max={Math.min(config.width, config.height) - 5}
                       step={1}
+                      disabled={controlsLocked}
                       className="py-2"
                     />
+                  </div>
+
+                  {/* QR Payload */}
+                  <div className="space-y-2">
+                    <Label className="text-xs">QR Payload</Label>
+                    <Select value={qrPayloadMode} onValueChange={handleQrPayloadModeChange} disabled={controlsLocked}>
+                      <SelectTrigger className="h-8 bg-background/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="assetId">Asset ID</SelectItem>
+                        <SelectItem value="assetTag">Asset Tag</SelectItem>
+                        <SelectItem value="snipeItUrl">Snipe-IT URL</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="text-xs text-muted-foreground">
+                      Snipe-IT URL falls back to Asset Tag when unavailable.
+                    </div>
                   </div>
 
                   {/* Grid Columns */}
@@ -373,6 +433,7 @@ export default function LabelDesigner() {
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => setGridColumns(Math.max(1, gridColumns - 1))}
+                        disabled={controlsLocked}
                       >
                         <Minus className="h-3 w-3" />
                       </Button>
@@ -382,6 +443,7 @@ export default function LabelDesigner() {
                         min={1}
                         max={6}
                         step={1}
+                        disabled={controlsLocked}
                         className="flex-1"
                       />
                       <Button
@@ -389,6 +451,7 @@ export default function LabelDesigner() {
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => setGridColumns(Math.min(6, gridColumns + 1))}
+                        disabled={controlsLocked}
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
@@ -409,19 +472,13 @@ export default function LabelDesigner() {
                 <CardContent className="space-y-4">
                   {/* Toggle Options */}
                   <div className="space-y-3">
-                    {[
-                      { key: "showAssetTag", label: "Asset Tag" },
-                      { key: "showAssetName", label: "Asset Name" },
-                      { key: "showCategory", label: "Category" },
-                      { key: "showLocation", label: "Location" },
-                      { key: "showCustomText", label: "Custom Text" },
-                      { key: "showLogo", label: "Company Logo" },
-                    ].map((item) => (
+                    {contentToggleItems.map((item) => (
                       <div key={item.key} className="flex items-center justify-between">
                         <Label className="text-sm">{item.label}</Label>
                         <Switch
-                          checked={config[item.key as keyof LabelConfig] as boolean}
-                          onCheckedChange={(v) => updateConfig(item.key as keyof LabelConfig, v)}
+                          checked={Boolean(config[item.key])}
+                          onCheckedChange={(v) => updateConfig(item.key, v)}
+                          disabled={controlsLocked}
                         />
                       </div>
                     ))}
@@ -436,6 +493,7 @@ export default function LabelDesigner() {
                           value={config.customText}
                           onChange={(e) => updateConfig("customText", e.target.value)}
                           placeholder="Enter custom text..."
+                          disabled={controlsLocked}
                           className="h-8 bg-background/50"
                         />
                       </div>
@@ -466,6 +524,7 @@ export default function LabelDesigner() {
                       min={5}
                       max={14}
                       step={1}
+                      disabled={controlsLocked}
                     />
                   </div>
 
@@ -481,6 +540,7 @@ export default function LabelDesigner() {
                       min={1}
                       max={10}
                       step={1}
+                      disabled={controlsLocked}
                     />
                   </div>
 
@@ -496,6 +556,7 @@ export default function LabelDesigner() {
                       min={0}
                       max={10}
                       step={1}
+                      disabled={controlsLocked}
                     />
                   </div>
 
@@ -507,6 +568,7 @@ export default function LabelDesigner() {
                     <Switch
                       checked={config.showBorder}
                       onCheckedChange={(v) => updateConfig("showBorder", v)}
+                      disabled={controlsLocked}
                     />
                   </div>
                 </CardContent>

@@ -1,0 +1,4 @@
+mobile/field-ready/android/**
+mobile/field-ready/dist/**
+backend/dist/**
+dist/**

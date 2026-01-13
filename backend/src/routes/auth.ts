@@ -105,10 +105,29 @@ authRouter.post("/login", async (req, res) => {
 });
 
 authRouter.get("/me", requireAuth, async (req, res) => {
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .query(
+      [
+        "SELECT TOP (1) Username, DisplayName, Email",
+        "FROM pm.Users",
+        "WHERE UserId = @userId",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as { Username: unknown; DisplayName: unknown; Email: unknown } | undefined;
+  const username = typeof row?.Username === "string" ? row.Username : req.user.username;
+  const displayName = typeof row?.DisplayName === "string" ? row.DisplayName : null;
+  const email = typeof row?.Email === "string" ? row.Email : null;
+
   res.json({
     user: {
       id: req.user.sub,
-      username: req.user.username,
+      username,
+      displayName,
+      email,
       roles: req.user.roles,
     },
   });

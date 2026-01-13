@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Shield,
   Plus,
@@ -30,7 +30,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiGetLookups, apiListUsers, type LookupRole, type UserSummary } from "@/lib/api";
+import { apiGetLookups, apiListUsers, apiUpdateUserRoles, type LookupRole, type UserSummary } from "@/lib/api";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 
 type UserStatusFilter = "all" | "active" | "inactive";
 
@@ -59,6 +63,33 @@ const UserManagement = () => {
 
   const roles: LookupRole[] = lookupsQuery.data?.roles ?? [];
   const users: UserSummary[] = usersQuery.data?.items ?? [];
+
+  const queryClient = useQueryClient();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<UserSummary | null>(null);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [nextActive, setNextActive] = useState<boolean>(true);
+  const [newRoleName, setNewRoleName] = useState("");
+
+  const openEdit = (user: UserSummary) => {
+    setEditTarget(user);
+    setSelectedRoles([...user.roles]);
+    setNextActive(Boolean(user.isActive));
+    setEditDialogOpen(true);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      if (!editTarget) return Promise.resolve({ ok: true, roles: [] });
+      return apiUpdateUserRoles({ userId: editTarget.id, roles: selectedRoles, isActive: nextActive });
+    },
+    onSuccess: async () => {
+      setEditDialogOpen(false);
+      setEditTarget(null);
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      await queryClient.invalidateQueries({ queryKey: ["lookups", "roles"] });
+    },
+  });
 
   const usersByRole = useMemo(() => {
     const counts = new Map<string, number>();
@@ -303,7 +334,7 @@ const UserManagement = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="gap-2">
+                        <DropdownMenuItem className="gap-2" onClick={() => openEdit(user)}>
                           <Edit2 className="w-4 h-4" /> Edit User
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-2">
@@ -352,6 +383,76 @@ const UserManagement = () => {
             </div>
           </div>
         </motion.div>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-12 gap-4">
+              <div className="col-span-12 md:col-span-6">
+                <div className="space-y-2">
+                  <Label>Roles</Label>
+                  <div className="space-y-2">
+                    {[...roles.map((r) => r.name), ...([] as string[])]
+                      .filter((v, i, arr) => arr.indexOf(v) === i)
+                      .sort()
+                      .map((roleName) => (
+                        <div key={roleName} className="flex items-center gap-2">
+                          <Checkbox
+                            checked={selectedRoles.includes(roleName)}
+                            onCheckedChange={(checked) => {
+                              setSelectedRoles((prev) => {
+                                const has = prev.includes(roleName);
+                                if (checked && !has) return [...prev, roleName];
+                                if (!checked && has) return prev.filter((r) => r !== roleName);
+                                return prev;
+                              });
+                            }}
+                          />
+                          <span className="text-sm">{roleName}</span>
+                        </div>
+                      ))}
+                  </div>
+                  <div className="flex items-center gap-2 pt-2">
+                    <Input
+                      placeholder="Add role by name"
+                      value={newRoleName}
+                      onChange={(e) => setNewRoleName(e.target.value)}
+                      className="max-w-xs"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const name = newRoleName.trim();
+                        if (!name) return;
+                        setSelectedRoles((prev) => (prev.includes(name) ? prev : [...prev, name]));
+                        setNewRoleName("");
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-6">
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <div className="flex items-center gap-3">
+                    <Switch checked={nextActive} onCheckedChange={(v) => setNextActive(Boolean(v))} />
+                    <span className="text-sm">{nextActive ? "Active" : "Inactive"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={saveMutation.isPending}>Cancel</Button>
+            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="bg-primary">Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </div>
   );

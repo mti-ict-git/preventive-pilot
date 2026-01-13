@@ -122,6 +122,18 @@ const openApiSpec: OpenApiSchema = {
         required: ["id", "name", "pm"],
         additionalProperties: false,
       },
+      AssetHistoryItem: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          date: { type: ["string", "null"], format: "date-time" },
+          type: { type: ["string", "null"] },
+          technician: { type: ["string", "null"] },
+          status: { type: "string" },
+        },
+        required: ["id", "status"],
+        additionalProperties: false,
+      },
       Role: {
         type: "object",
         properties: {
@@ -159,6 +171,50 @@ const openApiSpec: OpenApiSchema = {
           locations: { type: "array", items: { $ref: "#/components/schemas/Location" } },
         },
         required: ["roles", "assetCategories", "locations"],
+        additionalProperties: false,
+      },
+      UserSummary: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          username: { type: "string" },
+          displayName: { type: ["string", "null"] },
+          email: { type: ["string", "null"] },
+          phone: { type: ["string", "null"] },
+          isActive: { type: "boolean" },
+          roles: { type: "array", items: { type: "string" } },
+          tasksCompleted: { type: "integer" },
+        },
+        required: ["id", "username", "isActive", "roles", "tasksCompleted"],
+        additionalProperties: false,
+      },
+      UsersListResponse: {
+        type: "object",
+        properties: {
+          page: { type: "integer" },
+          pageSize: { type: "integer" },
+          total: { type: "integer" },
+          items: { type: "array", items: { $ref: "#/components/schemas/UserSummary" } },
+        },
+        required: ["page", "pageSize", "total", "items"],
+        additionalProperties: false,
+      },
+      UpdateUserRolesRequest: {
+        type: "object",
+        properties: {
+          roles: { type: "array", items: { type: "string" } },
+          isActive: { type: "boolean" },
+        },
+        required: ["roles"],
+        additionalProperties: false,
+      },
+      UpdateUserRolesResponse: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+          roles: { type: "array", items: { type: "string" } },
+        },
+        required: ["ok", "roles"],
         additionalProperties: false,
       },
       OkResponse: {
@@ -235,6 +291,8 @@ const openApiSpec: OpenApiSchema = {
             properties: {
               id: { type: "string" },
               username: { type: "string" },
+              displayName: { type: ["string", "null"] },
+              email: { type: ["string", "null"] },
               roles: { type: "array", items: { type: "string" } },
             },
             required: ["id", "username", "roles"],
@@ -501,6 +559,37 @@ const openApiSpec: OpenApiSchema = {
         ],
         responses: {
           "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/AssetDetail" } } } },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/assets/{assetId}/history": {
+      get: {
+        tags: ["Assets"],
+        summary: "List completed PM history for an asset",
+        parameters: [
+          { name: "assetId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { type: "array", items: { $ref: "#/components/schemas/AssetHistoryItem" } },
+              },
+            },
+          },
           "400": {
             description: "Invalid request",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
@@ -1183,12 +1272,50 @@ const openApiSpec: OpenApiSchema = {
         },
       },
     },
+    "/api/system/users": {
+      get: {
+        tags: ["System"],
+        summary: "List users",
+        parameters: [
+          { name: "page", in: "query", required: false, schema: { type: "integer", minimum: 1 } },
+          { name: "pageSize", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 200 } },
+          { name: "search", in: "query", required: false, schema: { type: "string" } },
+          { name: "isActive", in: "query", required: false, schema: { type: "string", enum: ["true", "false"] } },
+        ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/UsersListResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/system/users/{userId}/roles": {
+      put: {
+        tags: ["System"],
+        summary: "Update user roles",
+        parameters: [
+          { name: "userId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/UpdateUserRolesRequest" } } },
+        },
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/UpdateUserRolesResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
   },
 };
 
 app.use(
   cors({
-    origin: env.FRONTEND_ORIGIN,
+    origin: env.FRONTEND_ORIGIN.split(/[ ,\s]+/).filter((v) => v.length > 0),
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-filename"],
     exposedHeaders: ["Content-Disposition"],

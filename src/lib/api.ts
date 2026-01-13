@@ -118,7 +118,7 @@ export const apiLogin = async (input: {
 };
 
 export const apiGetMe = async (): Promise<{
-  user: { id: string; username: string; roles: string[] };
+	user: { id: string; username: string; displayName: string | null; email: string | null; roles: string[] };
 }> => {
   const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
     headers: buildAuthHeaders(),
@@ -128,8 +128,8 @@ export const apiGetMe = async (): Promise<{
     throw new ApiError("Failed to load profile", res.status);
   }
 
-  const data = (await res.json()) as unknown;
-  return data as { user: { id: string; username: string; roles: string[] } };
+	const data = (await res.json()) as unknown;
+	return data as { user: { id: string; username: string; displayName: string | null; email: string | null; roles: string[] } };
 };
 
 export type ThemeMode = "dark" | "light";
@@ -864,6 +864,17 @@ export const apiListUsers = async (input?: {
   return apiFetchJson<{ page: number; pageSize: number; total: number; items: UserSummary[] }>(
     `/api/system/users${query ? `?${query}` : ""}`,
   );
+};
+
+export const apiUpdateUserRoles = async (input: {
+  userId: string;
+  roles: string[];
+  isActive?: boolean;
+}): Promise<{ ok: true; roles: string[] }> => {
+  return apiFetchJson<{ ok: true; roles: string[] }>(`/api/system/users/${input.userId}/roles`, {
+    method: "PUT",
+    body: { roles: input.roles, isActive: input.isActive },
+  });
 };
 
 export type SchedulingCalendarDay = {

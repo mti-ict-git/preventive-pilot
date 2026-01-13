@@ -441,6 +441,74 @@ assetsRouter.get("/:assetId", async (req, res) => {
   });
 });
 
+assetsRouter.get("/:assetId/history", async (req, res) => {
+  const assetId = req.params.assetId;
+  if (!z.string().uuid().safeParse(assetId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+
+  const existsResult = await db
+    .request()
+    .input("assetId", sql.UniqueIdentifier, assetId)
+    .query("SELECT TOP (1) 1 AS One FROM pm.Assets WHERE AssetId = @assetId AND IsArchived = 0");
+
+  if (!existsResult.recordset[0]) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const historyResult = await db
+    .request()
+    .input("assetId", sql.UniqueIdentifier, assetId)
+    .input("limit", sql.Int, 50)
+    .query(
+      [
+        "SELECT TOP (@limit)",
+        "  t.TaskId AS TaskId,",
+        "  t.CompletedAt AS CompletedAt,",
+        "  t.Status AS Status,",
+        "  tpl.Name AS TemplateName,",
+        "  cu.Username AS CompletedByUsername,",
+        "  cu.DisplayName AS CompletedByDisplayName",
+        "FROM pm.PMTasks t",
+        "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "LEFT JOIN pm.Users cu ON cu.UserId = t.CompletedByUserId",
+        "WHERE t.AssetId = @assetId",
+        "  AND t.Status = N'completed'",
+        "  AND t.CompletedAt IS NOT NULL",
+        "ORDER BY t.CompletedAt DESC",
+      ].join("\n"),
+    );
+
+  const rows = historyResult.recordset as Array<Record<string, unknown>>;
+  res.json(
+    rows.map((r) => {
+      const completedAtValue = r.CompletedAt;
+      const completedAt =
+        completedAtValue instanceof Date
+          ? completedAtValue.toISOString()
+          : typeof completedAtValue === "string"
+            ? completedAtValue
+            : null;
+
+      const completedByDisplayName = typeof r.CompletedByDisplayName === "string" ? r.CompletedByDisplayName : null;
+      const completedByUsername = typeof r.CompletedByUsername === "string" ? r.CompletedByUsername : null;
+      const technician = completedByDisplayName ?? completedByUsername;
+
+      return {
+        id: typeof r.TaskId === "string" ? r.TaskId : "",
+        date: completedAt,
+        type: typeof r.TemplateName === "string" ? r.TemplateName : null,
+        technician,
+        status: typeof r.Status === "string" ? r.Status : "completed",
+      };
+    }),
+  );
+});
+
 assetsRouter.patch("/:assetId/pm", requireManager, async (req, res) => {
   const assetId = req.params.assetId;
   if (!z.string().uuid().safeParse(assetId).success) {

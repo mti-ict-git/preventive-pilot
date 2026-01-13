@@ -23,7 +23,7 @@ const numberFromString = z
 
 const EnvSchema = z.object({
   BACKEND_PORT: z.string().optional().default("3001").pipe(numberFromString).pipe(z.number()),
-  FRONTEND_ORIGIN: z.string().optional().default("http://localhost:8080"),
+  FRONTEND_ORIGIN: z.string().optional().default("http://localhost:8080,http://localhost:8081"),
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES_IN: z.string().optional().default("8h"),
   REFRESH_TOKEN_EXPIRES_IN: z.string().optional().default("30d"),

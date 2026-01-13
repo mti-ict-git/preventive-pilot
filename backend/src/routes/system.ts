@@ -385,6 +385,28 @@ const AssetsUiSettingsSchema = z.object({
   visibleCategoryIds: z.array(z.string().uuid()).min(1).nullable(),
 });
 
+const LabelDesignerUiSettingsSchema = z.object({
+  qrPayloadMode: z.enum(["assetId", "assetTag", "snipeItUrl"]),
+  gridColumns: z.number().int().min(1).max(6),
+  config: z.object({
+    width: z.number().int().min(10).max(200),
+    height: z.number().int().min(10).max(200),
+    qrSize: z.number().int().min(5).max(200),
+    showAssetTag: z.boolean(),
+    showAssetName: z.boolean(),
+    showCategory: z.boolean(),
+    showLocation: z.boolean(),
+    showCustomText: z.boolean(),
+    customText: z.string().max(256),
+    fontSize: z.number().int().min(5).max(24),
+    padding: z.number().int().min(0).max(20),
+    borderRadius: z.number().int().min(0).max(20),
+    showBorder: z.boolean(),
+    showLogo: z.boolean(),
+    orientation: z.enum(["portrait", "landscape"]),
+  }),
+});
+
 const WhatsAppSettingsSchema = z.object({
   enabled: z.boolean(),
   baseUrl: z.preprocess(nullIfBlank, z.string().trim().max(512).nullable()),
@@ -402,6 +424,8 @@ const WhatsAppSettingsTestSchema = WhatsAppSettingsSchema.partial()
   .optional();
 
 const ASSETS_VISIBLE_CATEGORY_IDS_SETTING_KEY = "ui.assets.visibleCategoryIds";
+
+const LABEL_DESIGNER_UI_SETTINGS_KEY = "ui.labelDesigner";
 
 const WHATSAPP_SETTINGS_KEY = "notifications.whatsapp";
 
@@ -438,6 +462,68 @@ const loadAssetsUiSettings = async (): Promise<z.infer<typeof AssetsUiSettingsSc
   } catch (err: unknown) {
     if (isInvalidObjectNameError(err)) {
       return { visibleCategoryIds: null };
+    }
+    throw err;
+  }
+};
+
+const parseLabelDesignerUiSettings = (
+  valueJson: string | null,
+): z.infer<typeof LabelDesignerUiSettingsSchema> => {
+  const defaults: z.infer<typeof LabelDesignerUiSettingsSchema> = {
+    qrPayloadMode: "assetId",
+    gridColumns: 3,
+    config: {
+      width: 50,
+      height: 30,
+      qrSize: 20,
+      showAssetTag: true,
+      showAssetName: true,
+      showCategory: false,
+      showLocation: false,
+      showCustomText: false,
+      customText: "Property of IT Dept",
+      fontSize: 8,
+      padding: 4,
+      borderRadius: 2,
+      showBorder: true,
+      showLogo: false,
+      orientation: "landscape",
+    },
+  };
+
+  if (!valueJson || !valueJson.trim()) return defaults;
+  try {
+    const parsed: unknown = JSON.parse(valueJson);
+    const validated = LabelDesignerUiSettingsSchema.safeParse(parsed);
+    if (!validated.success) return defaults;
+    return validated.data;
+  } catch {
+    return defaults;
+  }
+};
+
+const loadLabelDesignerUiSettings = async (): Promise<z.infer<typeof LabelDesignerUiSettingsSchema>> => {
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), LABEL_DESIGNER_UI_SETTINGS_KEY)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  SettingValueJson",
+          "FROM pm.SystemSettings",
+          "WHERE SettingKey = @settingKey",
+        ].join("\n"),
+      );
+
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
+    return parseLabelDesignerUiSettings(valueJson);
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      return parseLabelDesignerUiSettings(null);
     }
     throw err;
   }
@@ -886,6 +972,16 @@ systemRouter.get("/ui-settings/assets", async (_req, res) => {
   }
 });
 
+systemRouter.get("/ui-settings/label-designer", async (_req, res) => {
+  try {
+    const settings = await loadLabelDesignerUiSettings();
+    res.json(settings);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+  }
+});
+
 systemRouter.put("/ui-settings/assets", requireSuperadmin, async (req, res) => {
   const parsed = AssetsUiSettingsSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -930,6 +1026,51 @@ systemRouter.put("/ui-settings/assets", requireSuperadmin, async (req, res) => {
   }
 
   const updated = await loadAssetsUiSettings();
+  res.json(updated);
+});
+
+systemRouter.put("/ui-settings/label-designer", requireSystemAdmin, async (req, res) => {
+  const parsed = LabelDesignerUiSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const valueJson = JSON.stringify(parsed.data);
+
+  try {
+    const db = await getDb();
+    await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), LABEL_DESIGNER_UI_SETTINGS_KEY)
+      .input("settingValueJson", sql.NVarChar(sql.MAX), valueJson)
+      .input("updatedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "MERGE pm.SystemSettings WITH (HOLDLOCK) AS target",
+          "USING (SELECT @settingKey AS SettingKey) AS source",
+          "ON target.SettingKey = source.SettingKey",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    SettingValueJson = @settingValueJson,",
+          "    UpdatedAt = sysutcdatetime(),",
+          "    UpdatedByUserId = @updatedByUserId",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (SettingKey, SettingValueJson, UpdatedByUserId)",
+          "  VALUES (@settingKey, @settingValueJson, @updatedByUserId);",
+        ].join("\n"),
+      );
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      res.status(503).json({ message: "Database schema missing pm.SystemSettings. Run npm run db:apply-schema." });
+      return;
+    }
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+    return;
+  }
+
+  const updated = await loadLabelDesignerUiSettings();
   res.json(updated);
 });
 
