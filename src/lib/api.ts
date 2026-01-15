@@ -427,6 +427,10 @@ export const apiResumeTask = async (taskId: string): Promise<{ ok: true }> => {
   return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/resume`, { method: "POST" });
 };
 
+export const apiReopenTask = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/reopen`, { method: "POST" });
+};
+
 export type CompleteTaskChecklistResultInput = {
   templateChecklistItemId: string;
   outcome: 0 | 1 | 2;

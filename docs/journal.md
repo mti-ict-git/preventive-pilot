@@ -199,6 +199,12 @@
 - Extended evidence preview modal to support PDF, images, video, and audio.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-16 01:02
+- Wired Asset Detail "PM Now" button to open a PM Task detail dialog for the asset's default template.
+- Reused existing Task Detail checklist and evidence UI to complete PM directly from Asset Detail.
+- Triggered PM schedule recalculation automatically after completing PM Now to update Next PM date.
+- Ensured Label Designer uses DB-backed UI settings and QR payload configuration via real APIs.
+
 ## 2026-01-16 00:00
 - Added asset-level PM recalculate action on Asset Detail page using existing scheduling API.
 - Restricted PM recalc to managers with PM enabled and default template set.
@@ -440,4 +446,13 @@
 ## 2026-01-16 00:43:54 WIB
 - Replaced Asset Detail → Schedule tab mock data with real computed schedule.
 - Schedule combines scheduled tasks and projected occurrences (respects blackout windows).
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 01:01:59 WIB
+- Fixed Task Detail action buttons: allow Start when task status is `open` (overdue tasks).
+- Disabled Complete on cancelled tasks for consistency.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 01:19:26 WIB
+- Added Task Detail Reopen action for managers to restore cancelled tasks to `open`.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

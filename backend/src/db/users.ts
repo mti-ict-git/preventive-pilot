@@ -95,22 +95,45 @@ export const upsertLdapUser = async (input: {
       | undefined;
     if (!userRow) throw new Error("Failed to upsert user");
 
-    const roleIds = [] as string[];
-    for (const role of input.roles) {
-      const roleId = await ensureRole(role);
-      roleIds.push(roleId);
-      await tx
-        .request()
-        .input("userId", sql.UniqueIdentifier, userRow.UserId)
-        .input("roleId", sql.UniqueIdentifier, roleId)
-        .query(
-          [
-            "IF NOT EXISTS (SELECT 1 FROM pm.UserRoles WHERE UserId = @userId AND RoleId = @roleId)",
-            "BEGIN",
-            "  INSERT INTO pm.UserRoles (UserId, RoleId) VALUES (@userId, @roleId)",
-            "END",
-          ].join("\n"),
-        );
+    const existingRolesResult = await tx
+      .request()
+      .input("userId", sql.UniqueIdentifier, userRow.UserId)
+      .query([
+        "SELECT TOP (1) 1 AS One",
+        "FROM pm.UserRoles",
+        "WHERE UserId = @userId",
+      ].join("\n"));
+    const hasRoles = Boolean(existingRolesResult.recordset[0]);
+
+    if (!hasRoles) {
+      for (const role of input.roles) {
+        const existing = await tx
+          .request()
+          .input("name", sql.NVarChar(64), role)
+          .query("SELECT TOP (1) RoleId FROM pm.Roles WHERE Name = @name");
+        let roleId = existing.recordset[0]?.RoleId as string | undefined;
+        if (!roleId) {
+          const inserted = await tx
+            .request()
+            .input("name", sql.NVarChar(64), role)
+            .query("INSERT INTO pm.Roles (Name) OUTPUT inserted.RoleId AS RoleId VALUES (@name)");
+          roleId = inserted.recordset[0]?.RoleId as string | undefined;
+        }
+        if (roleId) {
+          await tx
+            .request()
+            .input("userId", sql.UniqueIdentifier, userRow.UserId)
+            .input("roleId", sql.UniqueIdentifier, roleId)
+            .query(
+              [
+                "IF NOT EXISTS (SELECT 1 FROM pm.UserRoles WHERE UserId = @userId AND RoleId = @roleId)",
+                "BEGIN",
+                "  INSERT INTO pm.UserRoles (UserId, RoleId) VALUES (@userId, @roleId)",
+                "END",
+              ].join("\n"),
+            );
+        }
+      }
     }
 
     await tx.commit();

@@ -43,12 +43,14 @@ import {
   apiPauseTask,
   apiCancelTask,
   apiResumeTask,
+  apiReopenTask,
   apiUploadTaskChecklistEvidenceFile,
   apiUploadTaskEvidenceFile,
   type CompleteTaskChecklistResultInput,
   type TaskListItem,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { isManager } from "@/lib/auth";
 
 const Tasks = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -321,17 +323,23 @@ const Tasks = () => {
         taskId={selectedTaskId}
         onStarted={async () => {
           await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          await statsQuery.refetch();
+        }}
+        onCompleted={async () => {
+          await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          await statsQuery.refetch();
         }}
       />
     </div>
   );
 };
 
-const TaskDetailDialog = (props: {
+export const TaskDetailDialog = (props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   taskId: string | null;
   onStarted: () => Promise<void>;
+  onCompleted?: () => Promise<void> | void;
 }) => {
   const taskQuery = useQuery({
     queryKey: ["task", props.taskId],
@@ -412,7 +420,34 @@ const TaskDetailDialog = (props: {
     },
   });
 
+  const reopenMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiReopenTask(props.taskId);
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      await props.onStarted();
+      toast({ title: "Task reopened" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Failed to reopen task",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
   const task = taskQuery.data;
+
+  const normalizedStatus = task?.status.toLowerCase() ?? null;
+  const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
+  const canPause = normalizedStatus === "in_progress";
+  const canResume = normalizedStatus === "paused";
+  const canCancel = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
+  const canComplete = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
+  const canReopen = normalizedStatus === "cancelled" && isManager();
 
   const getOutcomeOptions = (requiresPassFail: boolean) => {
     if (requiresPassFail) {
@@ -630,6 +665,9 @@ const TaskDetailDialog = (props: {
     onSuccess: async () => {
       await taskQuery.refetch();
       toast({ title: "Task completed" });
+      if (props.onCompleted) {
+        await props.onCompleted();
+      }
     },
     onError: (err: unknown) => {
       toast({
@@ -690,35 +728,44 @@ const TaskDetailDialog = (props: {
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
-                disabled={!task || startMutation.isPending || task.status.toLowerCase() !== "scheduled"}
+                disabled={!task || startMutation.isPending || !canStart}
                 onClick={() => startMutation.mutate()}
               >
                 Start
               </Button>
               <Button
                 variant="outline"
-                disabled={!task || pauseMutation.isPending || task.status.toLowerCase() !== "in_progress"}
+                disabled={!task || pauseMutation.isPending || !canPause}
                 onClick={() => pauseMutation.mutate()}
               >
                 Pause
               </Button>
               <Button
                 variant="outline"
-                disabled={!task || resumeMutation.isPending || task.status.toLowerCase() !== "paused"}
+                disabled={!task || resumeMutation.isPending || !canResume}
                 onClick={() => resumeMutation.mutate()}
               >
                 Resume
               </Button>
+              {canReopen ? (
+                <Button
+                  variant="outline"
+                  disabled={!task || reopenMutation.isPending}
+                  onClick={() => reopenMutation.mutate()}
+                >
+                  Reopen
+                </Button>
+              ) : null}
               <Button
                 variant="destructive"
-                disabled={!task || cancelMutation.isPending || task.status.toLowerCase() === "completed" || task.status.toLowerCase() === "cancelled"}
+                disabled={!task || cancelMutation.isPending || !canCancel}
                 onClick={() => cancelMutation.mutate()}
               >
                 Cancel
               </Button>
               <Button
                 variant="outline"
-                disabled={!task || completeMutation.isPending || task.status.toLowerCase() === "completed"}
+                disabled={!task || completeMutation.isPending || !canComplete}
                 onClick={() => completeMutation.mutate()}
               >
                 Complete

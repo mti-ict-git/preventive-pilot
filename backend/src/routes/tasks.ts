@@ -1942,6 +1942,55 @@ tasksRouter.post("/:taskId/cancel", async (req, res) => {
   res.json({ ok: true });
 });
 
+tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const statusResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  Status",
+        "FROM pm.PMTasks",
+        "WHERE TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const status = typeof row.Status === "string" ? row.Status.toLowerCase() : null;
+  if (status !== "cancelled") {
+    res.status(400).json({ message: "Only cancelled tasks can be reopened" });
+    return;
+  }
+
+  await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "UPDATE pm.PMTasks",
+        "SET",
+        "  Status = N'open',",
+        "  CancelledAt = NULL,",
+        "  CancelledByUserId = NULL",
+        "WHERE TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  res.json({ ok: true });
+});
+
 tasksRouter.post("/:taskId/resume", async (req, res) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) {

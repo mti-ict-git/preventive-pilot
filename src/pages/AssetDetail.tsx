@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { isManager } from "@/lib/auth";
+import { TaskDetailDialog } from "@/pages/Tasks";
 import {
   ApiError,
   apiDownloadEvidence,
@@ -176,6 +177,8 @@ const AssetDetail = () => {
   const [previewFileName, setPreviewFileName] = useState<string | null>(null);
   const [previewContentType, setPreviewContentType] = useState<string | null>(null);
   const [exportingPdfTaskId, setExportingPdfTaskId] = useState<string | null>(null);
+  const [pmNowTaskId, setPmNowTaskId] = useState<string | null>(null);
+  const [pmNowDialogOpen, setPmNowDialogOpen] = useState<boolean>(false);
 
   const queryClient = useQueryClient();
 
@@ -255,6 +258,50 @@ const AssetDetail = () => {
       const message =
         err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to recalculate schedule";
       toast({ title: "Action failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const pmNowStartMutation = useMutation({
+    mutationFn: async () => {
+      if (!assetId) throw new Error("Missing assetId");
+
+      const currentAsset = assetQuery.data;
+      const defaultTemplateId = currentAsset?.pm.defaultTemplateId ?? null;
+      if (!defaultTemplateId) {
+        throw new Error("PM template is not configured for this asset");
+      }
+
+      const listResponse = await apiListTasks({
+        assetId,
+        templateId: defaultTemplateId,
+        page: 1,
+        pageSize: 50,
+      });
+
+      const candidates = [...listResponse.items]
+        .filter((task) => {
+          const statusLower = task.status.toLowerCase();
+          return statusLower !== "completed" && statusLower !== "cancelled";
+        })
+        .sort((a, b) => {
+          const aTime = new Date(a.scheduledDueAt).getTime();
+          const bTime = new Date(b.scheduledDueAt).getTime();
+          return aTime - bTime;
+        });
+
+      if (candidates.length === 0) {
+        throw new Error("No PM task is available to run now for this asset");
+      }
+
+      return candidates[0].id;
+    },
+    onSuccess: (taskId) => {
+      setPmNowTaskId(taskId);
+      setPmNowDialogOpen(true);
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : "Failed to start PM Now";
+      toast({ title: "PM Now unavailable", description: message, variant: "destructive" });
     },
   });
 
@@ -696,6 +743,24 @@ const AssetDetail = () => {
         </DialogContent>
       </Dialog>
 
+      <TaskDetailDialog
+        open={pmNowDialogOpen}
+        onOpenChange={(open) => {
+          setPmNowDialogOpen(open);
+          if (!open) {
+            setPmNowTaskId(null);
+          }
+        }}
+        taskId={pmNowTaskId}
+        onStarted={async () => {
+          await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+        }}
+        onCompleted={async () => {
+          if (!assetId) return;
+          await recalcPmMutation.mutateAsync();
+        }}
+      />
+
       <div className="p-6 space-y-6">
         {/* Back Button */}
         <Link to="/assets">
@@ -748,8 +813,14 @@ const AssetDetail = () => {
               <Button
                 variant="outline"
                 className="gap-2"
-                disabled={!canManage || !pmEnabled || !asset?.pm.defaultTemplateId || recalcPmMutation.isPending}
-                onClick={() => recalcPmMutation.mutate()}
+                disabled={
+                  !canManage ||
+                  !pmEnabled ||
+                  !asset?.pm.defaultTemplateId ||
+                  recalcPmMutation.isPending ||
+                  pmNowStartMutation.isPending
+                }
+                onClick={() => pmNowStartMutation.mutate()}
               >
                 <Activity className="w-4 h-4" />
                 PM Now
