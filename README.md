@@ -105,6 +105,13 @@ Required environment variables:
 
 - Open PM Scheduling to view calendar counts and select a day to see tasks.
 - Calendar/day views include projected upcoming PM occurrences when tasks have not been generated yet.
+- Asset Detail → Schedule tab shows upcoming scheduled + projected occurrences (blackout-aware).
+
+### Asset-level PM schedule recalc
+
+- Open an Asset and use the PM section to enable PM and choose a template.
+- Managers can use the Recalculate PM button on Asset Detail to force recomputation of the next PM date for that asset.
+- This uses the same scheduling engine as the global Recalculate/Force Recalculate actions on the Scheduling page.
 
 ## Microsoft Graph notifications
 

@@ -45,6 +45,31 @@ BEGIN
   );
 END;
 
+IF NOT EXISTS (SELECT 1 FROM pm.Roles WHERE Name = N'Superadmin')
+BEGIN
+  INSERT INTO pm.Roles (Name) VALUES (N'Superadmin');
+END;
+
+IF NOT EXISTS (SELECT 1 FROM pm.Roles WHERE Name = N'Admin')
+BEGIN
+  INSERT INTO pm.Roles (Name) VALUES (N'Admin');
+END;
+
+IF NOT EXISTS (SELECT 1 FROM pm.Roles WHERE Name = N'Supervisor')
+BEGIN
+  INSERT INTO pm.Roles (Name) VALUES (N'Supervisor');
+END;
+
+IF NOT EXISTS (SELECT 1 FROM pm.Roles WHERE Name = N'Technician')
+BEGIN
+  INSERT INTO pm.Roles (Name) VALUES (N'Technician');
+END;
+
+IF NOT EXISTS (SELECT 1 FROM pm.Roles WHERE Name = N'Viewer')
+BEGIN
+  INSERT INTO pm.Roles (Name) VALUES (N'Viewer');
+END;
+
 IF OBJECT_ID(N'pm.Users', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.Users (

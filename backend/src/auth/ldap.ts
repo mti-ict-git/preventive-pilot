@@ -116,3 +116,99 @@ export const authenticateWithLdap = async (
     await searchClient.unbind().catch(() => undefined);
   }
 };
+
+export const lookupLdapUser = async (identifier: string): Promise<LdapUserProfile> => {
+  const normalized = normalizeLoginIdentifier(identifier);
+  const searchClient = createClient();
+  try {
+    await searchClient.bind(env.LDAP_BIND_DN, env.LDAP_BIND_PASSWORD);
+
+    const filter = buildUserSearchFilter(normalized.raw);
+    const userSearch = await searchClient.search(env.LDAP_USER_SEARCH_BASE, {
+      scope: "sub",
+      filter,
+      attributes: ["cn", "displayName", "mail", "telephoneNumber", "memberOf"],
+    });
+
+    const userEntry = userSearch.searchEntries[0];
+    if (!userEntry || typeof userEntry.dn !== "string") {
+      throw new Error("User not found");
+    }
+
+    const userDn = userEntry.dn;
+
+    const groupFilter = `(&(objectClass=group)(distinguishedName=${escapeFilterValue(env.LDAP_GROUP_SUPERADMIN)})(member=${escapeFilterValue(userDn)}))`;
+    const groupSearch = await searchClient.search(env.LDAP_GROUP_SEARCH_BASE, {
+      scope: "sub",
+      filter: groupFilter,
+      attributes: ["distinguishedName"],
+    });
+
+    const isSuperadmin = groupSearch.searchEntries.length > 0;
+
+    const displayName =
+      (typeof userEntry.displayName === "string" && userEntry.displayName) ||
+      (typeof userEntry.cn === "string" && userEntry.cn) ||
+      null;
+
+    const email = typeof userEntry.mail === "string" ? userEntry.mail : null;
+    const phone = typeof userEntry.telephoneNumber === "string" ? userEntry.telephoneNumber : null;
+
+    return {
+      username: normalized.username,
+      dn: userDn,
+      displayName,
+      email,
+      phone,
+      isSuperadmin,
+    };
+  } finally {
+    await searchClient.unbind().catch(() => undefined);
+  }
+};
+
+export type LdapUserSearchItem = {
+  username: string;
+  dn: string;
+  displayName: string | null;
+  email: string | null;
+  upn: string | null;
+};
+
+export const searchLdapUsers = async (query: string, limit = 10): Promise<LdapUserSearchItem[]> => {
+  const normalized = normalizeLoginIdentifier(query);
+  const searchClient = createClient();
+  try {
+    await searchClient.bind(env.LDAP_BIND_DN, env.LDAP_BIND_PASSWORD);
+
+    const escapedUser = escapeFilterValue(normalized.username);
+    const escapedRaw = escapeFilterValue(normalized.raw);
+    const userClass = "(objectClass=user)";
+    const filter = `(&${userClass}(|(sAMAccountName=*${escapedUser}*)(cn=*${escapedUser}*)(displayName=*${escapedUser}*)(name=*${escapedUser}*)(givenName=*${escapedUser}*)(sn=*${escapedUser}*)(mail=*${escapedRaw}*)(userPrincipalName=*${escapedRaw}*)))`;
+
+    const result = await searchClient.search(env.LDAP_USER_SEARCH_BASE, {
+      scope: "sub",
+      filter,
+      attributes: ["sAMAccountName", "displayName", "cn", "name", "givenName", "sn", "mail", "userPrincipalName"],
+      sizeLimit: limit,
+    });
+
+    const items: LdapUserSearchItem[] = result.searchEntries.map((entry) => {
+      const raw = entry as Record<string, unknown>;
+      const dn = typeof entry.dn === "string" ? entry.dn : "";
+      const sam = raw.sAMAccountName;
+      const username = typeof sam === "string" ? sam : normalized.username;
+      const displayNameSource = raw.displayName ?? raw.cn;
+      const displayName = typeof displayNameSource === "string" ? displayNameSource : null;
+      const mailRaw = raw.mail;
+      const email = typeof mailRaw === "string" ? mailRaw : null;
+      const upnRaw = raw.userPrincipalName;
+      const upn = typeof upnRaw === "string" ? upnRaw : null;
+      return { dn, username, displayName, email, upn };
+    });
+
+    return items.slice(0, Math.max(0, limit));
+  } finally {
+    await searchClient.unbind().catch(() => undefined);
+  }
+};

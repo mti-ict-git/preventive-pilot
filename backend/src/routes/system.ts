@@ -7,6 +7,9 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole.js";
 import { runJobNow, type JobName } from "../jobs/index.js";
 import { runEvidenceImportJob } from "../jobs/evidenceImport.js";
+import bcrypt from "bcryptjs";
+import { lookupLdapUser, searchLdapUsers } from "../auth/ldap.js";
+import { upsertLdapUser } from "../db/users.js";
 
 const requireSystemAdmin = requireAnyRole(["Superadmin", "Admin"]);
 
@@ -33,8 +36,30 @@ const UsersQuerySchema = z.object({
 });
 
 const UpdateUserRolesSchema = z.object({
-  roles: z.array(z.string().min(1).max(64)).max(50),
+  roles: z.array(z.string().min(1).max(64)).length(1),
   isActive: z.boolean().optional(),
+});
+
+const CreateLocalUserSchema = z.object({
+  username: z.string().min(1).max(128),
+  displayName: z.string().trim().max(256).nullable().optional(),
+  email: z.string().email().trim().max(256).nullable().optional(),
+  phone: z.string().trim().max(32).nullable().optional(),
+  password: z.string().min(6).max(128),
+  roleName: z.string().min(1).max(64),
+  isActive: z.boolean().optional().default(true),
+});
+
+const AssignLdapUserSchema = z.object({
+  identifier: z.string().min(1).max(256),
+  roleName: z.string().min(1).max(64),
+  isActive: z.boolean().optional().default(true),
+});
+
+const LdapSearchQuerySchema = z.object({
+  q: z.string().min(1).max(256).optional(),
+  query: z.string().min(1).max(256).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 const nullIfBlank = (value: unknown): unknown => {
@@ -1418,7 +1443,7 @@ systemRouter.get("/users", requireSystemAdmin, async (req, res) => {
     .query(
       [
         "SELECT",
-        "  UserId, Username, DisplayName, Email, Phone, IsActive",
+        "  UserId, Username, DisplayName, Email, Phone, ExternalProvider, IsActive",
         "FROM pm.Users",
         "WHERE (@isActive IS NULL OR IsActive = @isActive)",
         "  AND (",
@@ -1510,12 +1535,84 @@ systemRouter.get("/users", requireSystemAdmin, async (req, res) => {
         displayName: typeof r.DisplayName === "string" ? r.DisplayName : null,
         email: typeof r.Email === "string" ? r.Email : null,
         phone: typeof r.Phone === "string" ? r.Phone : null,
+        externalProvider: typeof r.ExternalProvider === "string" ? r.ExternalProvider : null,
         isActive: bitToBoolean(r.IsActive),
         roles: rolesByUserId.get(id) ?? [],
         tasksCompleted: completedByUserId.get(id) ?? 0,
       };
     }),
   });
+});
+
+systemRouter.delete("/users/:userId", requireSuperadmin, async (req, res) => {
+  const userId = req.params.userId;
+  if (!z.string().uuid().safeParse(userId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  if (userId === req.user.sub) {
+    res.status(400).json({ message: "Cannot delete your own user" });
+    return;
+  }
+
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const userResult = await tx
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  UserId,",
+          "  ExternalProvider",
+          "FROM pm.Users",
+          "WHERE UserId = @userId",
+        ].join("\n"),
+      );
+
+    const userRow = userResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!userRow) {
+      await tx.rollback();
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    const externalProvider = typeof userRow.ExternalProvider === "string" ? userRow.ExternalProvider : null;
+    if (externalProvider !== "local") {
+      await tx.rollback();
+      res.status(400).json({ message: "Only local users can be deleted" });
+      return;
+    }
+
+    await tx
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query(
+        [
+          "UPDATE pm.AssignmentRules SET AssignToUserId = NULL WHERE AssignToUserId = @userId;",
+          "UPDATE pm.PMTasks SET AssignedToUserId = NULL WHERE AssignedToUserId = @userId;",
+          "UPDATE pm.PMTasks SET CompletedByUserId = NULL WHERE CompletedByUserId = @userId;",
+          "UPDATE pm.PMTasks SET CancelledByUserId = NULL WHERE CancelledByUserId = @userId;",
+          "UPDATE pm.PMTaskChecklistResults SET CompletedByUserId = NULL WHERE CompletedByUserId = @userId;",
+          "UPDATE pm.PMTaskEvidence SET UploadedByUserId = NULL WHERE UploadedByUserId = @userId;",
+          "UPDATE pm.PMTaskChecklistEvidence SET UploadedByUserId = NULL WHERE UploadedByUserId = @userId;",
+          "UPDATE pm.AuditLog SET ActorUserId = NULL WHERE ActorUserId = @userId;",
+          "UPDATE pm.SystemSettings SET UpdatedByUserId = NULL WHERE UpdatedByUserId = @userId;",
+          "DELETE FROM pm.UserRoles WHERE UserId = @userId;",
+          "DELETE FROM pm.UserCredentials WHERE UserId = @userId;",
+          "DELETE FROM pm.Users WHERE UserId = @userId;",
+        ].join("\n"),
+      );
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch {
+    await tx.rollback().catch(() => undefined);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 systemRouter.put("/users/:userId/roles", requireSystemAdmin, async (req, res) => {
@@ -1651,6 +1748,240 @@ systemRouter.put("/users/:userId/roles", requireSystemAdmin, async (req, res) =>
   } catch (err) {
     await tx.rollback().catch(() => undefined);
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+systemRouter.post("/users/local", requireSystemAdmin, async (req, res) => {
+  const parsed = CreateLocalUserSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const roleExisting = await tx
+      .request()
+      .input("name", sql.NVarChar(64), parsed.data.roleName)
+      .query("SELECT TOP (1) RoleId FROM pm.Roles WHERE Name = @name");
+    let roleId = roleExisting.recordset[0]?.RoleId as string | undefined;
+    if (!roleId) {
+      const insertedRole = await tx
+        .request()
+        .input("name", sql.NVarChar(64), parsed.data.roleName)
+        .query("INSERT INTO pm.Roles (Name) OUTPUT inserted.RoleId AS RoleId VALUES (@name)");
+      roleId = insertedRole.recordset[0]?.RoleId as string | undefined;
+      if (!roleId) {
+        await tx.rollback();
+        res.status(500).json({ message: "Failed to create role" });
+        return;
+      }
+    }
+
+    const upserted = await tx
+      .request()
+      .input("username", sql.NVarChar(128), parsed.data.username.trim())
+      .input("displayName", sql.NVarChar(256), parsed.data.displayName ?? null)
+      .input("email", sql.NVarChar(256), parsed.data.email ?? null)
+      .input("phone", sql.NVarChar(32), parsed.data.phone ?? null)
+      .input("externalProvider", sql.NVarChar(64), "local")
+      .input("externalId", sql.NVarChar(128), `local:${parsed.data.username.trim()}`)
+      .input("isActive", sql.Bit, parsed.data.isActive ? 1 : 0)
+      .query(
+        [
+          "MERGE pm.Users WITH (HOLDLOCK) AS target",
+          "USING (SELECT @username AS Username) AS source",
+          "ON target.Username = source.Username",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    DisplayName = @displayName,",
+          "    Email = @email,",
+          "    Phone = @phone,",
+          "    ExternalProvider = @externalProvider,",
+          "    ExternalId = @externalId,",
+          "    IsActive = @isActive,",
+          "    UpdatedAt = sysutcdatetime()",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (Username, DisplayName, Email, Phone, ExternalProvider, ExternalId, IsActive)",
+          "  VALUES (@username, @displayName, @email, @phone, @externalProvider, @externalId, @isActive)",
+          "OUTPUT inserted.UserId AS UserId;",
+        ].join("\n"),
+      );
+
+    const userId = upserted.recordset[0]?.UserId as string | undefined;
+    if (!userId) {
+      await tx.rollback();
+      res.status(500).json({ message: "Failed to upsert user" });
+      return;
+    }
+
+    const hashed = await bcrypt.hash(parsed.data.password, 12);
+    await tx
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .input("passwordHash", sql.NVarChar(255), hashed)
+      .query(
+        [
+          "MERGE pm.UserCredentials WITH (HOLDLOCK) AS target",
+          "USING (SELECT @userId AS UserId) AS source",
+          "ON target.UserId = source.UserId",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    PasswordHash = @passwordHash,",
+          "    PasswordUpdatedAt = sysutcdatetime(),",
+          "    UpdatedAt = sysutcdatetime()",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (UserId, PasswordHash)",
+          "  VALUES (@userId, @passwordHash);",
+        ].join("\n"),
+      );
+
+    await tx
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query(
+        [
+          "DELETE ur FROM pm.UserRoles ur WHERE ur.UserId = @userId",
+        ].join("\n"),
+      );
+
+    await tx
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .input("roleId", sql.UniqueIdentifier, roleId)
+      .query("INSERT INTO pm.UserRoles (UserId, RoleId) VALUES (@userId, @roleId)");
+
+    await tx.commit();
+    res.json({ id: userId });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+systemRouter.post("/users/assign-ldap", requireSystemAdmin, async (req, res) => {
+  const parsed = AssignLdapUserSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  try {
+    const profile = await lookupLdapUser(parsed.data.identifier);
+    const roles = [parsed.data.roleName];
+    const user = await upsertLdapUser({
+      username: profile.username,
+      displayName: profile.displayName,
+      email: profile.email,
+      phone: profile.phone,
+      externalId: profile.dn,
+      roles,
+    });
+
+    const db = await getDb();
+    await db
+      .request()
+      .input("userId", sql.UniqueIdentifier, user.userId)
+      .input("isActive", sql.Bit, parsed.data.isActive ? 1 : 0)
+      .query("UPDATE pm.Users SET IsActive = @isActive, UpdatedAt = sysutcdatetime() WHERE UserId = @userId");
+
+    const currentRolesResult = await db
+      .request()
+      .input("userId", sql.UniqueIdentifier, user.userId)
+      .query(
+        [
+          "SELECT ur.RoleId AS RoleId, r.Name AS RoleName",
+          "FROM pm.UserRoles ur",
+          "INNER JOIN pm.Roles r ON r.RoleId = ur.RoleId",
+          "WHERE ur.UserId = @userId",
+        ].join("\n"),
+      );
+    const currentRoleRows = currentRolesResult.recordset as Array<Record<string, unknown>>;
+    const keepName = roles[0];
+    for (const row of currentRoleRows) {
+      const roleName = typeof row.RoleName === "string" ? row.RoleName : null;
+      if (roleName && roleName !== keepName) {
+        const roleId = row.RoleId as string | undefined;
+        if (roleId) {
+          await db
+            .request()
+            .input("userId", sql.UniqueIdentifier, user.userId)
+            .input("roleId", sql.UniqueIdentifier, roleId)
+            .query("DELETE FROM pm.UserRoles WHERE UserId = @userId AND RoleId = @roleId");
+        }
+      }
+    }
+
+    const targetRoleExisting = await db
+      .request()
+      .input("name", sql.NVarChar(64), keepName)
+      .query("SELECT TOP (1) RoleId FROM pm.Roles WHERE Name = @name");
+    let targetRoleId = targetRoleExisting.recordset[0]?.RoleId as string | undefined;
+    if (!targetRoleId) {
+      const insertedRole = await db
+        .request()
+        .input("name", sql.NVarChar(64), keepName)
+        .query("INSERT INTO pm.Roles (Name) OUTPUT inserted.RoleId AS RoleId VALUES (@name)");
+      targetRoleId = insertedRole.recordset[0]?.RoleId as string | undefined;
+    }
+    if (targetRoleId) {
+      await db
+        .request()
+        .input("userId", sql.UniqueIdentifier, user.userId)
+        .input("roleId", sql.UniqueIdentifier, targetRoleId)
+        .query(
+          [
+            "IF NOT EXISTS (SELECT 1 FROM pm.UserRoles WHERE UserId = @userId AND RoleId = @roleId)",
+            "BEGIN",
+            "  INSERT INTO pm.UserRoles (UserId, RoleId) VALUES (@userId, @roleId)",
+            "END",
+          ].join("\n"),
+        );
+    }
+
+    res.json({ id: user.userId });
+  } catch (err) {
+    res.status(400).json({ message: "Failed to assign LDAP user" });
+  }
+});
+
+systemRouter.get("/ldap/search", requireSystemAdmin, async (req, res) => {
+  const rawQ = typeof req.query.q === "string" ? req.query.q : undefined;
+  const rawQuery = typeof req.query.query === "string" ? req.query.query : undefined;
+  const parsed = LdapSearchQuerySchema.safeParse({
+    q: rawQ && rawQ.trim() !== "" ? rawQ : undefined,
+    query: rawQuery && rawQuery.trim() !== "" ? rawQuery : undefined,
+    limit: typeof req.query.limit === "string" ? Number(req.query.limit) : undefined,
+  });
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const term = (parsed.data.query ?? parsed.data.q ?? "").trim();
+  if (!term) {
+    res.json({ items: [] });
+    return;
+  }
+
+  try {
+    const items = await searchLdapUsers(term, parsed.data.limit ?? 10);
+    const response = items.map((u) => {
+      const identifier = u.upn ?? u.username ?? u.email ?? u.dn;
+      return {
+        username: u.username,
+        displayName: u.displayName,
+        email: u.email,
+        upn: u.upn,
+        dn: u.dn,
+        identifier,
+      };
+    });
+    res.json({ items: response });
+  } catch {
+    res.status(500).json({ message: "Search failed" });
   }
 });
 

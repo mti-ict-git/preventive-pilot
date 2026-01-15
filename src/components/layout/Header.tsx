@@ -14,7 +14,15 @@ import { clearAccessToken } from "@/lib/auth";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiGetMyPreferences, apiUpdateMyPreferences, type ThemeMode, type UserPreferencesResponse } from "@/lib/api";
+import {
+  apiGetDashboardOverview,
+  apiGetMe,
+  apiGetMyPreferences,
+  apiUpdateMyPreferences,
+  type MeResponse,
+  type ThemeMode,
+  type UserPreferencesResponse,
+} from "@/lib/api";
 
 interface HeaderProps {
   title: string;
@@ -41,9 +49,21 @@ const Header = ({ title, subtitle }: HeaderProps) => {
   const { theme, setTheme } = useTheme();
   const [currentPalette, setCurrentPalette] = useState<string | null>(null);
 
+  const meQuery = useQuery<MeResponse>({
+    queryKey: ["me"],
+    queryFn: apiGetMe,
+    staleTime: 60_000,
+  });
+
   const prefsQuery = useQuery<UserPreferencesResponse>({
     queryKey: ["me", "preferences"],
     queryFn: apiGetMyPreferences,
+  });
+
+  const overviewQuery = useQuery({
+    queryKey: ["dashboard", "overview"],
+    queryFn: apiGetDashboardOverview,
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -66,6 +86,29 @@ const Header = ({ title, subtitle }: HeaderProps) => {
       }
     },
   });
+
+  const userDisplayName = useMemo(() => {
+    const user = meQuery.data?.user;
+    if (!user) return "";
+    if (user.displayName && user.displayName.trim().length > 0) return user.displayName;
+    return user.username;
+  }, [meQuery.data]);
+
+  const userRoleLabel = useMemo(() => {
+    const roles = meQuery.data?.user.roles ?? [];
+    if (roles.length === 0) return "";
+    const primary = roles[0];
+    if (!primary) return "";
+    if (primary.toLowerCase() === "superadmin") return "Superadmin";
+    if (primary.toLowerCase() === "admin") return "Administrator";
+    if (primary.toLowerCase() === "supervisor") return "Supervisor";
+    return primary;
+  }, [meQuery.data]);
+
+  const overdueCount = overviewQuery.data?.stats.overdueCount ?? 0;
+  const dueTodayCount = overviewQuery.data?.stats.dueTodayCount ?? 0;
+  const upcoming7DaysCount = overviewQuery.data?.stats.upcoming7DaysCount ?? 0;
+  const totalPmAttentionCount = overdueCount + dueTodayCount + upcoming7DaysCount;
   return (
     <header className="h-16 bg-card/50 backdrop-blur-sm border-b border-border px-6 flex items-center justify-between sticky top-0 z-30">
       <div>
@@ -88,26 +131,40 @@ const Header = ({ title, subtitle }: HeaderProps) => {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="w-5 h-5 text-muted-foreground" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full text-[10px] font-bold text-destructive-foreground flex items-center justify-center">
-                3
-              </span>
+              {totalPmAttentionCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 bg-destructive rounded-full text-[10px] font-bold text-destructive-foreground flex items-center justify-center">
+                  {totalPmAttentionCount > 99 ? "99+" : totalPmAttentionCount}
+                </span>
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuLabel>Notifications</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium text-foreground">5 PM Tasks Overdue</span>
-              <span className="text-xs text-muted-foreground">Critical assets need attention</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium text-foreground">Snipe-IT Sync Complete</span>
-              <span className="text-xs text-muted-foreground">243 assets synchronized</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium text-foreground">Monthly Report Ready</span>
-              <span className="text-xs text-muted-foreground">December 2025 compliance report</span>
-            </DropdownMenuItem>
+            {overviewQuery.isLoading ? (
+              <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
+                <span className="text-sm text-muted-foreground">Loading PM summary…</span>
+              </DropdownMenuItem>
+            ) : overviewQuery.isError ? (
+              <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
+                <span className="text-sm text-destructive">Failed to load PM summary.</span>
+              </DropdownMenuItem>
+            ) : (
+              <>
+                <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
+                  <span className="font-medium text-foreground">{overdueCount} PM task(s) overdue</span>
+                  <span className="text-xs text-muted-foreground">Tasks past due and not completed</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
+                  <span className="font-medium text-foreground">{dueTodayCount} due today</span>
+                  <span className="text-xs text-muted-foreground">Scheduled for today</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
+                  <span className="font-medium text-foreground">{upcoming7DaysCount} upcoming in 7 days</span>
+                  <span className="text-xs text-muted-foreground">Due within the next week</span>
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -119,8 +176,12 @@ const Header = ({ title, subtitle }: HeaderProps) => {
                 <User className="w-4 h-4 text-primary" />
               </div>
               <div className="hidden md:block text-left">
-                <p className="text-sm font-medium text-foreground">Admin User</p>
-                <p className="text-xs text-muted-foreground">Administrator</p>
+                <p className="text-sm font-medium text-foreground">
+                  {userDisplayName || ""}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {userRoleLabel || ""}
+                </p>
               </div>
             </Button>
           </DropdownMenuTrigger>

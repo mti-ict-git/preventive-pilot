@@ -1,5 +1,5 @@
 import express from "express";
-import cors from "cors";
+import cors, { type CorsOptions } from "cors";
 import swaggerUi from "swagger-ui-express";
 import { env } from "./config/env.js";
 import { authRouter } from "./routes/auth.js";
@@ -122,18 +122,6 @@ const openApiSpec: OpenApiSchema = {
         required: ["id", "name", "pm"],
         additionalProperties: false,
       },
-      AssetHistoryItem: {
-        type: "object",
-        properties: {
-          id: { type: "string", format: "uuid" },
-          date: { type: ["string", "null"], format: "date-time" },
-          type: { type: ["string", "null"] },
-          technician: { type: ["string", "null"] },
-          status: { type: "string" },
-        },
-        required: ["id", "status"],
-        additionalProperties: false,
-      },
       Role: {
         type: "object",
         properties: {
@@ -181,11 +169,12 @@ const openApiSpec: OpenApiSchema = {
           displayName: { type: ["string", "null"] },
           email: { type: ["string", "null"] },
           phone: { type: ["string", "null"] },
+          externalProvider: { type: ["string", "null"] },
           isActive: { type: "boolean" },
           roles: { type: "array", items: { type: "string" } },
           tasksCompleted: { type: "integer" },
         },
-        required: ["id", "username", "isActive", "roles", "tasksCompleted"],
+        required: ["id", "username", "isActive", "roles", "tasksCompleted", "externalProvider"],
         additionalProperties: false,
       },
       UsersListResponse: {
@@ -291,8 +280,6 @@ const openApiSpec: OpenApiSchema = {
             properties: {
               id: { type: "string" },
               username: { type: "string" },
-              displayName: { type: ["string", "null"] },
-              email: { type: ["string", "null"] },
               roles: { type: "array", items: { type: "string" } },
             },
             required: ["id", "username", "roles"],
@@ -312,7 +299,7 @@ const openApiSpec: OpenApiSchema = {
       BulkSetPmEnabledRequest: {
         type: "object",
         properties: {
-          assetIds: { type: "array", items: { type: "string", format: "uuid" }, minItems: 1, maxItems: 200 },
+          assetIds: { type: "array", items: { type: "string", format: "uuid" }, minItems: 1, maxItems: 500 },
           pmEnabled: { type: "boolean" },
         },
         required: ["assetIds", "pmEnabled"],
@@ -321,7 +308,7 @@ const openApiSpec: OpenApiSchema = {
       BulkSetPmTemplateRequest: {
         type: "object",
         properties: {
-          assetIds: { type: "array", items: { type: "string", format: "uuid" }, minItems: 1, maxItems: 200 },
+          assetIds: { type: "array", items: { type: "string", format: "uuid" }, minItems: 1, maxItems: 500 },
           defaultTemplateId: { type: ["string", "null"], format: "uuid" },
         },
         required: ["assetIds", "defaultTemplateId"],
@@ -559,37 +546,6 @@ const openApiSpec: OpenApiSchema = {
         ],
         responses: {
           "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/AssetDetail" } } } },
-          "400": {
-            description: "Invalid request",
-            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
-          },
-          "401": {
-            description: "Unauthorized",
-            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
-          },
-          "404": {
-            description: "Not found",
-            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
-          },
-        },
-      },
-    },
-    "/api/assets/{assetId}/history": {
-      get: {
-        tags: ["Assets"],
-        summary: "List completed PM history for an asset",
-        parameters: [
-          { name: "assetId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
-        ],
-        responses: {
-          "200": {
-            description: "OK",
-            content: {
-              "application/json": {
-                schema: { type: "array", items: { $ref: "#/components/schemas/AssetHistoryItem" } },
-              },
-            },
-          },
           "400": {
             description: "Invalid request",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
@@ -1310,12 +1266,35 @@ const openApiSpec: OpenApiSchema = {
         },
       },
     },
+    "/api/system/users/{userId}": {
+      delete: {
+        tags: ["System"],
+        summary: "Delete local user",
+        parameters: [
+          { name: "userId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
   },
 };
 
+const allowedOriginsList = String(env.FRONTEND_ORIGIN ?? "")
+  .split(/[ ,]+/)
+  .map((v) => v.trim())
+  .filter((v) => v.length > 0);
+
+const originConfig: CorsOptions["origin"] = allowedOriginsList.includes("*") ? true : allowedOriginsList;
+
 app.use(
   cors({
-    origin: env.FRONTEND_ORIGIN.split(/[ ,\s]+/).filter((v) => v.length > 0),
+    origin: originConfig,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-filename"],
     exposedHeaders: ["Content-Disposition"],

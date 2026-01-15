@@ -46,9 +46,12 @@ import {
   apiGetAsset,
   apiGetSystemStatus,
   apiGetTask,
+  apiListBlackoutWindows,
   apiListTasks,
   apiListTemplates,
   apiPatchAssetPm,
+  apiRecalculateSchedules,
+  type BlackoutWindow,
   type TaskEvidence,
   type TaskDetail,
   type TaskListItem,
@@ -79,6 +82,88 @@ const inferMimeTypeFromFileName = (fileName: string | null): string | null => {
   if (extIndex < 0) return null;
   const ext = fileName.slice(extIndex).toLowerCase();
   return MIME_BY_EXT[ext] ?? null;
+};
+
+const daysInUtcMonth = (year: number, monthIndex: number): number => {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+};
+
+const addUtcMonthsClamped = (date: Date, months: number): Date => {
+  const year = date.getUTCFullYear();
+  const monthIndex = date.getUTCMonth();
+  const day = date.getUTCDate();
+
+  const targetMonthIndex = monthIndex + months;
+  const targetYear = year + Math.floor(targetMonthIndex / 12);
+  const normalizedMonthIndex = ((targetMonthIndex % 12) + 12) % 12;
+  const maxDay = daysInUtcMonth(targetYear, normalizedMonthIndex);
+  const clampedDay = Math.min(day, maxDay);
+
+  return new Date(
+    Date.UTC(
+      targetYear,
+      normalizedMonthIndex,
+      clampedDay,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+    ),
+  );
+};
+
+const addUtcYearsClamped = (date: Date, years: number): Date => {
+  const year = date.getUTCFullYear() + years;
+  const monthIndex = date.getUTCMonth();
+  const day = date.getUTCDate();
+  const maxDay = daysInUtcMonth(year, monthIndex);
+  const clampedDay = Math.min(day, maxDay);
+  return new Date(
+    Date.UTC(
+      year,
+      monthIndex,
+      clampedDay,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+    ),
+  );
+};
+
+const addIntervalUtc = (date: Date, intervalDays: number): Date => {
+  if (intervalDays === 30) return addUtcMonthsClamped(date, 1);
+  if (intervalDays === 90) return addUtcMonthsClamped(date, 3);
+  if (intervalDays === 180) return addUtcMonthsClamped(date, 6);
+  if (intervalDays === 365) return addUtcYearsClamped(date, 1);
+  return new Date(date.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+};
+
+const shiftForBlackoutsUtc = (candidate: Date, windows: BlackoutWindow[]): Date => {
+  const candidateTime = candidate.getTime();
+  let latestEndsAt: number | null = null;
+
+  for (const w of windows) {
+    if (!w.IsActive) continue;
+    const startsAt = new Date(w.StartsAt).getTime();
+    const endsAt = new Date(w.EndsAt).getTime();
+    if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt)) continue;
+    if (startsAt <= candidateTime && candidateTime <= endsAt) {
+      if (latestEndsAt === null || endsAt > latestEndsAt) {
+        latestEndsAt = endsAt;
+      }
+    }
+  }
+
+  if (latestEndsAt === null) return candidate;
+  return new Date(latestEndsAt);
+};
+
+type AssetScheduleItem = {
+  id: string;
+  date: string;
+  templateName: string;
+  status: "scheduled" | "projected";
+  taskId: string | null;
+  taskNumber: string | null;
 };
 
 const AssetDetail = () => {
@@ -150,9 +235,62 @@ const AssetDetail = () => {
     },
   });
 
+  const recalcPmMutation = useMutation({
+    mutationFn: async () => {
+      if (!assetId) throw new Error("Missing assetId");
+      return apiRecalculateSchedules({ assetId, force: true });
+    },
+    onSuccess: async () => {
+      if (!assetId) return;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["asset", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["assets"] }),
+      ]);
+      toast({
+        title: "PM schedule updated",
+        description: "Next PM date was recalculated for this asset.",
+      });
+    },
+    onError: (err: unknown) => {
+      const message =
+        err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to recalculate schedule";
+      toast({ title: "Action failed", description: message, variant: "destructive" });
+    },
+  });
+
   const asset = assetQuery.data;
   const canManage = isManager();
   const pmEnabled = asset?.pm.enabled === true;
+
+  const blackoutWindowsQuery = useQuery({
+    queryKey: ["scheduling", "blackout-windows"],
+    queryFn: apiListBlackoutWindows,
+    staleTime: 60_000,
+  });
+
+  const upcomingTasksQuery = useQuery({
+    queryKey: ["tasks", "upcoming", assetId, asset?.pm.defaultTemplateId],
+    queryFn: async () => {
+      if (!assetId) throw new Error("Missing assetId");
+
+      const templateId = asset?.pm.defaultTemplateId ?? null;
+      if (!templateId) return { page: 1, pageSize: 0, items: [] };
+
+      const now = new Date();
+      const dueFrom = now.toISOString();
+      const dueTo = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      return apiListTasks({
+        assetId,
+        templateId,
+        dueFrom,
+        dueTo,
+        page: 1,
+        pageSize: 200,
+      });
+    },
+    enabled: Boolean(assetId) && Boolean(asset?.pm.defaultTemplateId),
+    staleTime: 30_000,
+  });
 
   const snipeItBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
   const snipeItHardwareUrl =
@@ -180,6 +318,84 @@ const AssetDetail = () => {
     if (!id) return null;
     return allTemplates.find((t) => t.id === id) ?? null;
   }, [allTemplates, asset?.pm.defaultTemplateId]);
+
+  const scheduleItems = useMemo((): AssetScheduleItem[] => {
+    if (!asset) return [];
+    if (!pmEnabled) return [];
+
+    const templateId = asset.pm.defaultTemplateId ?? null;
+    if (!templateId) return [];
+
+    const intervalDays = selectedTemplate?.intervalDays ?? null;
+    const blackoutWindows = blackoutWindowsQuery.data?.items ?? [];
+
+    const upcomingTasks = (upcomingTasksQuery.data?.items ?? [])
+      .filter((t) => t.status !== "completed" && t.status !== "cancelled")
+      .sort((a, b) => new Date(a.scheduledDueAt).getTime() - new Date(b.scheduledDueAt).getTime());
+
+    if (!intervalDays || !Number.isFinite(intervalDays) || intervalDays <= 0) {
+      return upcomingTasks.slice(0, 4).map((t) => ({
+        id: t.id,
+        date: t.scheduledDueAt.slice(0, 10),
+        templateName: t.template.name,
+        status: "scheduled",
+        taskId: t.id,
+        taskNumber: t.taskNumber,
+      }));
+    }
+
+    const byScheduledSecond = new Map<number, TaskListItem>();
+    for (const t of upcomingTasks) {
+      const time = new Date(t.scheduledDueAt).getTime();
+      if (!Number.isFinite(time)) continue;
+      byScheduledSecond.set(Math.floor(time / 1000), t);
+    }
+
+    const baseDueAtIso = asset.pm.nextDueAt ?? null;
+    if (!baseDueAtIso) {
+      return upcomingTasks.slice(0, 4).map((t) => ({
+        id: t.id,
+        date: t.scheduledDueAt.slice(0, 10),
+        templateName: t.template.name,
+        status: "scheduled",
+        taskId: t.id,
+        taskNumber: t.taskNumber,
+      }));
+    }
+
+    let dueAt = new Date(baseDueAtIso);
+    if (!Number.isFinite(dueAt.getTime())) {
+      return upcomingTasks.slice(0, 4).map((t) => ({
+        id: t.id,
+        date: t.scheduledDueAt.slice(0, 10),
+        templateName: t.template.name,
+        status: "scheduled",
+        taskId: t.id,
+        taskNumber: t.taskNumber,
+      }));
+    }
+
+    const items: AssetScheduleItem[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const dueSecond = Math.floor(dueAt.getTime() / 1000);
+      const scheduledTask = byScheduledSecond.get(dueSecond) ?? null;
+      const templateName = scheduledTask?.template.name ?? selectedTemplate?.name ?? "—";
+      const date = (scheduledTask?.scheduledDueAt ?? dueAt.toISOString()).slice(0, 10);
+      items.push({
+        id: scheduledTask?.id ?? `projected:${templateId}:${dueSecond}`,
+        date,
+        templateName,
+        status: scheduledTask ? "scheduled" : "projected",
+        taskId: scheduledTask?.id ?? null,
+        taskNumber: scheduledTask?.taskNumber ?? null,
+      });
+
+      const nextCandidate = addIntervalUtc(dueAt, intervalDays);
+      dueAt = shiftForBlackoutsUtc(nextCandidate, blackoutWindows);
+    }
+
+    return items;
+  }, [asset, blackoutWindowsQuery.data?.items, pmEnabled, selectedTemplate?.intervalDays, selectedTemplate?.name, upcomingTasksQuery.data?.items]);
 
   const historyTasks = useMemo((): TaskListItem[] => {
     const items = historyTasksQuery.data?.items ?? [];
@@ -529,6 +745,15 @@ const AssetDetail = () => {
                   disabled={!canManage || patchPmMutation.isPending}
                 />
               </div>
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={!canManage || !pmEnabled || !asset?.pm.defaultTemplateId || recalcPmMutation.isPending}
+                onClick={() => recalcPmMutation.mutate()}
+              >
+                <Activity className="w-4 h-4" />
+                PM Now
+              </Button>
               <Button
                 variant="outline"
                 className="gap-2"
@@ -1039,40 +1264,61 @@ const AssetDetail = () => {
                   <CardDescription>Projected maintenance schedule based on current template</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {[
-                      { date: "2026-02-15", template: "PM Laptop Quarterly", status: "scheduled" },
-                      { date: "2026-05-16", template: "PM Laptop Quarterly", status: "projected" },
-                      { date: "2026-08-14", template: "PM Laptop Quarterly", status: "projected" },
-                      { date: "2026-11-12", template: "PM Laptop Quarterly", status: "projected" },
-                    ].map((schedule, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-4 rounded-lg bg-muted/30"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            schedule.status === 'scheduled' ? 'bg-primary/20' : 'bg-muted'
-                          }`}>
-                            <Calendar className={`w-5 h-5 ${
-                              schedule.status === 'scheduled' ? 'text-primary' : 'text-muted-foreground'
-                            }`} />
+                  {!pmEnabled ? (
+                    <div className="p-6 text-sm text-muted-foreground">
+                      Enable PM for this asset to see upcoming maintenance dates.
+                    </div>
+                  ) : !asset.pm.defaultTemplateId ? (
+                    <div className="p-6 text-sm text-muted-foreground">
+                      Select a default template to see a projected schedule.
+                    </div>
+                  ) : upcomingTasksQuery.isLoading || blackoutWindowsQuery.isLoading ? (
+                    <div className="p-6 text-sm text-muted-foreground">Loading schedule…</div>
+                  ) : upcomingTasksQuery.isError || blackoutWindowsQuery.isError ? (
+                    <div className="p-6 text-sm text-destructive">Failed to load schedule.</div>
+                  ) : scheduleItems.length === 0 ? (
+                    <div className="p-6 text-sm text-muted-foreground">No upcoming schedule found.</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {scheduleItems.map((schedule) => (
+                        <div
+                          key={schedule.id}
+                          className="flex items-center justify-between p-4 rounded-lg bg-muted/30"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                schedule.status === "scheduled" ? "bg-primary/20" : "bg-muted"
+                              }`}
+                            >
+                              <Calendar
+                                className={`w-5 h-5 ${
+                                  schedule.status === "scheduled" ? "text-primary" : "text-muted-foreground"
+                                }`}
+                              />
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{schedule.date}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {schedule.templateName}
+                                {schedule.taskNumber ? ` • ${schedule.taskNumber}` : ""}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium text-foreground">{schedule.date}</p>
-                            <p className="text-sm text-muted-foreground">{schedule.template}</p>
-                          </div>
+                          <Badge
+                            variant="outline"
+                            className={
+                              schedule.status === "scheduled"
+                                ? "bg-primary/20 text-primary border-primary/30"
+                                : "bg-muted text-muted-foreground"
+                            }
+                          >
+                            {schedule.status === "scheduled" ? "Scheduled" : "Projected"}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className={
-                          schedule.status === 'scheduled'
-                            ? 'bg-primary/20 text-primary border-primary/30'
-                            : 'bg-muted text-muted-foreground'
-                        }>
-                          {schedule.status === 'scheduled' ? 'Scheduled' : 'Projected'}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>

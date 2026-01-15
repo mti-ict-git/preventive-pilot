@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -22,6 +22,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -30,11 +40,26 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiGetLookups, apiListUsers, apiUpdateUserRoles, type LookupRole, type UserSummary } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
+import {
+  ApiError,
+  apiAssignAdUser,
+  apiCreateLocalUser,
+  apiDeleteUser,
+  apiGetLookups,
+  apiListUsers,
+  apiSearchAdUsers,
+  apiUpdateUserRoles,
+  type LookupRole,
+  type UserSummary,
+} from "@/lib/api";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 type UserStatusFilter = "all" | "active" | "inactive";
 
@@ -67,13 +92,50 @@ const UserManagement = () => {
   const queryClient = useQueryClient();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<UserSummary | null>(null);
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [selectedRole, setSelectedRole] = useState<string>("");
   const [nextActive, setNextActive] = useState<boolean>(true);
   const [newRoleName, setNewRoleName] = useState("");
 
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<UserSummary | null>(null);
+
+  const [newDialogOpen, setNewDialogOpen] = useState(false);
+  const [newMode, setNewMode] = useState<"local" | "ldap">("local");
+  const [localUsername, setLocalUsername] = useState("");
+  const [localDisplayName, setLocalDisplayName] = useState("");
+  const [localEmail, setLocalEmail] = useState("");
+  const [localPhone, setLocalPhone] = useState("");
+  const [localPassword, setLocalPassword] = useState("");
+  const [localRole, setLocalRole] = useState("");
+  const [localActive, setLocalActive] = useState(true);
+  const [ldapIdentifier, setLdapIdentifier] = useState("");
+  const [ldapRole, setLdapRole] = useState("");
+  const [ldapActive, setLdapActive] = useState(true);
+  const [ldapOpen, setLdapOpen] = useState(false);
+
+  const ldapSearchQuery = useQuery({
+    queryKey: ["ldap-search", ldapIdentifier.trim()],
+    queryFn: () => apiSearchAdUsers({ q: ldapIdentifier.trim(), limit: 8 }),
+    enabled: newDialogOpen && newMode === "ldap" && ldapIdentifier.trim().length > 0,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (!newDialogOpen || newMode !== "ldap") return;
+    if (ldapIdentifier.trim().length < 1) return;
+    void ldapSearchQuery.refetch();
+  }, [ldapIdentifier]);
+
+  useEffect(() => {
+    if (!ldapOpen) return;
+    if (!newDialogOpen || newMode !== "ldap") return;
+    if (ldapIdentifier.trim().length < 1) return;
+    void ldapSearchQuery.refetch();
+  }, [ldapOpen]);
+
   const openEdit = (user: UserSummary) => {
     setEditTarget(user);
-    setSelectedRoles([...user.roles]);
+    setSelectedRole(user.roles[0] ?? "");
     setNextActive(Boolean(user.isActive));
     setEditDialogOpen(true);
   };
@@ -81,13 +143,77 @@ const UserManagement = () => {
   const saveMutation = useMutation({
     mutationFn: () => {
       if (!editTarget) return Promise.resolve({ ok: true, roles: [] });
-      return apiUpdateUserRoles({ userId: editTarget.id, roles: selectedRoles, isActive: nextActive });
+      const roleName = selectedRole.trim();
+      if (!roleName) return Promise.resolve({ ok: true, roles: [] });
+      return apiUpdateUserRoles({ userId: editTarget.id, roles: [roleName], isActive: nextActive });
     },
     onSuccess: async () => {
       setEditDialogOpen(false);
       setEditTarget(null);
       await queryClient.invalidateQueries({ queryKey: ["users"] });
       await queryClient.invalidateQueries({ queryKey: ["lookups", "roles"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (userId: string) => apiDeleteUser(userId),
+    onSuccess: async () => {
+      toast({ title: "User deleted" });
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to delete user";
+      toast({ title: "Delete failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const createLocalMutation = useMutation({
+    mutationFn: async () =>
+      apiCreateLocalUser({
+        username: localUsername.trim(),
+        displayName: localDisplayName.trim() ? localDisplayName.trim() : null,
+        email: localEmail.trim() ? localEmail.trim() : null,
+        phone: localPhone.trim() ? localPhone.trim() : null,
+        password: localPassword,
+        roleName: localRole,
+        isActive: localActive,
+      }),
+    onSuccess: async () => {
+      toast({ title: "User created" });
+      setNewDialogOpen(false);
+      setLocalUsername("");
+      setLocalDisplayName("");
+      setLocalEmail("");
+      setLocalPhone("");
+      setLocalPassword("");
+      setLocalRole("");
+      setLocalActive(true);
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to create user";
+      toast({ title: "Create failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const assignLdapMutation = useMutation({
+    mutationFn: async () =>
+      apiAssignAdUser({
+        identifier: ldapIdentifier.trim(),
+        roleName: ldapRole,
+        isActive: ldapActive,
+      }),
+    onSuccess: async () => {
+      toast({ title: "User assigned" });
+      setNewDialogOpen(false);
+      setLdapIdentifier("");
+      setLdapRole("");
+      setLdapActive(true);
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to assign user";
+      toast({ title: "Assign failed", description: message, variant: "destructive" });
     },
   });
 
@@ -233,7 +359,23 @@ const UserManagement = () => {
                 Inactive
               </Button>
             </div>
-            <Button className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90">
+            <Button
+              className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              onClick={() => {
+                setNewDialogOpen(true);
+                setNewMode("local");
+                setLocalUsername("");
+                setLocalDisplayName("");
+                setLocalEmail("");
+                setLocalPhone("");
+                setLocalPassword("");
+                setLocalRole("");
+                setLocalActive(true);
+                setLdapIdentifier("");
+                setLdapRole("");
+                setLdapActive(true);
+              }}
+            >
               <Plus className="w-4 h-4" />
               Add User
             </Button>
@@ -334,15 +476,24 @@ const UserManagement = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="gap-2" onClick={() => openEdit(user)}>
+                        <DropdownMenuItem className="gap-2" onSelect={() => openEdit(user)}>
                           <Edit2 className="w-4 h-4" /> Edit User
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-2">
                           <Mail className="w-4 h-4" /> Send Email
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 text-destructive">
-                          <Trash2 className="w-4 h-4" /> Deactivate
-                        </DropdownMenuItem>
+                        {user.externalProvider === "local" && (
+                          <DropdownMenuItem
+                            className="gap-2 text-destructive"
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              setDeleteTarget(user);
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" /> Delete Local User
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -384,6 +535,39 @@ const UserManagement = () => {
           </div>
         </motion.div>
 
+        <AlertDialog
+          open={deleteDialogOpen}
+          onOpenChange={(open) => {
+            setDeleteDialogOpen(open);
+            if (!open) setDeleteTarget(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete local user</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteTarget ? `Delete “${deleteTarget.displayName ?? deleteTarget.username}”? This cannot be undone.` : ""}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (!deleteTarget) return;
+                  deleteMutation.mutate(deleteTarget.id);
+                  setDeleteDialogOpen(false);
+                  setDeleteTarget(null);
+                }}
+                disabled={deleteMutation.isPending || !deleteTarget}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -394,27 +578,21 @@ const UserManagement = () => {
               <div className="col-span-12 md:col-span-6">
                 <div className="space-y-2">
                   <Label>Roles</Label>
-                  <div className="space-y-2">
-                    {[...roles.map((r) => r.name), ...([] as string[])]
+                  <RadioGroup
+                    value={selectedRole}
+                    onValueChange={(value) => setSelectedRole(value)}
+                    className="space-y-2"
+                  >
+                    {[...roles.map((r) => r.name), ...(selectedRole ? [selectedRole] : [])]
                       .filter((v, i, arr) => arr.indexOf(v) === i)
                       .sort()
                       .map((roleName) => (
                         <div key={roleName} className="flex items-center gap-2">
-                          <Checkbox
-                            checked={selectedRoles.includes(roleName)}
-                            onCheckedChange={(checked) => {
-                              setSelectedRoles((prev) => {
-                                const has = prev.includes(roleName);
-                                if (checked && !has) return [...prev, roleName];
-                                if (!checked && has) return prev.filter((r) => r !== roleName);
-                                return prev;
-                              });
-                            }}
-                          />
-                          <span className="text-sm">{roleName}</span>
+                          <RadioGroupItem value={roleName} id={`role-${roleName}`} />
+                          <Label htmlFor={`role-${roleName}`}>{roleName}</Label>
                         </div>
                       ))}
-                  </div>
+                  </RadioGroup>
                   <div className="flex items-center gap-2 pt-2">
                     <Input
                       placeholder="Add role by name"
@@ -427,7 +605,7 @@ const UserManagement = () => {
                       onClick={() => {
                         const name = newRoleName.trim();
                         if (!name) return;
-                        setSelectedRoles((prev) => (prev.includes(name) ? prev : [...prev, name]));
+                        setSelectedRole(name);
                         setNewRoleName("");
                       }}
                     >
@@ -449,7 +627,151 @@ const UserManagement = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={saveMutation.isPending}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="bg-primary">Save</Button>
+            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !selectedRole.trim()} className="bg-primary">Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={newDialogOpen} onOpenChange={setNewDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add User</DialogTitle>
+          </DialogHeader>
+          <Tabs value={newMode} onValueChange={(v) => setNewMode(v as "local" | "ldap")}>
+            <TabsList>
+              <TabsTrigger value="local">Local</TabsTrigger>
+              <TabsTrigger value="ldap">AD</TabsTrigger>
+            </TabsList>
+            <TabsContent value="local" className="space-y-4 pt-4">
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-12 md:col-span-6 space-y-2">
+                  <Label>Username</Label>
+                  <Input value={localUsername} onChange={(e) => setLocalUsername(e.target.value)} />
+                  <Label>Display Name</Label>
+                  <Input value={localDisplayName} onChange={(e) => setLocalDisplayName(e.target.value)} />
+                  <Label>Email</Label>
+                  <Input value={localEmail} onChange={(e) => setLocalEmail(e.target.value)} />
+                  <Label>Phone</Label>
+                  <Input value={localPhone} onChange={(e) => setLocalPhone(e.target.value)} />
+                </div>
+                <div className="col-span-12 md:col-span-6 space-y-2">
+                  <Label>Password</Label>
+                  <Input type="password" value={localPassword} onChange={(e) => setLocalPassword(e.target.value)} />
+                  <Label>Role</Label>
+                  <RadioGroup value={localRole} onValueChange={(v) => setLocalRole(v)} className="space-y-2">
+                    {[...roles.map((r) => r.name)]
+                      .filter((v, i, arr) => arr.indexOf(v) === i)
+                      .sort()
+                      .map((roleName) => (
+                        <div key={roleName} className="flex items-center gap-2">
+                          <RadioGroupItem value={roleName} id={`local-role-${roleName}`} />
+                          <Label htmlFor={`local-role-${roleName}`}>{roleName}</Label>
+                        </div>
+                      ))}
+                  </RadioGroup>
+                  <div className="flex items-center gap-3 pt-2">
+                    <Switch checked={localActive} onCheckedChange={(v) => setLocalActive(Boolean(v))} />
+                    <span className="text-sm">Active</span>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+            <TabsContent value="ldap" className="space-y-4 pt-4">
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-12 md:col-span-6 space-y-2">
+                  <Label>Identifier</Label>
+                  <Popover open={ldapOpen} onOpenChange={setLdapOpen}>
+                    <PopoverTrigger asChild>
+                      <Input
+                        placeholder="DOMAIN\\user or user@domain"
+                        value={ldapIdentifier}
+                        onChange={(e) => {
+                          setLdapIdentifier(e.target.value);
+                          setLdapOpen(true);
+                        }}
+                        onFocus={() => setLdapOpen(true)}
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0" align="start">
+                      <Command>
+                        <CommandInput
+                          value={ldapIdentifier}
+                          onValueChange={(v) => setLdapIdentifier(v)}
+                          placeholder="Search AD users..."
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            {ldapIdentifier.trim().length < 1
+                              ? "Type to search"
+                              : ldapSearchQuery.isLoading
+                                ? "Searching..."
+                                : ldapSearchQuery.isError
+                                  ? "Search failed"
+                                  : "No results"}
+                          </CommandEmpty>
+                          <CommandGroup heading="Users">
+                            {(ldapSearchQuery.data?.items ?? []).map((u) => (
+                              <CommandItem
+                                key={u.dn}
+                                onSelect={() => {
+                                  setLdapIdentifier(u.identifier);
+                                  setLdapOpen(false);
+                                }}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-sm">{u.displayName ?? u.username}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {u.identifier}
+                                    {u.email ? ` • ${u.email}` : ""}
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="col-span-12 md:col-span-6 space-y-2">
+                  <Label>Role</Label>
+                  <RadioGroup value={ldapRole} onValueChange={(v) => setLdapRole(v)} className="space-y-2">
+                    {[...roles.map((r) => r.name)]
+                      .filter((v, i, arr) => arr.indexOf(v) === i)
+                      .sort()
+                      .map((roleName) => (
+                        <div key={roleName} className="flex items-center gap-2">
+                          <RadioGroupItem value={roleName} id={`ldap-role-${roleName}`} />
+                          <Label htmlFor={`ldap-role-${roleName}`}>{roleName}</Label>
+                        </div>
+                      ))}
+                  </RadioGroup>
+                  <div className="flex items-center gap-3 pt-2">
+                    <Switch checked={ldapActive} onCheckedChange={(v) => setLdapActive(Boolean(v))} />
+                    <span className="text-sm">Active</span>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewDialogOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-primary"
+              disabled={
+                (newMode === "local" && (!localUsername.trim() || !localPassword.trim() || !localRole.trim())) ||
+                (newMode === "ldap" && (!ldapIdentifier.trim() || !ldapRole.trim()))
+              }
+              onClick={() => {
+                if (newMode === "local") {
+                  void createLocalMutation.mutate();
+                } else {
+                  void assignLdapMutation.mutate();
+                }
+              }}
+            >
+              Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

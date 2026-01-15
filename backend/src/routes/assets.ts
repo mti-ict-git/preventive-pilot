@@ -45,12 +45,12 @@ const UpdatePmSchema = z
   .refine((v) => Object.keys(v).length > 0, { message: "No updates" });
 
 const BulkSetPmEnabledSchema = z.object({
-  assetIds: z.array(z.string().uuid()).min(1).max(200),
+  assetIds: z.array(z.string().uuid()).min(1).max(500),
   pmEnabled: z.boolean(),
 });
 
 const BulkSetPmTemplateSchema = z.object({
-  assetIds: z.array(z.string().uuid()).min(1).max(200),
+  assetIds: z.array(z.string().uuid()).min(1).max(500),
   defaultTemplateId: z.string().uuid().nullable(),
 });
 

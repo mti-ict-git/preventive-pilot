@@ -117,19 +117,20 @@ export const apiLogin = async (input: {
   return data as LoginResponse;
 };
 
-export const apiGetMe = async (): Promise<{
-	user: { id: string; username: string; displayName: string | null; email: string | null; roles: string[] };
-}> => {
-  const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
-    headers: buildAuthHeaders(),
-  });
+export type MeUser = {
+  id: string;
+  username: string;
+  displayName: string | null;
+  email: string | null;
+  roles: string[];
+};
 
-  if (!res.ok) {
-    throw new ApiError("Failed to load profile", res.status);
-  }
+export type MeResponse = {
+  user: MeUser;
+};
 
-	const data = (await res.json()) as unknown;
-	return data as { user: { id: string; username: string; displayName: string | null; email: string | null; roles: string[] } };
+export const apiGetMe = async (): Promise<MeResponse> => {
+  return apiFetchJson<MeResponse>("/api/auth/me");
 };
 
 export type ThemeMode = "dark" | "light";
@@ -844,6 +845,7 @@ export type UserSummary = {
   displayName: string | null;
   email: string | null;
   phone: string | null;
+  externalProvider: string | null;
   isActive: boolean;
   roles: string[];
   tasksCompleted: number;
@@ -875,6 +877,48 @@ export const apiUpdateUserRoles = async (input: {
     method: "PUT",
     body: { roles: input.roles, isActive: input.isActive },
   });
+};
+
+export const apiDeleteUser = async (userId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/system/users/${userId}`, {
+    method: "DELETE",
+  });
+};
+
+export const apiCreateLocalUser = async (input: {
+  username: string;
+  displayName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  password: string;
+  roleName: string;
+  isActive?: boolean;
+}): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>("/api/system/users/local", { method: "POST", body: input });
+};
+
+export const apiAssignAdUser = async (input: {
+  identifier: string;
+  roleName: string;
+  isActive?: boolean;
+}): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>("/api/system/users/assign-ldap", { method: "POST", body: input });
+};
+
+export type AdUserSearchItem = {
+  username: string;
+  displayName: string | null;
+  email: string | null;
+  upn: string | null;
+  dn: string;
+  identifier: string;
+};
+
+export const apiSearchAdUsers = async (input: { q: string; limit?: number }): Promise<{ items: AdUserSearchItem[] }> => {
+  const params = new URLSearchParams();
+  params.set("q", input.q);
+  if (input.limit !== undefined) params.set("limit", String(input.limit));
+  return apiFetchJson<{ items: AdUserSearchItem[] }>(`/api/system/ldap/search?${params.toString()}`);
 };
 
 export type SchedulingCalendarDay = {
@@ -910,12 +954,16 @@ export const apiGetSchedulingDayEvents = async (input: {
   return apiFetchJson<{ items: SchedulingDayEventItem[] }>(`/api/scheduling/day?${params.toString()}`);
 };
 
-export const apiRecalculateSchedules = async (input: { assetId?: string; force?: boolean }): Promise<{ updated: number }> => {
-  const body = JSON.stringify({ assetId: input.assetId ?? undefined, force: Boolean(input.force) });
+export const apiRecalculateSchedules = async (input: {
+  assetId?: string;
+  force?: boolean;
+}): Promise<{ updated: number }> => {
   return apiFetchJson<{ updated: number }>("/api/scheduling/recalculate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
+    body: {
+      assetId: input.assetId,
+      force: Boolean(input.force),
+    },
   });
 };
 
@@ -1234,6 +1282,47 @@ export const apiUpdateAssetsUiSettings = async (
   input: UpdateAssetsUiSettingsInput,
 ): Promise<AssetsUiSettingsResponse> => {
   return apiFetchJson<AssetsUiSettingsResponse>("/api/system/ui-settings/assets", { method: "PUT", body: input });
+};
+
+export type LabelDesignerQrPayloadMode = "assetId" | "assetTag" | "snipeItUrl";
+
+export type LabelDesignerConfig = {
+  width: number;
+  height: number;
+  qrSize: number;
+  showAssetTag: boolean;
+  showAssetName: boolean;
+  showCategory: boolean;
+  showLocation: boolean;
+  showCustomText: boolean;
+  customText: string;
+  fontSize: number;
+  padding: number;
+  borderRadius: number;
+  showBorder: boolean;
+  showLogo: boolean;
+  orientation: "portrait" | "landscape";
+};
+
+export type LabelDesignerUiSettingsResponse = {
+  qrPayloadMode: LabelDesignerQrPayloadMode;
+  gridColumns: number;
+  config: LabelDesignerConfig;
+};
+
+export type UpdateLabelDesignerUiSettingsInput = LabelDesignerUiSettingsResponse;
+
+export const apiGetLabelDesignerUiSettings = async (): Promise<LabelDesignerUiSettingsResponse> => {
+  return apiFetchJson<LabelDesignerUiSettingsResponse>("/api/system/ui-settings/label-designer");
+};
+
+export const apiUpdateLabelDesignerUiSettings = async (
+  input: UpdateLabelDesignerUiSettingsInput,
+): Promise<LabelDesignerUiSettingsResponse> => {
+  return apiFetchJson<LabelDesignerUiSettingsResponse>("/api/system/ui-settings/label-designer", {
+    method: "PUT",
+    body: input,
+  });
 };
 
 export type SnipeItSettingsResponse = {

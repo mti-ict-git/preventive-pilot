@@ -199,6 +199,34 @@
 - Extended evidence preview modal to support PDF, images, video, and audio.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-16 00:00
+- Added asset-level PM recalculate action on Asset Detail page using existing scheduling API.
+- Restricted PM recalc to managers with PM enabled and default template set.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 00:46:59 WIB
+- Renamed Asset Detail header action from "Recalculate PM" to "PM Now" for clarity.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 00:49:54 WIB
+- Fixed apiRecalculateSchedules to send a JSON object body instead of a pre-serialized string.
+- Resolved 400 Bad Request when clicking "PM Now" (scheduling recalc schema now matches payload).
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-15 17:16
+2026-01-15 17:16:44 UTC
+- Seeded core roles (Superadmin, Admin, Supervisor, Technician, Viewer) in pm.Roles via schema.sql
+- Applied schema to DB to populate missing roles
+- Verified Users & Roles lookups show full role list
+- Ran `npm run lint` and `npx tsc --noEmit`: OK
+
+## 2026-01-15 17:20
+2026-01-15 17:20:33 UTC
+- Restricted users to exactly one role
+- Frontend: switched Edit User roles to single-select RadioGroup
+- Backend: enforced single role via UpdateUserRolesSchema length(1)
+- Ran `npm run lint` and `npx tsc --noEmit`: OK
+
 ## 2026-01-07 13:38:26 WIB
 - Implemented JWT refresh tokens on backend (sign/verify, env REFRESH_TOKEN_EXPIRES_IN).
 - Added /api/auth/refresh endpoint and updated OpenAPI schemas and paths.
@@ -218,41 +246,7 @@
 
 ## 2026-01-07 13:47:35 WIB
 - Mobile: adjusted API base URL config to prefer VITE_API_BASE_URL and default to http://localhost:3001 when not using proxy.
-## 2026-01-07 13:53:24 WIB
-- Verified mobile Vite proxy forwards /api to backend target.
-- Confirmed dev API base selection (proxy vs direct) works as expected.
-- Checked backend CORS allows http://localhost:8080 origin.
-- Ran repo lint and typecheck; no errors.
-- Validated web 401 auto-refresh flow updates tokens and retries.
-## 2026-01-07 14:02:12 WIB
-- Backend: CORS origin now accepts multiple values from env list.
-- Updated default FRONTEND_ORIGIN to include http://localhost:8081.
-- Lint and typecheck passed after CORS change.
-## 2026-01-07 16:41:59 WIB
-- Updated .env FRONTEND_ORIGIN to include http://localhost:8081 and LAN origin.
-- Verified lint and typecheck remain passing.
-## 2026-01-07 16:51:30 WIB
-- Mobile: normalized API base URL to always include /api for direct URLs.
-- Mobile: removed Content-Type on GET requests to avoid unnecessary preflights.
-- Mobile: fixed Home tasks fetch/mapping to match backend /api/tasks response.
-- Verified with repo lint and typecheck.
-## 2026-01-07 16:59:42 WIB
-- Mobile: aligned Today count/list to due-today and non-completed tasks.
-- Mobile: computed This Week count within current week range.
-- Verified mobile lint and typecheck; warnings only, no errors.
 - Mobile: implemented login fallback to try the alternate provider if the first returns 401.
-
-## 2026-01-07 10:08:02 UTC
-- Mobile Home: compute Overdue using scheduledDueAt vs current time, not status.
-- Mobile Home: compute Today/This Week using parseISO to avoid timezone mismatches.
-- Added dueIso to TaskData and mapping to support date-fns comparisons.
-- Ran lint and typecheck in root and mobile; warnings only, no errors.
-
-## 2026-01-07 10:10:45 UTC
-- Mobile Home: unify 'overdue' status mapping using due date when not completed.
-- Mobile Profile: fix lint error by replacing constant condition with state.
-- Mobile Assets: fix empty catch blocks using noop expressions.
-- Ran mobile lint and typecheck: warnings only, no errors.
 
 ## 2026-01-06 08:55
 - Added delete support for task evidence and checklist item attachments (API + UI).
@@ -289,6 +283,10 @@
 - Added API client function apiUpdateUserRoles
 - Updated Swagger: documented /api/system/users (GET) and /api/system/users/{userId}/roles (PUT)
 - Ran `npm run lint` and `npx tsc --noEmit`: OK
+## 2026-01-15 00:48
+2026-01-15 00:48:13 UTC
+- Fixed Users menu Edit User selection to reliably open dialog (Radix onSelect)
+- Re-ran `npm run lint` and `npx tsc --noEmit`: OK
 ## 2026-01-06 15:44
 - Fixed Next PM off-by-one for annual interval by using dateadd(year, 1).
 - Updated assets, scheduling, tasks, and evidence import queries to apply year-based addition when IntervalDays = 365.
@@ -422,32 +420,24 @@
 - Set global default theme to light in App.tsx.
 - Ran `npm run lint` and `npx tsc --noEmit`: OK.
 
-## 2026-01-07 17:09:39 WIB
-- Backend: updated `/api/auth/me` to return `displayName` and `email` from pm.Users.
-- Backend: expanded OpenAPI `MeResponse` schema with `displayName`/`email`.
-- Mobile: Profile page now renders authenticated user data (no mock profile).
-- Mobile: AuthProvider `me` parsing now stores username/displayName/email/roles.
-- Web: updated `apiGetMe` typing to match `/api/auth/me` response.
-- Ran `npm run lint` (warnings only) and `npx tsc --noEmit` (OK).
+## 2026-01-14 23:40:17 WIB
+- Web API: added Label Designer settings client (types + GET/PUT helpers).
+- Fixed runtime import error by exporting apiGetLabelDesignerUiSettings/apiUpdateLabelDesignerUiSettings.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 
-## 2026-01-13 21:05:38 WIB
-- Backend: added `/api/assets/:assetId/history` to return completed PM tasks.
-- Mobile: Asset detail PM History now calls the real endpoint.
-- Mobile: show "No PM history yet" when history list is empty.
-- Ran `npm run lint` and `npx tsc --noEmit`: OK.
-## 2026-01-13 21:03:36 WIB
-- Mobile: aligned Tasks calendar with backend scheduling endpoints for month markers and day events, matching web parity.
-- Mobile: changed calendar event highlight to yellow border and light yellow background for better visibility.
-- Mobile: simplified Week view with compact task chips to reduce clutter.
-- Mobile: made calendar header responsive with icon-sized Prev/Next and smaller Today button to avoid overflow on small screens.
-- Ran `npm run lint` and `npx tsc --noEmit`: OK.
-## 2026-01-13 21:13:52 WIB
-- Mobile: fixed LoginPage type error by treating login outcome as boolean.
-- Mobile: added AuthProvider.loginWithRefresh to support biometric re-login using stored refresh token.
-- Mobile: updated LoginPage to use boolean outcome checks and simplified error messaging.
-- Ran `npm run lint` and `npx tsc --noEmit`: OK.
-## 2026-01-13 21:21:20 WIB
-- Reviewed backend checklist/evidence flow: upload endpoints for task evidence and per-checklist-item evidence; completion enforces RequiresAttachment/Notes.
-- Verified mobile TaskDetail supports real file/photo uploads via input accept image/* and uses checklist evidence upload API.
-- Noted opportunity: client-side enforcement for RequiresAttachment/Notes and optional camera capture via Capacitor Camera.
-- Ran `npm run lint` and `npx tsc --noEmit`: OK.
+## 2026-01-16 00:14:29 WIB
+- Fixed Assets bulk PM enable/disable failing with 400 when selecting >200 assets.
+- Increased backend bulk request maxItems to 500 (matches 500-per-page UI option).
+- Updated backend OpenAPI schemas for bulk PM endpoints.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 00:31:32 WIB
+- Added Superadmin-only delete endpoint for local users in Users & Roles.
+- Included ExternalProvider in users list response so UI can gate the delete action.
+- Added Users & Roles UI action with confirmation dialog for deleting local users.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 00:43:54 WIB
+- Replaced Asset Detail → Schedule tab mock data with real computed schedule.
+- Schedule combines scheduled tasks and projected occurrences (respects blackout windows).
+- Verified with `npm run lint` and `npx tsc --noEmit`.
