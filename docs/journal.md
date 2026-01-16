@@ -233,6 +233,17 @@
 
 ## 2026-01-16 00:46:59 WIB
 - Renamed Asset Detail header action from "Recalculate PM" to "PM Now" for clarity.
+
+## 2026-01-16 08:09
+- Added an Operational column filter on Assets table (All/Operational/Broken/Archived).
+- Wired Assets list API to accept operationalStatus query and filter by AssetOperationalStatus.
+- Updated OpenAPI docs and frontend apiListAssets signature for operationalStatus.
+
+## 2026-01-16 08:10:14 WIB
+- Optimized Snipe-IT asset sync to avoid per-asset category/location DB lookups.
+- Made Snipe-IT status mapping tolerate labels like "Broken - ..." and "Archived - ...".
+- Ensured Snipe-IT sync run rows are completed even if system logging fails.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-16 00:49:54 WIB

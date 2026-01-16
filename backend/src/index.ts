@@ -522,6 +522,13 @@ const openApiSpec: OpenApiSchema = {
           { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
           { name: "status", in: "query", required: false, description: "Exact match on asset status", schema: { type: "string" } },
           {
+            name: "operationalStatus",
+            in: "query",
+            required: false,
+            description: "Filter by normalized operational status",
+            schema: { type: "string", enum: ["operational", "broken", "archived"] },
+          },
+          {
             name: "pmEnabled",
             in: "query",
             required: false,

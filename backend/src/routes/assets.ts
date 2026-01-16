@@ -18,6 +18,7 @@ const QuerySchema = z.object({
   categoryIds: z.string().optional(),
   locationId: z.string().uuid().optional(),
   status: z.string().optional(),
+  operationalStatus: z.enum(["operational", "broken", "archived"]).optional(),
   pmEnabled: z.string().optional(),
   page: z.string().optional().default("1"),
   pageSize: z.string().optional().default("50"),
@@ -91,6 +92,7 @@ assetsRouter.get("/", async (req, res) => {
     .input("categoryIds", sql.NVarChar(sql.MAX), categoryIds ? categoryIds.join(",") : null)
     .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("status", sql.NVarChar(64), parsed.data.status ?? null)
+    .input("operationalStatus", sql.NVarChar(16), parsed.data.operationalStatus ?? null)
     .input("pmEnabled", sql.Bit, pmEnabled);
 
   const result = await request.query(
@@ -157,6 +159,7 @@ assetsRouter.get("/", async (req, res) => {
       "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
       "  AND (@locationId IS NULL OR a.LocationId = @locationId)",
       "  AND (@status IS NULL OR a.AssetStatus = @status)",
+      "  AND (@operationalStatus IS NULL OR a.AssetOperationalStatus = @operationalStatus)",
       "  AND (@pmEnabled IS NULL OR ISNULL(s.PMEnabled, 0) = @pmEnabled)",
       "  AND (",
       "    @search IS NULL",

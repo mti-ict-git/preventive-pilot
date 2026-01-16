@@ -35,9 +35,17 @@ type AssetOperationalStatus = "operational" | "broken" | "archived";
 
 const toOperationalStatus = (statusLabelName: string | null): AssetOperationalStatus => {
   const normalized = (statusLabelName ?? "").trim().toLowerCase();
-  if (normalized === "archived") return "archived";
-  if (normalized === "broken") return "broken";
+  if (/^archived\b/.test(normalized)) return "archived";
+  if (/^broken\b/.test(normalized)) return "broken";
   return "operational";
+};
+
+const safeWriteSystemLog = async (args: Parameters<typeof writeSystemLog>[0]): Promise<void> => {
+  try {
+    await writeSystemLog(args);
+  } catch {
+    return;
+  }
 };
 
 export type SnipeSyncRunOptions = {
@@ -199,33 +207,77 @@ const upsertLocations = async (locations: SnipeLocation[]): Promise<void> => {
   }
 };
 
-const mapCategoryId = async (snipeCategoryId: number | null): Promise<string | null> => {
-  if (!snipeCategoryId) return null;
+const loadCategoryIdMap = async (): Promise<Map<number, string>> => {
   const db = await getDb();
   const result = await db
     .request()
-    .input("snipeCategoryId", sql.Int, snipeCategoryId)
-    .query("SELECT TOP (1) CategoryId FROM pm.AssetCategories WHERE SnipeCategoryId = @snipeCategoryId");
-  const row = result.recordset[0] as { CategoryId?: string } | undefined;
-  return row?.CategoryId ?? null;
+    .query(
+      [
+        "SELECT CategoryId, SnipeCategoryId",
+        "FROM pm.AssetCategories",
+        "WHERE SnipeCategoryId IS NOT NULL AND IsActive = 1",
+      ].join("\n"),
+    );
+
+  const map = new Map<number, string>();
+  for (const r of result.recordset as Array<{ CategoryId?: string; SnipeCategoryId?: number }>) {
+    if (typeof r.SnipeCategoryId === "number" && typeof r.CategoryId === "string") {
+      map.set(r.SnipeCategoryId, r.CategoryId);
+    }
+  }
+  return map;
 };
 
-const mapLocationId = async (snipeLocationId: number | null): Promise<string | null> => {
-  if (!snipeLocationId) return null;
+const loadLocationIdMap = async (): Promise<Map<number, string>> => {
   const db = await getDb();
   const result = await db
     .request()
-    .input("snipeLocationId", sql.Int, snipeLocationId)
-    .query("SELECT TOP (1) LocationId FROM pm.Locations WHERE SnipeLocationId = @snipeLocationId");
-  const row = result.recordset[0] as { LocationId?: string } | undefined;
-  return row?.LocationId ?? null;
+    .query(
+      [
+        "SELECT LocationId, SnipeLocationId",
+        "FROM pm.Locations",
+        "WHERE SnipeLocationId IS NOT NULL AND IsActive = 1",
+      ].join("\n"),
+    );
+
+  const map = new Map<number, string>();
+  for (const r of result.recordset as Array<{ LocationId?: string; SnipeLocationId?: number }>) {
+    if (typeof r.SnipeLocationId === "number" && typeof r.LocationId === "string") {
+      map.set(r.SnipeLocationId, r.LocationId);
+    }
+  }
+  return map;
 };
 
-const upsertAssets = async (assets: SnipeHardware[]): Promise<number> => {
+const updateRunProgress = async (runId: string, assetsProcessed: number): Promise<void> => {
+  const db = await getDb();
+  await db
+    .request()
+    .input("runId", sql.UniqueIdentifier, runId)
+    .input("assetsProcessed", sql.Int, assetsProcessed)
+    .query(
+      [
+        "UPDATE pm.SnipeSyncRuns",
+        "SET AssetsProcessed = @assetsProcessed",
+        "WHERE SnipeSyncRunId = @runId",
+      ].join("\n"),
+    );
+};
+
+const upsertAssets = async (
+  assets: SnipeHardware[],
+  categoryIdBySnipeCategoryId: Map<number, string>,
+  locationIdBySnipeLocationId: Map<number, string>,
+  runId?: string,
+): Promise<number> => {
   let processed = 0;
+  const db = await getDb();
   for (const a of assets) {
-    const categoryId = await mapCategoryId(typeof a.category?.id === "number" ? a.category.id : null);
-    const locationId = await mapLocationId(typeof a.location?.id === "number" ? a.location.id : null);
+    const snipeCategoryId = typeof a.category?.id === "number" ? a.category.id : null;
+    const categoryId = snipeCategoryId ? categoryIdBySnipeCategoryId.get(snipeCategoryId) ?? null : null;
+
+    const snipeLocationId = typeof a.location?.id === "number" ? a.location.id : null;
+    const locationId = snipeLocationId ? locationIdBySnipeLocationId.get(snipeLocationId) ?? null : null;
 
     const manufacturer = a.manufacturer?.name ?? null;
     const model = a.model?.name ?? null;
@@ -235,7 +287,6 @@ const upsertAssets = async (assets: SnipeHardware[]): Promise<number> => {
     const assignedToText = a.assigned_to?.name ?? null;
     const assetTag = a.asset_tag ?? null;
 
-    const db = await getDb();
     await db
       .request()
       .input("snipeAssetId", sql.Int, a.id)
@@ -279,6 +330,10 @@ const upsertAssets = async (assets: SnipeHardware[]): Promise<number> => {
         ].join("\n"),
       );
     processed += 1;
+
+    if (runId && processed % 200 === 0) {
+      await updateRunProgress(runId, processed);
+    }
   }
 
   return processed;
@@ -371,7 +426,11 @@ export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<vo
   const runId = started.recordset[0]?.SnipeSyncRunId as string | undefined;
 
   const jobContext = { job: "snipe-sync", runId };
-  await writeSystemLog({ level: "info", message: "Snipe-IT sync started", context: jobContext });
+  await safeWriteSystemLog({ level: "info", message: "Snipe-IT sync started", context: jobContext });
+
+  let finalAssetsProcessed = 0;
+  let finalErrorMessage: string | null = null;
+  let finalStatus: "success" | "error" = "success";
 
   try {
     const categories = await listAll<SnipeCategory>(requestConfig, "/categories");
@@ -380,28 +439,14 @@ export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<vo
 
     await upsertCategories(categories);
     await upsertLocations(locations);
-    const assetsProcessed = await upsertAssets(assets);
+    const categoryIdBySnipeCategoryId = await loadCategoryIdMap();
+    const locationIdBySnipeLocationId = await loadLocationIdMap();
+    const assetsProcessed = await upsertAssets(assets, categoryIdBySnipeCategoryId, locationIdBySnipeLocationId, runId);
     const archivedMissingCount = await archiveMissingAssets(syncStartedAt, assets.map((a) => a.id));
 
-    if (runId) {
-      await db
-        .request()
-        .input("runId", sql.UniqueIdentifier, runId)
-        .input("status", sql.NVarChar(32), "success")
-        .input("assetsProcessed", sql.Int, assetsProcessed)
-        .query(
-          [
-            "UPDATE pm.SnipeSyncRuns",
-            "SET",
-            "  CompletedAt = sysutcdatetime(),",
-            "  Status = @status,",
-            "  AssetsProcessed = @assetsProcessed",
-            "WHERE SnipeSyncRunId = @runId",
-          ].join("\n"),
-        );
-    }
+    finalAssetsProcessed = assetsProcessed;
 
-    await writeSystemLog({
+    await safeWriteSystemLog({
       level: "info",
       message: "Snipe-IT sync completed",
       context: {
@@ -414,24 +459,37 @@ export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<vo
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    if (runId) {
-      await db
-        .request()
-        .input("runId", sql.UniqueIdentifier, runId)
-        .input("status", sql.NVarChar(32), "error")
-        .input("errorMessage", sql.NVarChar(2048), message)
-        .query(
-          [
-            "UPDATE pm.SnipeSyncRuns",
-            "SET",
-            "  CompletedAt = sysutcdatetime(),",
-            "  Status = @status,",
-            "  ErrorMessage = @errorMessage",
-            "WHERE SnipeSyncRunId = @runId",
-          ].join("\n"),
-        );
-    }
-    await writeSystemLog({ level: "error", message: "Snipe-IT sync failed", context: { ...jobContext, error: message } });
+    finalStatus = "error";
+    finalErrorMessage = message;
+    await safeWriteSystemLog({ level: "error", message: "Snipe-IT sync failed", context: { ...jobContext, error: message } });
     throw err;
+  } finally {
+    if (runId) {
+      try {
+        await db
+          .request()
+          .input("runId", sql.UniqueIdentifier, runId)
+          .input("status", sql.NVarChar(32), finalStatus)
+          .input("assetsProcessed", sql.Int, finalAssetsProcessed)
+          .input("errorMessage", sql.NVarChar(2048), finalErrorMessage)
+          .query(
+            [
+              "UPDATE pm.SnipeSyncRuns",
+              "SET",
+              "  CompletedAt = sysutcdatetime(),",
+              "  Status = @status,",
+              "  AssetsProcessed = @assetsProcessed,",
+              "  ErrorMessage = @errorMessage",
+              "WHERE SnipeSyncRunId = @runId",
+            ].join("\n"),
+          );
+      } catch {
+        await safeWriteSystemLog({
+          level: "error",
+          message: "Failed to update SnipeSyncRuns status",
+          context: { ...jobContext, status: finalStatus, assetsProcessed: finalAssetsProcessed },
+        });
+      }
+    }
   }
 };

@@ -81,6 +81,9 @@ const Assets = () => {
   const [pmStatusFilter, setPmStatusFilter] = useState<
     "all" | "not-started" | "on-track" | "due-soon" | "overdue" | "no-schedule"
   >("all");
+  const [operationalStatusFilter, setOperationalStatusFilter] = useState<
+    "all" | "operational" | "broken" | "archived"
+  >("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [page, setPage] = useState(1);
@@ -128,7 +131,16 @@ const Assets = () => {
   const assetsQuery = useQuery({
     queryKey: [
       "assets",
-      { page, pageSize, searchQuery, pmEnabledFilter, selectedCategoryId, selectedLocationId, visibleCategoryIds },
+      {
+        page,
+        pageSize,
+        searchQuery,
+        pmEnabledFilter,
+        selectedCategoryId,
+        selectedLocationId,
+        visibleCategoryIds,
+        operationalStatusFilter,
+      },
     ],
     queryFn: () =>
       apiListAssets({
@@ -139,6 +151,8 @@ const Assets = () => {
         categoryId: selectedCategoryId === "all" ? undefined : selectedCategoryId,
         categoryIds: visibleCategoryIds ?? undefined,
         locationId: selectedLocationId === "all" ? undefined : selectedLocationId,
+        operationalStatus:
+          operationalStatusFilter === "all" ? undefined : operationalStatusFilter,
       }),
   });
 
@@ -584,7 +598,27 @@ const Assets = () => {
                       </SelectContent>
                     </Select>
                   </TableHead>
-                  <TableHead></TableHead>
+                  <TableHead>
+                    <Select
+                      value={operationalStatusFilter}
+                      onValueChange={(value) => {
+                        setOperationalStatusFilter(
+                          value as "all" | "operational" | "broken" | "archived",
+                        );
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="Operational" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="operational">Operational</SelectItem>
+                        <SelectItem value="broken">Broken</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableHead>
                   <TableHead>
                     <Select
                       value={pmStatusFilter}
