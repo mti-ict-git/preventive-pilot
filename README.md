@@ -129,12 +129,14 @@ Required environment variables:
 
 - Configure notification channels and rules from the Notifications page.
 - Reminder and escalation rules are time-based (due/overdue), while `task_assigned` rules fire immediately when a task is assigned or reassigned to a technician.
+- Existing reminder and escalation rules can be edited from the Notifications page using the pencil icon next to each rule.
 - Reminder rules send Microsoft Graph emails (and optional WhatsApp messages) primarily to the task's assigned technician; if a task is unassigned or the technician has no email/phone, the system falls back to the rule's global recipients.
 - Message templates support the following placeholders, which are replaced per task when notifications are sent:
   - `{{taskNumber}}`
   - `{{dueAt}}`
   - `{{assetName}}`
   - `{{templateName}}`
+  - `{{technicianNumber}}` (the assigned technician's phone number when available)
   - `{{message}}` (the rendered per-rule message body)
 - The Notification Channel **Config (JSON or text)** field is optional and currently treated as free-form metadata. You can leave it empty or store notes like external IDs or routing hints for future integrations; it is not required for the built-in reminder job to work.
 

@@ -359,7 +359,26 @@ const Notifications = () => {
                           />
                           <span className="font-medium text-foreground">{rule.ruleName}</span>
                         </div>
-                        <Badge variant="secondary">{formatRuleTiming(rule)}</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">{formatRuleTiming(rule)}</Badge>
+                          <Pencil
+                            className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground"
+                            onClick={() => {
+                              setRuleModalMode("edit");
+                              const isEsc = rule.escalateAfterDays !== null;
+                              setRuleModalType(isEsc ? "escalation" : "reminder");
+                              setRuleId(rule.id);
+                              setRuleName(rule.ruleName);
+                              setEventType(rule.eventType);
+                              setOffsetDays(String(rule.offsetDays ?? 0));
+                              setEscalateAfterDays(String(rule.escalateAfterDays ?? 1));
+                              setRuleChannelId(rule.channel.id);
+                              setMessageTemplate(rule.messageTemplate ?? "");
+                              setRuleActive(rule.isActive);
+                              setRuleModalOpen(true);
+                            }}
+                          />
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 ml-11">
                         <Badge variant="outline" className="text-xs">
@@ -759,7 +778,7 @@ const Notifications = () => {
                 rows={4}
               />
               <p className="text-xs text-muted-foreground">
-                Available placeholders: {"{{taskNumber}}"}, {"{{assetTag}}"}, {"{{assetName}}"}, {"{{templateName}}"}, {"{{dueAt}}"}.
+                Available placeholders: {"{{taskNumber}}"}, {"{{assetTag}}"}, {"{{assetName}}"}, {"{{templateName}}"}, {"{{dueAt}}"}, {"{{technicianNumber}}"}.
                 This template is rendered per task and used as the
                 {" "}
                 <code>{"{{message}}"}</code>
@@ -768,7 +787,7 @@ const Notifications = () => {
               </p>
               <p className="text-xs text-muted-foreground">
                 Example: {" "}
-                <code>{"Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}})."}</code>
+                <code>{"Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}}). @{{technicianNumber}}"}</code>
               </p>
             </div>
             <div className="col-span-12">

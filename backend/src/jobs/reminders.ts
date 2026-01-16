@@ -716,15 +716,16 @@ export const runReminderEscalationJob = async (): Promise<void> => {
     const tasksForEscalation = await loadTasksForEscalationRule(rule);
     const tasks = [...tasksForOffset, ...tasksForEscalation];
 
-    for (const task of tasks) {
-      examined += 1;
-      const message = renderTemplate(template, {
-        taskNumber: task.TaskNumber,
-        assetTag: task.AssetTag ?? "",
-        assetName: task.AssetName,
-        templateName: task.TemplateName,
-        dueAt: task.ScheduledDueAt.toISOString(),
-      });
+  for (const task of tasks) {
+    examined += 1;
+    const message = renderTemplate(template, {
+      taskNumber: task.TaskNumber,
+      assetTag: task.AssetTag ?? "",
+      assetName: task.AssetName,
+      templateName: task.TemplateName,
+      dueAt: task.ScheduledDueAt.toISOString(),
+      technicianNumber: (task.AssignedUserPhone ?? "").trim(),
+    });
       const didQueue = await enqueueNotification(rule, task, message);
       if (didQueue) queued += 1;
     }

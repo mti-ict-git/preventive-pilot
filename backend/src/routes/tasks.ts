@@ -718,6 +718,7 @@ const enqueueTaskAssignedNotifications = async (taskId: string): Promise<void> =
   const assetName = taskRow.AssetName;
   const assetTag = taskRow.AssetTag ?? "";
   const templateName = taskRow.TemplateName;
+  const technicianNumber = (taskRow.AssignedUserPhone ?? "").trim();
 
   for (const rule of rules) {
     const template =
@@ -730,6 +731,7 @@ const enqueueTaskAssignedNotifications = async (taskId: string): Promise<void> =
       assetName,
       templateName,
       dueAt: dueAtIso,
+      technicianNumber,
     });
 
     const payload = JSON.stringify({

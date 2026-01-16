@@ -358,6 +358,11 @@
 - Refined Swagger with concrete AssetListItem, AssetListResponse, AssetDetail schemas.
 - Updated /api/assets 200 response to AssetListResponse and /api/assets/{assetId} to AssetDetail.
 - Documented pmEnabled oneOf (string|boolean) and categoryIds CSV example.
+
+## 2026-01-16 16:43:50 WIB
+- Added `{{technicianNumber}}` placeholder to notification rule templates, populated from the assigned technician's phone.
+- Updated Notifications UI helper text and README to document `{{technicianNumber}}` and show an @{{technicianNumber}} WhatsApp mention example.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 - Bumped API version to 1.0.1 in Swagger info.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
@@ -393,6 +398,11 @@
 - Queried API for asset MTI-PC-003 and its assigned template.
 - Confirmed template IntervalDays = 180 (Semi-Annual).
 - Noted existing NextPMDueAt stored as 2026-07-04 which conflicts with template.
+
+## 2026-01-16 16:49:10 WIB
+- Enabled editing for reminder notification rules on the Notifications page using the same rule dialog as escalation rules.
+- Added inline edit icon next to Reminder rule timing badge so users can update templates like @{{technicianNumber}} without recreating rules.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-06 17:03
 - Added force option to scheduling recalculation to ignore stored NextPMDueAt.
