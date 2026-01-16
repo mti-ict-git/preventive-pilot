@@ -160,7 +160,8 @@ const Tasks = () => {
                 ? 50
                 : 0;
         return {
-          id: task.taskNumber,
+          id: task.id,
+          displayId: task.taskNumber,
           taskId: task.id,
           asset: task.asset.assetTag,
           assetName: task.asset.name,
@@ -177,7 +178,7 @@ const Tasks = () => {
       .filter((task) => {
         if (!q) return true;
         return (
-          task.id.toLowerCase().includes(q) ||
+          task.displayId.toLowerCase().includes(q) ||
           task.asset.toLowerCase().includes(q) ||
           task.assetName.toLowerCase().includes(q)
         );
@@ -264,7 +265,7 @@ const Tasks = () => {
                           </div>
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="font-mono text-sm text-muted-foreground">{task.id}</span>
+                              <span className="font-mono text-sm text-muted-foreground">{task.displayId}</span>
                               <Badge variant="outline" className={statusConfig.color}>
                                 <statusConfig.icon className="w-3 h-3 mr-1" />
                                 {statusConfig.label}
