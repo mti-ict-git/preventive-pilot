@@ -246,6 +246,11 @@
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-16 09:07:39 WIB
+- Updated evidence import asset-key detection to treat patterns like "MTI-PC-LAB 001" as distinct from "MTI-PC-LAB 002".
+- This prevents backdated evidence for numbered assets from being grouped under a single asset folder.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## 2026-01-16 00:49:54 WIB
 - Fixed apiRecalculateSchedules to send a JSON object body instead of a pre-serialized string.
 - Resolved 400 Bad Request when clicking "PM Now" (scheduling recalc schema now matches payload).

@@ -133,9 +133,17 @@ const extractAssetKey = (fileName: string, dateMatchIndex: number): string | nul
   const { base } = splitExt(path.basename(fileName));
   const prefix = base.slice(0, Math.max(0, dateMatchIndex));
   const cleaned = prefix.replace(/[_-]+$/g, "").trim();
-  const token = cleaned.split(/\s+/).filter(Boolean)[0] ?? "";
-  const candidate = token.trim();
-  return candidate.length > 0 ? candidate : null;
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+
+  let candidate = tokens[0];
+  const second = tokens[1];
+  if (typeof second === "string" && /^\d+$/.test(second)) {
+    candidate = `${tokens[0]} ${second}`;
+  }
+
+  const result = candidate.trim();
+  return result.length > 0 ? result : null;
 };
 
 const computeQuarterFolder = (completedAtUtc: Date): { folder: string; year: number; quarter: 1 | 2 | 3 | 4 } => {
