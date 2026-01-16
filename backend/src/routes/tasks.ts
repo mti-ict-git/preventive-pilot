@@ -57,6 +57,10 @@ const EvidenceSchema = z.object({
   sizeBytes: z.number().int().nonnegative().nullable().optional(),
 });
 
+const PmNowSchema = z.object({
+  assetId: z.string().uuid(),
+});
+
 const managerRoles = ["Superadmin", "Admin", "Supervisor"] as const;
 const requireManager = requireAnyRole(managerRoles);
 
@@ -755,6 +759,147 @@ tasksRouter.get("/", async (req, res) => {
       },
     })),
   });
+});
+
+tasksRouter.post("/pm-now", requireManager, async (req, res) => {
+  const parsed = PmNowSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const assetResult = await db
+    .request()
+    .input("assetId", sql.UniqueIdentifier, parsed.data.assetId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  a.AssetId AS AssetId,",
+        "  a.AssetStatus AS AssetStatus,",
+        "  a.CategoryId AS CategoryId,",
+        "  a.LocationId AS LocationId,",
+        "  s.PMEnabled AS PMEnabled,",
+        "  s.DefaultTemplateId AS DefaultTemplateId,",
+        "  tpl.TemplateId AS TemplateId,",
+        "  tpl.IsActive AS TemplateIsActive",
+        "FROM pm.Assets a",
+        "LEFT JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
+        "LEFT JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
+        "WHERE a.AssetId = @assetId AND a.IsArchived = 0",
+      ].join("\n"),
+    );
+
+  const assetRow = assetResult.recordset[0] as Record<string, unknown> | undefined;
+  if (!assetRow) {
+    res.status(404).json({ message: "Asset not found" });
+    return;
+  }
+
+  const pmEnabledValue = assetRow.PMEnabled;
+  const pmEnabled =
+    typeof pmEnabledValue === "boolean"
+      ? pmEnabledValue
+      : typeof pmEnabledValue === "number"
+        ? pmEnabledValue === 1
+        : false;
+  if (!pmEnabled) {
+    res.status(400).json({ message: "PM is not enabled for this asset" });
+    return;
+  }
+
+  const templateIdValue = assetRow.DefaultTemplateId ?? assetRow.TemplateId;
+  const templateId = typeof templateIdValue === "string" ? templateIdValue : null;
+  const templateIsActiveValue = assetRow.TemplateIsActive;
+  const templateIsActive =
+    typeof templateIsActiveValue === "boolean"
+      ? templateIsActiveValue
+      : typeof templateIsActiveValue === "number"
+        ? templateIsActiveValue === 1
+        : false;
+
+  if (!templateId || !templateIsActive) {
+    res.status(400).json({ message: "PM template is not configured or inactive for this asset" });
+    return;
+  }
+
+  const categoryIdValue = assetRow.CategoryId;
+  const locationIdValue = assetRow.LocationId;
+  const assetStatusValue = assetRow.AssetStatus;
+
+  const assignmentResult = await db
+    .request()
+    .input("categoryId", sql.UniqueIdentifier, typeof categoryIdValue === "string" ? categoryIdValue : null)
+    .input("locationId", sql.UniqueIdentifier, typeof locationIdValue === "string" ? locationIdValue : null)
+    .input("assetStatus", sql.NVarChar(64), typeof assetStatusValue === "string" ? assetStatusValue : null)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  AssignToUserId,",
+        "  AssignToRoleId",
+        "FROM pm.AssignmentRules",
+        "WHERE",
+        "  IsActive = 1",
+        "  AND (CategoryId IS NULL OR CategoryId = @categoryId)",
+        "  AND (LocationId IS NULL OR LocationId = @locationId)",
+        "  AND (AssetStatus IS NULL OR AssetStatus = @assetStatus)",
+        "  AND (EffectiveFrom IS NULL OR EffectiveFrom <= sysutcdatetime())",
+        "  AND (EffectiveTo IS NULL OR EffectiveTo >= sysutcdatetime())",
+        "ORDER BY Priority ASC, UpdatedAt DESC",
+      ].join("\n"),
+    );
+
+  const assignmentRow = assignmentResult.recordset[0] as Record<string, unknown> | undefined;
+  const assignToUserIdValue = assignmentRow?.AssignToUserId ?? null;
+  const assignToRoleIdValue = assignmentRow?.AssignToRoleId ?? null;
+
+  const insertResult = await db
+    .request()
+    .input("assetId", sql.UniqueIdentifier, parsed.data.assetId)
+    .input("templateId", sql.UniqueIdentifier, templateId)
+    .input("assignedToUserId", sql.UniqueIdentifier, typeof assignToUserIdValue === "string" ? assignToUserIdValue : null)
+    .input("assignedToRoleId", sql.UniqueIdentifier, typeof assignToRoleIdValue === "string" ? assignToRoleIdValue : null)
+    .query(
+      [
+        "DECLARE @now datetime2(0) = sysutcdatetime();",
+        "DECLARE @taskNumber nvarchar(32) = CONCAT(",
+        "  N'PM-NOW-',",
+        "  FORMAT(@now, 'yyyyMMdd'),",
+        "  N'-',",
+        "  RIGHT(CONVERT(varchar(36), NEWID()), 8)",
+        ");",
+        "INSERT INTO pm.PMTasks (",
+        "  TaskNumber, AssetId, TemplateId, ScheduledDueAt, AssignedToUserId, AssignedToRoleId, Status",
+        ")",
+        "OUTPUT inserted.TaskId AS TaskId",
+        "VALUES (",
+        "  @taskNumber, @assetId, @templateId, @now, @assignedToUserId, @assignedToRoleId, N'open'",
+        ");",
+      ].join("\n"),
+    );
+
+  const insertedRow = insertResult.recordset[0] as Record<string, unknown> | undefined;
+  const taskId = typeof insertedRow?.TaskId === "string" ? insertedRow.TaskId : null;
+  if (!taskId) {
+    res.status(500).json({ message: "Failed to create PM Now task" });
+    return;
+  }
+
+  await writeAuditLog({
+    actorUserId: req.user.sub,
+    action: "task.create.pm-now",
+    entityType: "task",
+    entityId: taskId,
+    metadata: {
+      assetId: parsed.data.assetId,
+      templateId,
+      source: "pm-now",
+    },
+    ipAddress: typeof req.ip === "string" ? req.ip : null,
+    userAgent: req.get("user-agent") ?? null,
+  });
+
+  res.status(201).json({ id: taskId });
 });
 
 tasksRouter.get("/evidence/:evidenceId", async (req, res) => {

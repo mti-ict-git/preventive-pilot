@@ -110,7 +110,7 @@ Required environment variables:
 ### Asset-level PM: "PM Now" and schedule recalc
 
 - Open an Asset and use the PM section to enable PM and choose a template.
-- Managers can use the **PM Now** button on Asset Detail to open the PM Task dialog for the asset's default template, complete the checklist, and attach evidence directly from the asset page.
+- Managers can use the **PM Now** button on Asset Detail to create a new PM task that is due immediately for the asset's default template, then complete the checklist and attach evidence directly from the asset page. This works even if there is no task currently due.
 - After completing PM Now, the system automatically recalculates the next PM date for that asset using the same scheduling engine as the global Recalculate/Force Recalculate actions on the Scheduling page.
 
 ## Microsoft Graph notifications

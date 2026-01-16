@@ -437,6 +437,12 @@
 - Updated backend OpenAPI schemas for bulk PM endpoints.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-16 07:21:39 WIB
+- Changed PM Now to always create a new immediate PM task for the asset's default template, ignoring existing scheduled tasks.
+- Added `/api/tasks/pm-now` backend endpoint with manager-only access and OpenAPI documentation.
+- Updated frontend Asset Detail PM Now button to call the new endpoint and open the created task directly.
+- Documented the new behavior in README.
+
 ## 2026-01-16 00:31:32 WIB
 - Added Superadmin-only delete endpoint for local users in Users & Roles.
 - Included ExternalProvider in users list response so UI can gate the delete action.

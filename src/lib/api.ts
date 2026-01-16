@@ -971,6 +971,15 @@ export const apiRecalculateSchedules = async (input: {
   });
 };
 
+export const apiCreatePmNowTask = async (input: { assetId: string }): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>("/api/tasks/pm-now", {
+    method: "POST",
+    body: {
+      assetId: input.assetId,
+    },
+  });
+};
+
 export type TemplateSummary = {
   id: string;
   name: string;

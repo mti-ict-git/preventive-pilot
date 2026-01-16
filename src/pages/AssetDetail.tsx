@@ -51,6 +51,7 @@ import {
   apiListTasks,
   apiListTemplates,
   apiPatchAssetPm,
+  apiCreatePmNowTask,
   apiRecalculateSchedules,
   type BlackoutWindow,
   type TaskEvidence,
@@ -270,30 +271,8 @@ const AssetDetail = () => {
       if (!defaultTemplateId) {
         throw new Error("PM template is not configured for this asset");
       }
-
-      const listResponse = await apiListTasks({
-        assetId,
-        templateId: defaultTemplateId,
-        page: 1,
-        pageSize: 50,
-      });
-
-      const candidates = [...listResponse.items]
-        .filter((task) => {
-          const statusLower = task.status.toLowerCase();
-          return statusLower !== "completed" && statusLower !== "cancelled";
-        })
-        .sort((a, b) => {
-          const aTime = new Date(a.scheduledDueAt).getTime();
-          const bTime = new Date(b.scheduledDueAt).getTime();
-          return aTime - bTime;
-        });
-
-      if (candidates.length === 0) {
-        throw new Error("No PM task is available to run now for this asset");
-      }
-
-      return candidates[0].id;
+      const created = await apiCreatePmNowTask({ assetId });
+      return created.id;
     },
     onSuccess: (taskId) => {
       setPmNowTaskId(taskId);

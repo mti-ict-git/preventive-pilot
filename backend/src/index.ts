@@ -296,6 +296,14 @@ const openApiSpec: OpenApiSchema = {
         },
         required: ["page", "pageSize", "items"],
       },
+      PmNowRequest: {
+        type: "object",
+        properties: {
+          assetId: { type: "string", format: "uuid" },
+        },
+        required: ["assetId"],
+        additionalProperties: false,
+      },
       BulkSetPmEnabledRequest: {
         type: "object",
         properties: {
@@ -684,6 +692,44 @@ const openApiSpec: OpenApiSchema = {
           },
           "401": {
             description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/pm-now": {
+      post: {
+        tags: ["Tasks"],
+        summary: "Create an immediate PM task for an asset's default template",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/PmNowRequest" } },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Created",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "500": {
+            description: "Server error",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },
