@@ -83,6 +83,10 @@ const Tasks = () => {
       return { dueFrom: now.toISOString(), page: 1, pageSize: 100 };
     }
 
+    if (activeTab === "cancelled") {
+      return { status: "cancelled", page: 1, pageSize: 100 };
+    }
+
     return { page: 1, pageSize: 100 };
   }, [activeTab]);
 
@@ -97,11 +101,12 @@ const Tasks = () => {
     staleTime: 30_000,
   });
 
-  type UiStatus = "upcoming" | "in_progress" | "due_today" | "overdue" | "completed";
+  type UiStatus = "upcoming" | "in_progress" | "due_today" | "overdue" | "completed" | "cancelled";
 
   const getUiStatus = (task: TaskListItem, now: Date): UiStatus => {
     const due = parseISO(task.scheduledDueAt);
     const status = task.status.toLowerCase();
+    if (status === "cancelled") return "cancelled";
     if (status === "completed") return "completed";
     if (status === "in_progress") return "in_progress";
     if (isBefore(due, now)) return "overdue";
@@ -113,11 +118,20 @@ const Tasks = () => {
   const getStatusConfig = (status: UiStatus) => {
     const config = {
       upcoming: { label: "Upcoming", color: "bg-accent/20 text-accent border-accent/30", icon: Clock },
-      in_progress: { label: "In Progress", color: "bg-primary/20 text-primary border-primary/30", icon: ClipboardList },
+      in_progress: {
+        label: "In Progress",
+        color: "bg-primary/20 text-primary border-primary/30",
+        icon: ClipboardList,
+      },
       due_today: { label: "Due Today", color: "bg-warning/20 text-warning border-warning/30", icon: AlertTriangle },
       overdue: { label: "Overdue", color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertTriangle },
       completed: { label: "Completed", color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
-    };
+      cancelled: {
+        label: "Cancelled",
+        color: "bg-muted/40 text-muted-foreground border-muted/60",
+        icon: AlertTriangle,
+      },
+    } as const;
     return config[status];
   };
 
@@ -127,11 +141,13 @@ const Tasks = () => {
     const total = items.length;
     const dueTodayCount = items.filter((t) => {
       const status = t.status.toLowerCase();
-      return isSameDay(parseISO(t.scheduledDueAt), now) && status !== "completed";
+      if (status === "completed" || status === "cancelled") return false;
+      return isSameDay(parseISO(t.scheduledDueAt), now);
     }).length;
     const overdueCount = items.filter((t) => {
       const status = t.status.toLowerCase();
-      return isBefore(parseISO(t.scheduledDueAt), now) && status !== "completed";
+      if (status === "completed" || status === "cancelled") return false;
+      return isBefore(parseISO(t.scheduledDueAt), now);
     }).length;
     const completedCount = items.filter((t) => t.status.toLowerCase() === "completed").length;
     return [
@@ -144,7 +160,13 @@ const Tasks = () => {
 
   const filteredTasks = useMemo(() => {
     const now = new Date();
-    const items = tasksQuery.data?.items ?? [];
+    const items = (tasksQuery.data?.items ?? []).filter((task) => {
+      const status = task.status.toLowerCase();
+      if (activeTab === "due_today" && status === "cancelled") {
+        return false;
+      }
+      return true;
+    });
     const q = searchQuery.trim().toLowerCase();
     return items
       .map((task) => {
@@ -183,7 +205,7 @@ const Tasks = () => {
           task.assetName.toLowerCase().includes(q)
         );
       });
-  }, [searchQuery, tasksQuery.data?.items]);
+  }, [searchQuery, tasksQuery.data?.items, activeTab]);
 
   return (
     <div className="min-h-screen">
@@ -235,6 +257,7 @@ const Tasks = () => {
             <TabsTrigger value="overdue">Overdue</TabsTrigger>
             <TabsTrigger value="in_progress">In Progress</TabsTrigger>
             <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+            <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
           </TabsList>
 
           <TabsContent value={activeTab} className="mt-4">

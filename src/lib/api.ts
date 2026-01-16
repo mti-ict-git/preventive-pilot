@@ -147,6 +147,8 @@ export const apiUpdateMyPreferences = async (input: {
   return apiFetchJson<{ ok: true }>("/api/auth/me/preferences", { method: "PUT", body: input });
 };
 
+export type AssetOperationalStatus = "operational" | "broken" | "archived";
+
 export type Asset = {
   id: string;
   snipeAssetId: number | null;
@@ -156,6 +158,7 @@ export type Asset = {
   model: string | null;
   serialNumber: string | null;
   assetStatus: string | null;
+  assetOperationalStatus: AssetOperationalStatus;
   assignedToText: string | null;
   category: { id: string | null; name: string | null };
   location: { id: string | null; name: string | null };

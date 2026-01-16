@@ -31,6 +31,15 @@ type SnipeHardware = {
   assigned_to?: { name?: string | null } | null;
 };
 
+type AssetOperationalStatus = "operational" | "broken" | "archived";
+
+const toOperationalStatus = (statusLabelName: string | null): AssetOperationalStatus => {
+  const normalized = (statusLabelName ?? "").trim().toLowerCase();
+  if (normalized === "archived") return "archived";
+  if (normalized === "broken") return "broken";
+  return "operational";
+};
+
 export type SnipeSyncRunOptions = {
   force?: boolean;
 };
@@ -222,6 +231,7 @@ const upsertAssets = async (assets: SnipeHardware[]): Promise<number> => {
     const model = a.model?.name ?? null;
     const serial = a.serial ?? null;
     const status = a.status_label?.name ?? null;
+    const operationalStatus = toOperationalStatus(status);
     const assignedToText = a.assigned_to?.name ?? null;
     const assetTag = a.asset_tag ?? null;
 
@@ -237,6 +247,7 @@ const upsertAssets = async (assets: SnipeHardware[]): Promise<number> => {
       .input("categoryId", sql.UniqueIdentifier, categoryId)
       .input("locationId", sql.UniqueIdentifier, locationId)
       .input("assetStatus", sql.NVarChar(64), status)
+      .input("assetOperationalStatus", sql.NVarChar(16), operationalStatus)
       .input("assignedToText", sql.NVarChar(256), assignedToText)
       .query(
         [
@@ -253,16 +264,17 @@ const upsertAssets = async (assets: SnipeHardware[]): Promise<number> => {
           "    CategoryId = @categoryId,",
           "    LocationId = @locationId,",
           "    AssetStatus = @assetStatus,",
+          "    AssetOperationalStatus = @assetOperationalStatus,",
           "    AssignedToText = @assignedToText,",
           "    IsArchived = 0,",
           "    LastSyncedAt = sysutcdatetime(),",
           "    UpdatedAt = sysutcdatetime()",
           "WHEN NOT MATCHED THEN",
           "  INSERT (",
-          "    SnipeAssetId, AssetTag, Name, Manufacturer, Model, SerialNumber, CategoryId, LocationId, AssetStatus, AssignedToText, IsArchived, LastSyncedAt",
+          "    SnipeAssetId, AssetTag, Name, Manufacturer, Model, SerialNumber, CategoryId, LocationId, AssetStatus, AssignedToText, AssetOperationalStatus, IsArchived, LastSyncedAt",
           "  )",
           "  VALUES (",
-          "    @snipeAssetId, @assetTag, @name, @manufacturer, @model, @serialNumber, @categoryId, @locationId, @assetStatus, @assignedToText, 0, sysutcdatetime()",
+          "    @snipeAssetId, @assetTag, @name, @manufacturer, @model, @serialNumber, @categoryId, @locationId, @assetStatus, @assignedToText, @assetOperationalStatus, 0, sysutcdatetime()",
           "  );",
         ].join("\n"),
       );
@@ -272,7 +284,41 @@ const upsertAssets = async (assets: SnipeHardware[]): Promise<number> => {
   return processed;
 };
 
+const archiveMissingAssets = async (syncStartedAt: Date, snipeAssetIds: number[]): Promise<number> => {
+  if (snipeAssetIds.length === 0) return 0;
+  const idsCsv = snipeAssetIds.join(",");
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("syncStartedAt", sql.DateTime2(0), syncStartedAt)
+    .input("snipeAssetIdsCsv", sql.NVarChar(sql.MAX), idsCsv)
+    .query(
+      [
+        "UPDATE a",
+        "SET",
+        "  IsArchived = 1,",
+        "  AssetOperationalStatus = N'archived',",
+        "  UpdatedAt = sysutcdatetime()",
+        "FROM pm.Assets a",
+        "LEFT JOIN (",
+        "  SELECT DISTINCT TRY_CONVERT(int, value) AS SnipeAssetId",
+        "  FROM string_split(@snipeAssetIdsCsv, ',')",
+        "  WHERE TRY_CONVERT(int, value) IS NOT NULL",
+        ") ids ON ids.SnipeAssetId = a.SnipeAssetId",
+        "WHERE a.IsArchived = 0",
+        "  AND a.SnipeAssetId IS NOT NULL",
+        "  AND ids.SnipeAssetId IS NULL",
+        "  AND (a.LastSyncedAt IS NULL OR a.LastSyncedAt < @syncStartedAt);",
+        "SELECT @@ROWCOUNT AS ArchivedCount;",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as { ArchivedCount?: number } | undefined;
+  return typeof row?.ArchivedCount === "number" ? row.ArchivedCount : 0;
+};
+
 export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<void> => {
+  const syncStartedAt = new Date();
   const settings = await loadSnipeItSettings();
   if (!options?.force && !settings.autoSyncEnabled) return;
 
@@ -335,6 +381,7 @@ export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<vo
     await upsertCategories(categories);
     await upsertLocations(locations);
     const assetsProcessed = await upsertAssets(assets);
+    const archivedMissingCount = await archiveMissingAssets(syncStartedAt, assets.map((a) => a.id));
 
     if (runId) {
       await db
@@ -357,7 +404,13 @@ export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<vo
     await writeSystemLog({
       level: "info",
       message: "Snipe-IT sync completed",
-      context: { ...jobContext, categories: categories.length, locations: locations.length, assets: assetsProcessed },
+      context: {
+        ...jobContext,
+        categories: categories.length,
+        locations: locations.length,
+        assets: assetsProcessed,
+        archivedMissing: archivedMissingCount,
+      },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

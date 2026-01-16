@@ -69,6 +69,12 @@ const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
 
 const EMPTY_TEMPLATES: TemplateSummary[] = [];
 
+const OperationalStatusBadge = ({ status }: { status: Asset["assetOperationalStatus"] }) => {
+  if (status === "broken") return <Badge variant="destructive">Broken</Badge>;
+  if (status === "archived") return <Badge variant="secondary">Archived</Badge>;
+  return <Badge className="border-transparent bg-emerald-600 text-white hover:bg-emerald-600/90">Operational</Badge>;
+};
+
 const Assets = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
@@ -516,6 +522,7 @@ const Assets = () => {
                   <TableHead className="text-muted-foreground">Name</TableHead>
                   <TableHead className="text-muted-foreground">Category</TableHead>
                   <TableHead className="text-muted-foreground">Location</TableHead>
+                  <TableHead className="text-muted-foreground">Operational</TableHead>
                   <TableHead className="text-muted-foreground">PM Status</TableHead>
                   <TableHead className="text-muted-foreground">Next PM</TableHead>
                   <TableHead className="text-muted-foreground">PM Enabled</TableHead>
@@ -577,6 +584,7 @@ const Assets = () => {
                       </SelectContent>
                     </Select>
                   </TableHead>
+                  <TableHead></TableHead>
                   <TableHead>
                     <Select
                       value={pmStatusFilter}
@@ -598,7 +606,6 @@ const Assets = () => {
                       </SelectContent>
                     </Select>
                   </TableHead>
-                  <TableHead></TableHead>
                   <TableHead></TableHead>
                   <TableHead>
                     <Select
@@ -665,6 +672,9 @@ const Assets = () => {
                         <Badge variant="secondary">{asset.category.name ?? "—"}</Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{asset.location.name ?? "—"}</TableCell>
+                      <TableCell>
+                        <OperationalStatusBadge status={asset.assetOperationalStatus} />
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <pmStatus.icon className={`w-4 h-4 ${pmStatus.color}`} />

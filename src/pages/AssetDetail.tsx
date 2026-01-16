@@ -925,6 +925,7 @@ const AssetDetail = () => {
                       { label: "Serial Number", value: asset.serialNumber },
                       { label: "Category", value: asset.category.name },
                       { label: "Status", value: asset.assetStatus },
+                      { label: "Operational Status", value: asset.assetOperationalStatus },
                       { label: "Assigned To", value: asset.assignedToText },
                     ].map((item, index) => (
                       <div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-0">

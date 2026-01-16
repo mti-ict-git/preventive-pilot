@@ -104,6 +104,7 @@ assetsRouter.get("/", async (req, res) => {
       "  a.Model AS Model,",
       "  a.SerialNumber AS SerialNumber,",
       "  a.AssetStatus AS AssetStatus,",
+      "  a.AssetOperationalStatus AS AssetOperationalStatus,",
       "  a.AssignedToText AS AssignedToText,",
       "  a.CategoryId AS CategoryId,",
       "  c.Name AS CategoryName,",
@@ -181,6 +182,10 @@ assetsRouter.get("/", async (req, res) => {
       model: r.Model,
       serialNumber: r.SerialNumber,
       assetStatus: r.AssetStatus,
+      assetOperationalStatus:
+        r.AssetOperationalStatus === "operational" || r.AssetOperationalStatus === "broken" || r.AssetOperationalStatus === "archived"
+          ? r.AssetOperationalStatus
+          : "operational",
       assignedToText: r.AssignedToText,
       category: r.CategoryId
         ? { id: r.CategoryId, name: r.CategoryName ?? null }
@@ -373,6 +378,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
         "  a.Model AS Model,",
         "  a.SerialNumber AS SerialNumber,",
         "  a.AssetStatus AS AssetStatus,",
+        "  a.AssetOperationalStatus AS AssetOperationalStatus,",
         "  a.AssignedToText AS AssignedToText,",
         "  a.CategoryId AS CategoryId,",
         "  c.Name AS CategoryName,",
@@ -429,6 +435,12 @@ assetsRouter.get("/:assetId", async (req, res) => {
     model: row.Model,
     serialNumber: row.SerialNumber,
     assetStatus: row.AssetStatus,
+    assetOperationalStatus:
+      row.AssetOperationalStatus === "operational" ||
+      row.AssetOperationalStatus === "broken" ||
+      row.AssetOperationalStatus === "archived"
+        ? row.AssetOperationalStatus
+        : "operational",
     assignedToText: row.AssignedToText,
     category: row.CategoryId ? { id: row.CategoryId, name: row.CategoryName ?? null } : null,
     location: row.LocationId ? { id: row.LocationId, name: row.LocationName ?? null } : null,

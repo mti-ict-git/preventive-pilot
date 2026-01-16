@@ -199,6 +199,27 @@
 - Extended evidence preview modal to support PDF, images, video, and audio.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-16 07:49
+- Updated PM Tasks stats to exclude cancelled tasks from Due Today and Overdue counts.
+- Updated Due Today tab to hide tasks whose backend status is cancelled.
+- Added a Cancelled status badge style for cancelled tasks on the PM Tasks list.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 07:59
+- Added a Cancelled tab on PM Tasks to show historical cancelled tasks.
+- Wired Cancelled tab to backend status=cancelled while keeping Due Today/Overdue counts unchanged.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 07:52
+- Added `AssetOperationalStatus` (operational/broken/archived) to pm.Assets for PM reference.
+- Synced `AssetOperationalStatus` from Snipe-IT status labels and displayed it in Assets + Asset Detail.
+- Archived missing assets during Snipe-IT sync to preserve historical PM data.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 08:00
+- Fixed schema apply failure by deferring `AssetOperationalStatus` references via dynamic SQL.
+- Applied schema successfully and verified `pm.Assets.AssetOperationalStatus` exists.
+
 ## 2026-01-16 01:02
 - Wired Asset Detail "PM Now" button to open a PM Task detail dialog for the asset's default template.
 - Reused existing Task Detail checklist and evidence UI to complete PM directly from Asset Detail.

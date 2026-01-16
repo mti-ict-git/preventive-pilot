@@ -33,6 +33,11 @@ BEGIN
   INSERT INTO pm.SchemaInfo (Version) VALUES (4);
 END;
 
+IF (SELECT ISNULL(MAX(Version), 0) FROM pm.SchemaInfo) < 5
+BEGIN
+  INSERT INTO pm.SchemaInfo (Version) VALUES (5);
+END;
+
 IF OBJECT_ID(N'pm.Roles', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.Roles (
@@ -167,6 +172,7 @@ BEGIN
     LocationId uniqueidentifier NULL,
     AssetStatus nvarchar(64) NULL,
     AssignedToText nvarchar(256) NULL,
+    AssetOperationalStatus nvarchar(16) NOT NULL CONSTRAINT DF_pm_Assets_AssetOperationalStatus DEFAULT (N'operational'),
     IsArchived bit NOT NULL CONSTRAINT DF_pm_Assets_IsArchived DEFAULT (0),
     LastSyncedAt datetime2(0) NULL,
     CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_Assets_CreatedAt DEFAULT (sysutcdatetime()),
@@ -175,6 +181,39 @@ BEGIN
     CONSTRAINT UQ_pm_Assets_SnipeAssetId UNIQUE (SnipeAssetId),
     CONSTRAINT FK_pm_Assets_AssetCategories FOREIGN KEY (CategoryId) REFERENCES pm.AssetCategories(CategoryId),
     CONSTRAINT FK_pm_Assets_Locations FOREIGN KEY (LocationId) REFERENCES pm.Locations(LocationId)
+  );
+END;
+
+IF COL_LENGTH(N'pm.Assets', N'AssetOperationalStatus') IS NULL
+BEGIN
+  EXEC(
+    N'ALTER TABLE pm.Assets
+      ADD AssetOperationalStatus nvarchar(16) NOT NULL
+        CONSTRAINT DF_pm_Assets_AssetOperationalStatus DEFAULT (N''operational'') WITH VALUES;'
+  );
+END;
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.check_constraints cc
+  INNER JOIN sys.objects o ON o.object_id = cc.parent_object_id
+  INNER JOIN sys.schemas s ON s.schema_id = o.schema_id
+  WHERE s.name = N'pm'
+    AND o.name = N'Assets'
+    AND cc.name = N'CK_pm_Assets_AssetOperationalStatus'
+)
+BEGIN
+  EXEC(
+    N'UPDATE a
+      SET AssetOperationalStatus = CASE
+        WHEN a.AssetOperationalStatus IN (N''operational'', N''broken'', N''archived'') THEN a.AssetOperationalStatus
+        ELSE N''operational''
+      END
+      FROM pm.Assets a;
+
+      ALTER TABLE pm.Assets
+        ADD CONSTRAINT CK_pm_Assets_AssetOperationalStatus
+          CHECK (AssetOperationalStatus IN (N''operational'', N''broken'', N''archived''));'
   );
 END;
 

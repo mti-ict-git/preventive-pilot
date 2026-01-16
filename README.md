@@ -89,6 +89,13 @@ Required environment variables:
 - Backend base URL: `http://localhost:3001`
 - Configure frontend API base URL with `VITE_API_BASE_URL` (defaults to same-origin in production, `http://localhost:3001` in dev)
 
+## Snipe-IT asset sync
+
+- Assets are synced from Snipe-IT hardware into `pm.Assets`.
+- `AssetStatus` stores the raw Snipe-IT status label name.
+- `AssetOperationalStatus` is normalized for PM decisions: `operational`, `broken`, `archived`.
+- If an asset disappears from Snipe-IT (deleted), the next sync archives it in PM (`IsArchived=1`, `AssetOperationalStatus=archived`) to preserve history.
+
 ## Evidence attachments
 
 - Configure server-side file storage with `EVIDENCE_STORAGE_ROOT`.
@@ -100,6 +107,15 @@ Required environment variables:
 - Task Detail dialog supports Start, Pause, Cancel, and Complete.
 - Start moves task to In Progress; Pause sets task to Paused.
 - Cancel records CancelledBy and timestamp; Complete enforces checklist rules.
+
+On the PM Tasks page you can switch tabs to focus on different sets of work:
+
+- All Tasks: every task regardless of status.
+- Due Today: tasks due today (excluding completed and cancelled).
+- Overdue: tasks past due (excluding completed and cancelled).
+- In Progress: tasks currently in progress.
+- Upcoming: tasks scheduled in the future.
+- Cancelled: cancelled tasks kept for historical reference.
 
 ## Scheduling
 
