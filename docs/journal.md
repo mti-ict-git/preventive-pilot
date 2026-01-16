@@ -263,6 +263,12 @@
 - Verified Users & Roles lookups show full role list
 - Ran `npm run lint` and `npx tsc --noEmit`: OK
 
+## 2026-01-16 02:33:19 UTC
+- Added Scheduling UI dialog to create, edit, and deactivate auto-assignment rules.
+- Added bulk assignment action to set assignee for unassigned open tasks.
+- Added audit log entries for task assignment changes and bulk assignment.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## 2026-01-15 17:20
 2026-01-15 17:20:33 UTC
 - Restricted users to exactly one role
@@ -316,6 +322,12 @@
 - Updated /api/assets 200 response to AssetListResponse and /api/assets/{assetId} to AssetDetail.
 - Documented pmEnabled oneOf (string|boolean) and categoryIds CSV example.
 - Bumped API version to 1.0.1 in Swagger info.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 09:27:48 WIB
+- Added backend DELETE /api/tasks/{taskId} to remove mistaken PM tasks and evidence.
+- Added frontend apiDeleteTask and Asset Detail PM History delete action for managers.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-07 12:20
 - Tweaked Swagger summaries to display "(updated)" for assets endpoints to make changes visibly obvious in the UI list.

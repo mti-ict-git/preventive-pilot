@@ -118,6 +118,10 @@ On the PM Tasks page you can switch tabs to focus on different sets of work:
 - Upcoming: tasks scheduled in the future.
 - Cancelled: cancelled tasks kept for historical reference.
 
+### Asset PM history cleanup
+
+- On Asset Detail → PM History, managers can remove a mistakenly created PM task using **Remove from history** on the expanded task. This permanently deletes the task, its checklist results, and any associated evidence files.
+
 ## Scheduling
 
 - Open PM Scheduling to view calendar counts and select a day to see tasks.

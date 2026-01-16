@@ -37,6 +37,22 @@ const AssignSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "No updates" });
 
+const BulkAssignUnassignedSchema = z
+  .object({
+    assignedToUserId: z.string().uuid().optional(),
+    assignedToRoleId: z.string().uuid().optional(),
+    dueFrom: z.string().datetime().optional(),
+    dueTo: z.string().datetime().optional(),
+  })
+  .refine(
+    (v) => {
+      const hasUser = typeof v.assignedToUserId === "string" && v.assignedToUserId.length > 0;
+      const hasRole = typeof v.assignedToRoleId === "string" && v.assignedToRoleId.length > 0;
+      return (hasUser || hasRole) && hasUser !== hasRole;
+    },
+    { message: "Choose exactly one assignment target" },
+  );
+
 const OutcomeSchema = z.number().int().min(0).max(2);
 
 const ChecklistResultSchema = z.object({
@@ -1876,6 +1892,118 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
   res.send(Buffer.from(bytes));
 });
 
+tasksRouter.delete("/:taskId", requireManager, async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+
+  const storagePathsResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT StoragePath",
+        "FROM pm.PMTaskEvidence",
+        "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
+        "UNION ALL",
+        "SELECT StoragePath",
+        "FROM pm.PMTaskChecklistEvidence",
+        "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
+      ].join("\n"),
+    );
+
+  const storagePathRows = storagePathsResult.recordset as Array<Record<string, unknown>>;
+  const storagePaths: string[] = storagePathRows
+    .map((r) => (typeof r.StoragePath === "string" ? r.StoragePath : null))
+    .filter((v): v is string => v !== null);
+
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const taskInfoResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.TaskId AS TaskId,",
+          "  t.AssetId AS AssetId,",
+          "  t.TaskNumber AS TaskNumber,",
+          "  t.AssignedToUserId AS AssignedToUserId,",
+          "  r.Name AS AssignedToRoleName",
+          "FROM pm.PMTasks t",
+          "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+          "WHERE t.TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    const taskRow = taskInfoResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!taskRow) {
+      await tx.rollback();
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    const accessRow: TaskAccessRow = {
+      AssignedToUserId: (taskRow.AssignedToUserId as string | null) ?? null,
+      AssignedToRoleName: (taskRow.AssignedToRoleName as string | null) ?? null,
+    };
+    if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+      await tx.rollback();
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "DELETE FROM pm.PMTaskEvidence WHERE TaskId = @taskId;",
+          "DELETE FROM pm.PMTaskChecklistEvidence WHERE TaskId = @taskId;",
+          "DELETE FROM pm.PMTaskChecklistResults WHERE TaskId = @taskId;",
+          "DELETE FROM pm.PMTasks WHERE TaskId = @taskId;",
+        ].join("\n"),
+      );
+
+    await tx.commit();
+
+    const assetId = typeof taskRow.AssetId === "string" ? (taskRow.AssetId as string) : null;
+    const taskNumber = typeof taskRow.TaskNumber === "string" ? (taskRow.TaskNumber as string) : null;
+
+    await writeAuditLog({
+      actorUserId: req.user.sub,
+      action: "task.delete",
+      entityType: "task",
+      entityId: taskId,
+      metadata: {
+        assetId,
+        taskNumber,
+        reason: "manual-history-delete",
+      },
+      ipAddress: typeof req.ip === "string" ? req.ip : null,
+      userAgent: req.get("user-agent") ?? null,
+    });
+
+    if (env.EVIDENCE_STORAGE_ROOT && storagePaths.length > 0) {
+      for (const storagePath of storagePaths) {
+        const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
+        if (!resolved) continue;
+        await fs.promises.unlink(resolved).catch(() => undefined);
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
+});
+
 tasksRouter.post("/:taskId/assign", requireManager, async (req, res) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) {
@@ -1895,6 +2023,35 @@ tasksRouter.post("/:taskId/assign", requireManager, async (req, res) => {
   const hasStatus = Object.prototype.hasOwnProperty.call(parsed.data, "status");
 
   const db = await getDb();
+
+  const beforeResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  AssignedToUserId,",
+        "  AssignedToRoleId,",
+        "  Priority,",
+        "  Status",
+        "FROM pm.PMTasks",
+        "WHERE TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const beforeRow = beforeResult.recordset[0] as
+    | {
+        AssignedToUserId?: string | null;
+        AssignedToRoleId?: string | null;
+        Priority?: string | null;
+        Status?: string | null;
+      }
+    | undefined;
+  if (!beforeRow) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
   const updated = await db
     .request()
     .input("taskId", sql.UniqueIdentifier, taskId)
@@ -1923,7 +2080,113 @@ tasksRouter.post("/:taskId/assign", requireManager, async (req, res) => {
     return;
   }
 
+  const afterResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  AssignedToUserId,",
+        "  AssignedToRoleId,",
+        "  Priority,",
+        "  Status",
+        "FROM pm.PMTasks",
+        "WHERE TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const afterRow = afterResult.recordset[0] as
+    | {
+        AssignedToUserId?: string | null;
+        AssignedToRoleId?: string | null;
+        Priority?: string | null;
+        Status?: string | null;
+      }
+    | undefined;
+
+  await writeAuditLog({
+    actorUserId: req.user.sub,
+    action: "task.assign",
+    entityType: "task",
+    entityId: taskId,
+    metadata: {
+      updates: parsed.data,
+      before: {
+        assignedToUserId: beforeRow.AssignedToUserId ?? null,
+        assignedToRoleId: beforeRow.AssignedToRoleId ?? null,
+        priority: beforeRow.Priority ?? null,
+        status: beforeRow.Status ?? null,
+      },
+      after: {
+        assignedToUserId: afterRow?.AssignedToUserId ?? null,
+        assignedToRoleId: afterRow?.AssignedToRoleId ?? null,
+        priority: afterRow?.Priority ?? null,
+        status: afterRow?.Status ?? null,
+      },
+    },
+    ipAddress: typeof req.ip === "string" ? req.ip : null,
+    userAgent: req.get("user-agent") ?? null,
+  });
+
   res.json({ ok: true });
+});
+
+tasksRouter.post("/bulk-assign-unassigned", requireManager, async (req, res) => {
+  const parsed = BulkAssignUnassignedSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const assignedToUserId = parsed.data.assignedToUserId ?? null;
+  const assignedToRoleId = parsed.data.assignedToRoleId ?? null;
+  const dueFrom = parsed.data.dueFrom ?? null;
+  const dueTo = parsed.data.dueTo ?? null;
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("assignedToUserId", sql.UniqueIdentifier, assignedToUserId)
+    .input("assignedToRoleId", sql.UniqueIdentifier, assignedToRoleId)
+    .input("dueFrom", sql.DateTime2(0), dueFrom)
+    .input("dueTo", sql.DateTime2(0), dueTo)
+    .query(
+      [
+        "UPDATE pm.PMTasks",
+        "SET",
+        "  AssignedToUserId = @assignedToUserId,",
+        "  AssignedToRoleId = @assignedToRoleId",
+        "WHERE",
+        "  AssignedToUserId IS NULL",
+        "  AND AssignedToRoleId IS NULL",
+        "  AND CompletedAt IS NULL",
+        "  AND CancelledAt IS NULL",
+        "  AND (@dueFrom IS NULL OR ScheduledDueAt >= @dueFrom)",
+        "  AND (@dueTo IS NULL OR ScheduledDueAt <= @dueTo);",
+        "SELECT @@ROWCOUNT AS UpdatedCount;",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as { UpdatedCount?: number } | undefined;
+  const updatedCount = Number(row?.UpdatedCount ?? 0);
+
+  await writeAuditLog({
+    actorUserId: req.user.sub,
+    action: "task.assign.bulk",
+    entityType: "task",
+    entityId: null,
+    metadata: {
+      updatedCount,
+      assignedToUserId,
+      assignedToRoleId,
+      dueFrom,
+      dueTo,
+    },
+    ipAddress: typeof req.ip === "string" ? req.ip : null,
+    userAgent: req.get("user-agent") ?? null,
+  });
+
+  res.json({ ok: true, updatedCount });
 });
 
 tasksRouter.post("/:taskId/pause", async (req, res) => {

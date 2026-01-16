@@ -416,6 +416,18 @@ export const apiAssignTask = async (input: {
   });
 };
 
+export const apiBulkAssignUnassignedTasks = async (input: {
+  assignedToUserId?: string | null;
+  assignedToRoleId?: string | null;
+  dueFrom?: string;
+  dueTo?: string;
+}): Promise<{ ok: true; updatedCount: number }> => {
+  return apiFetchJson<{ ok: true; updatedCount: number }>("/api/tasks/bulk-assign-unassigned", {
+    method: "POST",
+    body: input,
+  });
+};
+
 export const apiStartTask = async (taskId: string): Promise<{ ok: true }> => {
   return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/start`, { method: "POST" });
 };
@@ -440,6 +452,10 @@ export type CompleteTaskChecklistResultInput = {
   templateChecklistItemId: string;
   outcome: 0 | 1 | 2;
   notes?: string | null;
+};
+
+export const apiDeleteTask = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}`, { method: "DELETE" });
 };
 
 export const apiCompleteTask = async (input: {
@@ -1088,6 +1104,56 @@ export type AssignmentRule = {
 
 export const apiListAssignmentRules = async (): Promise<{ items: AssignmentRule[] }> => {
   return apiFetchJson<{ items: AssignmentRule[] }>("/api/scheduling/assignment-rules");
+};
+
+export type CreateAssignmentRuleInput = {
+  priority: number;
+  categoryId?: string | null;
+  locationId?: string | null;
+  assetStatus?: string | null;
+  assignToUserId?: string | null;
+  assignToRoleId?: string | null;
+  isActive?: boolean;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+};
+
+export const apiCreateAssignmentRule = async (input: CreateAssignmentRuleInput): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>("/api/scheduling/assignment-rules", {
+    method: "POST",
+    body: {
+      priority: input.priority,
+      categoryId: input.categoryId ?? null,
+      locationId: input.locationId ?? null,
+      assetStatus: input.assetStatus ?? null,
+      assignToUserId: input.assignToUserId ?? null,
+      assignToRoleId: input.assignToRoleId ?? null,
+      isActive: input.isActive ?? true,
+      effectiveFrom: input.effectiveFrom ?? null,
+      effectiveTo: input.effectiveTo ?? null,
+    },
+  });
+};
+
+export const apiUpdateAssignmentRule = async (input: {
+  ruleId: string;
+  data: Partial<CreateAssignmentRuleInput>;
+}): Promise<{ ok: true }> => {
+  const { ruleId, data } = input;
+  return apiFetchJson<{ ok: true }>(`/api/scheduling/assignment-rules/${ruleId}`,
+    {
+      method: "PUT",
+      body: data,
+    },
+  );
+};
+
+export const apiDeactivateAssignmentRule = async (ruleId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/scheduling/assignment-rules/${ruleId}`,
+    {
+      method: "DELETE",
+    },
+  );
 };
 
 export type BlackoutWindow = {
