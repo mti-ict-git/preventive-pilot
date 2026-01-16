@@ -31,16 +31,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -63,7 +53,6 @@ import {
   apiPatchAssetPm,
   apiCreatePmNowTask,
   apiRecalculateSchedules,
-  apiDeleteTask,
   type BlackoutWindow,
   type TaskEvidence,
   type TaskDetail,
@@ -191,8 +180,6 @@ const AssetDetail = () => {
   const [exportingPdfTaskId, setExportingPdfTaskId] = useState<string | null>(null);
   const [pmNowTaskId, setPmNowTaskId] = useState<string | null>(null);
   const [pmNowDialogOpen, setPmNowDialogOpen] = useState<boolean>(false);
-  const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false);
-  const [deleteTaskTarget, setDeleteTaskTarget] = useState<{ id: string; taskNumber: string } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -300,31 +287,6 @@ const AssetDetail = () => {
   const asset = assetQuery.data;
   const canManage = isManager();
   const pmEnabled = asset?.pm.enabled === true;
-
-  const deleteHistoryTaskMutation = useMutation({
-    mutationFn: async (taskId: string) => apiDeleteTask(taskId),
-    onSuccess: async (_data, taskId) => {
-      if (assetId) {
-        await queryClient.invalidateQueries({ queryKey: ["tasks", "history", assetId] });
-        await queryClient.invalidateQueries({
-          queryKey: ["tasks", "upcoming", assetId, asset?.pm.defaultTemplateId],
-        });
-      }
-      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      if (expandedHistoryTaskId === taskId) {
-        setExpandedHistoryTaskId(null);
-      }
-      toast({
-        title: "PM history entry removed",
-        description: "Task and its evidence were deleted.",
-      });
-    },
-    onError: (err: unknown) => {
-      const message =
-        err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to delete task";
-      toast({ title: "Delete failed", description: message, variant: "destructive" });
-    },
-  });
 
   const blackoutWindowsQuery = useQuery({
     queryKey: ["scheduling", "blackout-windows"],
@@ -597,17 +559,6 @@ const AssetDetail = () => {
       toast({ title: "Export failed", description: message, variant: "destructive" });
     } finally {
       setExportingPdfTaskId((prev) => (prev === taskId ? null : prev));
-    }
-  };
-
-  const handleConfirmDeleteHistoryTask = async (): Promise<void> => {
-    if (!deleteTaskTarget) return;
-
-    try {
-      await deleteHistoryTaskMutation.mutateAsync(deleteTaskTarget.id);
-    } finally {
-      setDeleteTaskDialogOpen(false);
-      setDeleteTaskTarget(null);
     }
   };
 
@@ -1192,7 +1143,7 @@ const AssetDetail = () => {
                                 </div>
                               </div>
 
-                              <div className="flex items-center justify-end gap-2">
+                              <div className="flex items-center justify-end">
                                 <Button
                                   type="button"
                                   variant="outline"
@@ -1207,23 +1158,6 @@ const AssetDetail = () => {
                                   <Download className="h-4 w-4" />
                                   {exportingPdfTaskId === task.id ? "Exporting…" : "Export PDF"}
                                 </Button>
-                                {canManage ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-2 text-destructive border-destructive/40 hover:text-destructive"
-                                    disabled={deleteHistoryTaskMutation.isPending}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeleteTaskTarget({ id: task.id, taskNumber: task.taskNumber });
-                                      setDeleteTaskDialogOpen(true);
-                                    }}
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                    Remove from history
-                                  </Button>
-                                ) : null}
                               </div>
 
                               <div>
@@ -1441,38 +1375,6 @@ const AssetDetail = () => {
             </motion.div>
           </TabsContent>
         </Tabs>
-
-        <AlertDialog
-          open={deleteTaskDialogOpen}
-          onOpenChange={(open) => {
-            setDeleteTaskDialogOpen(open);
-            if (!open) setDeleteTaskTarget(null);
-          }}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remove PM history</AlertDialogTitle>
-              <AlertDialogDescription>
-                {deleteTaskTarget
-                  ? `Delete task "${deleteTaskTarget.taskNumber}" from this asset's history? This will permanently remove its checklist results and evidence.`
-                  : ""}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleteHistoryTaskMutation.isPending}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={(e) => {
-                  e.preventDefault();
-                  void handleConfirmDeleteHistoryTask();
-                }}
-                disabled={deleteHistoryTaskMutation.isPending || !deleteTaskTarget}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </div>
   );

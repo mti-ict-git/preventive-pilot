@@ -264,6 +264,40 @@ const Notifications = () => {
       <Header title="Notifications" subtitle="Configure reminders and escalation rules" />
 
       <div className="p-6 space-y-6">
+        <Card className="glass border-border">
+          <CardHeader>
+            <CardTitle className="text-foreground flex items-center gap-2">
+              <Bell className="w-5 h-5 text-primary" />
+              How notifications work
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>Reminder and escalation rules are executed by the Notifications job.</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>
+                Emails are sent via Microsoft Graph, targeting the assigned technician when they have an email
+                address and always including the configured Default To/Cc/Bcc recipients.
+              </li>
+              <li>
+                WhatsApp messages use the WhatsApp channel, preferring the technician's mobile number when the
+                target is a single number, or mentioning them in the configured group.
+              </li>
+              <li>
+                Message templates use placeholders such as
+                {" "}
+                <code>{"{{taskNumber}}"}</code>,{" "}
+                <code>{"{{dueAt}}"}</code>,{" "}
+                <code>{"{{assetName}}"}</code>,{" "}
+                <code>{"{{templateName}}"}</code>
+                , and the rendered text is passed into email templates as
+                {" "}
+                <code>{"{{message}}"}</code>
+                .
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Reminder Rules */}
           <motion.div
@@ -716,6 +750,18 @@ const Notifications = () => {
                 className="bg-muted/50"
                 rows={4}
               />
+              <p className="text-xs text-muted-foreground">
+                Available placeholders: {"{{taskNumber}}"}, {"{{assetTag}}"}, {"{{assetName}}"}, {"{{templateName}}"}, {"{{dueAt}}"}.
+                This template is rendered per task and used as the
+                {" "}
+                <code>{"{{message}}"}</code>
+                {" "}
+                value in email and WhatsApp notifications.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Example: {" "}
+                <code>{"Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}})."}</code>
+              </p>
             </div>
             <div className="col-span-12">
               <div className="flex items-center justify-between rounded-lg border border-border p-3">
@@ -762,6 +808,10 @@ const Notifications = () => {
                 className="bg-muted/50"
                 rows={4}
               />
+              <p className="text-xs text-muted-foreground">
+                Optional metadata for this channel. Currently not used by the notification job logic;
+                you can keep it empty or store notes like external IDs.
+              </p>
             </div>
             <div className="col-span-12">
               <div className="flex items-center justify-between rounded-lg border border-border p-3">

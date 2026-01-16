@@ -95,7 +95,6 @@ Required environment variables:
 - `AssetStatus` stores the raw Snipe-IT status label name.
 - `AssetOperationalStatus` is normalized for PM decisions: `operational`, `broken`, `archived`.
 - If an asset disappears from Snipe-IT (deleted), the next sync archives it in PM (`IsArchived=1`, `AssetOperationalStatus=archived`) to preserve history.
-- The Assets list includes an Operational column filter (All/Operational/Broken/Archived) based on `AssetOperationalStatus`.
 
 ## Evidence attachments
 
@@ -108,19 +107,6 @@ Required environment variables:
 - Task Detail dialog supports Start, Pause, Cancel, and Complete.
 - Start moves task to In Progress; Pause sets task to Paused.
 - Cancel records CancelledBy and timestamp; Complete enforces checklist rules.
-
-On the PM Tasks page you can switch tabs to focus on different sets of work:
-
-- All Tasks: every task regardless of status.
-- Due Today: tasks due today (excluding completed and cancelled).
-- Overdue: tasks past due (excluding completed and cancelled).
-- In Progress: tasks currently in progress.
-- Upcoming: tasks scheduled in the future.
-- Cancelled: cancelled tasks kept for historical reference.
-
-### Asset PM history cleanup
-
-- On Asset Detail → PM History, managers can remove a mistakenly created PM task using **Remove from history** on the expanded task. This permanently deletes the task, its checklist results, and any associated evidence files.
 
 ## Scheduling
 
@@ -138,6 +124,18 @@ On the PM Tasks page you can switch tabs to focus on different sets of work:
 
 - Configure in Settings → Notification Settings → Microsoft Graph.
 - Use Test Connection with the Send test email toggle to verify delivery.
+
+### Notification rules and templates
+
+- Configure notification channels and rules from the Notifications page.
+- Reminder rules send Microsoft Graph emails (and optional WhatsApp messages) primarily to the task's assigned technician; if a task is unassigned or the technician has no email/phone, the system falls back to the rule's global recipients.
+- Message templates support the following placeholders, which are replaced per task when notifications are sent:
+  - `{{taskNumber}}`
+  - `{{dueAt}}`
+  - `{{assetName}}`
+  - `{{templateName}}`
+  - `{{message}}` (the rendered per-rule message body)
+- The Notification Channel **Config (JSON or text)** field is optional and currently treated as free-form metadata. You can leave it empty or store notes like external IDs or routing hints for future integrations; it is not required for the built-in reminder job to work.
 
 ## Docker (web + api)
 

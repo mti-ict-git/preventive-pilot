@@ -251,6 +251,38 @@
 - This prevents backdated evidence for numbered assets from being grouped under a single asset folder.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-16 09:47:11 WIB
+- Added per-task Assign/Reassign button on PM Tasks list for managers (Supervisor/Admin/Superadmin).
+- Added technician selector dialog filtered to users with Technician role.
+- Wired assignment to task assign API and refreshed tasks + stats after save.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 09:53:57 WIB
+- Users & Roles: displayed mobile phone on user rows (AD phone is sourced from LDAP telephoneNumber).
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 09:59:46 WIB
+- Fixed AD mobile phone mapping to prefer LDAP `mobile` (fallback `telephoneNumber`).
+- Users & Roles: always shows a Mobile line for AD users (shows "—" when missing).
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 15:16:23 WIB
+- Improved LDAP phone extraction to handle common AD fields and multi-valued attributes.
+- Added per-user action to refresh AD profile and persist phone/email/display name.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 15:24:16 WIB
+- Added backend test script to refresh LDAP profile and print before/after phone for users.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 15:35:28 WIB
+- Re-verified lint and typecheck after LDAP mobile phone fixes.
+
+## 2026-01-16 15:49:07 WIB
+- Ran bulk LDAP profile refresh test for all AD users in the system.
+- Verified mobile phone fields are populated from LDAP and shown in Users & Roles.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## 2026-01-16 00:49:54 WIB
 - Fixed apiRecalculateSchedules to send a JSON object body instead of a pre-serialized string.
 - Resolved 400 Bad Request when clicking "PM Now" (scheduling recalc schema now matches payload).
@@ -511,3 +543,12 @@
 ## 2026-01-16 01:19:26 WIB
 - Added Task Detail Reopen action for managers to restore cancelled tasks to `open`.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-16 15:31:59 WIB
+- Updated reminder job to target assigned technicians via their email and WhatsApp number, falling back to global recipients when no assignee is present.
+- Added UI help text for notification templates, listing supported placeholders and how the per-rule message is rendered.
+- Clarified the Notification Channel "Config (JSON or text)" field as optional metadata for integrator notes or external IDs (not required for the built-in reminder job).
+
+## 2026-01-16 15:43:39 WIB
+- Refined Notifications page copy with a "How notifications work" panel explaining reminder/escalation flow, technician targeting, and placeholder rendering.
+- Enhanced rule Message Template helper text with available placeholders and a concrete example matching the backend default template.

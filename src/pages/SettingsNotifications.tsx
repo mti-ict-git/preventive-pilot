@@ -413,6 +413,10 @@ const SettingsNotifications = () => {
                           rows={8}
                           placeholder="{{message}}"
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Available placeholders: {"{{taskNumber}}"}, {"{{dueAt}}"}, {"{{assetName}}"}, {"{{templateName}}"}, {"{{message}}"}.
+                          The message value comes from the rule message template.
+                        </p>
                       </div>
 
                       <div className="grid grid-cols-12 gap-4">

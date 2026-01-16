@@ -25,6 +25,9 @@ type TaskRow = {
   AssetName: string;
   TemplateId: string;
   TemplateName: string;
+  AssignedUserId: string | null;
+  AssignedUserEmail: string | null;
+  AssignedUserPhone: string | null;
 };
 
 type EffectiveMicrosoftGraphSettings = {
@@ -348,12 +351,36 @@ const sendMicrosoftGraphEmail = async (
   const task = isRecord(payload) ? payload.task : undefined;
   const asset = isRecord(payload) ? payload.asset : undefined;
   const template = isRecord(payload) ? payload.template : undefined;
+  const user = isRecord(payload) ? payload.user : undefined;
 
   const taskNumber = isRecord(task) && typeof task.taskNumber === "string" ? task.taskNumber : "";
   const dueAt = isRecord(task) && typeof task.scheduledDueAt === "string" ? task.scheduledDueAt : "";
   const assetName = isRecord(asset) && typeof asset.name === "string" ? asset.name : "";
   const templateName = isRecord(template) && typeof template.name === "string" ? template.name : "";
   const messageText = typeof message === "string" ? message : "";
+
+  const userEmail = isRecord(user) && typeof user.email === "string" ? user.email.trim() : "";
+
+  const dynamicTo: string[] = [];
+  if (userEmail) {
+    dynamicTo.push(userEmail);
+  }
+
+  const combinedTo = [...dynamicTo, ...toRecipients];
+  const seenRecipients = new Set<string>();
+  const finalToRecipients: string[] = [];
+  for (const address of combinedTo) {
+    const trimmed = address.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const key = trimmed.toLowerCase();
+    if (seenRecipients.has(key)) {
+      continue;
+    }
+    seenRecipients.add(key);
+    finalToRecipients.push(trimmed);
+  }
 
   const templateData: Record<string, string> = {
     taskNumber,
@@ -380,7 +407,7 @@ const sendMicrosoftGraphEmail = async (
     message: {
       subject,
       body: { contentType: "Text", content: bodyContent },
-      toRecipients: toRecipients.map((address) => ({ emailAddress: { address } })),
+      toRecipients: finalToRecipients.map((address) => ({ emailAddress: { address } })),
       ccRecipients: ccRecipients.map((address) => ({ emailAddress: { address } })),
       bccRecipients: bccRecipients.map((address) => ({ emailAddress: { address } })),
     },
@@ -411,16 +438,20 @@ const sendWhatsAppMessage = async (settings: EffectiveWhatsAppSettings, payload:
   }
 
   const message = isRecord(payload) && typeof payload.message === "string" ? payload.message : "";
+  const user = isRecord(payload) && isRecord(payload.user) ? (payload.user as Record<string, unknown>) : null;
+  const userPhoneRaw = user && typeof user.phone === "string" ? user.phone : "";
+  const userPhone = userPhoneRaw.trim();
   const messageText = message.trim() ? message.trim() : "PM notification";
   const baseUrl = settings.baseUrl.replace(/\/+$/, "");
 
   if (settings.target === "single") {
-    if (!settings.defaultNumber) {
-      throw new Error("WhatsApp number not configured");
+    const effectiveNumber = userPhone || (settings.defaultNumber ? settings.defaultNumber.trim() : "");
+    if (!effectiveNumber) {
+      throw new Error("WhatsApp number not configured (no assigned user phone or default number)");
     }
 
     const form = new FormData();
-    form.set("number", settings.defaultNumber);
+    form.set("number", effectiveNumber);
     form.set("message", messageText);
 
     const res = await fetch(`${baseUrl}/send-message`, { method: "POST", body: form });
@@ -439,7 +470,22 @@ const sendWhatsAppMessage = async (settings: EffectiveWhatsAppSettings, payload:
   if (settings.groupId) form.set("id", settings.groupId);
   if (!settings.groupId && settings.groupName) form.set("name", settings.groupName);
   form.set("message", messageText);
-  if (settings.mentionNumbers.length > 0) form.set("mention", JSON.stringify(settings.mentionNumbers));
+  const mentionNumbers: string[] = [];
+  for (const value of settings.mentionNumbers) {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+    if (!mentionNumbers.includes(trimmed)) {
+      mentionNumbers.push(trimmed);
+    }
+  }
+  if (userPhone && !mentionNumbers.includes(userPhone)) {
+    mentionNumbers.push(userPhone);
+  }
+  if (mentionNumbers.length > 0) {
+    form.set("mention", JSON.stringify(mentionNumbers));
+  }
 
   const res = await fetch(`${baseUrl}/send-group-message`, { method: "POST", body: form });
   if (!res.ok) {
@@ -531,14 +577,18 @@ const loadTasksForOffsetRule = async (rule: NotificationRuleRow): Promise<TaskRo
         "  t.ScheduledDueAt AS ScheduledDueAt,",
         "  t.Status AS Status,",
         "  t.Priority AS Priority,",
+        "  t.AssignedToUserId AS AssignedToUserId,",
         "  a.AssetId AS AssetId,",
         "  a.AssetTag AS AssetTag,",
         "  a.Name AS AssetName,",
         "  tpl.TemplateId AS TemplateId,",
-        "  tpl.Name AS TemplateName",
+        "  tpl.Name AS TemplateName,",
+        "  u.Email AS AssignedUserEmail,",
+        "  u.Phone AS AssignedUserPhone",
         "FROM pm.PMTasks t",
         "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
         "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "LEFT JOIN pm.Users u ON u.UserId = t.AssignedToUserId",
         "WHERE",
         "  t.CompletedAt IS NULL",
         "  AND t.CancelledAt IS NULL",
@@ -563,14 +613,18 @@ const loadTasksForEscalationRule = async (rule: NotificationRuleRow): Promise<Ta
         "  t.ScheduledDueAt AS ScheduledDueAt,",
         "  t.Status AS Status,",
         "  t.Priority AS Priority,",
+        "  t.AssignedToUserId AS AssignedToUserId,",
         "  a.AssetId AS AssetId,",
         "  a.AssetTag AS AssetTag,",
         "  a.Name AS AssetName,",
         "  tpl.TemplateId AS TemplateId,",
-        "  tpl.Name AS TemplateName",
+        "  tpl.Name AS TemplateName,",
+        "  u.Email AS AssignedUserEmail,",
+        "  u.Phone AS AssignedUserPhone",
         "FROM pm.PMTasks t",
         "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
         "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "LEFT JOIN pm.Users u ON u.UserId = t.AssignedToUserId",
         "WHERE",
         "  t.CompletedAt IS NULL",
         "  AND t.CancelledAt IS NULL",
@@ -593,6 +647,14 @@ const enqueueNotification = async (rule: NotificationRuleRow, task: TaskRow, mes
     },
     asset: { id: task.AssetId, assetTag: task.AssetTag, name: task.AssetName },
     template: { id: task.TemplateId, name: task.TemplateName },
+    user:
+      task.AssignedUserId || task.AssignedUserEmail || task.AssignedUserPhone
+        ? {
+            id: task.AssignedUserId,
+            email: task.AssignedUserEmail,
+            phone: task.AssignedUserPhone,
+          }
+        : null,
     message,
   });
 

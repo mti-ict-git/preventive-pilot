@@ -893,6 +893,10 @@ export const apiListUsers = async (input?: {
   );
 };
 
+export const apiRefreshLdapUser = async (userId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/system/users/${userId}/refresh-ldap`, { method: "POST" });
+};
+
 export const apiUpdateUserRoles = async (input: {
   userId: string;
   roles: string[];

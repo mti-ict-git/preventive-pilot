@@ -37,6 +37,21 @@ const buildUserSearchFilter = (identifier: string): string => {
   return base;
 };
 
+const pickLdapString = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (typeof item !== "string") continue;
+      const trimmed = item.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return null;
+};
+
 export interface LdapUserProfile {
   username: string;
   dn: string;
@@ -70,7 +85,7 @@ export const authenticateWithLdap = async (
     const userSearch = await searchClient.search(env.LDAP_USER_SEARCH_BASE, {
       scope: "sub",
       filter,
-      attributes: ["cn", "displayName", "mail", "telephoneNumber", "memberOf"],
+      attributes: ["cn", "displayName", "mail", "mobile", "telephoneNumber", "ipPhone", "homePhone", "otherMobile", "memberOf"],
     });
 
     const userEntry = userSearch.searchEntries[0];
@@ -101,8 +116,14 @@ export const authenticateWithLdap = async (
       (typeof userEntry.cn === "string" && userEntry.cn) ||
       null;
 
-    const email = typeof userEntry.mail === "string" ? userEntry.mail : null;
-    const phone = typeof userEntry.telephoneNumber === "string" ? userEntry.telephoneNumber : null;
+    const entry = userEntry as unknown as Record<string, unknown>;
+    const email = pickLdapString(entry.mail);
+    const phone =
+      pickLdapString(entry.mobile) ??
+      pickLdapString(entry.telephoneNumber) ??
+      pickLdapString(entry.ipPhone) ??
+      pickLdapString(entry.homePhone) ??
+      pickLdapString(entry.otherMobile);
 
     return {
       username: normalized.username,
@@ -127,7 +148,7 @@ export const lookupLdapUser = async (identifier: string): Promise<LdapUserProfil
     const userSearch = await searchClient.search(env.LDAP_USER_SEARCH_BASE, {
       scope: "sub",
       filter,
-      attributes: ["cn", "displayName", "mail", "telephoneNumber", "memberOf"],
+      attributes: ["cn", "displayName", "mail", "mobile", "telephoneNumber", "ipPhone", "homePhone", "otherMobile", "memberOf"],
     });
 
     const userEntry = userSearch.searchEntries[0];
@@ -151,8 +172,14 @@ export const lookupLdapUser = async (identifier: string): Promise<LdapUserProfil
       (typeof userEntry.cn === "string" && userEntry.cn) ||
       null;
 
-    const email = typeof userEntry.mail === "string" ? userEntry.mail : null;
-    const phone = typeof userEntry.telephoneNumber === "string" ? userEntry.telephoneNumber : null;
+    const entry = userEntry as unknown as Record<string, unknown>;
+    const email = pickLdapString(entry.mail);
+    const phone =
+      pickLdapString(entry.mobile) ??
+      pickLdapString(entry.telephoneNumber) ??
+      pickLdapString(entry.ipPhone) ??
+      pickLdapString(entry.homePhone) ??
+      pickLdapString(entry.otherMobile);
 
     return {
       username: normalized.username,

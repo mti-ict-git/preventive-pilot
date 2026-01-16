@@ -1544,6 +1544,64 @@ systemRouter.get("/users", requireSystemAdmin, async (req, res) => {
   });
 });
 
+systemRouter.post("/users/:userId/refresh-ldap", requireSystemAdmin, async (req, res) => {
+  const userId = req.params.userId;
+  if (!z.string().uuid().safeParse(userId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const userResult = await db
+    .request()
+    .input("userId", sql.UniqueIdentifier, userId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  Username,",
+        "  ExternalProvider",
+        "FROM pm.Users",
+        "WHERE UserId = @userId",
+      ].join("\n"),
+    );
+
+  const row = userResult.recordset[0] as { Username?: unknown; ExternalProvider?: unknown } | undefined;
+  const username = typeof row?.Username === "string" ? row.Username : null;
+  const externalProvider = typeof row?.ExternalProvider === "string" ? row.ExternalProvider : null;
+  if (!username) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  if (externalProvider !== "ldap") {
+    res.status(400).json({ message: "Only LDAP users can be refreshed" });
+    return;
+  }
+
+  try {
+    const profile = await lookupLdapUser(username);
+    await db
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .input("displayName", sql.NVarChar(256), profile.displayName)
+      .input("email", sql.NVarChar(256), profile.email)
+      .input("phone", sql.NVarChar(32), profile.phone)
+      .query(
+        [
+          "UPDATE pm.Users",
+          "SET DisplayName = @displayName,",
+          "    Email = @email,",
+          "    Phone = @phone,",
+          "    UpdatedAt = sysutcdatetime()",
+          "WHERE UserId = @userId",
+        ].join("\n"),
+      );
+
+    res.json({ ok: true });
+  } catch {
+    res.status(400).json({ message: "Failed to refresh LDAP profile" });
+  }
+});
+
 systemRouter.delete("/users/:userId", requireSuperadmin, async (req, res) => {
   const userId = req.params.userId;
   if (!z.string().uuid().safeParse(userId).success) {

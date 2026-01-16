@@ -7,6 +7,7 @@ import {
   Search,
   MoreVertical,
   Edit2,
+  RefreshCw,
   Trash2,
   Mail,
 } from "lucide-react";
@@ -48,6 +49,7 @@ import {
   apiDeleteUser,
   apiGetLookups,
   apiListUsers,
+  apiRefreshLdapUser,
   apiSearchAdUsers,
   apiUpdateUserRoles,
   type LookupRole,
@@ -164,6 +166,18 @@ const UserManagement = () => {
     onError: (err: unknown) => {
       const message = err instanceof ApiError ? err.message : "Failed to delete user";
       toast({ title: "Delete failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const refreshLdapMutation = useMutation({
+    mutationFn: async (userId: string) => apiRefreshLdapUser(userId),
+    onSuccess: async () => {
+      toast({ title: "AD profile refreshed" });
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to refresh AD profile";
+      toast({ title: "Refresh failed", description: message, variant: "destructive" });
     },
   });
 
@@ -449,7 +463,12 @@ const UserManagement = () => {
                       </Avatar>
                       <div>
                         <p className="font-medium text-foreground">{user.displayName ?? user.username}</p>
-                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                        {user.email ? <p className="text-sm text-muted-foreground">{user.email}</p> : null}
+                        {user.externalProvider === "ldap" ? (
+                          <p className="text-sm text-muted-foreground">Mobile: {user.phone ?? "—"}</p>
+                        ) : user.phone ? (
+                          <p className="text-sm text-muted-foreground">Mobile: {user.phone}</p>
+                        ) : null}
                       </div>
                     </div>
                   </TableCell>
@@ -479,6 +498,18 @@ const UserManagement = () => {
                         <DropdownMenuItem className="gap-2" onSelect={() => openEdit(user)}>
                           <Edit2 className="w-4 h-4" /> Edit User
                         </DropdownMenuItem>
+                        {user.externalProvider === "ldap" ? (
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              refreshLdapMutation.mutate(user.id);
+                            }}
+                            disabled={refreshLdapMutation.isPending}
+                          >
+                            <RefreshCw className="w-4 h-4" /> Refresh AD Profile
+                          </DropdownMenuItem>
+                        ) : null}
                         <DropdownMenuItem className="gap-2">
                           <Mail className="w-4 h-4" /> Send Email
                         </DropdownMenuItem>
