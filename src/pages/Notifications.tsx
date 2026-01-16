@@ -223,6 +223,7 @@ const Notifications = () => {
   };
 
   const formatRuleTiming = (rule: NotificationRule): string => {
+    if (rule.eventType === "task_assigned") return "On Assignment";
     if (rule.offsetDays !== null) {
       const n = rule.offsetDays;
       if (n === 0) return "D-Day";
@@ -706,6 +707,7 @@ const Notifications = () => {
                 <SelectContent>
                   <SelectItem value="task_due">Task Due</SelectItem>
                   <SelectItem value="task_overdue">Task Overdue</SelectItem>
+                  <SelectItem value="task_assigned">Task Assigned</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -718,6 +720,9 @@ const Notifications = () => {
                 <Label>Offset (days)</Label>
                 <Input value={offsetDays} onChange={(e) => setOffsetDays(e.target.value)} className="bg-muted/50" />
                 <p className="text-xs text-muted-foreground">Use negative for H+ and positive for H-; 0 for D-Day.</p>
+                {eventType === "task_assigned" && (
+                  <p className="text-xs text-muted-foreground">For Task Assigned events, this timing is ignored and notifications are sent immediately when a task is assigned.</p>
+                )}
               </div>
             ) : (
               <div className="col-span-12 md:col-span-6 space-y-2">
@@ -727,6 +732,9 @@ const Notifications = () => {
                   onChange={(e) => setEscalateAfterDays(e.target.value)}
                   className="bg-muted/50"
                 />
+                {eventType === "task_assigned" && (
+                  <p className="text-xs text-muted-foreground">For Task Assigned events, this timing is ignored and notifications are sent immediately when a task is assigned.</p>
+                )}
               </div>
             )}
             <div className="col-span-12 md:col-span-6 space-y-2">

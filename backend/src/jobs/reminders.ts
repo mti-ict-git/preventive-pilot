@@ -556,7 +556,9 @@ const loadActiveRules = async (): Promise<NotificationRuleRow[]> => {
         "  r.MessageTemplate AS MessageTemplate",
         "FROM pm.NotificationRules r",
         "INNER JOIN pm.NotificationChannels c ON c.ChannelId = r.ChannelId",
-        "WHERE r.IsActive = 1 AND c.IsActive = 1",
+        "WHERE r.IsActive = 1",
+        "  AND c.IsActive = 1",
+        "  AND r.EventType <> N'task_assigned'",
         "ORDER BY r.UpdatedAt DESC",
       ].join("\n"),
     );

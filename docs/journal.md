@@ -339,6 +339,11 @@
 - Extended Tasks API and UI to enforce required checklist attachments on completion.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-16 16:19:13 WIB
+- Enabled `task_assigned` as an Event option when creating/editing notification rules.
+- Updated Notifications UI to label `task_assigned` rules as "On Assignment" and clarify timing behavior.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## 2026-01-07 11:28
 - Updated Swagger for /api/assets: documented search fields (Name, AssetTag, SerialNumber), categoryIds CSV (max 50), and pageSize cap at 500.
 - Added Role, AssetCategory, Location, and LookupsResponse schemas.

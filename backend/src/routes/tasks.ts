@@ -620,6 +620,157 @@ const outcomeLabelFor = (requiresPassFail: boolean, outcome: number): ChecklistO
   return "done";
 };
 
+type NotificationRuleForAssignment = {
+  NotificationRuleId: string;
+  RuleName: string;
+  EventType: string;
+  ChannelId: string;
+  ChannelType: string;
+  MessageTemplate: string | null;
+};
+
+type TaskRowForAssignment = {
+  TaskId: string;
+  TaskNumber: string;
+  ScheduledDueAt: Date;
+  Status: string;
+  Priority: string;
+  AssetId: string;
+  AssetTag: string | null;
+  AssetName: string;
+  TemplateId: string;
+  TemplateName: string;
+  AssignedUserId: string | null;
+  AssignedUserEmail: string | null;
+  AssignedUserPhone: string | null;
+};
+
+const renderNotificationTemplate = (template: string, data: Record<string, string>): string => {
+  let rendered = template;
+  for (const [key, value] of Object.entries(data)) {
+    const safeKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    rendered = rendered.replace(new RegExp(`\\{\\{\\s*${safeKey}\\s*\\}\\}`, "g"), value);
+  }
+  return rendered;
+};
+
+const enqueueTaskAssignedNotifications = async (taskId: string): Promise<void> => {
+  const db = await getDb();
+
+  const rulesResult = await db
+    .request()
+    .query(
+      [
+        "SELECT",
+        "  r.NotificationRuleId AS NotificationRuleId,",
+        "  r.RuleName AS RuleName,",
+        "  r.EventType AS EventType,",
+        "  r.ChannelId AS ChannelId,",
+        "  c.ChannelType AS ChannelType,",
+        "  r.MessageTemplate AS MessageTemplate",
+        "FROM pm.NotificationRules r",
+        "INNER JOIN pm.NotificationChannels c ON c.ChannelId = r.ChannelId",
+        "WHERE r.IsActive = 1",
+        "  AND c.IsActive = 1",
+        "  AND r.EventType = N'task_assigned'",
+      ].join("\n"),
+    );
+
+  const rules = rulesResult.recordset as NotificationRuleForAssignment[];
+  if (rules.length === 0) {
+    return;
+  }
+
+  const taskResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.TaskId AS TaskId,",
+        "  t.TaskNumber AS TaskNumber,",
+        "  t.ScheduledDueAt AS ScheduledDueAt,",
+        "  t.Status AS Status,",
+        "  t.Priority AS Priority,",
+        "  a.AssetId AS AssetId,",
+        "  a.AssetTag AS AssetTag,",
+        "  a.Name AS AssetName,",
+        "  tpl.TemplateId AS TemplateId,",
+        "  tpl.Name AS TemplateName,",
+        "  u.UserId AS AssignedUserId,",
+        "  u.Email AS AssignedUserEmail,",
+        "  u.Phone AS AssignedUserPhone",
+        "FROM pm.PMTasks t",
+        "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "LEFT JOIN pm.Users u ON u.UserId = t.AssignedToUserId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const taskRow = taskResult.recordset[0] as TaskRowForAssignment | undefined;
+  if (!taskRow) {
+    return;
+  }
+
+  const taskNumber = taskRow.TaskNumber;
+  const dueAtIso = taskRow.ScheduledDueAt.toISOString();
+  const assetName = taskRow.AssetName;
+  const assetTag = taskRow.AssetTag ?? "";
+  const templateName = taskRow.TemplateName;
+
+  for (const rule of rules) {
+    const template =
+      rule.MessageTemplate ??
+      "You have been assigned PM task {{taskNumber}} for {{assetName}} ({{templateName}}), due at {{dueAt}}.";
+
+    const message = renderNotificationTemplate(template, {
+      taskNumber,
+      assetTag,
+      assetName,
+      templateName,
+      dueAt: dueAtIso,
+    });
+
+    const payload = JSON.stringify({
+      rule: { id: rule.NotificationRuleId, name: rule.RuleName, eventType: rule.EventType },
+      channel: { id: rule.ChannelId, type: rule.ChannelType },
+      task: {
+        id: taskRow.TaskId,
+        taskNumber: taskRow.TaskNumber,
+        scheduledDueAt: taskRow.ScheduledDueAt,
+        status: taskRow.Status,
+        priority: taskRow.Priority,
+      },
+      asset: { id: taskRow.AssetId, assetTag: taskRow.AssetTag, name: taskRow.AssetName },
+      template: { id: taskRow.TemplateId, name: taskRow.TemplateName },
+      user:
+        taskRow.AssignedUserId || taskRow.AssignedUserEmail || taskRow.AssignedUserPhone
+          ? {
+              id: taskRow.AssignedUserId,
+              email: taskRow.AssignedUserEmail,
+              phone: taskRow.AssignedUserPhone,
+            }
+          : null,
+      message,
+    });
+
+    await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskRow.TaskId)
+      .input("ruleId", sql.UniqueIdentifier, rule.NotificationRuleId)
+      .input("channelId", sql.UniqueIdentifier, rule.ChannelId)
+      .input("status", sql.NVarChar(32), "queued")
+      .input("payload", sql.NVarChar(sql.MAX), payload)
+      .query(
+        [
+          "INSERT INTO pm.NotificationLog (TaskId, NotificationRuleId, ChannelId, Status, Payload)",
+          "VALUES (@taskId, @ruleId, @channelId, @status, @payload)",
+        ].join("\n"),
+      );
+  }
+};
+
 export const tasksRouter = Router();
 
 tasksRouter.use(requireAuth);
@@ -2127,6 +2278,12 @@ tasksRouter.post("/:taskId/assign", requireManager, async (req, res) => {
     ipAddress: typeof req.ip === "string" ? req.ip : null,
     userAgent: req.get("user-agent") ?? null,
   });
+
+  const assignedUserBefore = beforeRow.AssignedToUserId ?? null;
+  const assignedUserAfter = afterRow?.AssignedToUserId ?? null;
+  if (assignedUserAfter && assignedUserAfter !== assignedUserBefore) {
+    await enqueueTaskAssignedNotifications(taskId);
+  }
 
   res.json({ ok: true });
 });
