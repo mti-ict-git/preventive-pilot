@@ -2740,7 +2740,11 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
         }
       }
 
-      if (bitToBoolean(templateItem.RequiresAttachment) && result.outcome !== 0) {
+      if (
+        bitToBoolean(templateItem.RequiresAttachment) &&
+        bitToBoolean(templateItem.IsMandatory) &&
+        result.outcome !== 0
+      ) {
         if (!checklistEvidenceItemIdSet.has(result.templateChecklistItemId)) {
           res.status(400).json({ message: "Invalid request" });
           await tx.rollback();
