@@ -7,12 +7,14 @@
     "dev": "vite",
     "dev:full": "node scripts/dev/full.mjs",
     "dev:backend": "npm --prefix backend run dev",
+    "ngrok:full": "node scripts/dev/ngrok-full.mjs",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
     "db:apply-schema": "node scripts/db/apply-schema.mjs",
-    "db:verify": "node scripts/db/verify-schema.mjs"
+    "db:verify": "node scripts/db/verify-schema.mjs",
+    "ngrok:gist-watch": "node scripts/ngrok/gist-watcher.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

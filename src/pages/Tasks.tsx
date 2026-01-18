@@ -19,11 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { endOfDay, format, isAfter, isBefore, isSameDay, parseISO, startOfDay } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -33,14 +32,12 @@ import {
 } from "@/components/ui/select";
 import {
   apiAddTaskEvidence,
-  apiAssignTask,
   apiCompleteTask,
   apiDeleteChecklistEvidence,
   apiDeleteEvidence,
   apiDownloadChecklistEvidence,
   apiDownloadEvidence,
   apiGetTask,
-  apiListUsers,
   apiListTasks,
   apiStartTask,
   apiPauseTask,
@@ -60,10 +57,6 @@ const Tasks = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [taskDetailOpen, setTaskDetailOpen] = useState(false);
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [assignTaskId, setAssignTaskId] = useState<string | null>(null);
-  const [assignTaskLabel, setAssignTaskLabel] = useState<string>("");
-  const [assignToUserId, setAssignToUserId] = useState<string>("");
 
   const queryClient = useQueryClient();
 
@@ -102,47 +95,11 @@ const Tasks = () => {
     queryFn: () => apiListTasks(listQueryInput),
   });
 
-  const usersQuery = useQuery({
-    queryKey: ["users", "task-assign"],
-    queryFn: () => apiListUsers({ page: 1, pageSize: 200, isActive: true }),
-    enabled: assignDialogOpen,
-  });
-
   const statsQuery = useQuery({
     queryKey: ["task-stats"],
     queryFn: () => apiListTasks({ page: 1, pageSize: 200 }),
     staleTime: 30_000,
   });
-
-  const assignMutation = useMutation({
-    mutationFn: async () => {
-      if (!assignTaskId) throw new Error("No task selected");
-      const userId = assignToUserId.trim();
-      if (!userId) throw new Error("No user selected");
-      return apiAssignTask({ taskId: assignTaskId, assignedToUserId: userId, assignedToRoleId: null });
-    },
-    onSuccess: async () => {
-      toast({ title: "Task assigned" });
-      setAssignDialogOpen(false);
-      setAssignTaskId(null);
-      setAssignTaskLabel("");
-      setAssignToUserId("");
-      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      await statsQuery.refetch();
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : "Request failed";
-      toast({ title: "Assign failed", description: message, variant: "destructive" });
-    },
-  });
-
-  const technicianUsers = useMemo(() => {
-    const items = usersQuery.data?.items ?? [];
-    return items
-      .filter((u) => u.roles.includes("Technician"))
-      .slice()
-      .sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username));
-  }, [usersQuery.data?.items]);
 
   type UiStatus = "upcoming" | "in_progress" | "due_today" | "overdue" | "completed" | "cancelled";
 
@@ -235,8 +192,6 @@ const Tasks = () => {
           priority: task.priority,
           dueDate,
           pic,
-          assignedToUserId: task.assignedTo.userId,
-          assignedToRoleId: task.assignedTo.roleId,
           progress,
           checklistComplete: task.checklistCompleted,
           checklistTotal: task.checklistTotal,
@@ -314,7 +269,6 @@ const Tasks = () => {
               <div className="space-y-3">
                 {filteredTasks.map((task, index) => {
                   const statusConfig = getStatusConfig(task.status);
-                  const canAssign = isManager() && task.status !== "completed" && task.status !== "cancelled";
                   return (
                     <motion.div
                       key={task.id}
@@ -354,25 +308,7 @@ const Tasks = () => {
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {canAssign ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setAssignTaskId(task.taskId);
-                                setAssignTaskLabel(task.displayId);
-                                setAssignToUserId(task.assignedToUserId ?? "");
-                                setAssignDialogOpen(true);
-                              }}
-                            >
-                              {task.assignedToUserId || task.assignedToRoleId ? "Reassign" : "Assign"}
-                            </Button>
-                          ) : null}
-                          <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
@@ -401,60 +337,6 @@ const Tasks = () => {
           </TabsContent>
         </Tabs>
       </div>
-
-      <Dialog
-        open={assignDialogOpen}
-        onOpenChange={(open) => {
-          setAssignDialogOpen(open);
-          if (!open) {
-            setAssignTaskId(null);
-            setAssignTaskLabel("");
-            setAssignToUserId("");
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign Task{assignTaskLabel ? ` • ${assignTaskLabel}` : ""}</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-2">
-            <Label>Technician</Label>
-            <Select value={assignToUserId} onValueChange={(v) => setAssignToUserId(v)}>
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={usersQuery.isLoading ? "Loading technicians…" : technicianUsers.length ? "Select technician" : "No technicians"}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {technicianUsers.length ? (
-                  technicianUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.displayName ?? u.username}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="__none__" disabled>
-                    No technicians found
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={assignMutation.isPending || !assignTaskId || !assignToUserId.trim()}
-              onClick={() => assignMutation.mutate()}
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <TaskDetailDialog
         open={taskDetailOpen}

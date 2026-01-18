@@ -185,3 +185,48 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## Ngrok API gateway (mobile) with GitHub Gist discovery
+
+- Start the backend locally and open a public tunnel:
+
+```sh
+ngrok http http://localhost:5056
+```
+
+- Run the gist watcher to publish the current public API base URL:
+
+```sh
+GITHUB_PAT=<token_with_gist_scope> \
+NGROK_GIST_ID=<gist_id> \
+NGROK_GIST_FILE=ngrok.json \
+npm run ngrok:gist-watch
+```
+
+- The watcher polls the local ngrok API and updates the gist content to:
+
+```json
+{
+  "apiBaseUrl": "https://<random>.ngrok.app",
+  "updatedAt": "<ISO8601>"
+}
+```
+
+- Mobile clients should fetch this gist (or its raw URL) on startup and periodically to discover the current API base, switching automatically when it changes.
+
+### Dev shortcuts
+
+- Run frontend + backend together:
+
+```sh
+npm run dev:full
+```
+
+- Run ngrok tunnel + gist watcher together (uses BACKEND_PORT or 3001):
+
+```sh
+GITHUB_PAT=<token_with_gist_scope> \
+NGROK_GIST_ID=<gist_id> \
+NGROK_GIST_FILE=ngrok.json \
+npm run ngrok:full
+```

@@ -23,3 +23,15 @@ services:
       - "9102:80"
     depends_on:
       - api
+
+  ngrok-api:
+    image: ngrok/ngrok:alpine
+    command: http api:5056
+    env_file:
+      - ./.env
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+    depends_on:
+      - api

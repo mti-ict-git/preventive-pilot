@@ -199,6 +199,30 @@
 - Extended evidence preview modal to support PDF, images, video, and audio.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-17 21:24
+- Added ngrok GitHub Gist watcher script and npm task
+- Exported API_BASE_URL and added apiHealth in web client
+- Added Connection Status card in System Settings page
+- Updated README with ngrok gist discovery usage
+
+## 2026-01-18 08:31
+- Updated ngrok gist watcher to load .env automatically
+- Re-ran lint and typecheck; no issues
+
+## 2026-01-18 08:42
+- Added ngrok docker-compose sidecar service (ports 4040, depends on api)
+- Appended NGROK_AUTHTOKEN entry to .env for container auth
+- Verified with `npm run lint` and `npx tsc --noEmit`
+
+## 2026-01-18 08:45
+- Added dev script to run ngrok + gist watcher together (ngrok:full)
+- Updated README with dev shortcuts for ngrok:full
+- Verified with `npm run lint` and `npx tsc --noEmit`
+
+## 2026-01-18 08:49
+- Updated ngrok:full to accept NGROK_AUTHTOKEN via --authtoken flag
+- Re-verified lint and typecheck
+
 ## 2026-01-16 07:49
 - Updated PM Tasks stats to exclude cancelled tasks from Due Today and Overdue counts.
 - Updated Due Today tab to hide tasks whose backend status is cancelled.
@@ -398,6 +422,11 @@
 - Queried API for asset MTI-PC-003 and its assigned template.
 - Confirmed template IntervalDays = 180 (Semi-Annual).
 - Noted existing NextPMDueAt stored as 2026-07-04 which conflicts with template.
+
+## Sun Jan 18 19:30:13 WITA 2026
+- Investigated mismatch between web Dashboard overdue stats and mobile Home overdue count.
+- Updated mobile HomePage task mapping to treat cancelled tasks as "cancelled" instead of overdue and exclude them from overdue/today/week stats.
+- Extended mobile StatusBadge/TaskCard to support paused/cancelled statuses and verified with npm run lint and npx tsc --noEmit.
 
 ## 2026-01-16 16:49:10 WIB
 - Enabled editing for reminder notification rules on the Notifications page using the same rule dialog as escalation rules.

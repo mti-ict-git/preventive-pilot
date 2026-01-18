@@ -32,6 +32,8 @@ import {
   apiRunEvidenceImport,
   apiTestSnipeItSettings,
   apiUpdateSnipeItSettings,
+  apiHealth,
+  API_BASE_URL,
   type UpdateSnipeItSettingsInput,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -68,6 +70,12 @@ const SystemSettings = () => {
     queryKey: ["templates", { active: true }],
     queryFn: () => apiListTemplates({ active: true }),
     staleTime: 30_000,
+  });
+
+  const healthQuery = useQuery({
+    queryKey: ["api-health"],
+    queryFn: apiHealth,
+    refetchInterval: 30_000,
   });
 
   const [baseUrl, setBaseUrl] = useState<string>("");
@@ -265,6 +273,43 @@ const SystemSettings = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Connection Status */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+          >
+            <Card className="glass border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground flex items-center gap-2">
+                  <Server className="w-5 h-5 text-primary" />
+                  Connection Status
+                </CardTitle>
+                <CardDescription>Current API base and health</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                  <div>
+                    <p className="font-medium text-foreground">API Base</p>
+                    <p className="text-sm text-muted-foreground break-all">{API_BASE_URL || window.location.origin}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => void healthQuery.refetch()} disabled={healthQuery.isFetching}>
+                    <RefreshCw className="w-4 h-4" />
+                    Refresh
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${healthQuery.data?.status === "ok" ? "bg-success" : "bg-warning"}`} />
+                    <p className="font-medium text-foreground">Health</p>
+                  </div>
+                  <Badge variant="outline" className={healthQuery.data?.status === "ok" ? "bg-success/20 text-success border-success/30" : "bg-muted text-muted-foreground border-border"}>
+                    {healthQuery.data?.status === "ok" ? "OK" : healthQuery.isLoading ? "Checking" : "Unknown"}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
           {/* Snipe-IT Integration */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}

@@ -1,7 +1,7 @@
 import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearAccessToken, clearRefreshToken } from "@/lib/auth";
 
 const defaultApiBaseUrl = import.meta.env.PROD ? "" : "http://localhost:3001";
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? defaultApiBaseUrl).replace(/\/$/, "");
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? defaultApiBaseUrl).replace(/\/$/, "");
 
 export type LoginProvider = "ldap" | "local";
 
@@ -95,6 +95,10 @@ const apiFetchJson = async <T>(
 
   const data = (await res.json()) as unknown;
   return data as T;
+};
+
+export const apiHealth = async (): Promise<{ status: string }> => {
+  return apiFetchJson<{ status: string }>("/health");
 };
 
 export const apiLogin = async (input: {
