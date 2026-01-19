@@ -4,6 +4,7 @@ import swaggerUi from "swagger-ui-express";
 import { env } from "./config/env.js";
 import { authRouter } from "./routes/auth.js";
 import { assetsRouter } from "./routes/assets.js";
+import { facilitiesRouter } from "./routes/facilities.js";
 import { templatesRouter } from "./routes/templates.js";
 import { schedulingRouter } from "./routes/scheduling.js";
 import { tasksRouter } from "./routes/tasks.js";
@@ -100,6 +101,40 @@ const openApiSpec: OpenApiSchema = {
           page: { type: "integer" },
           pageSize: { type: "integer" },
           items: { type: "array", items: { $ref: "#/components/schemas/AssetListItem" } },
+        },
+        required: ["page", "pageSize", "items"],
+        additionalProperties: false,
+      },
+      FacilityPmInfo: {
+        type: "object",
+        properties: {
+          enabled: { type: ["boolean", "null"] },
+          defaultTemplateId: { type: ["string", "null"], format: "uuid" },
+          lastCompletedAt: { type: ["string", "null"], format: "date-time" },
+          nextDueAt: { type: ["string", "null"], format: "date-time" },
+        },
+        required: ["enabled"],
+        additionalProperties: false,
+      },
+      FacilityListItem: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          description: { type: ["string", "null"] },
+          isActive: { type: "boolean" },
+          location: { $ref: "#/components/schemas/EntityRefNullable" },
+          pm: { $ref: "#/components/schemas/FacilityPmInfo" },
+        },
+        required: ["id", "name", "isActive", "location", "pm"],
+        additionalProperties: false,
+      },
+      FacilityListResponse: {
+        type: "object",
+        properties: {
+          page: { type: "integer" },
+          pageSize: { type: "integer" },
+          items: { type: "array", items: { $ref: "#/components/schemas/FacilityListItem" } },
         },
         required: ["page", "pageSize", "items"],
         additionalProperties: false,
@@ -394,6 +429,7 @@ const openApiSpec: OpenApiSchema = {
     { name: "Health" },
     { name: "Auth" },
     { name: "Assets" },
+    { name: "Facilities" },
     { name: "Tasks" },
     { name: "Notifications" },
     { name: "System" },
@@ -550,6 +586,114 @@ const openApiSpec: OpenApiSchema = {
           "401": {
             description: "Unauthorized",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/facilities": {
+      get: {
+        tags: ["Facilities"],
+        summary: "List facilities",
+        description:
+          "Returns a paginated list of facilities that can have PM configured. Facilities represent locations or areas, not Snipe-IT assets.",
+        parameters: [
+          {
+            name: "search",
+            in: "query",
+            required: false,
+            description: "Substring match on Name or Description",
+            schema: { type: "string" },
+          },
+          { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          {
+            name: "pmEnabled",
+            in: "query",
+            required: false,
+            description: "Filter by PM enabled",
+            schema: { oneOf: [{ type: "string", enum: ["true", "false"] }, { type: "boolean" }] },
+          },
+          { name: "page", in: "query", required: false, schema: { type: "integer", default: 1, minimum: 1 } },
+          { name: "pageSize", in: "query", required: false, schema: { type: "integer", default: 50, minimum: 1, maximum: 500 } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/FacilityListResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Invalid request",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+        },
+      },
+      post: {
+        tags: ["Facilities"],
+        summary: "Create facility",
+        description: "Create a new facility record for non-asset PM.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  locationId: { type: ["string", "null"], format: "uuid" },
+                  description: { type: ["string", "null"] },
+                  isActive: { type: "boolean" },
+                },
+                required: ["name"],
+                additionalProperties: false,
+              },
+            },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Created",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } },
+            },
+          },
+          "400": {
+            description: "Invalid request",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          "403": {
+            description: "Forbidden",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
           },
         },
       },
@@ -1370,6 +1514,7 @@ app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 app.use("/api/auth", authRouter);
 app.use("/api/assets", assetsRouter);
+app.use("/api/facilities", facilitiesRouter);
 app.use("/api/templates", templatesRouter);
 app.use("/api/scheduling", schedulingRouter);
 app.use("/api/tasks", tasksRouter);

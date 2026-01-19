@@ -184,6 +184,21 @@ BEGIN
   );
 END;
 
+IF OBJECT_ID(N'pm.Facilities', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.Facilities (
+    FacilityId uniqueidentifier NOT NULL CONSTRAINT DF_pm_Facilities_FacilityId DEFAULT (newsequentialid()),
+    Name nvarchar(256) NOT NULL,
+    LocationId uniqueidentifier NULL,
+    Description nvarchar(1024) NULL,
+    IsActive bit NOT NULL CONSTRAINT DF_pm_Facilities_IsActive DEFAULT (1),
+    CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_Facilities_CreatedAt DEFAULT (sysutcdatetime()),
+    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_Facilities_UpdatedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_Facilities PRIMARY KEY CLUSTERED (FacilityId),
+    CONSTRAINT FK_pm_Facilities_Locations FOREIGN KEY (LocationId) REFERENCES pm.Locations(LocationId)
+  );
+END;
+
 IF COL_LENGTH(N'pm.Assets', N'AssetOperationalStatus') IS NULL
 BEGIN
   EXEC(
@@ -228,6 +243,21 @@ BEGIN
     UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_AssetPMSettings_UpdatedAt DEFAULT (sysutcdatetime()),
     CONSTRAINT PK_pm_AssetPMSettings PRIMARY KEY CLUSTERED (AssetId),
     CONSTRAINT FK_pm_AssetPMSettings_Assets FOREIGN KEY (AssetId) REFERENCES pm.Assets(AssetId)
+  );
+END;
+
+IF OBJECT_ID(N'pm.FacilityPMSettings', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.FacilityPMSettings (
+    FacilityId uniqueidentifier NOT NULL,
+    PMEnabled bit NOT NULL CONSTRAINT DF_pm_FacilityPMSettings_PMEnabled DEFAULT (1),
+    DefaultTemplateId uniqueidentifier NULL,
+    LastPMCompletedAt datetime2(0) NULL,
+    NextPMDueAt datetime2(0) NULL,
+    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_FacilityPMSettings_UpdatedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_FacilityPMSettings PRIMARY KEY CLUSTERED (FacilityId),
+    CONSTRAINT FK_pm_FacilityPMSettings_Facilities FOREIGN KEY (FacilityId) REFERENCES pm.Facilities(FacilityId),
+    CONSTRAINT FK_pm_FacilityPMSettings_Templates FOREIGN KEY (DefaultTemplateId) REFERENCES pm.PMTemplates(TemplateId)
   );
 END;
 
@@ -339,6 +369,7 @@ BEGIN
     TaskId uniqueidentifier NOT NULL CONSTRAINT DF_pm_PMTasks_TaskId DEFAULT (newsequentialid()),
     TaskNumber nvarchar(32) NOT NULL,
     AssetId uniqueidentifier NOT NULL,
+    FacilityId uniqueidentifier NULL,
     TemplateId uniqueidentifier NOT NULL,
     ScheduledDueAt datetime2(0) NOT NULL,
     AssignedToUserId uniqueidentifier NULL,
@@ -355,12 +386,44 @@ BEGIN
     CONSTRAINT PK_pm_PMTasks PRIMARY KEY CLUSTERED (TaskId),
     CONSTRAINT UQ_pm_PMTasks_TaskNumber UNIQUE (TaskNumber),
     CONSTRAINT FK_pm_PMTasks_Assets FOREIGN KEY (AssetId) REFERENCES pm.Assets(AssetId),
+    CONSTRAINT FK_pm_PMTasks_Facilities FOREIGN KEY (FacilityId) REFERENCES pm.Facilities(FacilityId),
     CONSTRAINT FK_pm_PMTasks_Templates FOREIGN KEY (TemplateId) REFERENCES pm.PMTemplates(TemplateId),
     CONSTRAINT FK_pm_PMTasks_AssignedToUser FOREIGN KEY (AssignedToUserId) REFERENCES pm.Users(UserId),
     CONSTRAINT FK_pm_PMTasks_AssignedToRole FOREIGN KEY (AssignedToRoleId) REFERENCES pm.Roles(RoleId),
     CONSTRAINT FK_pm_PMTasks_CompletedByUser FOREIGN KEY (CompletedByUserId) REFERENCES pm.Users(UserId),
     CONSTRAINT FK_pm_PMTasks_CancelledByUser FOREIGN KEY (CancelledByUserId) REFERENCES pm.Users(UserId)
   );
+END;
+
+IF EXISTS (
+  SELECT 1
+  FROM sys.columns c
+  WHERE c.object_id = OBJECT_ID(N'pm.PMTasks')
+    AND c.name = N'AssetId'
+    AND c.is_nullable = 0
+)
+BEGIN
+  ALTER TABLE pm.PMTasks ALTER COLUMN AssetId uniqueidentifier NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'FacilityId') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD FacilityId uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.check_constraints cc
+  INNER JOIN sys.objects o ON o.object_id = cc.parent_object_id
+  INNER JOIN sys.schemas s ON s.schema_id = o.schema_id
+  WHERE s.name = N'pm'
+    AND o.name = N'PMTasks'
+    AND cc.name = N'CK_pm_PMTasks_AssetOrFacility'
+)
+BEGIN
+  ALTER TABLE pm.PMTasks
+    ADD CONSTRAINT CK_pm_PMTasks_AssetOrFacility
+      CHECK ((AssetId IS NOT NULL AND FacilityId IS NULL) OR (AssetId IS NULL AND FacilityId IS NOT NULL));
 END;
 
 IF OBJECT_ID(N'pm.PMTaskChecklistResults', N'U') IS NULL

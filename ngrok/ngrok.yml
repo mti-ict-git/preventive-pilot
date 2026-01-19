@@ -1,0 +1,6 @@
+version: 3
+
+tunnels:
+  api:
+    proto: http
+    addr: api:5056

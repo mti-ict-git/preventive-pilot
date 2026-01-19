@@ -138,6 +138,13 @@
 - Disabled bulk PM enable/disable actions for non-managers in the Assets page.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-19 23:31:09 WITA
+- Added ngrok/ngrok.yml (version 3) defining api tunnel to api:5056.
+- Updated docker-compose ngrok-api service to use `start --all --config /etc/ngrok/ngrok.yml` and mount config.
+- Kept NGROK_AUTHTOKEN in .env (no secrets in repo) and passed to container.
+- Guidance: ensure only one ngrok agent session (stop local dev agent) to avoid ERR_NGROK_108.
+- Verified repo lint and typecheck.
+
 ## 2026-01-05 16:19
 - Re-verified bulk PM template assignment and Asset Detail PM history wiring.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
