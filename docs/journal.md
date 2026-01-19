@@ -334,6 +334,11 @@
 - Verified mobile phone fields are populated from LDAP and shown in Users & Roles.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## 2026-01-20 06:16:38 WITA
+- Fixed Dashboard duplicate React keys by using task id for Recent Tasks entries.
+- Eliminated warning about two children with the same key.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## 2026-01-16 00:49:54 WIB
 - Fixed apiRecalculateSchedules to send a JSON object body instead of a pre-serialized string.
 - Resolved 400 Bad Request when clicking "PM Now" (scheduling recalc schema now matches payload).

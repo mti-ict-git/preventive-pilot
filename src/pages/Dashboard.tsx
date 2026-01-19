@@ -93,6 +93,7 @@ const Dashboard = () => {
 
   const recentTasks =
     overview?.recentTasks.map((t) => ({
+      id: t.id,
       asset: t.asset.assetTag,
       type: t.template.name,
       status: t.status.toLowerCase(),
@@ -279,7 +280,7 @@ const Dashboard = () => {
             <div className="space-y-3">
               {recentTasks.map((task, index) => (
                 <motion.div
-                  key={task.asset}
+                  key={task.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.7 + index * 0.1 }}

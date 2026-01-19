@@ -18,6 +18,7 @@ import {
   Wrench,
   LogOut,
   QrCode,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { clearAccessToken, isSuperadmin } from "@/lib/auth";
@@ -33,6 +34,7 @@ interface NavItem {
 const mainNavBase: Omit<NavItem, "badge">[] = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { title: "Assets", icon: Server, href: "/assets" },
+  { title: "Facilities", icon: Building2, href: "/facilities" },
   { title: "PM Templates", icon: FileText, href: "/templates" },
   { title: "Scheduling", icon: Calendar, href: "/scheduling" },
   { title: "PM Tasks", icon: ClipboardList, href: "/tasks" },
