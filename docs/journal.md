@@ -156,6 +156,10 @@
 - Fixed container failure (ERR_MODULE_NOT_FOUND for dotenv) in server environment.
 - Re-ran repo lint and typecheck; passed.
 
+## 2026-01-20 05:40:44 WITA
+- Added health-check loop to gist-watcher to log ngrok API reachability and status codes.
+- Verified repo lint and typecheck; passed.
+
 ## 2026-01-05 16:19
 - Re-verified bulk PM template assignment and Asset Detail PM history wiring.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

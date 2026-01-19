@@ -58,3 +58,16 @@ const loop = async () => {
 };
 
 loop();
+
+const check = async () => {
+  try {
+    const res = await fetch(NGROK_API_URL, { method: "GET" });
+    process.stdout.write(`ngrok api status ${res.status}\n`);
+  } catch (err) {
+    process.stderr.write(`ngrok api unreachable ${err instanceof Error ? err.message : String(err)}\n`);
+  }
+};
+
+setInterval(() => {
+  void check();
+}, Math.max(3000, Math.floor(POLL_INTERVAL_MS / 2)));
