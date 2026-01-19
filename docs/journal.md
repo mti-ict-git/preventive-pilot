@@ -258,6 +258,11 @@
 
 ## 2026-01-16 07:52
 - Added `AssetOperationalStatus` (operational/broken/archived) to pm.Assets for PM reference.
+
+## 2026-01-20 06:03:02 WITA
+- Updated mobile TasksPage mapping to display facility-based PM tasks alongside asset tasks.
+- Added optional facilityId filter handling in mobile task list and range-based fetching.
+- Ran `npm run lint` and `npx tsc --noEmit` after changes.
 - Synced `AssetOperationalStatus` from Snipe-IT status labels and displayed it in Assets + Asset Detail.
 - Archived missing assets during Snipe-IT sync to preserve historical PM data.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

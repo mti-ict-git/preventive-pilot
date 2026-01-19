@@ -391,7 +391,8 @@ BEGIN
     CONSTRAINT FK_pm_PMTasks_AssignedToUser FOREIGN KEY (AssignedToUserId) REFERENCES pm.Users(UserId),
     CONSTRAINT FK_pm_PMTasks_AssignedToRole FOREIGN KEY (AssignedToRoleId) REFERENCES pm.Roles(RoleId),
     CONSTRAINT FK_pm_PMTasks_CompletedByUser FOREIGN KEY (CompletedByUserId) REFERENCES pm.Users(UserId),
-    CONSTRAINT FK_pm_PMTasks_CancelledByUser FOREIGN KEY (CancelledByUserId) REFERENCES pm.Users(UserId)
+    CONSTRAINT FK_pm_PMTasks_CancelledByUser FOREIGN KEY (CancelledByUserId) REFERENCES pm.Users(UserId),
+    CONSTRAINT CK_pm_PMTasks_AssetOrFacility CHECK ((AssetId IS NOT NULL AND FacilityId IS NULL) OR (AssetId IS NULL AND FacilityId IS NOT NULL))
   );
 END;
 
@@ -409,21 +410,6 @@ END;
 IF COL_LENGTH(N'pm.PMTasks', N'FacilityId') IS NULL
 BEGIN
   ALTER TABLE pm.PMTasks ADD FacilityId uniqueidentifier NULL;
-END;
-
-IF NOT EXISTS (
-  SELECT 1
-  FROM sys.check_constraints cc
-  INNER JOIN sys.objects o ON o.object_id = cc.parent_object_id
-  INNER JOIN sys.schemas s ON s.schema_id = o.schema_id
-  WHERE s.name = N'pm'
-    AND o.name = N'PMTasks'
-    AND cc.name = N'CK_pm_PMTasks_AssetOrFacility'
-)
-BEGIN
-  ALTER TABLE pm.PMTasks
-    ADD CONSTRAINT CK_pm_PMTasks_AssetOrFacility
-      CHECK ((AssetId IS NOT NULL AND FacilityId IS NULL) OR (AssetId IS NULL AND FacilityId IS NOT NULL));
 END;
 
 IF OBJECT_ID(N'pm.PMTaskChecklistResults', N'U') IS NULL
