@@ -145,6 +145,12 @@
 - Guidance: ensure only one ngrok agent session (stop local dev agent) to avoid ERR_NGROK_108.
 - Verified repo lint and typecheck.
 
+## 2026-01-19 23:39:57 WITA
+- Added gist-watcher service to docker-compose to update discovery Gist from server ngrok API.
+- Uses node:22-alpine, mounts repo read-only, and reads credentials from .env.
+- Configures NGROK_API_URL=http://ngrok-api:4040/api/tunnels with poll interval override.
+- Verified repo lint and typecheck; warnings only.
+
 ## 2026-01-05 16:19
 - Re-verified bulk PM template assignment and Asset Detail PM history wiring.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

@@ -21,6 +21,7 @@ const TaskListQuerySchema = z.object({
   assigned: z.enum(["me", "unassigned", "any"]).optional().default("any"),
   overdue: z.string().optional(),
   assetId: z.string().uuid().optional(),
+  facilityId: z.string().uuid().optional(),
   templateId: z.string().uuid().optional(),
   dueFrom: z.string().datetime().optional(),
   dueTo: z.string().datetime().optional(),
@@ -799,6 +800,7 @@ tasksRouter.get("/", async (req, res) => {
     .input("assigned", sql.NVarChar(16), parsed.data.assigned)
     .input("overdue", sql.Bit, overdue)
     .input("assetId", sql.UniqueIdentifier, parsed.data.assetId ?? null)
+    .input("facilityId", sql.UniqueIdentifier, parsed.data.facilityId ?? null)
     .input("templateId", sql.UniqueIdentifier, parsed.data.templateId ?? null)
     .input("dueFrom", sql.DateTime2(0), parsed.data.dueFrom ?? null)
     .input("dueTo", sql.DateTime2(0), parsed.data.dueTo ?? null)
@@ -812,6 +814,9 @@ tasksRouter.get("/", async (req, res) => {
         "  t.AssetId AS AssetId,",
         "  a.AssetTag AS AssetTag,",
         "  a.Name AS AssetName,",
+        "  t.FacilityId AS FacilityId,",
+        "  fac.Name AS FacilityName,",
+        "  loc.Name AS LocationName,",
         "  t.TemplateId AS TemplateId,",
         "  tpl.Name AS TemplateName,",
         "  t.ScheduledDueAt AS ScheduledDueAt,",
@@ -840,13 +845,16 @@ tasksRouter.get("/", async (req, res) => {
         "      AND i.IsActive = 1",
         "  ) AS ChecklistCompleted",
         "FROM pm.PMTasks t",
-        "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+        "LEFT JOIN pm.Locations loc ON loc.LocationId = COALESCE(a.LocationId, fac.LocationId)",
         "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
         "LEFT JOIN pm.Users au ON au.UserId = t.AssignedToUserId",
         "LEFT JOIN pm.Roles ar ON ar.RoleId = t.AssignedToRoleId",
         "WHERE",
         "  (@status IS NULL OR t.Status = @status)",
         "  AND (@assetId IS NULL OR t.AssetId = @assetId)",
+        "  AND (@facilityId IS NULL OR t.FacilityId = @facilityId)",
         "  AND (@templateId IS NULL OR t.TemplateId = @templateId)",
         "  AND (@dueFrom IS NULL OR t.ScheduledDueAt >= @dueFrom)",
         "  AND (@dueTo IS NULL OR t.ScheduledDueAt <= @dueTo)",
@@ -915,6 +923,13 @@ tasksRouter.get("/", async (req, res) => {
         assetTag: r.AssetTag,
         name: r.AssetName,
       },
+      facility: r.FacilityId
+        ? {
+            id: r.FacilityId,
+            name: r.FacilityName,
+            locationName: r.LocationName ?? null,
+          }
+        : null,
       template: {
         id: r.TemplateId,
         name: r.TemplateName,

@@ -173,6 +173,8 @@ const Tasks = () => {
         const uiStatus = getUiStatus(task, now);
         const pic = task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned";
         const dueDate = format(parseISO(task.scheduledDueAt), "yyyy-MM-dd");
+        const assetTag = task.asset.assetTag ?? (task.facility ? task.facility.name ?? "" : "");
+        const assetName = task.asset.name ?? (task.facility ? task.facility.locationName ?? task.facility.name ?? "" : "");
         const progress =
           uiStatus === "completed"
             ? 100
@@ -185,8 +187,8 @@ const Tasks = () => {
           id: task.id,
           displayId: task.taskNumber,
           taskId: task.id,
-          asset: task.asset.assetTag,
-          assetName: task.asset.name,
+          asset: assetTag,
+          assetName,
           template: task.template.name,
           status: uiStatus,
           priority: task.priority,

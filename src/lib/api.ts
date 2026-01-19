@@ -257,7 +257,8 @@ export type TaskListItem = {
   completedAt: string | null;
   checklistTotal: number;
   checklistCompleted: number;
-  asset: { id: string; assetTag: string; name: string };
+  asset: { id: string | null; assetTag: string | null; name: string | null };
+  facility: { id: string; name: string | null; locationName: string | null } | null;
   template: { id: string; name: string };
   assignedTo: {
     userId: string | null;
@@ -279,6 +280,7 @@ export const apiListTasks = async (input: {
   assigned?: "me" | "unassigned" | "any";
   overdue?: boolean;
   assetId?: string;
+  facilityId?: string;
   templateId?: string;
   dueFrom?: string;
   dueTo?: string;
@@ -290,6 +292,7 @@ export const apiListTasks = async (input: {
   if (input.assigned) params.set("assigned", input.assigned);
   if (input.overdue !== undefined) params.set("overdue", input.overdue ? "true" : "false");
   if (input.assetId) params.set("assetId", input.assetId);
+   if (input.facilityId) params.set("facilityId", input.facilityId);
   if (input.templateId) params.set("templateId", input.templateId);
   if (input.dueFrom) params.set("dueFrom", input.dueFrom);
   if (input.dueTo) params.set("dueTo", input.dueTo);
