@@ -1,7 +1,3 @@
-import { config as loadEnv } from "dotenv";
-import path from "node:path";
-
-loadEnv({ path: path.resolve(process.cwd(), ".env") });
 
 const NGROK_API_URL = process.env.NGROK_API_URL ?? "http://127.0.0.1:4040/api/tunnels";
 const GITHUB_PAT = process.env.GITHUB_PAT ?? "";

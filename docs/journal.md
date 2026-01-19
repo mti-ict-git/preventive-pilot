@@ -151,6 +151,11 @@
 - Configures NGROK_API_URL=http://ngrok-api:4040/api/tunnels with poll interval override.
 - Verified repo lint and typecheck; warnings only.
 
+## 2026-01-19 23:43:10 WITA
+- Removed dotenv dependency from gist-watcher; use envs provided by docker compose.
+- Fixed container failure (ERR_MODULE_NOT_FOUND for dotenv) in server environment.
+- Re-ran repo lint and typecheck; passed.
+
 ## 2026-01-05 16:19
 - Re-verified bulk PM template assignment and Asset Detail PM history wiring.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
