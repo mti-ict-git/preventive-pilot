@@ -544,6 +544,9 @@ export const apiCompleteTask = async (input: {
   taskId: string;
   checklistResults: CompleteTaskChecklistResultInput[];
   forceCompleted?: boolean;
+  completedAt?: string;
+  backdateReason?: string;
+  technicianName?: string;
 }): Promise<{ ok: true }> => {
   const { taskId, ...body } = input;
   return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/complete`, {

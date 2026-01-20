@@ -108,6 +108,12 @@ Required environment variables:
 - Start moves task to In Progress; Pause sets task to Paused.
 - Cancel records CancelledBy and timestamp; Complete enforces checklist rules.
 
+### Backdated completion (supervisor+)
+
+- Supervisors and above can optionally backdate task completion from the Task Detail dialog.
+- When enabled, they must provide a past completion date/time and a reason for backdating.
+- Backdated completions update PM history and next-due scheduling using the chosen completion date, while the system still records when the entry was made.
+
 ## Scheduling
 
 - Open PM Scheduling to view calendar counts and select a day to see tasks.
@@ -126,6 +132,12 @@ Required environment variables:
 - Use **Create Facility** to add new facilities with name and location.
 - Click **Details** on a facility row to edit its name, location, and description, and to manage PM settings.
 - Select multiple facilities to run bulk PM actions (enable, disable, set template) or **Archive Facilities** to soft-delete them from the active list while keeping history.
+
+## PM Templates checklist editor
+
+- Open PM Templates and create or edit a template to configure its checklist.
+- Use the drag handle next to each checklist item to reorder items via drag-and-drop.
+- The order you set in the checklist editor is saved and used when technicians complete PM tasks.
 
 ## Microsoft Graph notifications
 

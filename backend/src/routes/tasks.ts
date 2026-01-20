@@ -65,6 +65,9 @@ const ChecklistResultSchema = z.object({
 const CompleteSchema = z.object({
   checklistResults: z.array(ChecklistResultSchema).default([]),
   forceCompleted: z.boolean().optional(),
+  completedAt: z.string().datetime().optional(),
+  backdateReason: z.string().max(1024).optional(),
+  technicianName: z.string().max(256).optional(),
 });
 
 const EvidenceSchema = z.object({
@@ -2780,20 +2783,73 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       }
     }
 
+    const parsedCompletedAt = parsed.data.completedAt;
+    const hasCustomCompletedAt = typeof parsedCompletedAt === "string" && parsedCompletedAt.length > 0;
+    let effectiveCompletedAt: Date | null = null;
+    let useBackdated = false;
+
+    if (hasCustomCompletedAt) {
+      const isManagerUser = req.user.roles.some((role) => (managerRoles as readonly string[]).includes(role));
+      if (!isManagerUser) {
+        res.status(403).json({ message: "Forbidden" });
+        await tx.rollback();
+        return;
+      }
+
+      try {
+        const parsedDate = new Date(parsedCompletedAt);
+        if (Number.isNaN(parsedDate.getTime())) {
+          res.status(400).json({ message: "Invalid completion date" });
+          await tx.rollback();
+          return;
+        }
+        const now = new Date();
+        if (parsedDate.getTime() > now.getTime()) {
+          res.status(400).json({ message: "Completion date cannot be in the future" });
+          await tx.rollback();
+          return;
+        }
+
+        const reason = parsed.data.backdateReason?.trim() ?? "";
+        if (reason.length === 0) {
+          res.status(400).json({ message: "Backdate reason is required when setting completion date" });
+          await tx.rollback();
+          return;
+        }
+
+        effectiveCompletedAt = parsedDate;
+        useBackdated = true;
+      } catch {
+        res.status(400).json({ message: "Invalid completion date" });
+        await tx.rollback();
+        return;
+      }
+    }
+
+    const completedAtDate = effectiveCompletedAt ?? new Date();
+
     await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
       .input("forceCompleted", sql.Bit, parsed.data.forceCompleted ? 1 : 0)
+      .input("completedAt", sql.DateTime2(0), completedAtDate)
+      .input("isBackdated", sql.Bit, useBackdated ? 1 : 0)
+      .input("backdateReason", sql.NVarChar(1024), useBackdated ? parsed.data.backdateReason ?? null : null)
+      .input("technicianName", sql.NVarChar(256), parsed.data.technicianName ?? null)
       .query(
         [
           "UPDATE pm.PMTasks",
           "SET",
           "  Status = N'completed',",
-          "  StartedAt = COALESCE(StartedAt, sysutcdatetime()),",
-          "  CompletedAt = sysutcdatetime(),",
+          "  StartedAt = COALESCE(StartedAt, @completedAt),",
+          "  CompletedAt = @completedAt,",
           "  CompletedByUserId = @completedByUserId,",
-          "  ForceCompleted = @forceCompleted",
+          "  ForceCompleted = @forceCompleted,",
+          "  IsBackdated = @isBackdated,",
+          "  BackdateReason = @backdateReason,",
+          "  TechnicianName = @technicianName,",
+          "  DataEntryAt = COALESCE(DataEntryAt, sysutcdatetime())",
           "WHERE TaskId = @taskId",
         ].join("\n"),
       );
@@ -2806,6 +2862,7 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
         .input("outcome", sql.TinyInt, item.outcome)
         .input("notes", sql.NVarChar(1024), item.notes ?? null)
         .input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
+        .input("completedAt", sql.DateTime2(0), completedAtDate)
         .query(
           [
             "MERGE pm.PMTaskChecklistResults WITH (HOLDLOCK) AS target",
@@ -2815,11 +2872,11 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
             "  UPDATE SET",
             "    Outcome = @outcome,",
             "    Notes = @notes,",
-            "    CompletedAt = sysutcdatetime(),",
+            "    CompletedAt = @completedAt,",
             "    CompletedByUserId = @completedByUserId",
             "WHEN NOT MATCHED THEN",
             "  INSERT (TaskId, TemplateChecklistItemId, Outcome, Notes, CompletedAt, CompletedByUserId)",
-            "  VALUES (@taskId, @templateChecklistItemId, @outcome, @notes, sysutcdatetime(), @completedByUserId);",
+            "  VALUES (@taskId, @templateChecklistItemId, @outcome, @notes, @completedAt, @completedByUserId);",
           ].join("\n"),
         );
     }
@@ -2829,18 +2886,19 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       .request()
       .input("assetId", sql.UniqueIdentifier, row.AssetId as string)
       .input("intervalDays", sql.Int, Number.isFinite(intervalDays) ? intervalDays : 0)
+      .input("completedAt", sql.DateTime2(0), completedAtDate)
       .query(
         [
           "UPDATE pm.AssetPMSettings",
           "SET",
-          "  LastPMCompletedAt = sysutcdatetime(),",
+          "  LastPMCompletedAt = @completedAt,",
           "  NextPMDueAt = CASE",
           "    WHEN @intervalDays <= 0 THEN NextPMDueAt",
-          "    WHEN @intervalDays = 30 THEN dateadd(month, 1, sysutcdatetime())",
-          "    WHEN @intervalDays = 90 THEN dateadd(month, 3, sysutcdatetime())",
-          "    WHEN @intervalDays = 180 THEN dateadd(month, 6, sysutcdatetime())",
-          "    WHEN @intervalDays = 365 THEN dateadd(year, 1, sysutcdatetime())",
-          "    ELSE dateadd(day, @intervalDays, sysutcdatetime())",
+          "    WHEN @intervalDays = 30 THEN dateadd(month, 1, @completedAt)",
+          "    WHEN @intervalDays = 90 THEN dateadd(month, 3, @completedAt)",
+          "    WHEN @intervalDays = 180 THEN dateadd(month, 6, @completedAt)",
+          "    WHEN @intervalDays = 365 THEN dateadd(year, 1, @completedAt)",
+          "    ELSE dateadd(day, @intervalDays, @completedAt)",
           "  END,",
           "  UpdatedAt = sysutcdatetime()",
           "WHERE AssetId = @assetId",

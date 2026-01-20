@@ -292,6 +292,7 @@ BEGIN
     IsMandatory bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_IsMandatory DEFAULT (1),
     RequiresNotes bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_RequiresNotes DEFAULT (0),
     RequiresPassFail bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_RequiresPassFail DEFAULT (1),
+    EnableAttachment bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_EnableAttachment DEFAULT (0),
     RequiresAttachment bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_RequiresAttachment DEFAULT (0),
     IsActive bit NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_IsActive DEFAULT (1),
     CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_PMTemplateChecklistItems_CreatedAt DEFAULT (sysutcdatetime()),
@@ -306,6 +307,16 @@ BEGIN
   ALTER TABLE pm.PMTemplateChecklistItems
     ADD RequiresAttachment bit NOT NULL
       CONSTRAINT DF_pm_PMTemplateChecklistItems_RequiresAttachment DEFAULT (0) WITH VALUES;
+END;
+
+IF COL_LENGTH(N'pm.PMTemplateChecklistItems', N'EnableAttachment') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTemplateChecklistItems
+    ADD EnableAttachment bit NOT NULL
+      CONSTRAINT DF_pm_PMTemplateChecklistItems_EnableAttachment DEFAULT (0) WITH VALUES;
+
+  UPDATE pm.PMTemplateChecklistItems
+  SET EnableAttachment = RequiresAttachment;
 END;
 
 IF OBJECT_ID(N'pm.AssignmentRules', N'U') IS NULL
@@ -383,6 +394,10 @@ BEGIN
     CancelledAt datetime2(0) NULL,
     CancelledByUserId uniqueidentifier NULL,
     ForceCompleted bit NOT NULL CONSTRAINT DF_pm_PMTasks_ForceCompleted DEFAULT (0),
+    IsBackdated bit NOT NULL CONSTRAINT DF_pm_PMTasks_IsBackdated DEFAULT (0),
+    BackdateReason nvarchar(1024) NULL,
+    TechnicianName nvarchar(256) NULL,
+    DataEntryAt datetime2(0) NOT NULL CONSTRAINT DF_pm_PMTasks_DataEntryAt DEFAULT (sysutcdatetime()),
     CONSTRAINT PK_pm_PMTasks PRIMARY KEY CLUSTERED (TaskId),
     CONSTRAINT UQ_pm_PMTasks_TaskNumber UNIQUE (TaskNumber),
     CONSTRAINT FK_pm_PMTasks_Assets FOREIGN KEY (AssetId) REFERENCES pm.Assets(AssetId),
@@ -410,6 +425,91 @@ END;
 IF COL_LENGTH(N'pm.PMTasks', N'FacilityId') IS NULL
 BEGIN
   ALTER TABLE pm.PMTasks ADD FacilityId uniqueidentifier NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'MaintenanceType') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks
+    ADD MaintenanceType nvarchar(8) NOT NULL
+      CONSTRAINT DF_pm_PMTasks_MaintenanceType DEFAULT (N'PM') WITH VALUES;
+
+  EXEC(
+    N'ALTER TABLE pm.PMTasks
+      ADD CONSTRAINT CK_pm_PMTasks_MaintenanceType
+        CHECK (MaintenanceType IN (N''PM'', N''CM''));'
+  );
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'ReportedByUserId') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD ReportedByUserId uniqueidentifier NULL;
+
+  ALTER TABLE pm.PMTasks
+    ADD CONSTRAINT FK_pm_PMTasks_ReportedByUser FOREIGN KEY (ReportedByUserId) REFERENCES pm.Users(UserId);
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'ReportedAt') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD ReportedAt datetime2(0) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'ReportedChannel') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD ReportedChannel nvarchar(32) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'Symptom') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD Symptom nvarchar(1024) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'FailureCategory') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD FailureCategory nvarchar(64) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'FailureCode') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD FailureCode nvarchar(64) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'IsBackdated') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks
+    ADD IsBackdated bit NOT NULL
+      CONSTRAINT DF_pm_PMTasks_IsBackdated DEFAULT (0) WITH VALUES;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'BackdateReason') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD BackdateReason nvarchar(1024) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'TechnicianName') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD TechnicianName nvarchar(256) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'DataEntryAt') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks
+    ADD DataEntryAt datetime2(0) NOT NULL
+      CONSTRAINT DF_pm_PMTasks_DataEntryAt DEFAULT (sysutcdatetime()) WITH VALUES;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'ImpactLevel') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD ImpactLevel nvarchar(32) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'DowntimeStartedAt') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD DowntimeStartedAt datetime2(0) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'DowntimeEndedAt') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD DowntimeEndedAt datetime2(0) NULL;
 END;
 
 IF OBJECT_ID(N'pm.PMTaskChecklistResults', N'U') IS NULL
@@ -648,6 +748,16 @@ END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_PMTasks_Status_Due' AND object_id = OBJECT_ID(N'pm.PMTasks'))
 BEGIN
   CREATE INDEX IX_pm_PMTasks_Status_Due ON pm.PMTasks(Status, ScheduledDueAt);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_PMTasks_MaintenanceType_ImpactLevel' AND object_id = OBJECT_ID(N'pm.PMTasks'))
+BEGIN
+  EXEC(N'CREATE INDEX IX_pm_PMTasks_MaintenanceType_ImpactLevel ON pm.PMTasks(MaintenanceType, ImpactLevel);');
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_PMTasks_MaintenanceType_FailureCategory' AND object_id = OBJECT_ID(N'pm.PMTasks'))
+BEGIN
+  EXEC(N'CREATE INDEX IX_pm_PMTasks_MaintenanceType_FailureCategory ON pm.PMTasks(MaintenanceType, FailureCategory);');
 END;
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_PMSchedules_AssetId' AND object_id = OBJECT_ID(N'pm.PMSchedules'))

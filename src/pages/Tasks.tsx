@@ -65,6 +65,10 @@ const Tasks = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [taskDetailOpen, setTaskDetailOpen] = useState(false);
+  const [backdateMode, setBackdateMode] = useState(false);
+  const [backdateCompletedAt, setBackdateCompletedAt] = useState("");
+  const [backdateReason, setBackdateReason] = useState("");
+  const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
 
   const queryClient = useQueryClient();
 
@@ -850,11 +854,38 @@ export const TaskDetailDialog = (props: {
           notes: notesValue.trim() ? notesValue.trim() : null,
         });
       }
-      return apiCompleteTask({ taskId: props.taskId, checklistResults: results, forceCompleted });
+      const isManagerUser = isManager();
+      const trimmedReason = backdateReason.trim();
+      const completedAtValue = backdateCompletedAt.trim();
+
+      if (backdateMode) {
+        if (!isManagerUser) {
+          throw new Error("Only supervisors and above can backdate completion");
+        }
+        if (!completedAtValue) {
+          throw new Error("Completion date is required when backdating");
+        }
+        if (!trimmedReason) {
+          throw new Error("Reason is required when backdating");
+        }
+      }
+
+      return apiCompleteTask({
+        taskId: props.taskId,
+        checklistResults: results,
+        forceCompleted,
+        completedAt: backdateMode ? new Date(completedAtValue).toISOString() : undefined,
+        backdateReason: backdateMode ? trimmedReason : undefined,
+        technicianName: backdateMode && backdateTechnicianName.trim() ? backdateTechnicianName.trim() : undefined,
+      });
     },
     onSuccess: async () => {
       await taskQuery.refetch();
       toast({ title: "Task completed" });
+      setBackdateMode(false);
+      setBackdateCompletedAt("");
+      setBackdateReason("");
+      setBackdateTechnicianName("");
       if (props.onCompleted) {
         await props.onCompleted();
       }
@@ -961,6 +992,64 @@ export const TaskDetailDialog = (props: {
                 Complete
               </Button>
             </div>
+          </div>
+          <div className="mt-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="backdate-toggle"
+                  checked={backdateMode}
+                  onCheckedChange={(checked) => setBackdateMode(Boolean(checked))}
+                  disabled={!isManager()}
+                />
+                <Label htmlFor="backdate-toggle" className="text-sm">
+                  Backdate completion (supervisor and above only)
+                </Label>
+              </div>
+              {backdateMode && !isManager() && (
+                <span className="text-xs text-destructive">You do not have permission to backdate</span>
+              )}
+            </div>
+            {backdateMode && (
+              <div className="grid grid-cols-12 gap-3">
+                <div className="col-span-12 md:col-span-4">
+                  <Label htmlFor="backdate-completedAt" className="text-xs">
+                    Completion date/time
+                  </Label>
+                  <Input
+                    id="backdate-completedAt"
+                    type="datetime-local"
+                    value={backdateCompletedAt}
+                    onChange={(event) => setBackdateCompletedAt(event.target.value)}
+                    className="mt-1 h-8 text-xs"
+                  />
+                </div>
+                <div className="col-span-12 md:col-span-4">
+                  <Label htmlFor="backdate-technician" className="text-xs">
+                    Technician name(s)
+                  </Label>
+                  <Input
+                    id="backdate-technician"
+                    value={backdateTechnicianName}
+                    onChange={(event) => setBackdateTechnicianName(event.target.value)}
+                    placeholder="Optional"
+                    className="mt-1 h-8 text-xs"
+                  />
+                </div>
+                <div className="col-span-12 md:col-span-4">
+                  <Label htmlFor="backdate-reason" className="text-xs">
+                    Reason for backdating
+                  </Label>
+                  <Input
+                    id="backdate-reason"
+                    value={backdateReason}
+                    onChange={(event) => setBackdateReason(event.target.value)}
+                    placeholder="Required"
+                    className="mt-1 h-8 text-xs"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </DialogHeader>
 

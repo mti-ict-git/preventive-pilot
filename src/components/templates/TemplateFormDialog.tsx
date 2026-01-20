@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
 import {
   Plus,
   GripVertical,
@@ -295,11 +295,23 @@ const TemplateFormDialog = ({
             </div>
 
             {/* Checklist items */}
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <Reorder.Group
+              as="div"
+              axis="y"
+              className="space-y-2 max-h-64 overflow-y-auto"
+              values={formData.checklistItems}
+              onReorder={(items) =>
+                setFormData({
+                  ...formData,
+                  checklistItems: items,
+                })
+              }
+           >
               <AnimatePresence>
                 {formData.checklistItems.map((item, index) => (
-                  <motion.div
+                  <Reorder.Item
                     key={item.id}
+                    value={item}
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, x: -20 }}
@@ -321,7 +333,7 @@ const TemplateFormDialog = ({
                         <X className="w-4 h-4" />
                       </Button>
                     </div>
-                    
+
                     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pl-10">
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox
@@ -332,7 +344,7 @@ const TemplateFormDialog = ({
                         />
                         <span className="text-muted-foreground">Mandatory</span>
                       </label>
-                      
+
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox
                           checked={item.requiresPassFail}
@@ -342,7 +354,7 @@ const TemplateFormDialog = ({
                         />
                         <span className="text-muted-foreground">Pass/Fail</span>
                       </label>
-                      
+
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox
                           checked={item.requiresNotes}
@@ -363,7 +375,7 @@ const TemplateFormDialog = ({
                         <span className="text-muted-foreground">Requires Attachment</span>
                       </label>
                     </div>
-                  </motion.div>
+                  </Reorder.Item>
                 ))}
               </AnimatePresence>
 
@@ -373,7 +385,7 @@ const TemplateFormDialog = ({
                   <p className="text-sm">Add items above to build your maintenance checklist.</p>
                 </div>
               )}
-            </div>
+            </Reorder.Group>
           </div>
 
           {/* Actions */}

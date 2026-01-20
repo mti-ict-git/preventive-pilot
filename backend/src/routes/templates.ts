@@ -12,6 +12,7 @@ const ChecklistItemSchema = z.object({
   isMandatory: z.boolean().default(true),
   requiresNotes: z.boolean().default(false),
   requiresPassFail: z.boolean().default(true),
+  enableAttachment: z.boolean().default(false),
   requiresAttachment: z.boolean().default(false),
   isActive: z.boolean().default(true),
 });
@@ -134,6 +135,7 @@ templatesRouter.get("/:templateId", async (req, res) => {
         "  i.IsMandatory AS IsMandatory,",
         "  i.RequiresNotes AS RequiresNotes,",
         "  i.RequiresPassFail AS RequiresPassFail,",
+        "  i.EnableAttachment AS EnableAttachment,",
         "  i.RequiresAttachment AS RequiresAttachment,",
         "  i.IsActive AS IsActive",
         "FROM pm.PMTemplateChecklistItems i",
@@ -165,6 +167,7 @@ templatesRouter.get("/:templateId", async (req, res) => {
       isMandatory: r.IsMandatory,
       requiresNotes: r.RequiresNotes,
       requiresPassFail: r.RequiresPassFail,
+      enableAttachment: r.EnableAttachment,
       requiresAttachment: r.RequiresAttachment,
       isActive: r.IsActive,
     })),
