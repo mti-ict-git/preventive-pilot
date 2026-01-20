@@ -649,6 +649,13 @@
 - Added Facilities page (list + filters + PM actions) under src/pages/Facilities.tsx.
 - Wired /facilities route in App.tsx and validated it loads.
 - Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## 2026-01-20 17:38:18 +08:00
+- Added Facility Detail page with PM settings, QR, and PM history.
+- Wired /facilities/:facilityId route and added list → Details link.
+- Implemented bulk PM enable/disable and bulk default template assignment.
+- Added per-row Set Template dialog and active template list.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
  
 ## 2026-01-20 17:27:12 +08:00
 - Verified PM Tasks assignment capabilities: tasks can be assigned to a technician (user) or to a role.
@@ -657,3 +664,10 @@
 - Reviewed UI: Scheduling page supports viewing/editing assignment rules and bulk-assigning unassigned tasks.
 - Validated DB schema fields: pm.PMTasks.AssignedToUserId and AssignedToRoleId with FKs to pm.Users and pm.Roles (Technician role present).
 - No code changes performed.
+
+## 2026-01-20 17:41:12 +08:00
+- Added manager-only Assign button to each task card on PM Tasks page.
+- Implemented Assign dialog with User/Role/Unassign options and pickers.
+- Wired assignment via apiAssignTask; stops card click propagation.
+- Ensured Supervisor and above can assign and reassign technicians.
+- Ran integrity check: `npx tsc --noEmit`; no type errors.

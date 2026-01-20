@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,8 +13,10 @@ import {
   apiCreateFacility,
   apiUpdateFacilityPmSettings,
   apiFacilityPmNow,
+  apiListTemplates,
   type Facility,
   type LookupsResponse,
+  type TemplateSummary,
 } from "@/lib/api";
 
 const Facilities = () => {
@@ -21,6 +24,10 @@ const Facilities = () => {
   const [locationId, setLocationId] = useState<string>("all");
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
+  const [bulkTemplateValue, setBulkTemplateValue] = useState<string>("none");
+  const [selectedFacilityIds, setSelectedFacilityIds] = useState<Record<string, true>>({});
+  const navigate = useNavigate();
 
   const queryClient = useQueryClient();
 
@@ -45,6 +52,12 @@ const Facilities = () => {
     queryFn: () => apiListFacilities(listInput),
   });
 
+  const templatesQuery = useQuery<{ items: TemplateSummary[] }>({
+    queryKey: ["templates", "active"],
+    queryFn: () => apiListTemplates({ active: true }),
+    staleTime: 60_000,
+  });
+
   const createMutation = useMutation({
     mutationFn: (input: { name: string; locationId?: string | null; description?: string | null; isActive?: boolean }) =>
       apiCreateFacility(input),
@@ -66,6 +79,12 @@ const Facilities = () => {
   });
 
   const locations = lookupsQuery.data?.locations ?? [];
+  const templates = templatesQuery.data?.items ?? [];
+  const templateOptions = useMemo(() => [{ id: "none", name: "No Template" }, ...templates], [templates]);
+
+  const allVisibleIds = useMemo(() => (facilitiesQuery.data?.items ?? []).map((x: Facility) => x.id), [facilitiesQuery.data?.items]);
+  const selectedCount = Object.keys(selectedFacilityIds).length;
+  const allSelectedOnPage = selectedCount > 0 && allVisibleIds.every((id) => selectedFacilityIds[id]);
 
   return (
     <>
@@ -139,10 +158,100 @@ const Facilities = () => {
           </div>
         </div>
 
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">{selectedCount} selected</div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={selectedCount === 0}
+              onClick={() => {
+                const ids = Object.keys(selectedFacilityIds);
+                Promise.all(
+                  ids.map((id) =>
+                    updatePmMutation.mutateAsync({ facilityId: id, pmEnabled: true }),
+                  ),
+                ).then(() => queryClient.invalidateQueries({ queryKey: ["facilities"] }));
+              }}
+            >
+              Bulk Enable PM
+            </Button>
+            <Button
+              variant="outline"
+              disabled={selectedCount === 0}
+              onClick={() => {
+                const ids = Object.keys(selectedFacilityIds);
+                Promise.all(
+                  ids.map((id) =>
+                    updatePmMutation.mutateAsync({ facilityId: id, pmEnabled: false }),
+                  ),
+                ).then(() => queryClient.invalidateQueries({ queryKey: ["facilities"] }));
+              }}
+            >
+              Bulk Disable PM
+            </Button>
+            <Dialog open={bulkTemplateOpen} onOpenChange={setBulkTemplateOpen}>
+              <DialogTrigger asChild>
+                <Button variant="secondary" disabled={selectedCount === 0}>Bulk Set Template</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Assign Default Template</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Select value={bulkTemplateValue} onValueChange={setBulkTemplateValue}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templateOptions.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={() => {
+                      const ids = Object.keys(selectedFacilityIds);
+                      Promise.all(
+                        ids.map((id) =>
+                          updatePmMutation.mutateAsync({
+                            facilityId: id,
+                            defaultTemplateId: bulkTemplateValue === "none" ? null : bulkTemplateValue,
+                          }),
+                        ),
+                      ).then(() => {
+                        queryClient.invalidateQueries({ queryKey: ["facilities"] });
+                        setBulkTemplateOpen(false);
+                      });
+                    }}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
         <div className="bg-card rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <input
+                    type="checkbox"
+                    checked={allSelectedOnPage}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      const next: Record<string, true> = { ...selectedFacilityIds };
+                      if (checked) {
+                        for (const id of allVisibleIds) next[id] = true;
+                      } else {
+                        for (const id of allVisibleIds) delete next[id];
+                      }
+                      setSelectedFacilityIds(next);
+                    }}
+                  />
+                </TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>PM Enabled</TableHead>
@@ -154,6 +263,18 @@ const Facilities = () => {
             <TableBody>
               {(facilitiesQuery.data?.items ?? []).map((f: Facility) => (
                 <TableRow key={f.id}>
+                  <TableCell className="w-12">
+                    <input
+                      type="checkbox"
+                      checked={!!selectedFacilityIds[f.id]}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        const next: Record<string, true> = { ...selectedFacilityIds };
+                        if (checked) next[f.id] = true; else delete next[f.id];
+                        setSelectedFacilityIds(next);
+                      }}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">{f.name}</TableCell>
                   <TableCell>{f.location?.name ?? "—"}</TableCell>
                   <TableCell>{f.pm.enabled ? "Enabled" : "Disabled"}</TableCell>
@@ -174,6 +295,36 @@ const Facilities = () => {
                     >
                       Toggle PM
                     </Button>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost">Set Template</Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Default Template</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <Select
+                            value={f.pm.defaultTemplateId ?? "none"}
+                            onValueChange={(v) =>
+                              updatePmMutation.mutate({ facilityId: f.id, defaultTemplateId: v === "none" ? null : v })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Template" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {templateOptions.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <div className="flex justify-end">
+                            <Button onClick={() => navigate(`/facilities/${f.id}`)}>Details</Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </TableCell>
                 </TableRow>
               ))}

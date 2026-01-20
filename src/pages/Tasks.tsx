@@ -37,6 +37,10 @@ import {
   apiDeleteEvidence,
   apiDownloadChecklistEvidence,
   apiDownloadEvidence,
+  apiAssignTask,
+  apiGetLookups,
+  apiListUsers,
+  ApiError,
   apiGetTask,
   apiListTasks,
   apiStartTask,
@@ -48,9 +52,13 @@ import {
   apiUploadTaskEvidenceFile,
   type CompleteTaskChecklistResultInput,
   type TaskListItem,
+  type LookupRole,
+  type UserSummary,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { isManager } from "@/lib/auth";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const Tasks = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -99,6 +107,69 @@ const Tasks = () => {
     queryKey: ["task-stats"],
     queryFn: () => apiListTasks({ page: 1, pageSize: 200 }),
     staleTime: 30_000,
+  });
+
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignTaskId, setAssignTaskId] = useState<string | null>(null);
+  const [assignMode, setAssignMode] = useState<"user" | "role" | "unassigned">("user");
+  const [assignUserId, setAssignUserId] = useState<string>("");
+  const [assignRoleId, setAssignRoleId] = useState<string>("");
+
+  const lookupsQuery = useQuery({
+    queryKey: ["lookups"],
+    queryFn: apiGetLookups,
+    enabled: assignDialogOpen,
+  });
+
+  const usersQuery = useQuery({
+    queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
+    queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
+    enabled: assignDialogOpen,
+  });
+
+  const openAssignDialogFor = (taskId: string) => {
+    setAssignTaskId(taskId);
+    const full = (tasksQuery.data?.items ?? []).find((t) => t.id === taskId);
+    if (full?.assignedTo.userId) {
+      setAssignMode("user");
+      setAssignUserId(full.assignedTo.userId);
+      setAssignRoleId("");
+    } else if (full?.assignedTo.roleId) {
+      setAssignMode("role");
+      setAssignRoleId(full.assignedTo.roleId);
+      setAssignUserId("");
+    } else {
+      setAssignMode("unassigned");
+      setAssignUserId("");
+      setAssignRoleId("");
+    }
+    setAssignDialogOpen(true);
+  };
+
+  const assignMutation = useMutation({
+    mutationFn: async () => {
+      if (!assignTaskId) throw new Error("No task selected");
+      if (assignMode === "user") {
+        if (!assignUserId) throw new Error("Select technician");
+        return apiAssignTask({ taskId: assignTaskId, assignedToUserId: assignUserId, assignedToRoleId: null });
+      }
+      if (assignMode === "role") {
+        if (!assignRoleId) throw new Error("Select role");
+        return apiAssignTask({ taskId: assignTaskId, assignedToRoleId: assignRoleId, assignedToUserId: null });
+      }
+      return apiAssignTask({ taskId: assignTaskId, assignedToUserId: null, assignedToRoleId: null });
+    },
+    onSuccess: async () => {
+      setAssignDialogOpen(false);
+      setAssignTaskId(null);
+      toast({ title: "Task assigned" });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      await statsQuery.refetch();
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed";
+      toast({ title: "Assign failed", description: message, variant: "destructive" });
+    },
   });
 
   type UiStatus = "upcoming" | "in_progress" | "due_today" | "overdue" | "completed" | "cancelled";
@@ -329,6 +400,19 @@ const Tasks = () => {
                           <span className="text-sm text-muted-foreground whitespace-nowrap">
                             {task.checklistComplete}/{task.checklistTotal}
                           </span>
+                          {isManager() ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAssignDialogFor(task.taskId);
+                              }}
+                            >
+                              Assign
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     </motion.div>
@@ -356,6 +440,84 @@ const Tasks = () => {
           await statsQuery.refetch();
         }}
       />
+
+      <Dialog open={assignDialogOpen} onOpenChange={(o) => setAssignDialogOpen(o)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Assign Task</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Assignment Target</Label>
+              <RadioGroup value={assignMode} onValueChange={(v) => setAssignMode(v as "user" | "role" | "unassigned")}
+                className="grid grid-cols-12 gap-2">
+                <div className="col-span-12 md:col-span-4 flex items-center gap-2">
+                  <RadioGroupItem id="assign-user" value="user" />
+                  <Label htmlFor="assign-user">User</Label>
+                </div>
+                <div className="col-span-12 md:col-span-4 flex items-center gap-2">
+                  <RadioGroupItem id="assign-role" value="role" />
+                  <Label htmlFor="assign-role">Role</Label>
+                </div>
+                <div className="col-span-12 md:col-span-4 flex items-center gap-2">
+                  <RadioGroupItem id="assign-unassigned" value="unassigned" />
+                  <Label htmlFor="assign-unassigned">Unassign</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {assignMode === "user" ? (
+              <div className="space-y-2">
+                <Label>Technician</Label>
+                <Select value={assignUserId} onValueChange={(v) => setAssignUserId(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select user" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(usersQuery.data?.items ?? [])
+                      .slice()
+                      .sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username))
+                      .map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {(u.displayName ?? u.username) ?? u.username}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : assignMode === "role" ? (
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select value={assignRoleId} onValueChange={(v) => setAssignRoleId(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(lookupsQuery.data?.roles ?? [])
+                      .slice()
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => assignMutation.mutate()}
+                disabled={assignMutation.isPending || (assignMode === "user" && !assignUserId) || (assignMode === "role" && !assignRoleId)}
+              >
+                {assignMutation.isPending ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
