@@ -76,6 +76,8 @@ const WorkOrderListQuerySchema = z.object({
   assetId: z.string().uuid().optional(),
   facilityId: z.string().uuid().optional(),
   impactLevel: z.string().max(32).optional(),
+  categoryId: z.string().uuid().optional(),
+  locationId: z.string().uuid().optional(),
   reportedFrom: z.string().datetime().optional(),
   reportedTo: z.string().datetime().optional(),
   completedFrom: z.string().datetime().optional(),
@@ -269,6 +271,8 @@ workOrdersRouter.get("/", async (req, res) => {
     .input("assetId", sql.UniqueIdentifier, parsed.data.assetId ?? null)
     .input("facilityId", sql.UniqueIdentifier, parsed.data.facilityId ?? null)
     .input("impactLevel", sql.NVarChar(32), parsed.data.impactLevel ?? null)
+    .input("categoryId", sql.UniqueIdentifier, parsed.data.categoryId ?? null)
+    .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("reportedFrom", sql.DateTime2(0), parsed.data.reportedFrom ?? null)
     .input("reportedTo", sql.DateTime2(0), parsed.data.reportedTo ?? null)
     .input("completedFrom", sql.DateTime2(0), parsed.data.completedFrom ?? null)
@@ -283,8 +287,14 @@ workOrdersRouter.get("/", async (req, res) => {
         "  t.AssetId AS AssetId,",
         "  a.AssetTag AS AssetTag,",
         "  a.Name AS AssetName,",
+        "  a.CategoryId AS AssetCategoryId,",
+        "  ac.Name AS AssetCategoryName,",
+        "  a.LocationId AS AssetLocationId,",
+        "  al.Name AS AssetLocationName,",
         "  t.FacilityId AS FacilityId,",
         "  fac.Name AS FacilityName,",
+        "  fac.LocationId AS FacilityLocationId,",
+        "  fl.Name AS FacilityLocationName,",
         "  tpl.Name AS TemplateName,",
         "  t.ScheduledDueAt AS ScheduledDueAt,",
         "  t.Status AS Status,",
@@ -305,7 +315,10 @@ workOrdersRouter.get("/", async (req, res) => {
         "  rby.Username AS ReportedByUsername",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.AssetCategories ac ON ac.CategoryId = a.CategoryId",
+        "LEFT JOIN pm.Locations al ON al.LocationId = a.LocationId",
         "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+        "LEFT JOIN pm.Locations fl ON fl.LocationId = fac.LocationId",
         "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
         "LEFT JOIN pm.Users au ON au.UserId = t.AssignedToUserId",
         "LEFT JOIN pm.Roles ar ON ar.RoleId = t.AssignedToRoleId",
@@ -316,6 +329,8 @@ workOrdersRouter.get("/", async (req, res) => {
         "  AND (@assetId IS NULL OR t.AssetId = @assetId)",
         "  AND (@facilityId IS NULL OR t.FacilityId = @facilityId)",
         "  AND (@impactLevel IS NULL OR t.ImpactLevel = @impactLevel)",
+        "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "  AND (@locationId IS NULL OR a.LocationId = @locationId OR fac.LocationId = @locationId)",
         "  AND (@reportedFrom IS NULL OR t.ReportedAt >= @reportedFrom)",
         "  AND (@reportedTo IS NULL OR t.ReportedAt <= @reportedTo)",
         "  AND (@completedFrom IS NULL OR t.CompletedAt >= @completedFrom)",
@@ -380,6 +395,19 @@ workOrdersRouter.get("/", async (req, res) => {
             name: r.FacilityName,
           }
         : null,
+      category: r.AssetCategoryId
+        ? {
+            id: r.AssetCategoryId,
+            name: r.AssetCategoryName ?? null,
+          }
+        : null,
+      location:
+        r.AssetLocationId || r.FacilityLocationId
+          ? {
+              id: r.AssetLocationId ?? r.FacilityLocationId,
+              name: (r.AssetLocationName ?? r.FacilityLocationName) ?? null,
+            }
+          : null,
       templateName: r.TemplateName,
       assignedTo: {
         userId: r.AssignedToUserId,
@@ -1092,4 +1120,3 @@ workOrdersRouter.post("/:taskId/close-downtime", async (req, res) => {
     );
   res.json({ ok: true });
 });
-

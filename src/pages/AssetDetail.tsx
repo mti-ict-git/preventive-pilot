@@ -50,6 +50,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { isManager } from "@/lib/auth";
 import { TaskDetailDialog } from "@/pages/Tasks";
+import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
 import {
   ApiError,
   apiDownloadEvidence,
@@ -191,6 +192,7 @@ const AssetDetail = () => {
   const [exportingPdfTaskId, setExportingPdfTaskId] = useState<string | null>(null);
   const [pmNowTaskId, setPmNowTaskId] = useState<string | null>(null);
   const [pmNowDialogOpen, setPmNowDialogOpen] = useState<boolean>(false);
+  const [reportBreakdownOpen, setReportBreakdownOpen] = useState<boolean>(false);
   const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false);
   const [deleteTaskTarget, setDeleteTaskTarget] = useState<{ id: string; taskNumber: string } | null>(null);
 
@@ -789,6 +791,13 @@ const AssetDetail = () => {
         }}
       />
 
+      <ReportBreakdownDialog
+        open={reportBreakdownOpen}
+        onOpenChange={setReportBreakdownOpen}
+        assetId={assetId ?? undefined}
+        templateId={asset?.pm.defaultTemplateId ?? null}
+      />
+
       <div className="p-6 space-y-6">
         {/* Back Button */}
         <Link to="/assets">
@@ -838,6 +847,14 @@ const AssetDetail = () => {
                   disabled={!canManage || patchPmMutation.isPending}
                 />
               </div>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setReportBreakdownOpen(true)}
+              >
+                <Wrench className="w-4 h-4" />
+                Report Breakdown
+              </Button>
               <Button
                 variant="outline"
                 className="gap-2"

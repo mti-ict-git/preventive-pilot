@@ -38,6 +38,7 @@ const mainNavBase: Omit<NavItem, "badge">[] = [
   { title: "PM Templates", icon: FileText, href: "/templates" },
   { title: "Scheduling", icon: Calendar, href: "/scheduling" },
   { title: "PM Tasks", icon: ClipboardList, href: "/tasks" },
+  { title: "Work Orders", icon: Wrench, href: "/work-orders" },
   { title: "Reports", icon: BarChart3, href: "/reports" },
   { title: "Notifications", icon: Bell, href: "/notifications" },
   { title: "Label Designer", icon: QrCode, href: "/label-designer" },

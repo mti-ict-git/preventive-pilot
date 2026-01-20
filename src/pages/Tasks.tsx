@@ -537,6 +537,25 @@ export const TaskDetailDialog = (props: {
     enabled: props.open && !!props.taskId,
   });
 
+	const [backdateMode, setBackdateMode] = useState(false);
+	const [backdateCompletedAt, setBackdateCompletedAt] = useState("");
+	const [backdateReason, setBackdateReason] = useState("");
+	const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
+
+	const usersQueryForBackdate = useQuery({
+		queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
+		queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
+		enabled: backdateMode,
+	});
+
+	const technicianOptionsForBackdate = useMemo(() => {
+		const users = usersQueryForBackdate.data?.items ?? [];
+		return users
+			.filter((u) => u.roles.includes("Technician"))
+			.slice()
+			.sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username));
+	}, [usersQueryForBackdate.data?.items]);
+
   const startMutation = useMutation({
     mutationFn: async () => {
       if (!props.taskId) throw new Error("No task selected");
@@ -629,9 +648,9 @@ export const TaskDetailDialog = (props: {
     },
   });
 
-  const task = taskQuery.data;
+	const task = taskQuery.data;
 
-  const normalizedStatus = task?.status.toLowerCase() ?? null;
+	const normalizedStatus = task?.status.toLowerCase() ?? null;
   const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
   const canPause = normalizedStatus === "in_progress";
   const canResume = normalizedStatus === "paused";
@@ -661,13 +680,9 @@ export const TaskDetailDialog = (props: {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string | null>(null);
-  const [previewContentType, setPreviewContentType] = useState<string | null>(null);
-  const [previewKind, setPreviewKind] = useState<"task" | "checklist">("task");
-  const [previewId, setPreviewId] = useState<string | null>(null);
-	const [backdateMode, setBackdateMode] = useState(false);
-	const [backdateCompletedAt, setBackdateCompletedAt] = useState("");
-	const [backdateReason, setBackdateReason] = useState("");
-	const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
+	const [previewContentType, setPreviewContentType] = useState<string | null>(null);
+	const [previewKind, setPreviewKind] = useState<"task" | "checklist">("task");
+	const [previewId, setPreviewId] = useState<string | null>(null);
 
   const taskFileInputRef = useRef<HTMLInputElement | null>(null);
   const checklistFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1020,46 +1035,72 @@ export const TaskDetailDialog = (props: {
                 <span className="text-xs text-destructive">You do not have permission to backdate</span>
               )}
             </div>
-            {backdateMode && (
-              <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-12 md:col-span-4">
-                  <Label htmlFor="backdate-completedAt" className="text-xs">
-                    Completion date/time
-                  </Label>
-                  <Input
-                    id="backdate-completedAt"
-                    type="datetime-local"
-                    value={backdateCompletedAt}
-                    onChange={(event) => setBackdateCompletedAt(event.target.value)}
-                    className="mt-1 h-8 text-xs"
-                  />
-                </div>
-                <div className="col-span-12 md:col-span-4">
-                  <Label htmlFor="backdate-technician" className="text-xs">
-                    Technician name(s)
-                  </Label>
-                  <Input
-                    id="backdate-technician"
-                    value={backdateTechnicianName}
-                    onChange={(event) => setBackdateTechnicianName(event.target.value)}
-                    placeholder="Optional"
-                    className="mt-1 h-8 text-xs"
-                  />
-                </div>
-                <div className="col-span-12 md:col-span-4">
-                  <Label htmlFor="backdate-reason" className="text-xs">
-                    Reason for backdating
-                  </Label>
-                  <Input
-                    id="backdate-reason"
-                    value={backdateReason}
-                    onChange={(event) => setBackdateReason(event.target.value)}
-                    placeholder="Required"
-                    className="mt-1 h-8 text-xs"
-                  />
-                </div>
-              </div>
-            )}
+				{backdateMode && (
+					<div className="grid grid-cols-12 gap-3">
+						<div className="col-span-12 md:col-span-4">
+							<Label htmlFor="backdate-completedAt" className="text-xs">
+								Completion date/time
+							</Label>
+							<Input
+								id="backdate-completedAt"
+								type="datetime-local"
+								value={backdateCompletedAt}
+								onChange={(event) => setBackdateCompletedAt(event.target.value)}
+								className="mt-1 h-8 text-xs"
+							/>
+						</div>
+						<div className="col-span-12 md:col-span-4">
+							<Label htmlFor="backdate-technician" className="text-xs">
+								Technician name(s)
+							</Label>
+							<div className="mt-1 flex gap-2">
+								<Input
+									id="backdate-technician"
+									value={backdateTechnicianName}
+									onChange={(event) => setBackdateTechnicianName(event.target.value)}
+									placeholder="Optional"
+									className="h-8 text-xs flex-1"
+								/>
+								<Select
+									onValueChange={(userId) => {
+										const user = technicianOptionsForBackdate.find((u) => u.id === userId);
+										if (!user) return;
+										const name = user.displayName ?? user.username;
+										if (!name) return;
+										setBackdateTechnicianName(name);
+									}}
+									value=""
+								>
+									<SelectTrigger className="h-8 w-28 text-xs">
+										<SelectValue placeholder="Lookup" />
+									</SelectTrigger>
+									<SelectContent>
+										{technicianOptionsForBackdate.map((u) => (
+											<SelectItem key={u.id} value={u.id}>
+												{(u.displayName ?? u.username) ?? u.username}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+							{usersQueryForBackdate.isLoading ? (
+								<p className="mt-1 text-[10px] text-muted-foreground">Loading technicians…</p>
+							) : null}
+						</div>
+						<div className="col-span-12 md:col-span-4">
+							<Label htmlFor="backdate-reason" className="text-xs">
+								Reason for backdating
+							</Label>
+							<Input
+								id="backdate-reason"
+								value={backdateReason}
+								onChange={(event) => setBackdateReason(event.target.value)}
+								placeholder="Required"
+								className="mt-1 h-8 text-xs"
+							/>
+						</div>
+					</div>
+				)}
           </div>
         </DialogHeader>
 

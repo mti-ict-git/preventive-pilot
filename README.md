@@ -123,6 +123,11 @@ Required environment variables:
 - Work orders reuse PM templates/checklists and permission model (technician vs manager roles).
 - OpenAPI docs available at `/api/docs` include all Work Orders schemas and paths.
 
+### Web UI
+
+- Work Orders page at `/work-orders` with filters for status, impact, assigned, location, category, and reported date range.
+- Asset Detail and Facility Detail include a **Report Breakdown** dialog to create a new work order with symptom, impact level, optional failure category/code, optional downtime start, and reported channel.
+
 ### Backdated completion (supervisor+)
 
 - Supervisors and above can optionally backdate task completion from the Task Detail dialog.

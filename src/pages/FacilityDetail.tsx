@@ -32,6 +32,7 @@ import {
   type ListTasksResponse,
   type LookupsResponse,
 } from "@/lib/api";
+import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
 
 const FacilityDetail = () => {
   const params = useParams();
@@ -62,6 +63,7 @@ const FacilityDetail = () => {
   const [locationId, setLocationId] = useState<string>("none");
   const [description, setDescription] = useState<string>("");
   const [isActive, setIsActive] = useState<boolean>(true);
+  const [reportBreakdownOpen, setReportBreakdownOpen] = useState<boolean>(false);
 
   const lookupsQuery = useQuery<LookupsResponse>({
     queryKey: ["lookups"],
@@ -122,6 +124,12 @@ const FacilityDetail = () => {
   return (
     <>
       <Header title="Facility" subtitle={f ? f.name : ""} />
+      <ReportBreakdownDialog
+        open={reportBreakdownOpen}
+        onOpenChange={setReportBreakdownOpen}
+        facilityId={facilityId}
+        templateId={f?.pm.defaultTemplateId ?? null}
+      />
       <div className="p-6 space-y-6">
         <Card>
           <CardHeader>
@@ -245,6 +253,7 @@ const FacilityDetail = () => {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setReportBreakdownOpen(true)}>Report Breakdown</Button>
                   <Button
                     onClick={() =>
                       updatePmMutation.mutate({

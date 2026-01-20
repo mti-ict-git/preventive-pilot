@@ -570,6 +570,163 @@ export const apiAddTaskEvidence = async (input: {
   });
 };
 
+export type WorkOrderListItem = {
+  id: string;
+  taskNumber: string;
+  status: string;
+  priority: string | null;
+  scheduledDueAt: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  symptom: string | null;
+  impactLevel: string | null;
+  failureCategory: string | null;
+  failureCode: string | null;
+  reportedAt: string | null;
+  reportedByUsername: string | null;
+  asset: { id: string; assetTag: string | null; name: string | null } | null;
+  facility: { id: string; name: string | null } | null;
+  category: { id: string | null; name: string | null } | null;
+  location: { id: string | null; name: string | null } | null;
+  templateName: string | null;
+  assignedTo: {
+    userId: string | null;
+    username: string | null;
+    displayName: string | null;
+    roleId: string | null;
+    roleName: string | null;
+  };
+};
+
+export type ListWorkOrdersResponse = {
+  page: number;
+  pageSize: number;
+  items: WorkOrderListItem[];
+};
+
+export const apiListWorkOrders = async (input: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  assetId?: string;
+  facilityId?: string;
+  impactLevel?: string;
+  categoryId?: string;
+  locationId?: string;
+  reportedFrom?: string;
+  reportedTo?: string;
+  completedFrom?: string;
+  completedTo?: string;
+  assigned?: "any" | "unassigned" | "me";
+}): Promise<ListWorkOrdersResponse> => {
+  const params = new URLSearchParams();
+  if (input.page) params.set("page", String(input.page));
+  if (input.pageSize) params.set("pageSize", String(input.pageSize));
+  if (input.status) params.set("status", input.status);
+  if (input.assetId) params.set("assetId", input.assetId);
+  if (input.facilityId) params.set("facilityId", input.facilityId);
+  if (input.impactLevel) params.set("impactLevel", input.impactLevel);
+  if (input.categoryId) params.set("categoryId", input.categoryId);
+  if (input.locationId) params.set("locationId", input.locationId);
+  if (input.reportedFrom) params.set("reportedFrom", input.reportedFrom);
+  if (input.reportedTo) params.set("reportedTo", input.reportedTo);
+  if (input.completedFrom) params.set("completedFrom", input.completedFrom);
+  if (input.completedTo) params.set("completedTo", input.completedTo);
+  if (input.assigned) params.set("assigned", input.assigned);
+  const query = params.toString();
+  return apiFetchJson<ListWorkOrdersResponse>(`/api/work-orders${query ? `?${query}` : ""}`);
+};
+
+export const apiCreateWorkOrder = async (input: {
+  assetId?: string;
+  facilityId?: string;
+  templateId?: string;
+  symptom: string;
+  impactLevel?: "normal" | "high" | "critical";
+  failureCategory?: string;
+  failureCode?: string;
+  downtimeStartedAt?: string;
+  reportedChannel?: string;
+}): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>(`/api/work-orders`, { method: "POST", body: input });
+};
+
+export type WorkOrderDetail = {
+  id: string;
+  taskNumber: string;
+  status: string;
+  priority: string | null;
+  scheduledDueAt: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  symptom: string | null;
+  impactLevel: string | null;
+  failureCategory: string | null;
+  failureCode: string | null;
+  reportedAt: string | null;
+  asset: { id: string; assetTag: string | null; name: string | null } | null;
+  facility: { id: string; name: string | null } | null;
+  template: { id: string; name: string };
+  assignedTo: {
+    userId: string | null;
+    username: string | null;
+    displayName: string | null;
+    roleId: string | null;
+    roleName: string | null;
+  };
+  completedBy: TaskUserRef | null;
+  cancelledBy: TaskUserRef | null;
+};
+
+export const apiGetWorkOrder = async (taskId: string): Promise<WorkOrderDetail> => {
+  return apiFetchJson<WorkOrderDetail>(`/api/work-orders/${taskId}`);
+};
+
+export const apiAssignWorkOrder = async (input: {
+  taskId: string;
+  assignedToUserId?: string | null;
+  assignedToRoleId?: string | null;
+  priority?: "low" | "medium" | "high";
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/assign`, { method: "POST", body });
+};
+
+export const apiStartWorkOrder = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/start`, { method: "POST" });
+};
+
+export const apiPauseWorkOrder = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/pause`, { method: "POST" });
+};
+
+export const apiResumeWorkOrder = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/resume`, { method: "POST" });
+};
+
+export const apiCancelWorkOrder = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/cancel`, { method: "POST" });
+};
+
+export const apiCloseDowntime = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/close-downtime`, { method: "POST" });
+};
+
+export const apiCompleteWorkOrder = async (input: {
+  taskId: string;
+  checklistResults: CompleteTaskChecklistResultInput[];
+  forceCompleted?: boolean;
+  completedAt?: string;
+  backdateReason?: string;
+  technicianName?: string;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/complete`, { method: "POST", body });
+};
+
 export type DownloadEvidenceResponse = {
   blob: Blob;
   fileName: string | null;

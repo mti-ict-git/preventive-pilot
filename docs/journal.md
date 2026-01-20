@@ -5,6 +5,13 @@
 - Extended OpenAPI docs with Work Orders schemas and endpoints.
 - Verified repo lint and typecheck (frontend + backend).
 
+## Wed Jan 21 06:04:05 WITA 2026
+- Added Work Orders web page (`/work-orders`) with filters and list layout.
+- Registered Work Orders route and sidebar navigation entry.
+- Implemented reusable Report Breakdown dialog component.
+- Integrated Report Breakdown into Asset Detail and Facility Detail pages.
+- Ran `npm run lint` and `npx tsc --noEmit` locally to validate.
+
 ## 2026-01-20 23:47:57 WITA
 - Split PM checklist attachments into Enable Attachment vs Attachment Required flags.
 - Updated template DB schema, backend APIs, and web UI to expose both flags.
@@ -214,6 +221,16 @@
 - Fixed backdateMode ReferenceError by scoping backdate state inside TaskDetailDialog.
 - Reset backdate form fields whenever the Task Detail dialog opens.
 - Ran `npm run lint` successfully.
+
+## 2026-01-21 05:56:57 WITA
+- Fixed db/schema.sql EnableAttachment migration block to use EXEC dynamic SQL.
+- Successfully ran `npm run db:apply-schema` against SQL Server without errors.
+- Verified TypeScript types with `npx tsc --noEmit`.
+
+## 2026-01-21 06:05:51 WITA
+- Added technician lookup dropdown to backdate Technician name(s) field in Task Detail.
+- Limited lookup options to active users with Technician role.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-05 22:39
 - Added evidence import error-stage breakdown and sample errors in results.

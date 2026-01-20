@@ -311,12 +311,13 @@ END;
 
 IF COL_LENGTH(N'pm.PMTemplateChecklistItems', N'EnableAttachment') IS NULL
 BEGIN
-  ALTER TABLE pm.PMTemplateChecklistItems
-    ADD EnableAttachment bit NOT NULL
-      CONSTRAINT DF_pm_PMTemplateChecklistItems_EnableAttachment DEFAULT (0) WITH VALUES;
+	EXEC(
+		N'ALTER TABLE pm.PMTemplateChecklistItems
+			ADD EnableAttachment bit NOT NULL
+				CONSTRAINT DF_pm_PMTemplateChecklistItems_EnableAttachment DEFAULT (0) WITH VALUES;'
+	);
 
-  UPDATE pm.PMTemplateChecklistItems
-  SET EnableAttachment = RequiresAttachment;
+	EXEC(N'UPDATE pm.PMTemplateChecklistItems SET EnableAttachment = RequiresAttachment;');
 END;
 
 IF OBJECT_ID(N'pm.AssignmentRules', N'U') IS NULL
