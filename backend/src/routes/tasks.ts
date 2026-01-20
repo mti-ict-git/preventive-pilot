@@ -1649,6 +1649,8 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "  t.AssetId AS AssetId,",
         "  a.AssetTag AS AssetTag,",
         "  a.Name AS AssetName,",
+        "  t.FacilityId AS FacilityId,",
+        "  fac.Name AS FacilityName,",
         "  t.TemplateId AS TemplateId,",
         "  tpl.Name AS TemplateName,",
         "  t.ScheduledDueAt AS ScheduledDueAt,",
@@ -1671,7 +1673,8 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "  xu.DisplayName AS CancelledByDisplayName,",
         "  t.ForceCompleted AS ForceCompleted",
         "FROM pm.PMTasks t",
-        "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
         "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
         "LEFT JOIN pm.Users au ON au.UserId = t.AssignedToUserId",
         "LEFT JOIN pm.Roles ar ON ar.RoleId = t.AssignedToRoleId",
@@ -1809,6 +1812,15 @@ tasksRouter.get( "/:taskId", async (req, res) => {
     else checklistEvidenceByItemId.set(itemId, [next]);
   }
 
+  const assetIdValue = (taskRow.AssetId as string | null) ?? null;
+  const facilityIdValue = (taskRow.FacilityId as string | null) ?? null;
+  const assetId = assetIdValue ?? facilityIdValue ?? "";
+  const assetTagValue = (taskRow.AssetTag as string | null) ?? null;
+  const facilityNameValue = (taskRow.FacilityName as string | null) ?? null;
+  const assetNameValue = (taskRow.AssetName as string | null) ?? null;
+  const assetTag = assetTagValue ?? (facilityNameValue ?? "");
+  const assetName = assetNameValue ?? (facilityNameValue ?? "");
+
   res.json({
     id: taskRow.TaskId,
     taskNumber: taskRow.TaskNumber,
@@ -1835,9 +1847,9 @@ tasksRouter.get( "/:taskId", async (req, res) => {
       : null,
     forceCompleted: taskRow.ForceCompleted,
     asset: {
-      id: taskRow.AssetId,
-      assetTag: taskRow.AssetTag,
-      name: taskRow.AssetName,
+      id: assetId,
+      assetTag,
+      name: assetName,
     },
     template: {
       id: taskRow.TemplateId,

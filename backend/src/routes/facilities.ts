@@ -52,7 +52,7 @@ facilitiesRouter.get("/", async (req, res) => {
   }
 
   const page = Math.max(1, Number(parsed.data.page) || 1);
-  const pageSize = Math.min(500, Math.max(1, Number(parsed.data.page) || 50));
+  const pageSize = Math.min(500, Math.max(1, Number(parsed.data.pageSize) || 50));
   const offset = (page - 1) * pageSize;
   const pmEnabled = parseBoolean(parsed.data.pmEnabled);
 

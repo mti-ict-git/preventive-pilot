@@ -8,9 +8,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   apiGetLookups,
   apiListFacilities,
   apiCreateFacility,
+  apiUpdateFacility,
   apiUpdateFacilityPmSettings,
   apiFacilityPmNow,
   apiListTemplates,
@@ -58,6 +70,19 @@ const Facilities = () => {
     queryKey: ["templates", "active"],
     queryFn: () => apiListTemplates({ active: true }),
     staleTime: 60_000,
+  });
+
+  const updateFacilityMutation = useMutation({
+    mutationFn: (input: {
+      facilityId: string;
+      name?: string;
+      locationId?: string | null;
+      description?: string | null;
+      isActive?: boolean;
+    }) => apiUpdateFacility(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["facilities"] });
+    },
   });
 
   const createMutation = useMutation({
@@ -191,6 +216,43 @@ const Facilities = () => {
             >
               Bulk Disable PM
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={selectedCount === 0}>
+                  Archive Facilities
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Archive selected facilities?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Archived facilities will no longer appear in this list but remain available for history.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      const ids = Object.keys(selectedFacilityIds);
+                      if (ids.length === 0) return;
+                      Promise.all(
+                        ids.map((id) =>
+                          updateFacilityMutation.mutateAsync({
+                            facilityId: id,
+                            isActive: false,
+                          }),
+                        ),
+                      ).then(() => {
+                        setSelectedFacilityIds({});
+                        queryClient.invalidateQueries({ queryKey: ["facilities"] });
+                      });
+                    }}
+                  >
+                    Archive
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <Dialog open={bulkTemplateOpen} onOpenChange={setBulkTemplateOpen}>
               <DialogTrigger asChild>
                 <Button variant="secondary" disabled={selectedCount === 0}>Bulk Set Template</Button>
@@ -283,6 +345,9 @@ const Facilities = () => {
                   <TableCell>{f.pm.lastCompletedAt ?? "—"}</TableCell>
                   <TableCell>{f.pm.nextDueAt ?? "—"}</TableCell>
                   <TableCell className="text-right space-x-2">
+                    <Button variant="outline" onClick={() => navigate(`/facilities/${f.id}`)}>
+                      Details
+                    </Button>
                     <Button variant="outline" onClick={() => pmNowMutation.mutate(f.id)}>PM Now</Button>
                     <Button
                       variant="secondary"

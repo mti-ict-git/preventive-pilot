@@ -9,14 +9,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { QRCodeSVG } from "qrcode.react";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   apiGetFacility,
   apiListTasks,
+  apiUpdateFacility,
   apiUpdateFacilityPmSettings,
   apiListTemplates,
   apiFacilityPmNow,
+  apiGetLookups,
   type Facility,
   type TemplateSummary,
   type ListTasksResponse,
+  type LookupsResponse,
 } from "@/lib/api";
 
 const FacilityDetail = () => {
@@ -44,6 +58,17 @@ const FacilityDetail = () => {
   const [defaultTemplateId, setDefaultTemplateId] = useState<string>("none");
   const [nextDueAt, setNextDueAt] = useState<string>("");
 
+  const [name, setName] = useState<string>("");
+  const [locationId, setLocationId] = useState<string>("none");
+  const [description, setDescription] = useState<string>("");
+  const [isActive, setIsActive] = useState<boolean>(true);
+
+  const lookupsQuery = useQuery<LookupsResponse>({
+    queryKey: ["lookups"],
+    queryFn: apiGetLookups,
+    staleTime: 60_000,
+  });
+
   const updatePmMutation = useMutation({
     mutationFn: (input: { facilityId: string; pmEnabled?: boolean; defaultTemplateId?: string | null; nextPmDueAt?: string | null }) =>
       apiUpdateFacilityPmSettings(input),
@@ -66,9 +91,29 @@ const FacilityDetail = () => {
 
   const f = facilityQuery.data;
 
+  const locations = lookupsQuery.data?.locations ?? [];
+
+  const updateFacilityMutation = useMutation({
+    mutationFn: (input: {
+      facilityId: string;
+      name?: string;
+      locationId?: string | null;
+      description?: string | null;
+      isActive?: boolean;
+    }) => apiUpdateFacility(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["facility", facilityId] });
+      queryClient.invalidateQueries({ queryKey: ["facilities"] });
+    },
+  });
+
   useEffect(() => {
     const data = facilityQuery.data;
     if (!data) return;
+    setName(data.name);
+    setLocationId(data.location?.id ?? "none");
+    setDescription(data.description ?? "");
+    setIsActive(data.isActive);
     setPmEnabled(data.pm.enabled ?? false);
     setDefaultTemplateId(data.pm.defaultTemplateId ?? "none");
     setNextDueAt(data.pm.nextDueAt ?? "");
@@ -78,6 +123,85 @@ const FacilityDetail = () => {
     <>
       <Header title="Facility" subtitle={f ? f.name : ""} />
       <div className="p-6 space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Facility Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-12 gap-4">
+              <div className="col-span-12 md:col-span-4">
+                <Input
+                  placeholder="Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="col-span-12 md:col-span-4">
+                <Select value={locationId} onValueChange={setLocationId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Location</SelectItem>
+                    {locations.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.name ?? l.id}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-12 md:col-span-4">
+                <Input
+                  placeholder="Description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() =>
+                  updateFacilityMutation.mutate({
+                    facilityId,
+                    name: name.trim() ? name.trim() : undefined,
+                    locationId: locationId === "none" ? null : locationId,
+                    description: description.trim() ? description.trim() : null,
+                  })
+                }
+              >
+                Save Details
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" disabled={!isActive}>
+                    Archive Facility
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Archive this facility?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Archived facilities will no longer appear in the Facilities list but remain in history.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() =>
+                        updateFacilityMutation.mutate({
+                          facilityId,
+                          isActive: false,
+                        })
+                      }
+                    >
+                      Archive
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 md:col-span-6">
             <Card>

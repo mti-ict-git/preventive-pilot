@@ -684,3 +684,28 @@
 - Updated button label to show Reassign when a task already has an assignee.
 - Kept Assign for unassigned tasks; logic derives from assignedTo fields.
 - Ran integrity check: `npx tsc --noEmit`; no type errors.
+
+## 2026-01-20 22:26:02 WITA
+- Updated docs/implementation-plan.md to reflect the current PM system architecture and implementation status (DB schema, backend API, jobs, and web UI).
+- Clarified phase statuses (implemented vs. ongoing) and aligned deliverables/acceptance criteria with existing features.
+
+## 2026-01-20 23:06:51 WITA
+- Added Phase 6  Corrective Maintenance (CM / Work Orders) to docs/implementation-plan.md.
+- Defined scope, UX flows, backend schema/API changes, web UI design, reporting, and acceptance criteria for reactive work orders.
+
+## 2026-01-20 23:11:34 WITA
+- Created docs/cm-implementation-plan.md as a phased implementation guide for CM/Work Orders.
+- Documented Phases 06: concept alignment, schema extensions, Work Orders API, web UI integration, reporting, and mobile readiness.
+
+## 2026-01-20 23:13:58 WITA
+- Refined Phase 0 section in docs/cm-implementation-plan.md to add an explicit decision record.
+- Clarified CM vocabulary (Work Order, Symptom, FailureCategory/Code, ImpactLevel, Downtime, ReportedBy/At) and mapping to existing pm tables.
+
+## 2026-01-20 22:30:10 WITA
+- Fixed Facilities listing backend pageSize calculation so the list returns up to the requested number of facilities instead of only one per page.
+- Verified end-to-end by creating multiple facilities and confirming they all appear on the Facilities page.
+
+## 2026-01-20 22:40:00 WITA
+- Added per-row Details button on Facilities list and a Facility Detail card to edit name, location, and description.
+- Implemented Archive Facility (soft delete via IsActive flag) from Facility Detail and a bulk Archive Facilities action on the Facilities list.
+- Ran `npx tsc --noEmit` and `npm run lint` to verify types and lint rules.
