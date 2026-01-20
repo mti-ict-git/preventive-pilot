@@ -33,6 +33,7 @@ export interface ChecklistItem {
   isMandatory: boolean;
   requiresNotes: boolean;
   requiresPassFail: boolean;
+  enableAttachment: boolean;
   requiresAttachment: boolean;
   isActive: boolean;
 }
@@ -97,6 +98,7 @@ const TemplateFormDialog = ({
       isMandatory: true,
       requiresNotes: false,
       requiresPassFail: true,
+      enableAttachment: false,
       requiresAttachment: false,
       isActive: true,
     };
@@ -367,12 +369,31 @@ const TemplateFormDialog = ({
 
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox
-                          checked={item.requiresAttachment}
-                          onCheckedChange={(checked) =>
-                            updateChecklistItem(item.id, { requiresAttachment: checked === true })
-                          }
+                          checked={item.enableAttachment}
+                          onCheckedChange={(checked) => {
+                            const enabled = checked === true;
+                            updateChecklistItem(item.id, {
+                              enableAttachment: enabled,
+                              requiresAttachment: enabled ? item.requiresAttachment : false,
+                            });
+                          }}
                         />
-                        <span className="text-muted-foreground">Requires Attachment</span>
+                        <span className="text-muted-foreground">Enable Attachment</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={item.requiresAttachment}
+                          disabled={!item.enableAttachment}
+                          onCheckedChange={(checked) => {
+                            const required = checked === true;
+                            updateChecklistItem(item.id, {
+                              requiresAttachment: required,
+                              enableAttachment: required ? true : item.enableAttachment,
+                            });
+                          }}
+                        />
+                        <span className="text-muted-foreground">Attachment Required</span>
                       </label>
                     </div>
                   </Reorder.Item>

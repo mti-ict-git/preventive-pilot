@@ -1,5 +1,12 @@
 # Journal
 
+## 2026-01-20 23:47:57 WITA
+- Split PM checklist attachments into Enable Attachment vs Attachment Required flags.
+- Updated template DB schema, backend APIs, and web UI to expose both flags.
+- Enforced mandatory checklist items to require non-skip outcomes with notes.
+- Adjusted task completion validation and UI to respect new attachment semantics.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## 2026-01-01 14:03
 - Added initial SQL Server `pm` schema script and apply runner.
 - Added implementation plan document for database, API, jobs, and UI integration.
@@ -197,6 +204,11 @@
 
 ## 2026-01-05 22:27
 - Extended evidence import filename date parsing to support DDMMYYYY.
+
+## 2026-01-20 23:44:22 WITA
+- Fixed backdateMode ReferenceError by scoping backdate state inside TaskDetailDialog.
+- Reset backdate form fields whenever the Task Detail dialog opens.
+- Ran `npm run lint` successfully.
 
 ## 2026-01-05 22:39
 - Added evidence import error-stage breakdown and sample errors in results.

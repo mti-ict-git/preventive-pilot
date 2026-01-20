@@ -1706,6 +1706,7 @@ tasksRouter.get( "/:taskId", async (req, res) => {
           "  i.IsMandatory AS IsMandatory,",
           "  i.RequiresNotes AS RequiresNotes,",
           "  i.RequiresPassFail AS RequiresPassFail,",
+          "  i.EnableAttachment AS EnableAttachment,",
           "  i.RequiresAttachment AS RequiresAttachment,",
           "  i.IsActive AS IsActive,",
         "  r.TaskChecklistResultId AS TaskChecklistResultId,",
@@ -1885,6 +1886,7 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         isMandatory: r.IsMandatory,
         requiresNotes: r.RequiresNotes,
         requiresPassFail: r.RequiresPassFail,
+        enableAttachment: r.EnableAttachment,
         requiresAttachment: r.RequiresAttachment,
         isActive: r.IsActive,
         evidence: checklistEvidenceByItemId.get(String(r.TemplateChecklistItemId)) ?? [],
@@ -1985,6 +1987,7 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
         "  i.SortOrder AS SortOrder,",
         "  i.ItemText AS ItemText,",
         "  i.RequiresPassFail AS RequiresPassFail,",
+        "  i.IsMandatory AS IsMandatory,",
         "  r.Outcome AS Outcome,",
         "  r.Notes AS Notes",
         "FROM pm.PMTemplateChecklistItems i",
@@ -2704,6 +2707,7 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
           "  i.IsMandatory AS IsMandatory,",
           "  i.RequiresNotes AS RequiresNotes,",
           "  i.RequiresPassFail AS RequiresPassFail,",
+          "  i.EnableAttachment AS EnableAttachment,",
           "  i.RequiresAttachment AS RequiresAttachment,",
           "  i.IsActive AS IsActive",
           "FROM pm.PMTemplateChecklistItems i",
@@ -2762,7 +2766,9 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       }
 
       const notes = result.notes ?? null;
-      if (bitToBoolean(templateItem.RequiresNotes) && result.outcome !== 0) {
+      const requiresNotes =
+        bitToBoolean(templateItem.RequiresNotes) || bitToBoolean(templateItem.IsMandatory);
+      if (requiresNotes && result.outcome !== 0) {
         if (!notes || notes.trim().length === 0) {
           res.status(400).json({ message: "Invalid request" });
           await tx.rollback();
@@ -2771,8 +2777,8 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       }
 
       if (
+        bitToBoolean(templateItem.EnableAttachment) &&
         bitToBoolean(templateItem.RequiresAttachment) &&
-        bitToBoolean(templateItem.IsMandatory) &&
         result.outcome !== 0
       ) {
         if (!checklistEvidenceItemIdSet.has(result.templateChecklistItemId)) {

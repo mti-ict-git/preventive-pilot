@@ -431,6 +431,7 @@ export type TaskDetailChecklistItem = {
   isMandatory: boolean;
   requiresNotes: boolean;
   requiresPassFail: boolean;
+  enableAttachment: boolean;
   requiresAttachment: boolean;
   isActive: boolean;
   evidence: TaskChecklistEvidence[];
@@ -1110,6 +1111,7 @@ export type TemplateChecklistItem = {
   isMandatory: boolean;
   requiresNotes: boolean;
   requiresPassFail: boolean;
+  enableAttachment: boolean;
   requiresAttachment: boolean;
   isActive: boolean;
 };
@@ -1136,6 +1138,7 @@ export type UpsertTemplateChecklistItemInput = {
   isMandatory: boolean;
   requiresNotes: boolean;
   requiresPassFail: boolean;
+  enableAttachment: boolean;
   requiresAttachment: boolean;
   isActive: boolean;
 };

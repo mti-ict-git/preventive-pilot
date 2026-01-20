@@ -61,16 +61,12 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const Tasks = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
-  const [backdateMode, setBackdateMode] = useState(false);
-  const [backdateCompletedAt, setBackdateCompletedAt] = useState("");
-  const [backdateReason, setBackdateReason] = useState("");
-  const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
+	const [searchQuery, setSearchQuery] = useState("");
+	const [activeTab, setActiveTab] = useState("all");
+	const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+	const [taskDetailOpen, setTaskDetailOpen] = useState(false);
 
-  const queryClient = useQueryClient();
+	const queryClient = useQueryClient();
 
   const listQueryInput = useMemo(() => {
     const now = new Date();
@@ -668,6 +664,10 @@ export const TaskDetailDialog = (props: {
   const [previewContentType, setPreviewContentType] = useState<string | null>(null);
   const [previewKind, setPreviewKind] = useState<"task" | "checklist">("task");
   const [previewId, setPreviewId] = useState<string | null>(null);
+	const [backdateMode, setBackdateMode] = useState(false);
+	const [backdateCompletedAt, setBackdateCompletedAt] = useState("");
+	const [backdateReason, setBackdateReason] = useState("");
+	const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
 
   const taskFileInputRef = useRef<HTMLInputElement | null>(null);
   const checklistFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -704,6 +704,10 @@ export const TaskDetailDialog = (props: {
     setEvidenceUri("");
     closePreview();
     setPendingChecklistItemId(null);
+		setBackdateMode(false);
+		setBackdateCompletedAt("");
+		setBackdateReason("");
+		setBackdateTechnicianName("");
   }, [props.open, task?.checklistItems]);
 
   const uploadTaskEvidenceMutation = useMutation({
@@ -840,11 +844,17 @@ export const TaskDetailDialog = (props: {
         }
 
         const notesValue = draft?.notes ?? "";
-        if (item.requiresNotes && outcome !== 0 && notesValue.trim().length === 0) {
+        const notesRequired = item.requiresNotes || item.isMandatory;
+        if (notesRequired && outcome !== 0 && notesValue.trim().length === 0) {
           throw new Error("Notes are required for this checklist item");
         }
 
-        if (item.requiresAttachment && outcome !== 0 && item.evidence.length === 0) {
+        if (
+          item.enableAttachment &&
+          item.requiresAttachment &&
+          outcome !== 0 &&
+          item.evidence.length === 0
+        ) {
           throw new Error("Attachment is required for this checklist item");
         }
 
@@ -1117,9 +1127,14 @@ export const TaskDetailDialog = (props: {
                                     Notes
                                   </Badge>
                                 ) : null}
-                                {item.requiresAttachment ? (
+                                {item.enableAttachment && item.requiresAttachment ? (
                                   <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">
-                                    Attachment
+                                    Attachment Required
+                                  </Badge>
+                                ) : null}
+                                {item.enableAttachment && !item.requiresAttachment ? (
+                                  <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">
+                                    Attachment Optional
                                   </Badge>
                                 ) : null}
                               </div>
@@ -1168,74 +1183,78 @@ export const TaskDetailDialog = (props: {
                               />
                           </div>
 
-                          <div className="mt-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-xs text-muted-foreground">Attachments</p>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={uploadChecklistEvidenceMutation.isPending}
-                                onClick={() => {
-                                  setPendingChecklistItemId(item.id);
-                                  checklistFileInputRef.current?.click();
-                                }}
-                              >
-                                Attach file
-                              </Button>
-                            </div>
+                          {item.enableAttachment ? (
+                            <div className="mt-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs text-muted-foreground">Attachments</p>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={uploadChecklistEvidenceMutation.isPending}
+                                  onClick={() => {
+                                    setPendingChecklistItemId(item.id);
+                                    checklistFileInputRef.current?.click();
+                                  }}
+                                >
+                                  Attach file
+                                </Button>
+                              </div>
 
-                            {item.evidence.length === 0 ? (
-                              <div className="text-xs text-muted-foreground mt-2">No attachments.</div>
-                            ) : (
-                              <div className="space-y-2 mt-2">
-                                {item.evidence.map((e) => (
-                                  <div
-                                    key={e.id}
-                                    className="rounded-md border border-border bg-muted/30 p-2 flex items-center justify-between gap-3"
-                                  >
-                                    <div className="min-w-0">
-                                      <div className="text-xs text-foreground truncate">{e.fileName ?? e.uri}</div>
-                                      <div className="text-[11px] text-muted-foreground truncate">
-                                        {e.uploadedBy?.displayName ?? e.uploadedBy?.username ?? ""}
+                              {item.evidence.length === 0 ? (
+                                <div className="text-xs text-muted-foreground mt-2">No attachments.</div>
+                              ) : (
+                                <div className="space-y-2 mt-2">
+                                  {item.evidence.map((e) => (
+                                    <div
+                                      key={e.id}
+                                      className="rounded-md border border-border bg-muted/30 p-2 flex items-center justify-between gap-3"
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="text-xs text-foreground truncate">{e.fileName ?? e.uri}</div>
+                                        <div className="text-[11px] text-muted-foreground truncate">
+                                          {e.uploadedBy?.displayName ?? e.uploadedBy?.username ?? ""}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            openEvidencePreview({
+                                              kind: "checklist",
+                                              id: e.id,
+                                              uri: e.uri,
+                                              fileName: e.fileName,
+                                              contentType: e.contentType,
+                                            })
+                                          }
+                                        >
+                                          Preview
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => downloadEvidence({ kind: "checklist", id: e.id })}
+                                        >
+                                          Download
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          disabled={deleteEvidenceMutation.isPending}
+                                          onClick={() =>
+                                            deleteEvidenceMutation.mutate({ kind: "checklist", id: e.id })
+                                          }
+                                        >
+                                          Delete
+                                        </Button>
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          openEvidencePreview({
-                                            kind: "checklist",
-                                            id: e.id,
-                                            uri: e.uri,
-                                            fileName: e.fileName,
-                                            contentType: e.contentType,
-                                          })
-                                        }
-                                      >
-                                        Preview
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => downloadEvidence({ kind: "checklist", id: e.id })}
-                                      >
-                                        Download
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        disabled={deleteEvidenceMutation.isPending}
-                                        onClick={() => deleteEvidenceMutation.mutate({ kind: "checklist", id: e.id })}
-                                      >
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       ))}
                   </div>

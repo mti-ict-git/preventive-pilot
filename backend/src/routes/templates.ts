@@ -222,15 +222,16 @@ templatesRouter.post("/", requireSuperadmin, async (req, res) => {
         .input("isMandatory", sql.Bit, item.isMandatory ? 1 : 0)
         .input("requiresNotes", sql.Bit, item.requiresNotes ? 1 : 0)
         .input("requiresPassFail", sql.Bit, item.requiresPassFail ? 1 : 0)
+        .input("enableAttachment", sql.Bit, item.enableAttachment ? 1 : 0)
         .input("requiresAttachment", sql.Bit, item.requiresAttachment ? 1 : 0)
         .input("isActive", sql.Bit, item.isActive ? 1 : 0)
         .query(
           [
             "INSERT INTO pm.PMTemplateChecklistItems (",
-            "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, RequiresAttachment, IsActive",
+            "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, EnableAttachment, RequiresAttachment, IsActive",
             ")",
             "VALUES (",
-            "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @requiresAttachment, @isActive",
+            "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @enableAttachment, @requiresAttachment, @isActive",
             ")",
           ].join("\n"),
         );
@@ -329,15 +330,16 @@ templatesRouter.put("/:templateId", requireSuperadmin, async (req, res) => {
           .input("isMandatory", sql.Bit, item.isMandatory ? 1 : 0)
           .input("requiresNotes", sql.Bit, item.requiresNotes ? 1 : 0)
           .input("requiresPassFail", sql.Bit, item.requiresPassFail ? 1 : 0)
+          .input("enableAttachment", sql.Bit, item.enableAttachment ? 1 : 0)
           .input("requiresAttachment", sql.Bit, item.requiresAttachment ? 1 : 0)
           .input("isActive", sql.Bit, item.isActive ? 1 : 0)
           .query(
             [
               "INSERT INTO pm.PMTemplateChecklistItems (",
-              "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, RequiresAttachment, IsActive",
+              "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, EnableAttachment, RequiresAttachment, IsActive",
               ")",
               "VALUES (",
-              "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @requiresAttachment, @isActive",
+              "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @enableAttachment, @requiresAttachment, @isActive",
               ")",
             ].join("\n"),
           );

@@ -141,6 +141,7 @@ const Templates = () => {
           isMandatory: item.isMandatory,
           requiresNotes: item.requiresNotes,
           requiresPassFail: item.requiresPassFail,
+          enableAttachment: item.enableAttachment,
           requiresAttachment: item.requiresAttachment,
           isActive: item.isActive,
         };
@@ -164,6 +165,7 @@ const Templates = () => {
         isMandatory: i.isMandatory,
         requiresNotes: i.requiresNotes,
         requiresPassFail: i.requiresPassFail,
+        enableAttachment: i.enableAttachment,
         requiresAttachment: i.requiresAttachment,
         isActive: i.isActive,
       })),

@@ -159,10 +159,16 @@ const TemplateDetailDialog = ({
                             Notes Required
                           </span>
                         )}
-                        {item.requiresAttachment && (
+                        {item.enableAttachment && item.requiresAttachment && (
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Paperclip className="w-3 h-3" />
-                            Requires Attachment
+                            Attachment Required
+                          </span>
+                        )}
+                        {item.enableAttachment && !item.requiresAttachment && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Paperclip className="w-3 h-3" />
+                            Attachment Optional
                           </span>
                         )}
                       </div>

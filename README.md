@@ -102,6 +102,14 @@ Required environment variables:
 - Evidence uploads are stored under the existing `Qx YYYY` folder structure.
 - Max upload size is 50MB per file.
 
+### Checklist attachment behavior
+
+- Each template checklist item now has two attachment flags:
+  - **Enable Attachment** – shows the Attach file control for that item in Task Detail.
+  - **Attachment Required** – when enabled attachment is on, requires at least one file before completion.
+- Mandatory checklist items cannot be skipped and must have a non-skip outcome with notes.
+- If attachment is enabled but not required, technicians can complete the item without uploading evidence.
+
 ## Task actions (web)
 
 - Task Detail dialog supports Start, Pause, Cancel, and Complete.
