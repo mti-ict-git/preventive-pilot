@@ -540,6 +540,9 @@
 - Added PM Status header filter and client-side filtering keys.
 - Updated PM status logic: assets with PM enabled but no history show "Not Started".
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+## 2026-01-20 17:09:11
+- Switched main to commit c35d0c54bedd9d572b2d56d9424e60482234ce00.
+- Verified TypeScript typecheck: OK.
 ## 2026-01-06 17:35
 - Fixed Assets runtime error by moving getPMStatus above filteredAssets.
 - Verified UI filters render correctly and selection logic remains intact.
