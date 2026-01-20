@@ -12,6 +12,7 @@ import { reportsRouter } from "./routes/reports.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { systemRouter } from "./routes/system.js";
 import { dashboardRouter } from "./routes/dashboard.js";
+import { workOrdersRouter } from "./routes/workOrders.js";
 import { startJobs } from "./jobs/index.js";
 
 const app = express();
@@ -422,6 +423,170 @@ const openApiSpec: OpenApiSchema = {
         required: ["assigneeUserId"],
         additionalProperties: false,
       },
+      WorkOrderCreateRequest: {
+        type: "object",
+        properties: {
+          assetId: { type: ["string", "null"], format: "uuid" },
+          facilityId: { type: ["string", "null"], format: "uuid" },
+          templateId: { type: ["string", "null"], format: "uuid" },
+          symptom: { type: "string", maxLength: 1024 },
+          impactLevel: { type: ["string", "null"], enum: ["normal", "high", "critical"] },
+          failureCategory: { type: ["string", "null"], maxLength: 64 },
+          failureCode: { type: ["string", "null"], maxLength: 64 },
+          downtimeStartedAt: { type: ["string", "null"], format: "date-time" },
+          reportedChannel: { type: ["string", "null"], maxLength: 32 },
+        },
+        required: ["symptom"],
+        additionalProperties: false,
+      },
+      WorkOrderAssignRequest: {
+        type: "object",
+        properties: {
+          assignedToUserId: { type: ["string", "null"], format: "uuid" },
+          assignedToRoleId: { type: ["string", "null"], format: "uuid" },
+          priority: { type: ["string", "null"], enum: ["low", "medium", "high"] },
+        },
+        additionalProperties: false,
+      },
+      WorkOrderChecklistResult: {
+        type: "object",
+        properties: {
+          templateChecklistItemId: { type: "string", format: "uuid" },
+          outcome: { type: "integer", enum: [0, 1, 2] },
+          notes: { type: ["string", "null"], maxLength: 1024 },
+        },
+        required: ["templateChecklistItemId", "outcome"],
+        additionalProperties: false,
+      },
+      WorkOrderCompleteRequest: {
+        type: "object",
+        properties: {
+          checklistResults: { type: "array", items: { $ref: "#/components/schemas/WorkOrderChecklistResult" } },
+          forceCompleted: { type: ["boolean", "null"] },
+          completedAt: { type: ["string", "null"], format: "date-time" },
+          backdateReason: { type: ["string", "null"], maxLength: 1024 },
+          technicianName: { type: ["string", "null"], maxLength: 256 },
+        },
+        additionalProperties: false,
+      },
+      WorkOrderListItem: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          taskNumber: { type: "string" },
+          status: { type: "string" },
+          priority: { type: ["string", "null"], enum: ["low", "medium", "high"] },
+          scheduledDueAt: { type: ["string", "null"], format: "date-time" },
+          createdAt: { type: "string", format: "date-time" },
+          startedAt: { type: ["string", "null"], format: "date-time" },
+          completedAt: { type: ["string", "null"], format: "date-time" },
+          symptom: { type: ["string", "null"] },
+          impactLevel: { type: ["string", "null"] },
+          failureCategory: { type: ["string", "null"] },
+          failureCode: { type: ["string", "null"] },
+          reportedAt: { type: ["string", "null"], format: "date-time" },
+          reportedByUsername: { type: ["string", "null"] },
+          asset: { $ref: "#/components/schemas/EntityRefNullable" },
+          facility: { $ref: "#/components/schemas/EntityRefNullable" },
+          templateName: { type: ["string", "null"] },
+          assignedTo: {
+            type: "object",
+            properties: {
+              userId: { type: ["string", "null"], format: "uuid" },
+              username: { type: ["string", "null"] },
+              displayName: { type: ["string", "null"] },
+              roleId: { type: ["string", "null"], format: "uuid" },
+              roleName: { type: ["string", "null"] },
+            },
+            required: ["userId", "username", "displayName", "roleId", "roleName"],
+            additionalProperties: false,
+          },
+        },
+        required: [
+          "id",
+          "taskNumber",
+          "status",
+          "createdAt",
+          "asset",
+          "facility",
+          "assignedTo",
+        ],
+        additionalProperties: false,
+      },
+      WorkOrderListResponse: {
+        type: "object",
+        properties: {
+          page: { type: "integer" },
+          pageSize: { type: "integer" },
+          items: { type: "array", items: { $ref: "#/components/schemas/WorkOrderListItem" } },
+        },
+        required: ["page", "pageSize", "items"],
+        additionalProperties: false,
+      },
+      WorkOrderDetail: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          taskNumber: { type: "string" },
+          status: { type: "string" },
+          priority: { type: ["string", "null"], enum: ["low", "medium", "high"] },
+          scheduledDueAt: { type: ["string", "null"], format: "date-time" },
+          createdAt: { type: "string", format: "date-time" },
+          startedAt: { type: ["string", "null"], format: "date-time" },
+          completedAt: { type: ["string", "null"], format: "date-time" },
+          cancelledAt: { type: ["string", "null"], format: "date-time" },
+          symptom: { type: ["string", "null"] },
+          impactLevel: { type: ["string", "null"] },
+          failureCategory: { type: ["string", "null"] },
+          failureCode: { type: ["string", "null"] },
+          reportedAt: { type: ["string", "null"], format: "date-time" },
+          asset: { $ref: "#/components/schemas/EntityRefNullable" },
+          facility: { $ref: "#/components/schemas/EntityRefNullable" },
+          template: { $ref: "#/components/schemas/EntityRef" },
+          assignedTo: {
+            type: "object",
+            properties: {
+              userId: { type: ["string", "null"], format: "uuid" },
+              username: { type: ["string", "null"] },
+              displayName: { type: ["string", "null"] },
+              roleId: { type: ["string", "null"], format: "uuid" },
+              roleName: { type: ["string", "null"] },
+            },
+            required: ["userId", "username", "displayName", "roleId", "roleName"],
+            additionalProperties: false,
+          },
+          completedBy: {
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  userId: { type: "string", format: "uuid" },
+                  username: { type: ["string", "null"] },
+                  displayName: { type: ["string", "null"] },
+                },
+                required: ["userId"],
+              },
+              { type: "null" },
+            ],
+          },
+          cancelledBy: {
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  userId: { type: "string", format: "uuid" },
+                  username: { type: ["string", "null"] },
+                  displayName: { type: ["string", "null"] },
+                },
+                required: ["userId"],
+              },
+              { type: "null" },
+            ],
+          },
+        },
+        required: ["id", "taskNumber", "status", "createdAt", "asset", "facility", "template", "assignedTo"],
+        additionalProperties: false,
+      },
     },
   },
   security: [{ bearerAuth: [] }],
@@ -431,6 +596,7 @@ const openApiSpec: OpenApiSchema = {
     { name: "Assets" },
     { name: "Facilities" },
     { name: "Tasks" },
+    { name: "Work Orders" },
     { name: "Notifications" },
     { name: "System" },
   ],
@@ -1481,6 +1647,152 @@ const openApiSpec: OpenApiSchema = {
         },
       },
     },
+    "/api/work-orders": {
+      get: {
+        tags: ["Work Orders"],
+        summary: "List CM work orders",
+        parameters: [
+          { name: "page", in: "query", required: false, schema: { type: "integer", default: 1, minimum: 1 } },
+          { name: "pageSize", in: "query", required: false, schema: { type: "integer", default: 50, minimum: 1, maximum: 200 } },
+          { name: "status", in: "query", required: false, schema: { type: "string" } },
+          { name: "assetId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "facilityId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "impactLevel", in: "query", required: false, schema: { type: "string" } },
+          { name: "reportedFrom", in: "query", required: false, schema: { type: "string", format: "date-time" } },
+          { name: "reportedTo", in: "query", required: false, schema: { type: "string", format: "date-time" } },
+          { name: "completedFrom", in: "query", required: false, schema: { type: "string", format: "date-time" } },
+          { name: "completedTo", in: "query", required: false, schema: { type: "string", format: "date-time" } },
+          { name: "assigned", in: "query", required: false, schema: { type: "string", enum: ["any", "unassigned", "me"], default: "any" } },
+        ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderListResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+      post: {
+        tags: ["Work Orders"],
+        summary: "Create a CM work order",
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderCreateRequest" } } },
+        },
+        responses: {
+          "201": { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}": {
+      get: {
+        tags: ["Work Orders"],
+        summary: "Get work order detail",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderDetail" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/assign": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Assign/unassign work order",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderAssignRequest" } } } },
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/start": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Start work order",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/pause": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Pause work order",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/resume": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Resume work order",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/complete": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Complete work order",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderCompleteRequest" } } } },
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/cancel": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Cancel work order",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/close-downtime": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Close current downtime",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
   },
 };
 
@@ -1518,6 +1830,7 @@ app.use("/api/facilities", facilitiesRouter);
 app.use("/api/templates", templatesRouter);
 app.use("/api/scheduling", schedulingRouter);
 app.use("/api/tasks", tasksRouter);
+app.use("/api/work-orders", workOrdersRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/system", systemRouter);

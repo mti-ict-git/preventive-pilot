@@ -116,6 +116,13 @@ Required environment variables:
 - Start moves task to In Progress; Pause sets task to Paused.
 - Cancel records CancelledBy and timestamp; Complete enforces checklist rules.
 
+## Corrective Maintenance (CM) Work Orders
+
+- Dedicated API mounted at `/api/work-orders` for CM tasks.
+- Endpoints include create, list, detail, assign, start/pause/resume, complete, cancel, and close-downtime.
+- Work orders reuse PM templates/checklists and permission model (technician vs manager roles).
+- OpenAPI docs available at `/api/docs` include all Work Orders schemas and paths.
+
 ### Backdated completion (supervisor+)
 
 - Supervisors and above can optionally backdate task completion from the Task Detail dialog.

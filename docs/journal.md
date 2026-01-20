@@ -1,5 +1,10 @@
 # Journal
 
+## 2026-01-21 05:44:31 WITA
+- Mounted CM Work Orders API router at /api/work-orders (backend).
+- Extended OpenAPI docs with Work Orders schemas and endpoints.
+- Verified repo lint and typecheck (frontend + backend).
+
 ## 2026-01-20 23:47:57 WITA
 - Split PM checklist attachments into Enable Attachment vs Attachment Required flags.
 - Updated template DB schema, backend APIs, and web UI to expose both flags.
