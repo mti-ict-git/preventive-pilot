@@ -27,6 +27,8 @@ const Facilities = () => {
   const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
   const [bulkTemplateValue, setBulkTemplateValue] = useState<string>("none");
   const [selectedFacilityIds, setSelectedFacilityIds] = useState<Record<string, true>>({});
+  const [rowTemplateDialogFacilityId, setRowTemplateDialogFacilityId] = useState<string | null>(null);
+  const [rowTemplateValue, setRowTemplateValue] = useState<string>("none");
   const navigate = useNavigate();
 
   const queryClient = useQueryClient();
@@ -295,7 +297,17 @@ const Facilities = () => {
                     >
                       Toggle PM
                     </Button>
-                    <Dialog>
+                    <Dialog
+                      open={rowTemplateDialogFacilityId === f.id}
+                      onOpenChange={(open) => {
+                        if (open) {
+                          setRowTemplateDialogFacilityId(f.id);
+                          setRowTemplateValue(f.pm.defaultTemplateId ?? "none");
+                        } else {
+                          setRowTemplateDialogFacilityId(null);
+                        }
+                      }}
+                    >
                       <DialogTrigger asChild>
                         <Button variant="ghost">Set Template</Button>
                       </DialogTrigger>
@@ -304,12 +316,7 @@ const Facilities = () => {
                           <DialogTitle>Default Template</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4">
-                          <Select
-                            value={f.pm.defaultTemplateId ?? "none"}
-                            onValueChange={(v) =>
-                              updatePmMutation.mutate({ facilityId: f.id, defaultTemplateId: v === "none" ? null : v })
-                            }
-                          >
+                          <Select value={rowTemplateValue} onValueChange={setRowTemplateValue}>
                             <SelectTrigger>
                               <SelectValue placeholder="Template" />
                             </SelectTrigger>
@@ -319,8 +326,20 @@ const Facilities = () => {
                               ))}
                             </SelectContent>
                           </Select>
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-2">
                             <Button onClick={() => navigate(`/facilities/${f.id}`)}>Details</Button>
+                            <Button
+                              onClick={() =>
+                                updatePmMutation
+                                  .mutateAsync({
+                                    facilityId: f.id,
+                                    defaultTemplateId: rowTemplateValue === "none" ? null : rowTemplateValue,
+                                  })
+                                  .then(() => setRowTemplateDialogFacilityId(null))
+                              }
+                            >
+                              Save
+                            </Button>
                           </div>
                         </div>
                       </DialogContent>

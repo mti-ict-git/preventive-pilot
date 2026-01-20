@@ -416,6 +416,10 @@
 - Documented pmEnabled oneOf (string|boolean) and categoryIds CSV example.
 
 ## 2026-01-16 16:43:50 WIB
+## 2026-01-20 22:04:55 +08:00
+- Facilities list: added per-row Set Template dialog with Save confirmation.
+- Refactored dialog to use controlled open and local state.
+- Ran `npm run lint` and `npx tsc --noEmit`: OK.
 - Added `{{technicianNumber}}` placeholder to notification rule templates, populated from the assigned technician's phone.
 - Updated Notifications UI helper text and README to document `{{technicianNumber}}` and show an @{{technicianNumber}} WhatsApp mention example.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
