@@ -656,6 +656,10 @@
 - Implemented bulk PM enable/disable and bulk default template assignment.
 - Added per-row Set Template dialog and active template list.
 - Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## 2026-01-20 17:54:18 +08:00
+- Fixed FacilityDetail QR import to use named export (QRCodeSVG) from qrcode.react v4.
+- Verified TypeScript and lint; both passed.
  
 ## 2026-01-20 17:27:12 +08:00
 - Verified PM Tasks assignment capabilities: tasks can be assigned to a technician (user) or to a role.
@@ -670,4 +674,9 @@
 - Implemented Assign dialog with User/Role/Unassign options and pickers.
 - Wired assignment via apiAssignTask; stops card click propagation.
 - Ensured Supervisor and above can assign and reassign technicians.
+- Ran integrity check: `npx tsc --noEmit`; no type errors.
+
+## 2026-01-20 17:58:21 +08:00
+- Updated button label to show Reassign when a task already has an assignee.
+- Kept Assign for unassigned tasks; logic derives from assignedTo fields.
 - Ran integrity check: `npx tsc --noEmit`; no type errors.

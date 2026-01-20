@@ -254,6 +254,7 @@ const Tasks = () => {
               : uiStatus === "in_progress"
                 ? 50
                 : 0;
+        const isAssigned = Boolean(task.assignedTo.userId || task.assignedTo.roleId);
         return {
           id: task.id,
           displayId: task.taskNumber,
@@ -268,6 +269,7 @@ const Tasks = () => {
           progress,
           checklistComplete: task.checklistCompleted,
           checklistTotal: task.checklistTotal,
+          isAssigned,
         };
       })
       .filter((task) => {
@@ -410,7 +412,7 @@ const Tasks = () => {
                                 openAssignDialogFor(task.taskId);
                               }}
                             >
-                              Assign
+                              {task.isAssigned ? "Reassign" : "Assign"}
                             </Button>
                           ) : null}
                         </div>

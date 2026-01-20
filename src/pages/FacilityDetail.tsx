@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import Header from "@/components/layout/Header";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import QRCode from "qrcode.react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   apiGetFacility,
   apiListTasks,
@@ -66,15 +66,13 @@ const FacilityDetail = () => {
 
   const f = facilityQuery.data;
 
-  if (f && pmEnabled === null) {
-    setPmEnabled(f.pm.enabled ?? false);
-  }
-  if (f && defaultTemplateId === "none") {
-    setDefaultTemplateId(f.pm.defaultTemplateId ?? "none");
-  }
-  if (f && nextDueAt === "") {
-    setNextDueAt(f.pm.nextDueAt ?? "");
-  }
+  useEffect(() => {
+    const data = facilityQuery.data;
+    if (!data) return;
+    setPmEnabled(data.pm.enabled ?? false);
+    setDefaultTemplateId(data.pm.defaultTemplateId ?? "none");
+    setNextDueAt(data.pm.nextDueAt ?? "");
+  }, [facilityQuery.data]);
 
   return (
     <>
@@ -146,7 +144,7 @@ const FacilityDetail = () => {
                 <CardTitle>Facility QR</CardTitle>
               </CardHeader>
               <CardContent className="flex items-center justify-center">
-                <QRCode value={facilityId} size={200} />
+                <QRCodeSVG value={facilityId} size={200} />
               </CardContent>
             </Card>
           </div>
