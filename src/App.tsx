@@ -9,6 +9,8 @@ import Dashboard from "./pages/Dashboard";
 import Assets from "./pages/Assets";
 import AssetDetail from "./pages/AssetDetail";
 import Templates from "./pages/Templates";
+import Facilities from "./pages/Facilities";
+import FacilityDetail from "./pages/FacilityDetail";
 import Tasks from "./pages/Tasks";
 import Reports from "./pages/Reports";
 import Scheduling from "./pages/Scheduling";
@@ -52,6 +54,8 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/assets" element={<Assets />} />
             <Route path="/assets/:assetId" element={<AssetDetail />} />
+            <Route path="/facilities" element={<Facilities />} />
+            <Route path="/facilities/:facilityId" element={<FacilityDetail />} />
             <Route path="/templates" element={<Templates />} />
             <Route path="/scheduling" element={<Scheduling />} />
             <Route path="/tasks" element={<Tasks />} />

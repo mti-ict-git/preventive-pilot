@@ -635,3 +635,25 @@
 ## 2026-01-16 15:43:39 WIB
 - Refined Notifications page copy with a "How notifications work" panel explaining reminder/escalation flow, technician targeting, and placeholder rendering.
 - Enhanced rule Message Template helper text with available placeholders and a concrete example matching the backend default template.
+
+## 2026-01-20 17:21:35 +08:00
+- Reviewed 404 at /facilities and confirmed missing web route in App.tsx.
+- Verified backend Facilities API and DB tables exist and support CRUD + PM settings + PM Now.
+- Drafted a Facilities feature spec: web pages, API client wrappers, route wiring, and UI flows.
+- Outlined Snipe-IT mapping via Locations for facility association and filters.
+- Prepared React + Shadcn/Tailwind sample implementations for list/detail and PM settings.
+- Performed integrity check: ran `npx tsc --noEmit`; no type errors.
+
+## 2026-01-20 17:30:16 +08:00
+- Implemented Facilities API client wrappers in src/lib/api.ts.
+- Added Facilities page (list + filters + PM actions) under src/pages/Facilities.tsx.
+- Wired /facilities route in App.tsx and validated it loads.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+ 
+## 2026-01-20 17:27:12 +08:00
+- Verified PM Tasks assignment capabilities: tasks can be assigned to a technician (user) or to a role.
+- Confirmed backend endpoints: POST /api/tasks/{taskId}/assign and POST /api/tasks/bulk-assign-unassigned.
+- Confirmed automatic assignment via pm.AssignmentRules on PM Now creation and Facilities PM Now.
+- Reviewed UI: Scheduling page supports viewing/editing assignment rules and bulk-assigning unassigned tasks.
+- Validated DB schema fields: pm.PMTasks.AssignedToUserId and AssignedToRoleId with FKs to pm.Users and pm.Roles (Technician role present).
+- No code changes performed.

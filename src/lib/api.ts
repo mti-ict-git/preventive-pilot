@@ -206,6 +206,81 @@ export const apiListAssets = async (input: {
   return apiFetchJson<ListAssetsResponse>(`/api/assets${query ? `?${query}` : ""}`);
 };
 
+export type Facility = {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  location: { id: string | null; name: string | null } | null;
+  pm: {
+    enabled: boolean | null;
+    defaultTemplateId: string | null;
+    lastCompletedAt: string | null;
+    nextDueAt: string | null;
+  };
+};
+
+export type ListFacilitiesResponse = {
+  page: number;
+  pageSize: number;
+  items: Facility[];
+};
+
+export const apiListFacilities = async (input: {
+  search?: string;
+  locationId?: string;
+  pmEnabled?: boolean;
+  page?: number;
+  pageSize?: number;
+}): Promise<ListFacilitiesResponse> => {
+  const params = new URLSearchParams();
+  if (input.search) params.set("search", input.search);
+  if (input.locationId) params.set("locationId", input.locationId);
+  if (input.pmEnabled !== undefined) params.set("pmEnabled", input.pmEnabled ? "true" : "false");
+  if (input.page) params.set("page", String(input.page));
+  if (input.pageSize) params.set("pageSize", String(input.pageSize));
+  const query = params.toString();
+  return apiFetchJson<ListFacilitiesResponse>(`/api/facilities${query ? `?${query}` : ""}`);
+};
+
+export const apiGetFacility = async (facilityId: string): Promise<Facility> => {
+  return apiFetchJson<Facility>(`/api/facilities/${facilityId}`);
+};
+
+export const apiCreateFacility = async (input: {
+  name: string;
+  locationId?: string | null;
+  description?: string | null;
+  isActive?: boolean;
+}): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>(`/api/facilities`, { method: "POST", body: input });
+};
+
+export const apiUpdateFacility = async (input: {
+  facilityId: string;
+  name?: string;
+  locationId?: string | null;
+  description?: string | null;
+  isActive?: boolean;
+}): Promise<{ ok: true }> => {
+  const { facilityId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/facilities/${facilityId}`, { method: "PUT", body });
+};
+
+export const apiUpdateFacilityPmSettings = async (input: {
+  facilityId: string;
+  pmEnabled?: boolean;
+  defaultTemplateId?: string | null;
+  nextPmDueAt?: string | null;
+}): Promise<{ ok: true }> => {
+  const { facilityId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/facilities/${facilityId}/pm-settings`, { method: "PUT", body });
+};
+
+export const apiFacilityPmNow = async (facilityId: string): Promise<{ id: string }> => {
+  return apiFetchJson<{ id: string }>(`/api/facilities/${facilityId}/pm-now`, { method: "POST" });
+};
+
 export const apiGetAsset = async (assetId: string): Promise<Asset> => {
   return apiFetchJson<Asset>(`/api/assets/${assetId}`);
 };
