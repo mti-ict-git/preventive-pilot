@@ -543,6 +543,10 @@
 ## 2026-01-20 17:09:11
 - Switched main to commit c35d0c54bedd9d572b2d56d9424e60482234ce00.
 - Verified TypeScript typecheck: OK.
+## 2026-01-20 17:13:03
+- Permanently set main to c35d0c54bedd9d572b2d56d9424e60482234ce00 and force-pushed to origin.
+- Created annotated tag stable-2026-01-20-c35d0c5 marking this baseline.
+- Verified TypeScript typecheck: OK.
 ## 2026-01-06 17:35
 - Fixed Assets runtime error by moving getPMStatus above filteredAssets.
 - Verified UI filters render correctly and selection logic remains intact.
