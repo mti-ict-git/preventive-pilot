@@ -199,6 +199,16 @@
 ## 2026-01-05 18:51
 - Added CIFS-based docker compose override for mounting SMB share in Docker.
 
+## Wed Jan 21 06:36:47 WITA 2026
+- Updated Task Detail checklist progress to track in-dialog checklist draft outcomes.
+- Fixed evidence upload backend to support facility-level PM tasks (no required AssetId).
+- Ran `npm run lint` and `npx tsc --noEmit` after changes.
+
+## Wed Jan 21 06:30:09 WITA 2026
+- Fixed backend Work Orders list handler missing @assigned parameter input.
+- Updated Task Detail dialog to avoid empty Select values (backdate technician, checklist outcomes).
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
 ## 2026-01-05 19:29
 - Fixed backend ESM imports for Node.js runtime in Docker.
 
@@ -648,6 +658,17 @@
 ## 2026-01-16 01:01:59 WIB
 - Fixed Task Detail action buttons: allow Start when task status is `open` (overdue tasks).
 - Disabled Complete on cancelled tasks for consistency.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-21 06:13:06 WITA
+- Added Create Work Order action in PM Task Detail dialog to report breakdowns directly.
+- Integrated ReportBreakdownDialog to pre-fill asset or facility from the PM task.
+- Updated backend task detail response to include maintenanceType and facility fields.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## 2026-01-21 06:16:33 WITA
+- Fixed Select components to avoid empty string values in items (Radix Select requirement).
+- Updated Work Orders filters and Report Breakdown dialog to use sentinel values and map to cleared selections.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-16 01:19:26 WIB

@@ -115,6 +115,7 @@ Required environment variables:
 - Task Detail dialog supports Start, Pause, Cancel, and Complete.
 - Start moves task to In Progress; Pause sets task to Paused.
 - Cancel records CancelledBy and timestamp; Complete enforces checklist rules.
+- PM Task Detail includes a Create Work Order action to report breakdowns; it opens a dialog pre-filled with the task's asset or facility context.
 
 ## Corrective Maintenance (CM) Work Orders
 
@@ -127,6 +128,7 @@ Required environment variables:
 
 - Work Orders page at `/work-orders` with filters for status, impact, assigned, location, category, and reported date range.
 - Asset Detail and Facility Detail include a **Report Breakdown** dialog to create a new work order with symptom, impact level, optional failure category/code, optional downtime start, and reported channel.
+- PM Task Detail provides a **Create Work Order** button for cross-flow from PM to CM when issues are found during inspection.
 
 ### Backdated completion (supervisor+)
 

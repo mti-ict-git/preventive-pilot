@@ -458,6 +458,7 @@ export type TaskEvidence = {
 export type TaskDetail = {
   id: string;
   taskNumber: string;
+  maintenanceType: "PM" | "CM";
   status: string;
   priority: string;
   scheduledDueAt: string;
@@ -469,6 +470,7 @@ export type TaskDetail = {
   cancelledBy: TaskUserRef | null;
   forceCompleted: boolean | null;
   asset: { id: string; assetTag: string; name: string };
+  facility: { id: string; name: string | null } | null;
   template: { id: string; name: string };
   assignedTo: {
     userId: string | null;

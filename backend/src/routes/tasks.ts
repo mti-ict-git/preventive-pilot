@@ -565,12 +565,14 @@ const getTaskStorageContext = async (taskId: string): Promise<TaskStorageContext
         "  t.TaskNumber AS TaskNumber,",
         "  t.TemplateId AS TemplateId,",
         "  a.Name AS AssetName,",
+        "  fac.Name AS FacilityName,",
         "  a.AssetTag AS AssetTag,",
         "  c.Name AS CategoryName,",
         "  t.AssignedToUserId AS AssignedToUserId,",
         "  r.Name AS AssignedToRoleName",
         "FROM pm.PMTasks t",
-        "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
         "LEFT JOIN pm.AssetCategories c ON c.CategoryId = a.CategoryId",
         "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
         "WHERE t.TaskId = @taskId",
@@ -580,7 +582,12 @@ const getTaskStorageContext = async (taskId: string): Promise<TaskStorageContext
   const row = result.recordset[0] as Record<string, unknown> | undefined;
   const taskNumber = typeof row?.TaskNumber === "string" ? row.TaskNumber : null;
   const templateId = typeof row?.TemplateId === "string" ? row.TemplateId : null;
-  const assetName = typeof row?.AssetName === "string" ? row.AssetName : null;
+  const assetName =
+    typeof row?.AssetName === "string"
+      ? row.AssetName
+      : typeof row?.FacilityName === "string"
+        ? row.FacilityName
+        : null;
   const taskIdRow = typeof row?.TaskId === "string" ? row.TaskId : null;
   if (!taskIdRow || !taskNumber || !templateId || !assetName) return null;
 
@@ -1649,6 +1656,7 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "SELECT TOP (1)",
         "  t.TaskId AS TaskId,",
         "  t.TaskNumber AS TaskNumber,",
+        "  t.MaintenanceType AS MaintenanceType,",
         "  t.AssetId AS AssetId,",
         "  a.AssetTag AS AssetTag,",
         "  a.Name AS AssetName,",
@@ -1828,6 +1836,7 @@ tasksRouter.get( "/:taskId", async (req, res) => {
   res.json({
     id: taskRow.TaskId,
     taskNumber: taskRow.TaskNumber,
+    maintenanceType: taskRow.MaintenanceType,
     status: taskRow.Status,
     priority: taskRow.Priority,
     scheduledDueAt: taskRow.ScheduledDueAt,
@@ -1855,6 +1864,13 @@ tasksRouter.get( "/:taskId", async (req, res) => {
       assetTag,
       name: assetName,
     },
+    facility:
+      taskRow.FacilityId
+        ? {
+            id: taskRow.FacilityId as string,
+            name: taskRow.FacilityName as string | null,
+          }
+        : null,
     template: {
       id: taskRow.TemplateId,
       name: taskRow.TemplateName,

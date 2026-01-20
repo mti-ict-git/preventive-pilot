@@ -73,12 +73,15 @@ const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templa
           <div className="grid grid-cols-12 gap-3">
             <div className="col-span-12 md:col-span-6 space-y-2">
               <label className="text-sm text-muted-foreground">Impact level</label>
-              <Select value={impactLevel} onValueChange={(v) => setImpactLevel(v as "normal" | "high" | "critical" | "")}>
+              <Select
+                value={impactLevel}
+                onValueChange={(v) => setImpactLevel(v === "__none__" ? "" : (v as "normal" | "high" | "critical"))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select impact" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="__none__">None</SelectItem>
                   <SelectItem value="normal">Normal</SelectItem>
                   <SelectItem value="high">High</SelectItem>
                   <SelectItem value="critical">Critical</SelectItem>

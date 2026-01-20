@@ -268,6 +268,7 @@ workOrdersRouter.get("/", async (req, res) => {
     .input("offset", sql.Int, offset)
     .input("limit", sql.Int, pageSize)
     .input("status", sql.NVarChar(32), parsed.data.status ?? null)
+    .input("assigned", sql.NVarChar(16), parsed.data.assigned)
     .input("assetId", sql.UniqueIdentifier, parsed.data.assetId ?? null)
     .input("facilityId", sql.UniqueIdentifier, parsed.data.facilityId ?? null)
     .input("impactLevel", sql.NVarChar(32), parsed.data.impactLevel ?? null)

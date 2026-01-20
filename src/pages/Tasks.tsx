@@ -12,6 +12,7 @@ import {
   Server,
   ChevronRight,
   Calendar,
+  Wrench,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,7 @@ import { toast } from "@/hooks/use-toast";
 import { isManager } from "@/lib/auth";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
 
 const Tasks = () => {
 	const [searchQuery, setSearchQuery] = useState("");
@@ -687,6 +689,7 @@ export const TaskDetailDialog = (props: {
   const taskFileInputRef = useRef<HTMLInputElement | null>(null);
   const checklistFileInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingChecklistItemId, setPendingChecklistItemId] = useState<string | null>(null);
+  const [reportBreakdownOpen, setReportBreakdownOpen] = useState(false);
 
   const closePreview = useCallback(() => {
     setPreviewOpen(false);
@@ -952,12 +955,17 @@ export const TaskDetailDialog = (props: {
 
   const checklistCompleted = useMemo(() => {
     const items = task?.checklistItems ?? [];
-    return items.filter((i) => i.isActive && i.result !== null).length;
-  }, [task?.checklistItems]);
+    return items.filter((i) => {
+      if (!i.isActive) return false;
+      const draft = checklistDraft[i.id];
+      return draft !== undefined && draft.outcome !== null;
+    }).length;
+  }, [task?.checklistItems, checklistDraft]);
 
   const checklistProgress = checklistTotal > 0 ? Math.round((checklistCompleted / checklistTotal) * 100) : 0;
 
   return (
+    <>
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden glass border-border">
         <DialogHeader className="pb-4 border-b border-border">
@@ -993,6 +1001,15 @@ export const TaskDetailDialog = (props: {
               >
                 Resume
               </Button>
+            <Button
+              variant="outline"
+              disabled={!task}
+              onClick={() => setReportBreakdownOpen(true)}
+              className="gap-2"
+            >
+              <Wrench className="w-4 h-4" />
+              Create Work Order
+            </Button>
               {canReopen ? (
                 <Button
                   variant="outline"
@@ -1061,20 +1078,21 @@ export const TaskDetailDialog = (props: {
 									placeholder="Optional"
 									className="h-8 text-xs flex-1"
 								/>
-								<Select
-									onValueChange={(userId) => {
-										const user = technicianOptionsForBackdate.find((u) => u.id === userId);
-										if (!user) return;
-										const name = user.displayName ?? user.username;
-										if (!name) return;
-										setBackdateTechnicianName(name);
-									}}
-									value=""
-								>
+                <Select
+                  onValueChange={(userId) => {
+                    const user = technicianOptionsForBackdate.find((u) => u.id === userId);
+                    if (!user) return;
+                    const name = user.displayName ?? user.username;
+                    if (!name) return;
+                    setBackdateTechnicianName(name);
+                  }}
+                  value="__none__"
+                >
 									<SelectTrigger className="h-8 w-28 text-xs">
 										<SelectValue placeholder="Lookup" />
 									</SelectTrigger>
 									<SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
 										{technicianOptionsForBackdate.map((u) => (
 											<SelectItem key={u.id} value={u.id}>
 												{(u.displayName ?? u.username) ?? u.username}
@@ -1185,11 +1203,11 @@ export const TaskDetailDialog = (props: {
                               <Select
                                 value={
                                   checklistDraft[item.id]?.outcome === null
-                                    ? ""
+                                    ? "__none__"
                                     : String(checklistDraft[item.id]?.outcome)
                                 }
                                 onValueChange={(v) => {
-                                  const nextOutcome = v === "" ? null : (Number(v) as 0 | 1 | 2);
+                                  const nextOutcome = v === "__none__" ? null : (Number(v) as 0 | 1 | 2);
                                   setChecklistDraft((prev) => ({
                                     ...prev,
                                     [item.id]: { outcome: nextOutcome, notes: prev[item.id]?.notes ?? "" },
@@ -1200,6 +1218,7 @@ export const TaskDetailDialog = (props: {
                                   <SelectValue placeholder="Select" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  <SelectItem value="__none__">None</SelectItem>
                                   {getOutcomeOptions(item.requiresPassFail).map((opt) => (
                                     <SelectItem key={opt.value} value={opt.value}>
                                       {opt.label}
@@ -1483,7 +1502,14 @@ export const TaskDetailDialog = (props: {
         </ScrollArea>
       </DialogContent>
     </Dialog>
-  );
+    <ReportBreakdownDialog
+      open={reportBreakdownOpen}
+      onOpenChange={setReportBreakdownOpen}
+      assetId={task && !task.facility ? task.asset.id : undefined}
+      facilityId={task?.facility?.id ?? undefined}
+      templateId={task?.template.id}
+    />
+  </>);
 };
 
 export default Tasks;

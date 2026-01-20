@@ -88,12 +88,12 @@ const WorkOrders = () => {
             </div>
           </div>
           <div className="col-span-12 md:col-span-2">
-            <Select value={status} onValueChange={setStatus}>
+            <Select value={status} onValueChange={(v) => setStatus(v === "__all__" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="__all__">All</SelectItem>
                 <SelectItem value="open">Open</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
@@ -102,12 +102,12 @@ const WorkOrders = () => {
             </Select>
           </div>
           <div className="col-span-12 md:col-span-2">
-            <Select value={impactLevel} onValueChange={setImpactLevel}>
+            <Select value={impactLevel} onValueChange={(v) => setImpactLevel(v === "__all__" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Impact" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="__all__">All</SelectItem>
                 <SelectItem value="normal">Normal</SelectItem>
                 <SelectItem value="high">High</SelectItem>
                 <SelectItem value="critical">Critical</SelectItem>
@@ -127,12 +127,12 @@ const WorkOrders = () => {
             </Select>
           </div>
           <div className="col-span-12 md:col-span-2">
-            <Select value={locationId} onValueChange={setLocationId}>
+            <Select value={locationId} onValueChange={(v) => setLocationId(v === "__all__" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Location" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="__all__">All</SelectItem>
                 {(lookupsQuery.data?.locations ?? [])
                   .slice()
                   .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
@@ -145,12 +145,12 @@ const WorkOrders = () => {
             </Select>
           </div>
           <div className="col-span-12 md:col-span-2">
-            <Select value={categoryId} onValueChange={setCategoryId}>
+            <Select value={categoryId} onValueChange={(v) => setCategoryId(v === "__all__" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="__all__">All</SelectItem>
                 {(lookupsQuery.data?.assetCategories ?? [])
                   .slice()
                   .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
