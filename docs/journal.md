@@ -1,5 +1,32 @@
 # Journal
 
+## 2026-01-22 1:08:59 PM
+- Added CM reported by/channel and downtime fields to Work Order detail response and UI.
+- Added Close Downtime action in Work Order detail.
+- Updated README with downtime detail note.
+
+## 2026-01-22 12:57:50 PM
+- Fixed backdateMode scope ordering in Work Order detail to satisfy TypeScript.
+
+## 2026-01-22 12:52:04 PM
+- Wired Work Orders list row click and View button to the detail route.
+- Updated README with Work Order detail route notes.
+- Ran `npm run lint` (ESLintIgnoreWarning about .eslintignore) and `npx tsc --noEmit`.
+
+## 2026-01-22 12:36:58 PM
+- Added PM Task Enhancement Plan document with phased roadmap and specs.
+## 2026-01-22 13:00:12
+- Added PM Now idempotency settings with env fallback and system endpoints.
+- Enforced PM Now idempotency checks for assets and facilities.
+- Added unique indexes to prevent duplicate PM tasks per due time.
+- Verified with `npm run lint`, `npx tsc --noEmit`, and `npm --prefix backend run typecheck`.
+
+
+## 2026-01-22 12:42:16 PM
+
+## 2026-01-22 12:42:16 PM
+- Expanded PM Task Enhancement Plan with detailed phase breakdowns and rollout checklist.
+
 ## 2026-01-21 05:44:31 WITA
 - Mounted CM Work Orders API router at /api/work-orders (backend).
 - Extended OpenAPI docs with Work Orders schemas and endpoints.
@@ -714,3 +741,8 @@
 - Backend marks categories with SnipeCategoryId not in the latest Snipe list as Inactive.
 - Logged deactivatedCategories count to system logs for visibility.
 - Verified backend typecheck with `npm run typecheck --prefix backend`.
+
+## 2026-01-22 13:14:52 +08:00
+- Added SQL due-date primitive `pm.fn_CalculateNextDueAt` and routed schedule calc + calendar/day queries through it.
+- Applied schema and verified via `npm run db:apply-schema` and `npm run db:verify`.
+- Verified with `npm run lint` and `npx tsc --noEmit`.

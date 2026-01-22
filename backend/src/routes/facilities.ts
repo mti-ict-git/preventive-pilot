@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
 import { getDb } from "../db/mssql.js";
+import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireManager } from "../middleware/requireRole.js";
 
@@ -39,6 +40,71 @@ const FacilityPmSettingsSchema = z
     nextPmDueAt: z.string().datetime().nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "No updates" });
+
+const PM_NOW_IDEMPOTENCY_WINDOW_SETTING_KEY = "pm.now.idempotencyWindowMinutes";
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null;
+};
+
+const getSqlErrorNumber = (err: unknown): number | null => {
+  if (!isRecord(err)) return null;
+
+  const directNumber = err.number;
+  if (typeof directNumber === "number") return directNumber;
+
+  const originalError = err.originalError;
+  if (isRecord(originalError) && typeof originalError.number === "number") return originalError.number;
+
+  const precedingErrors = err.precedingErrors;
+  if (Array.isArray(precedingErrors)) {
+    const first = precedingErrors[0];
+    if (isRecord(first) && typeof first.number === "number") return first.number;
+  }
+
+  return null;
+};
+
+const isInvalidObjectNameError = (err: unknown): boolean => {
+  return getSqlErrorNumber(err) === 208;
+};
+
+const parsePmNowIdempotencyWindowMinutes = (valueJson: string | null): number | null => {
+  if (!valueJson || !valueJson.trim()) return null;
+  try {
+    const parsed: unknown = JSON.parse(valueJson);
+    const validated = z.number().int().min(1).max(1440).safeParse(parsed);
+    if (!validated.success) return null;
+    return validated.data;
+  } catch {
+    return null;
+  }
+};
+
+const loadPmNowIdempotencyWindowMinutes = async (): Promise<number> => {
+  try {
+    const db = await getDb();
+    const result = await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), PM_NOW_IDEMPOTENCY_WINDOW_SETTING_KEY)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  SettingValueJson",
+          "FROM pm.SystemSettings",
+          "WHERE SettingKey = @settingKey",
+        ].join("\n"),
+      );
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
+    return parsePmNowIdempotencyWindowMinutes(valueJson) ?? env.PM_NOW_IDEMPOTENCY_WINDOW_MINUTES;
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      return env.PM_NOW_IDEMPOTENCY_WINDOW_MINUTES;
+    }
+    throw err;
+  }
+};
 
 export const facilitiesRouter = Router();
 
@@ -391,6 +457,35 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
     res
       .status(400)
       .json({ message: "PM template is not configured or inactive for this facility" });
+    return;
+  }
+
+  const idempotencyWindowMinutes = await loadPmNowIdempotencyWindowMinutes();
+  const existingResult = await db
+    .request()
+    .input("facilityId", sql.UniqueIdentifier, facilityId)
+    .input("templateId", sql.UniqueIdentifier, templateId)
+    .input("windowMinutes", sql.Int, idempotencyWindowMinutes)
+    .query(
+      [
+        "DECLARE @now datetime2(0) = sysutcdatetime();",
+        "SELECT TOP (1)",
+        "  TaskId",
+        "FROM pm.PMTasks",
+        "WHERE FacilityId = @facilityId",
+        "  AND TemplateId = @templateId",
+        "  AND MaintenanceType = N'PM'",
+        "  AND CompletedAt IS NULL",
+        "  AND CancelledAt IS NULL",
+        "  AND ScheduledDueAt >= dateadd(minute, -@windowMinutes, @now)",
+        "  AND ScheduledDueAt <= @now",
+        "ORDER BY ScheduledDueAt DESC",
+      ].join("\n"),
+    );
+  const existingRow = existingResult.recordset[0] as Record<string, unknown> | undefined;
+  const existingTaskId = typeof existingRow?.TaskId === "string" ? existingRow.TaskId : null;
+  if (existingTaskId) {
+    res.status(409).json({ message: "PM Now already created recently", id: existingTaskId });
     return;
   }
 

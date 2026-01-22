@@ -467,7 +467,13 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
         "  t.ImpactLevel AS ImpactLevel,",
         "  t.FailureCategory AS FailureCategory,",
         "  t.FailureCode AS FailureCode,",
-        "  t.ReportedAt AS ReportedAt",
+        "  t.DowntimeStartedAt AS DowntimeStartedAt,",
+        "  t.DowntimeEndedAt AS DowntimeEndedAt,",
+        "  t.ReportedAt AS ReportedAt,",
+        "  t.ReportedChannel AS ReportedChannel,",
+        "  t.ReportedByUserId AS ReportedByUserId,",
+        "  rby.Username AS ReportedByUsername,",
+        "  rby.DisplayName AS ReportedByDisplayName",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
         "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
@@ -476,6 +482,7 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
         "LEFT JOIN pm.Roles ar ON ar.RoleId = t.AssignedToRoleId",
         "LEFT JOIN pm.Users cu ON cu.UserId = t.CompletedByUserId",
         "LEFT JOIN pm.Users xu ON xu.UserId = t.CancelledByUserId",
+        "LEFT JOIN pm.Users rby ON rby.UserId = t.ReportedByUserId",
         "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'CM'",
       ].join("\n"),
     );
@@ -500,7 +507,13 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
     impactLevel: row.ImpactLevel,
     failureCategory: row.FailureCategory,
     failureCode: row.FailureCode,
+    downtimeStartedAt: row.DowntimeStartedAt,
+    downtimeEndedAt: row.DowntimeEndedAt,
     reportedAt: row.ReportedAt,
+    reportedChannel: row.ReportedChannel,
+    reportedBy: row.ReportedByUserId
+      ? { userId: row.ReportedByUserId, username: row.ReportedByUsername, displayName: row.ReportedByDisplayName }
+      : null,
     asset: row.AssetId
       ? {
           id: row.AssetId,

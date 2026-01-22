@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Wrench, Search, Filter, AlertTriangle, CheckCircle, Clock, MapPin, Tags, User, Server } from "lucide-react";
@@ -29,6 +30,7 @@ const statusBadge = (status: string): { label: string; color: string; icon: Reac
 };
 
 const WorkOrders = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [status, setStatus] = useState<string>("");
   const [impactLevel, setImpactLevel] = useState<string>("");
@@ -207,6 +209,7 @@ const WorkOrders = () => {
                     <TableHead>Status</TableHead>
                     <TableHead>Reported</TableHead>
                     <TableHead>Assigned</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -215,8 +218,21 @@ const WorkOrders = () => {
                     const assetLabel = w.asset ? `${w.asset.assetTag ?? ""} ${w.asset.name ?? ""}`.trim() : w.facility ? w.facility.name ?? "—" : "—";
                     const assignedLabel = w.assignedTo.displayName ?? w.assignedTo.roleName ?? "Unassigned";
                     const reported = w.reportedAt ? new Date(w.reportedAt).toLocaleString() : "—";
+                    const workOrderPath = `/work-orders/${w.id}`;
                     return (
-                      <TableRow key={w.id} className="hover:bg-muted/40">
+                      <TableRow
+                        key={w.id}
+                        className="hover:bg-muted/40 cursor-pointer"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigate(workOrderPath)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigate(workOrderPath);
+                          }
+                        }}
+                      >
                         <TableCell className="font-mono text-sm text-muted-foreground">{w.taskNumber}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -242,6 +258,18 @@ const WorkOrders = () => {
                             <User className="w-4 h-4 text-muted-foreground" />
                             <span className="text-sm text-muted-foreground">{assignedLabel}</span>
                           </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              navigate(workOrderPath);
+                            }}
+                          >
+                            View
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );

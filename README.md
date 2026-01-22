@@ -66,6 +66,7 @@ This project is built with:
 ## Database schema (SQL Server)
 
 This repo includes an idempotent SQL Server schema script at `db/schema.sql` and a runner that reads database connection settings from `.env`.
+Schema includes a centralized due-date calculation function `pm.fn_CalculateNextDueAt` used by scheduling queries.
 
 Run:
 
@@ -127,6 +128,8 @@ Required environment variables:
 ### Web UI
 
 - Work Orders page at `/work-orders` with filters for status, impact, assigned, location, category, and reported date range.
+- Work Order detail view at `/work-orders/:taskId`, reachable by clicking a row or the View button.
+- Work Order detail includes reported by/channel and downtime tracking with Close Downtime action.
 - Asset Detail and Facility Detail include a **Report Breakdown** dialog to create a new work order with symptom, impact level, optional failure category/code, optional downtime start, and reported channel.
 - PM Task Detail provides a **Create Work Order** button for cross-flow from PM to CM when issues are found during inspection.
 
@@ -146,6 +149,7 @@ Required environment variables:
 
 - Open an Asset and use the PM section to enable PM and choose a template.
 - Managers can use the **PM Now** button on Asset Detail to create a new PM task that is due immediately for the asset's default template, then complete the checklist and attach evidence directly from the asset page. This works even if there is no task currently due.
+- PM Now is idempotent within a configurable window (env `PM_NOW_IDEMPOTENCY_WINDOW_MINUTES` with system setting override).
 - After completing PM Now, the system automatically recalculates the next PM date for that asset using the same scheduling engine as the global Recalculate/Force Recalculate actions on the Scheduling page.
 
 ## Facilities

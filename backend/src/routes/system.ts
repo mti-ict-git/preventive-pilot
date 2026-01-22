@@ -148,6 +148,10 @@ type EffectiveWhatsAppSettings = {
   mentionNumbers: string[];
 };
 
+type EffectivePmNowSettings = {
+  idempotencyWindowMinutes: number;
+};
+
 const loadEffectiveSnipeItSettings = async (): Promise<EffectiveSnipeItSettings> => {
   let dbRow: Record<string, unknown> | null = null;
   try {
@@ -408,6 +412,7 @@ const toGraphRecipients = (addresses: string[]) => {
 
 const AssetsUiSettingsSchema = z.object({
   visibleCategoryIds: z.array(z.string().uuid()).min(1).nullable(),
+  excludeInactive: z.boolean().optional(),
 });
 
 const LabelDesignerUiSettingsSchema = z.object({
@@ -448,9 +453,17 @@ const WhatsAppSettingsTestSchema = WhatsAppSettingsSchema.partial()
   })
   .optional();
 
+const PmNowSettingsSchema = z.object({
+  idempotencyWindowMinutes: z.number().int().min(1).max(1440),
+});
+
 const ASSETS_VISIBLE_CATEGORY_IDS_SETTING_KEY = "ui.assets.visibleCategoryIds";
 
+const ASSETS_EXCLUDE_INACTIVE_SETTING_KEY = "ui.assets.excludeInactive";
+
 const LABEL_DESIGNER_UI_SETTINGS_KEY = "ui.labelDesigner";
+
+const PM_NOW_IDEMPOTENCY_WINDOW_SETTING_KEY = "pm.now.idempotencyWindowMinutes";
 
 const WHATSAPP_SETTINGS_KEY = "notifications.whatsapp";
 
@@ -466,10 +479,63 @@ const parseVisibleCategoryIds = (valueJson: string | null): string[] | null => {
   }
 };
 
-const loadAssetsUiSettings = async (): Promise<z.infer<typeof AssetsUiSettingsSchema>> => {
+const parseExcludeInactive = (valueJson: string | null): boolean => {
+  if (!valueJson || !valueJson.trim()) return false;
+  try {
+    const parsed: unknown = JSON.parse(valueJson);
+    const validated = z.boolean().safeParse(parsed);
+    if (!validated.success) return false;
+    return validated.data;
+  } catch {
+    return false;
+  }
+};
+
+const parsePmNowIdempotencyWindowMinutes = (valueJson: string | null): number | null => {
+  if (!valueJson || !valueJson.trim()) return null;
+  try {
+    const parsed: unknown = JSON.parse(valueJson);
+    const validated = z.number().int().min(1).max(1440).safeParse(parsed);
+    if (!validated.success) return null;
+    return validated.data;
+  } catch {
+    return null;
+  }
+};
+
+const loadPmNowSettings = async (): Promise<EffectivePmNowSettings> => {
   try {
     const db = await getDb();
     const result = await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), PM_NOW_IDEMPOTENCY_WINDOW_SETTING_KEY)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  SettingValueJson",
+          "FROM pm.SystemSettings",
+          "WHERE SettingKey = @settingKey",
+        ].join("\n"),
+      );
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
+    const parsed = parsePmNowIdempotencyWindowMinutes(valueJson);
+    return {
+      idempotencyWindowMinutes: parsed ?? env.PM_NOW_IDEMPOTENCY_WINDOW_MINUTES,
+    };
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      return { idempotencyWindowMinutes: env.PM_NOW_IDEMPOTENCY_WINDOW_MINUTES };
+    }
+    throw err;
+  }
+};
+
+const loadAssetsUiSettings = async (): Promise<z.infer<typeof AssetsUiSettingsSchema>> => {
+  try {
+    const db = await getDb();
+
+    const visibleResult = await db
       .request()
       .input("settingKey", sql.NVarChar(128), ASSETS_VISIBLE_CATEGORY_IDS_SETTING_KEY)
       .query(
@@ -480,13 +546,30 @@ const loadAssetsUiSettings = async (): Promise<z.infer<typeof AssetsUiSettingsSc
           "WHERE SettingKey = @settingKey",
         ].join("\n"),
       );
+    const visibleRow = visibleResult.recordset[0] as Record<string, unknown> | undefined;
+    const visibleJson = typeof visibleRow?.SettingValueJson === "string" ? visibleRow.SettingValueJson : null;
 
-    const row = result.recordset[0] as Record<string, unknown> | undefined;
-    const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
-    return { visibleCategoryIds: parseVisibleCategoryIds(valueJson) };
+    const excludeResult = await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), ASSETS_EXCLUDE_INACTIVE_SETTING_KEY)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  SettingValueJson",
+          "FROM pm.SystemSettings",
+          "WHERE SettingKey = @settingKey",
+        ].join("\n"),
+      );
+    const excludeRow = excludeResult.recordset[0] as Record<string, unknown> | undefined;
+    const excludeJson = typeof excludeRow?.SettingValueJson === "string" ? excludeRow.SettingValueJson : null;
+
+    return {
+      visibleCategoryIds: parseVisibleCategoryIds(visibleJson),
+      excludeInactive: parseExcludeInactive(excludeJson),
+    };
   } catch (err: unknown) {
     if (isInvalidObjectNameError(err)) {
-      return { visibleCategoryIds: null };
+      return { visibleCategoryIds: null, excludeInactive: false };
     }
     throw err;
   }
@@ -753,6 +836,65 @@ systemRouter.get("/status", async (_req, res) => {
   });
 });
 
+systemRouter.get("/pm-settings", requireSuperadmin, async (_req, res) => {
+  try {
+    const settings = await loadPmNowSettings();
+    res.json(settings);
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      res.status(503).json({ message: "Database schema missing pm.SystemSettings. Run npm run db:apply-schema." });
+      return;
+    }
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+  }
+});
+
+systemRouter.put("/pm-settings", requireSuperadmin, async (req, res) => {
+  const parsed = PmNowSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const valueJson = JSON.stringify(parsed.data.idempotencyWindowMinutes);
+
+  try {
+    const db = await getDb();
+    await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), PM_NOW_IDEMPOTENCY_WINDOW_SETTING_KEY)
+      .input("settingValueJson", sql.NVarChar(sql.MAX), valueJson)
+      .input("updatedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "MERGE pm.SystemSettings WITH (HOLDLOCK) AS target",
+          "USING (SELECT @settingKey AS SettingKey) AS source",
+          "ON target.SettingKey = source.SettingKey",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    SettingValueJson = @settingValueJson,",
+          "    UpdatedAt = sysutcdatetime(),",
+          "    UpdatedByUserId = @updatedByUserId",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (SettingKey, SettingValueJson, UpdatedByUserId)",
+          "  VALUES (@settingKey, @settingValueJson, @updatedByUserId);",
+        ].join("\n"),
+      );
+  } catch (err: unknown) {
+    if (isInvalidObjectNameError(err)) {
+      res.status(503).json({ message: "Database schema missing pm.SystemSettings. Run npm run db:apply-schema." });
+      return;
+    }
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+    return;
+  }
+
+  const updated = await loadPmNowSettings();
+  res.json(updated);
+});
+
 systemRouter.get("/snipeit-settings", async (_req, res) => {
   const settings = await loadEffectiveSnipeItSettings();
   res.json({
@@ -1015,6 +1157,7 @@ systemRouter.put("/ui-settings/assets", requireSuperadmin, async (req, res) => {
   }
 
   const valueJson = parsed.data.visibleCategoryIds === null ? null : JSON.stringify(parsed.data.visibleCategoryIds);
+  const excludeJson = JSON.stringify(parsed.data.excludeInactive ?? false);
 
   try {
     const db = await getDb();
@@ -1022,6 +1165,27 @@ systemRouter.put("/ui-settings/assets", requireSuperadmin, async (req, res) => {
       .request()
       .input("settingKey", sql.NVarChar(128), ASSETS_VISIBLE_CATEGORY_IDS_SETTING_KEY)
       .input("settingValueJson", sql.NVarChar(sql.MAX), valueJson)
+      .input("updatedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "MERGE pm.SystemSettings WITH (HOLDLOCK) AS target",
+          "USING (SELECT @settingKey AS SettingKey) AS source",
+          "ON target.SettingKey = source.SettingKey",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    SettingValueJson = @settingValueJson,",
+          "    UpdatedAt = sysutcdatetime(),",
+          "    UpdatedByUserId = @updatedByUserId",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (SettingKey, SettingValueJson, UpdatedByUserId)",
+          "  VALUES (@settingKey, @settingValueJson, @updatedByUserId);",
+        ].join("\n"),
+      );
+
+    await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), ASSETS_EXCLUDE_INACTIVE_SETTING_KEY)
+      .input("settingValueJson", sql.NVarChar(sql.MAX), excludeJson)
       .input("updatedByUserId", sql.UniqueIdentifier, req.user.sub)
       .query(
         [

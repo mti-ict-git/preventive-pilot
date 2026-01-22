@@ -668,7 +668,11 @@ export type WorkOrderDetail = {
   impactLevel: string | null;
   failureCategory: string | null;
   failureCode: string | null;
+  downtimeStartedAt: string | null;
+  downtimeEndedAt: string | null;
   reportedAt: string | null;
+  reportedChannel: string | null;
+  reportedBy: TaskUserRef | null;
   asset: { id: string; assetTag: string | null; name: string | null } | null;
   facility: { id: string; name: string | null } | null;
   template: { id: string; name: string };
@@ -1605,6 +1609,7 @@ export const apiGetSystemStatus = async (): Promise<SystemStatusResponse> => {
 
 export type AssetsUiSettingsResponse = {
   visibleCategoryIds: string[] | null;
+  excludeInactive: boolean;
 };
 
 export type UpdateAssetsUiSettingsInput = AssetsUiSettingsResponse;

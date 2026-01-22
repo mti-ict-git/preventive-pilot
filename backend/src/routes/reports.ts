@@ -4,11 +4,14 @@ import sql from "mssql";
 import { getDb } from "../db/mssql.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
+const MaintenanceTypeSchema = z.enum(["PM", "CM", "all"]).optional().default("PM");
+
 const OverdueQuerySchema = z.object({
   page: z.string().optional().default("1"),
   pageSize: z.string().optional().default("50"),
   locationId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
+  maintenanceType: MaintenanceTypeSchema,
 });
 
 const ComplianceQuerySchema = z.object({
@@ -16,11 +19,13 @@ const ComplianceQuerySchema = z.object({
   to: z.string().datetime(),
   locationId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
+  maintenanceType: MaintenanceTypeSchema,
 });
 
 const OverdueExportQuerySchema = z.object({
   locationId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
+  maintenanceType: MaintenanceTypeSchema,
 });
 
 const ComplianceExportQuerySchema = z.object({
@@ -28,6 +33,7 @@ const ComplianceExportQuerySchema = z.object({
   to: z.string().datetime(),
   locationId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
+  maintenanceType: MaintenanceTypeSchema,
 });
 
 const SystemLogsExportQuerySchema = z.object({
@@ -110,6 +116,7 @@ reportsRouter.get("/overdue", async (req, res) => {
     .request()
     .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("categoryId", sql.UniqueIdentifier, parsed.data.categoryId ?? null)
+    .input("maintenanceType", sql.NVarChar(8), parsed.data.maintenanceType === "all" ? null : parsed.data.maintenanceType)
     .query(
       [
         "SELECT",
@@ -122,6 +129,7 @@ reportsRouter.get("/overdue", async (req, res) => {
         "  AND t.ScheduledDueAt < sysutcdatetime()",
         "  AND (@locationId IS NULL OR a.LocationId = @locationId)",
         "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "  AND (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
       ].join("\n"),
     );
 
@@ -131,6 +139,7 @@ reportsRouter.get("/overdue", async (req, res) => {
     .input("limit", sql.Int, pageSize)
     .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("categoryId", sql.UniqueIdentifier, parsed.data.categoryId ?? null)
+    .input("maintenanceType", sql.NVarChar(8), parsed.data.maintenanceType === "all" ? null : parsed.data.maintenanceType)
     .query(
       [
         "SELECT",
@@ -159,6 +168,7 @@ reportsRouter.get("/overdue", async (req, res) => {
         "  AND t.ScheduledDueAt < sysutcdatetime()",
         "  AND (@locationId IS NULL OR a.LocationId = @locationId)",
         "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "  AND (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
         "ORDER BY t.ScheduledDueAt ASC",
         "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY",
       ].join("\n"),
@@ -205,6 +215,7 @@ reportsRouter.get("/overdue/export.csv", async (req, res) => {
     .request()
     .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("categoryId", sql.UniqueIdentifier, parsed.data.categoryId ?? null)
+    .input("maintenanceType", sql.NVarChar(8), parsed.data.maintenanceType === "all" ? null : parsed.data.maintenanceType)
     .query(
       [
         "SELECT",
@@ -228,6 +239,7 @@ reportsRouter.get("/overdue/export.csv", async (req, res) => {
         "  AND t.ScheduledDueAt < sysutcdatetime()",
         "  AND (@locationId IS NULL OR a.LocationId = @locationId)",
         "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "  AND (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
         "ORDER BY t.ScheduledDueAt ASC",
       ].join("\n"),
     );
@@ -300,6 +312,7 @@ reportsRouter.get("/compliance", async (req, res) => {
     .input("to", sql.DateTime2(0), parsed.data.to)
     .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("categoryId", sql.UniqueIdentifier, parsed.data.categoryId ?? null)
+    .input("maintenanceType", sql.NVarChar(8), parsed.data.maintenanceType === "all" ? null : parsed.data.maintenanceType)
     .query(
       [
         "SELECT",
@@ -314,6 +327,7 @@ reportsRouter.get("/compliance", async (req, res) => {
         "  AND t.ScheduledDueAt <= @to",
         "  AND (@locationId IS NULL OR a.LocationId = @locationId)",
         "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "  AND (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
       ].join("\n"),
     );
 
@@ -349,6 +363,7 @@ reportsRouter.get("/compliance/export.csv", async (req, res) => {
     .input("to", sql.DateTime2(0), parsed.data.to)
     .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("categoryId", sql.UniqueIdentifier, parsed.data.categoryId ?? null)
+    .input("maintenanceType", sql.NVarChar(8), parsed.data.maintenanceType === "all" ? null : parsed.data.maintenanceType)
     .query(
       [
         "SELECT",
@@ -363,6 +378,7 @@ reportsRouter.get("/compliance/export.csv", async (req, res) => {
         "  AND t.ScheduledDueAt <= @to",
         "  AND (@locationId IS NULL OR a.LocationId = @locationId)",
         "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "  AND (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
       ].join("\n"),
     );
 

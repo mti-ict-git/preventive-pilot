@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import {
   ApiError,
   apiGetAssetsUiSettings,
@@ -74,10 +75,12 @@ const SettingsCategories = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [listFilter, setListFilter] = useState<ListFilter>("all");
   const [draftVisibleCategoryIds, setDraftVisibleCategoryIds] = useState<string[] | null>(null);
+  const [excludeInactive, setExcludeInactive] = useState<boolean>(false);
 
   useEffect(() => {
     if (!uiSettingsQuery.isSuccess) return;
     setDraftVisibleCategoryIds(uiSettingsQuery.data.visibleCategoryIds);
+    setExcludeInactive(Boolean(uiSettingsQuery.data.excludeInactive));
   }, [uiSettingsQuery.isSuccess, uiSettingsQuery.data?.visibleCategoryIds]);
 
   const normalizedDraft = useMemo(() => {
@@ -88,6 +91,8 @@ const SettingsCategories = () => {
     const serverIds = uiSettingsQuery.data?.visibleCategoryIds ?? null;
     return normalizeVisibleCategoryIds(serverIds, allCategoryIds);
   }, [uiSettingsQuery.data?.visibleCategoryIds, allCategoryIds]);
+
+  const serverExcludeInactive = uiSettingsQuery.data?.excludeInactive === true;
 
   const selectedCount = useMemo(() => {
     if (allCategoryIds.length === 0) return 0;
@@ -137,12 +142,13 @@ const SettingsCategories = () => {
     return allCategories.filter((c) => {
       const matchesText = !q || c.name.toLowerCase().includes(q);
       if (!matchesText) return false;
+      if (excludeInactive && !c.isActive) return false;
 
       if (listFilter === "all") return true;
       const selected = selectedSet === null ? true : selectedSet.has(c.id);
       return listFilter === "selected" ? selected : !selected;
     });
-  }, [allCategories, searchQuery, listFilter, selectedSet]);
+  }, [allCategories, searchQuery, listFilter, selectedSet, excludeInactive]);
 
   const invertSelection = (): void => {
     const allIds = allCategoryIds;
@@ -164,15 +170,16 @@ const SettingsCategories = () => {
 
   const resetSelection = (): void => {
     setDraftVisibleCategoryIds(normalizedServer);
+    setExcludeInactive(serverExcludeInactive);
   };
 
   const hasUnsavedChanges = useMemo(() => {
-    return !isSameIdSelection(normalizedDraft, normalizedServer);
-  }, [normalizedDraft, normalizedServer]);
+    return !isSameIdSelection(normalizedDraft, normalizedServer) || excludeInactive !== serverExcludeInactive;
+  }, [normalizedDraft, normalizedServer, excludeInactive, serverExcludeInactive]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      return apiUpdateAssetsUiSettings({ visibleCategoryIds: normalizedDraft });
+      return apiUpdateAssetsUiSettings({ visibleCategoryIds: normalizedDraft, excludeInactive });
     },
     onSuccess: async (data) => {
       queryClient.setQueryData(["ui-settings", "assets"], data);
@@ -239,19 +246,25 @@ const SettingsCategories = () => {
                       </div>
                     </div>
                     <div className="col-span-12 md:col-span-5">
-                      <Tabs value={listFilter} onValueChange={(v) => setListFilter(v as ListFilter)}>
-                        <TabsList className="w-full">
-                          <TabsTrigger value="all" className="flex-1">
-                            All
-                          </TabsTrigger>
-                          <TabsTrigger value="selected" className="flex-1">
-                            Selected
-                          </TabsTrigger>
-                          <TabsTrigger value="unselected" className="flex-1">
-                            Unselected
-                          </TabsTrigger>
-                        </TabsList>
-                      </Tabs>
+                      <div className="flex items-center justify-between gap-3">
+                        <Tabs value={listFilter} onValueChange={(v) => setListFilter(v as ListFilter)}>
+                          <TabsList className="w-full">
+                            <TabsTrigger value="all" className="flex-1">
+                              All
+                            </TabsTrigger>
+                            <TabsTrigger value="selected" className="flex-1">
+                              Selected
+                            </TabsTrigger>
+                            <TabsTrigger value="unselected" className="flex-1">
+                              Unselected
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                        <label className="flex items-center gap-2 text-sm">
+                          <span>Exclude inactive</span>
+                          <Switch checked={excludeInactive} onCheckedChange={(v) => setExcludeInactive(v)} />
+                        </label>
+                      </div>
                     </div>
                   </div>
 

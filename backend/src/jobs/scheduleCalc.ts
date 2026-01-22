@@ -7,29 +7,9 @@ type CandidateRow = {
   AssetId: string;
   TemplateId: string;
   NextDueAt: Date;
-  IntervalDays: number;
   CategoryId: string | null;
   LocationId: string | null;
   AssetStatus: string | null;
-};
-
-const computeDueAt = async (candidate: CandidateRow): Promise<Date> => {
-  const db = await getDb();
-  const blackout = await db
-    .request()
-    .input("dueAt", sql.DateTime2(0), candidate.NextDueAt)
-    .query(
-      [
-        "SELECT MAX(EndsAt) AS MaxEndsAt",
-        "FROM pm.BlackoutWindows",
-        "WHERE IsActive = 1 AND StartsAt <= @dueAt AND EndsAt >= @dueAt",
-      ].join("\n"),
-    );
-
-  const row = blackout.recordset[0] as { MaxEndsAt?: Date } | undefined;
-  const maxEndsAt = row?.MaxEndsAt;
-  if (maxEndsAt instanceof Date) return maxEndsAt;
-  return candidate.NextDueAt;
 };
 
 const resolveAssignment = async (candidate: CandidateRow): Promise<{
@@ -165,21 +145,7 @@ export const runScheduleCalculationJob = async (): Promise<void> => {
         "SELECT",
         "  a.AssetId AS AssetId,",
         "  s.DefaultTemplateId AS TemplateId,",
-        "  COALESCE(h.LastCompletedAt, s.LastPMCompletedAt) AS LastPMCompletedAt,",
-        "  CAST(",
-        "    COALESCE(",
-        "      s.NextPMDueAt,",
-        "      CASE",
-        "        WHEN t.IntervalDays = 30 THEN dateadd(month, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "        WHEN t.IntervalDays = 90 THEN dateadd(month, 3, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "        WHEN t.IntervalDays = 180 THEN dateadd(month, 6, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "        WHEN t.IntervalDays = 365 THEN dateadd(year, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "        ELSE dateadd(day, t.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "      END",
-        "    )",
-        "    AS datetime2(0)",
-        "  ) AS NextDueAt,",
-        "  t.IntervalDays AS IntervalDays,",
+        "  due.NextDueAt AS NextDueAt,",
         "  a.CategoryId AS CategoryId,",
         "  a.LocationId AS LocationId,",
         "  a.AssetStatus AS AssetStatus",
@@ -194,28 +160,27 @@ export const runScheduleCalculationJob = async (): Promise<void> => {
         "    AND tt.Status = N'completed'",
         "    AND tt.CompletedAt IS NOT NULL",
         ") h",
+        "OUTER APPLY (",
+        "  SELECT pm.fn_CalculateNextDueAt(",
+        "    h.LastCompletedAt,",
+        "    s.LastPMCompletedAt,",
+        "    t.IntervalDays,",
+        "    s.NextPMDueAt",
+        "  ) AS NextDueAt",
+        ") due",
         "WHERE",
         "  a.IsArchived = 0",
         "  AND s.PMEnabled = 1",
         "  AND s.DefaultTemplateId IS NOT NULL",
         "  AND t.IsActive = 1",
-        "  AND COALESCE(",
-        "    s.NextPMDueAt,",
-        "    CASE",
-        "      WHEN t.IntervalDays = 30 THEN dateadd(month, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "      WHEN t.IntervalDays = 90 THEN dateadd(month, 3, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "      WHEN t.IntervalDays = 180 THEN dateadd(month, 6, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "      WHEN t.IntervalDays = 365 THEN dateadd(year, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "      ELSE dateadd(day, t.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
-        "    END",
-        "  ) <= dateadd(day, @horizonDays, sysutcdatetime())",
+        "  AND due.NextDueAt <= dateadd(day, @horizonDays, sysutcdatetime())",
       ].join("\n"),
     );
 
   const candidates = candidatesResult.recordset as CandidateRow[];
   let created = 0;
   for (const candidate of candidates) {
-    const dueAt = await computeDueAt(candidate);
+    const dueAt = candidate.NextDueAt;
     const inserted = await ensureTask(candidate, dueAt);
     if (inserted) created += 1;
     await updateScheduleAndSettings(candidate, dueAt);

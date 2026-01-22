@@ -70,6 +70,12 @@ const EnvSchema = z.object({
     .default("30")
     .pipe(numberFromString)
     .pipe(z.number().int().min(1)),
+  PM_NOW_IDEMPOTENCY_WINDOW_MINUTES: z
+    .string()
+    .optional()
+    .default("15")
+    .pipe(numberFromString)
+    .pipe(z.number().int().min(1)),
   JOB_NOTIFICATION_INTERVAL_MINUTES: z
     .string()
     .optional()

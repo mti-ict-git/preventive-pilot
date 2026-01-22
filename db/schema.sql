@@ -357,6 +357,39 @@ BEGIN
   );
 END;
 
+EXEC(
+  N'CREATE OR ALTER FUNCTION pm.fn_CalculateNextDueAt(
+    @lastCompletedAt datetime2(0),
+    @lastPmCompletedAt datetime2(0),
+    @intervalDays int,
+    @nextPmDueAt datetime2(0)
+  )
+  RETURNS datetime2(0)
+  AS
+  BEGIN
+    DECLARE @base datetime2(0);
+    SET @base = COALESCE(
+      @nextPmDueAt,
+      CASE
+        WHEN @intervalDays = 30 THEN dateadd(month, 1, COALESCE(@lastCompletedAt, @lastPmCompletedAt, sysutcdatetime()))
+        WHEN @intervalDays = 90 THEN dateadd(month, 3, COALESCE(@lastCompletedAt, @lastPmCompletedAt, sysutcdatetime()))
+        WHEN @intervalDays = 180 THEN dateadd(month, 6, COALESCE(@lastCompletedAt, @lastPmCompletedAt, sysutcdatetime()))
+        WHEN @intervalDays = 365 THEN dateadd(year, 1, COALESCE(@lastCompletedAt, @lastPmCompletedAt, sysutcdatetime()))
+        ELSE dateadd(day, @intervalDays, COALESCE(@lastCompletedAt, @lastPmCompletedAt, sysutcdatetime()))
+      END
+    );
+
+    DECLARE @blackoutEnd datetime2(0);
+    SELECT @blackoutEnd = MAX(bw.EndsAt)
+    FROM pm.BlackoutWindows bw
+    WHERE bw.IsActive = 1
+      AND bw.StartsAt <= @base
+      AND bw.EndsAt >= @base;
+
+    RETURN COALESCE(@blackoutEnd, @base);
+  END;'
+);
+
 IF OBJECT_ID(N'pm.PMSchedules', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.PMSchedules (
@@ -372,6 +405,24 @@ BEGIN
     CONSTRAINT PK_pm_PMSchedules PRIMARY KEY CLUSTERED (ScheduleId),
     CONSTRAINT FK_pm_PMSchedules_Assets FOREIGN KEY (AssetId) REFERENCES pm.Assets(AssetId),
     CONSTRAINT FK_pm_PMSchedules_Templates FOREIGN KEY (TemplateId) REFERENCES pm.PMTemplates(TemplateId)
+  );
+END;
+
+IF OBJECT_ID(N'pm.FacilityPMSchedules', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.FacilityPMSchedules (
+    ScheduleId uniqueidentifier NOT NULL CONSTRAINT DF_pm_FacilityPMSchedules_ScheduleId DEFAULT (newsequentialid()),
+    FacilityId uniqueidentifier NOT NULL,
+    TemplateId uniqueidentifier NOT NULL,
+    NextDueAt datetime2(0) NOT NULL,
+    LastCalculatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_FacilityPMSchedules_LastCalculatedAt DEFAULT (sysutcdatetime()),
+    Frozen bit NOT NULL CONSTRAINT DF_pm_FacilityPMSchedules_Frozen DEFAULT (0),
+    Source nvarchar(32) NOT NULL CONSTRAINT DF_pm_FacilityPMSchedules_Source DEFAULT (N'auto'),
+    CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_FacilityPMSchedules_CreatedAt DEFAULT (sysutcdatetime()),
+    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_FacilityPMSchedules_UpdatedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_FacilityPMSchedules PRIMARY KEY CLUSTERED (ScheduleId),
+    CONSTRAINT FK_pm_FacilityPMSchedules_Facilities FOREIGN KEY (FacilityId) REFERENCES pm.Facilities(FacilityId),
+    CONSTRAINT FK_pm_FacilityPMSchedules_Templates FOREIGN KEY (TemplateId) REFERENCES pm.PMTemplates(TemplateId)
   );
 END;
 
@@ -426,6 +477,30 @@ END;
 IF COL_LENGTH(N'pm.PMTasks', N'FacilityId') IS NULL
 BEGIN
   ALTER TABLE pm.PMTasks ADD FacilityId uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.indexes i
+  WHERE i.object_id = OBJECT_ID(N'pm.PMTasks')
+    AND i.name = N'UQ_pm_PMTasks_AssetTemplateDue'
+)
+BEGIN
+  CREATE UNIQUE INDEX UQ_pm_PMTasks_AssetTemplateDue
+  ON pm.PMTasks (AssetId, TemplateId, ScheduledDueAt)
+  WHERE AssetId IS NOT NULL;
+END;
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.indexes i
+  WHERE i.object_id = OBJECT_ID(N'pm.PMTasks')
+    AND i.name = N'UQ_pm_PMTasks_FacilityTemplateDue'
+)
+BEGIN
+  CREATE UNIQUE INDEX UQ_pm_PMTasks_FacilityTemplateDue
+  ON pm.PMTasks (FacilityId, TemplateId, ScheduledDueAt)
+  WHERE FacilityId IS NOT NULL;
 END;
 
 IF COL_LENGTH(N'pm.PMTasks', N'MaintenanceType') IS NULL
