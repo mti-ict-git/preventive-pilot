@@ -693,3 +693,7 @@
 - Added git utility script to force origin/main to a specified commit.
 - Script: `npm run git:force-main -- <commit>` with optional flags `--remote`, `--branch`, `--dry-run`.
 - Ran repository lint to validate changes.
+
+## Thursday, January 22, 2026 8:33:27 AM
+- Fixed git force-main script to handle current HEAD on target branch using `git reset --hard`.
+- Validated with dry-run and live run; origin/main now points to a275986.
