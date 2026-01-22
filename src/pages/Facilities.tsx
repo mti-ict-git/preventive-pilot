@@ -24,6 +24,7 @@ import {
   apiCreateFacility,
   apiUpdateFacility,
   apiUpdateFacilityPmSettings,
+  apiCloneFacility,
   apiFacilityPmNow,
   apiListTemplates,
   type Facility,
