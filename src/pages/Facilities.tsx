@@ -41,6 +41,9 @@ const Facilities = () => {
   const [selectedFacilityIds, setSelectedFacilityIds] = useState<Record<string, true>>({});
   const [rowTemplateDialogFacilityId, setRowTemplateDialogFacilityId] = useState<string | null>(null);
   const [rowTemplateValue, setRowTemplateValue] = useState<string>("none");
+  const [cloneDialogFacilityId, setCloneDialogFacilityId] = useState<string | null>(null);
+  const [cloneName, setCloneName] = useState<string>("");
+  const [cloneIncludePm, setCloneIncludePm] = useState<boolean>(true);
   const navigate = useNavigate();
 
   const queryClient = useQueryClient();
@@ -98,6 +101,15 @@ const Facilities = () => {
     mutationFn: (input: { facilityId: string; pmEnabled?: boolean; defaultTemplateId?: string | null; nextPmDueAt?: string | null }) =>
       apiUpdateFacilityPmSettings(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["facilities"] }),
+  });
+
+  const cloneFacilityMutation = useMutation({
+    mutationFn: (input: { facilityId: string; name?: string; includePmSettings?: boolean }) =>
+      apiCloneFacility(input),
+    onSuccess: () => {
+      setCloneDialogFacilityId(null);
+      queryClient.invalidateQueries({ queryKey: ["facilities"] });
+    },
   });
 
   const pmNowMutation = useMutation({
@@ -401,6 +413,48 @@ const Facilities = () => {
                                     defaultTemplateId: rowTemplateValue === "none" ? null : rowTemplateValue,
                                   })
                                   .then(() => setRowTemplateDialogFacilityId(null))
+                              }
+                            >
+                              Save
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                    <Dialog
+                      open={cloneDialogFacilityId === f.id}
+                      onOpenChange={(open) => {
+                        if (open) {
+                          setCloneDialogFacilityId(f.id);
+                          setCloneName(`${f.name} (Copy)`);
+                          setCloneIncludePm(true);
+                        } else {
+                          setCloneDialogFacilityId(null);
+                        }
+                      }}
+                    >
+                      <DialogTrigger asChild>
+                        <Button variant="ghost">Clone</Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Clone Facility</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <Input value={cloneName} onChange={(e) => setCloneName(e.target.value)} placeholder="New name" />
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={cloneIncludePm} onChange={(e) => setCloneIncludePm(e.target.checked)} />
+                            <span>Copy PM settings</span>
+                          </label>
+                          <div className="flex justify-end gap-2">
+                            <Button onClick={() => setCloneDialogFacilityId(null)}>Cancel</Button>
+                            <Button
+                              onClick={() =>
+                                cloneFacilityMutation.mutate({
+                                  facilityId: f.id,
+                                  name: cloneName.trim() ? cloneName.trim() : undefined,
+                                  includePmSettings: cloneIncludePm,
+                                })
                               }
                             >
                               Save

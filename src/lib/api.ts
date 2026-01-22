@@ -281,6 +281,15 @@ export const apiFacilityPmNow = async (facilityId: string): Promise<{ id: string
   return apiFetchJson<{ id: string }>(`/api/facilities/${facilityId}/pm-now`, { method: "POST" });
 };
 
+export const apiCloneFacility = async (input: {
+  facilityId: string;
+  name?: string;
+  includePmSettings?: boolean;
+}): Promise<{ id: string }> => {
+  const { facilityId, ...body } = input;
+  return apiFetchJson<{ id: string }>(`/api/facilities/${facilityId}/clone`, { method: "POST", body });
+};
+
 export const apiGetAsset = async (assetId: string): Promise<Asset> => {
   return apiFetchJson<Asset>(`/api/assets/${assetId}`);
 };

@@ -198,6 +198,14 @@
 ## 2026-01-19 23:31:09 WITA
 - Added ngrok/ngrok.yml (version 3) defining api tunnel to api:5056.
 - Updated docker-compose ngrok-api service to use `start --all --config /etc/ngrok/ngrok.yml` and mount config.
+
+## 2026-01-22 16:37:54 +08:00
+- Added Facilities clone feature (backend + frontend).
+- Backend: POST /api/facilities/{facilityId}/clone with optional name and includePmSettings.
+- Frontend: apiCloneFacility and Clone dialog on Facilities page.
+- Ensures unique names and optional PM settings copy.
+- Verified with `npm run lint`, `npx tsc --noEmit`, and backend typecheck.
+- Started dev servers; frontend available at http://localhost:8082/.
 - Kept NGROK_AUTHTOKEN in .env (no secrets in repo) and passed to container.
 - Guidance: ensure only one ngrok agent session (stop local dev agent) to avoid ERR_NGROK_108.
 - Verified repo lint and typecheck.

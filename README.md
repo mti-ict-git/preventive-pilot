@@ -173,6 +173,7 @@ Required environment variables:
 - Use **Create Facility** to add new facilities with name and location.
 - Click **Details** on a facility row to edit its name, location, and description, and to manage PM settings.
 - Select multiple facilities to run bulk PM actions (enable, disable, set template) or **Archive Facilities** to soft-delete them from the active list while keeping history.
+ - Use **Clone** to duplicate a facility; optionally copy PM settings.
 
 ## PM Templates checklist editor
 

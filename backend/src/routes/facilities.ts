@@ -33,6 +33,13 @@ const FacilityUpdateSchema = FacilityCreateSchema.partial().refine(
   { message: "No updates" },
 );
 
+const FacilityCloneSchema = z
+  .object({
+    name: z.string().trim().max(256).optional(),
+    includePmSettings: z.boolean().optional().default(true),
+  })
+  .optional();
+
 const FacilityPmSettingsSchema = z
   .object({
     pmEnabled: z.boolean().optional(),
@@ -637,4 +644,140 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
   }
 
   res.status(201).json({ id: taskId });
+});
+
+facilitiesRouter.post("/:facilityId/clone", requireManager, async (req, res) => {
+  const facilityId = req.params.facilityId;
+  if (!z.string().uuid().safeParse(facilityId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const parsed = FacilityCloneSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const sourceResult = await db
+    .request()
+    .input("facilityId", sql.UniqueIdentifier, facilityId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  f.Name AS Name,",
+        "  f.LocationId AS LocationId,",
+        "  f.Description AS Description,",
+        "  f.IsActive AS IsActive",
+        "FROM pm.Facilities f",
+        "WHERE f.FacilityId = @facilityId",
+      ].join("\n"),
+    );
+
+  const sourceRow = sourceResult.recordset[0] as Record<string, unknown> | undefined;
+  if (!sourceRow) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const sourceName = typeof sourceRow.Name === "string" ? sourceRow.Name : "Facility";
+  const locationId = typeof sourceRow.LocationId === "string" ? sourceRow.LocationId : null;
+  const description = typeof sourceRow.Description === "string" ? sourceRow.Description : null;
+  const isActiveValue = sourceRow.IsActive;
+  const isActive = typeof isActiveValue === "boolean" ? isActiveValue : typeof isActiveValue === "number" ? isActiveValue === 1 : true;
+
+  let targetName = parsed.data?.name?.trim();
+  if (!targetName) {
+    let base = `${sourceName} (Copy)`;
+    let suffix = 1;
+    // ensure unique name
+    while (true) {
+      const candidate = suffix === 1 ? base : `${sourceName} (Copy ${suffix})`;
+      const existsResult = await db
+        .request()
+        .input("name", sql.NVarChar(256), candidate)
+        .query(
+          [
+            "SELECT TOP (1) 1 AS One",
+            "FROM pm.Facilities",
+            "WHERE Name = @name",
+          ].join("\n"),
+        );
+      const exists = Boolean(existsResult.recordset[0]);
+      if (!exists) {
+        targetName = candidate;
+        break;
+      }
+      suffix++;
+      if (suffix > 50) {
+        targetName = `${sourceName} (Copy ${Date.now()})`;
+        break;
+      }
+    }
+  }
+
+  const insertResult = await db
+    .request()
+    .input("name", sql.NVarChar(256), targetName)
+    .input("locationId", sql.UniqueIdentifier, locationId)
+    .input("description", sql.NVarChar(1024), description)
+    .input("isActive", sql.Bit, isActive ? 1 : 0)
+    .query(
+      [
+        "INSERT INTO pm.Facilities (",
+        "  Name, LocationId, Description, IsActive",
+        ")",
+        "OUTPUT inserted.FacilityId AS FacilityId",
+        "VALUES (",
+        "  @name, @locationId, @description, @isActive",
+        ")",
+      ].join("\n"),
+    );
+
+  const insertedRow = insertResult.recordset[0] as { FacilityId?: string } | undefined;
+  const newFacilityId = insertedRow?.FacilityId;
+  if (!newFacilityId) {
+    res.status(500).json({ message: "Failed to create facility" });
+    return;
+  }
+
+  const includePm = parsed.data?.includePmSettings ?? true;
+  if (includePm) {
+    const pmResult = await db
+      .request()
+      .input("facilityId", sql.UniqueIdentifier, facilityId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  PMEnabled,",
+          "  DefaultTemplateId",
+          "FROM pm.FacilityPMSettings",
+          "WHERE FacilityId = @facilityId",
+        ].join("\n"),
+      );
+    const pmRow = pmResult.recordset[0] as Record<string, unknown> | undefined;
+    const pmEnabledValue = pmRow?.PMEnabled;
+    const pmEnabled = typeof pmEnabledValue === "boolean" ? pmEnabledValue : typeof pmEnabledValue === "number" ? pmEnabledValue === 1 : false;
+    const defaultTemplateIdValue = pmRow?.DefaultTemplateId;
+    const defaultTemplateId = typeof defaultTemplateIdValue === "string" ? defaultTemplateIdValue : null;
+
+    await db
+      .request()
+      .input("facilityId", sql.UniqueIdentifier, newFacilityId)
+      .input("pmEnabled", sql.Bit, pmEnabled ? 1 : 0)
+      .input("defaultTemplateId", sql.UniqueIdentifier, defaultTemplateId)
+      .query(
+        [
+          "INSERT INTO pm.FacilityPMSettings (",
+          "  FacilityId, PMEnabled, DefaultTemplateId, LastPMCompletedAt, NextPMDueAt",
+          ")",
+          "VALUES (",
+          "  @facilityId, @pmEnabled, @defaultTemplateId, NULL, NULL",
+          ")",
+        ].join("\n"),
+      );
+  }
+
+  res.status(201).json({ id: newFacilityId });
 });
