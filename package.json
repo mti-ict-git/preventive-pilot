@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "db:apply-schema": "node scripts/db/apply-schema.mjs",
     "db:verify": "node scripts/db/verify-schema.mjs",
-    "ngrok:gist-watch": "node scripts/ngrok/gist-watcher.mjs"
+    "ngrok:gist-watch": "node scripts/ngrok/gist-watcher.mjs",
+    "git:force-main": "node scripts/git/force-main-to-commit.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -683,3 +683,13 @@
 ## 2026-01-16 15:43:39 WIB
 - Refined Notifications page copy with a "How notifications work" panel explaining reminder/escalation flow, technician targeting, and placeholder rendering.
 - Enhanced rule Message Template helper text with available placeholders and a concrete example matching the backend default template.
+
+## Thursday, January 22, 2026 8:20:37 AM
+- Switched local main branch to commit fc4f527 (feat: PM→CM workflow and facility support).
+- Forced updated origin/main to fc4f527 per request.
+- Verified backend typecheck and frontend lint/build after switch.
+
+## Thursday, January 22, 2026 8:22:58 AM
+- Added git utility script to force origin/main to a specified commit.
+- Script: `npm run git:force-main -- <commit>` with optional flags `--remote`, `--branch`, `--dry-run`.
+- Ran repository lint to validate changes.
