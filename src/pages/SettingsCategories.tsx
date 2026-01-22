@@ -15,6 +15,7 @@ import {
   apiGetAssetsUiSettings,
   apiGetLookups,
   apiUpdateAssetsUiSettings,
+  apiRunJob,
   type LookupAssetCategory,
 } from "@/lib/api";
 import { isSuperadmin } from "@/lib/auth";
@@ -187,6 +188,26 @@ const SettingsCategories = () => {
     },
   });
 
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      return apiRunJob("snipe-sync");
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["lookups"] });
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["lookups"] });
+      }, 3000);
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["lookups"] });
+      }, 7000);
+      toast({ title: "Sync started", description: "Snipe-IT category sync has been triggered." });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to start category sync";
+      toast({ title: "Sync failed", description: message, variant: "destructive" });
+    },
+  });
+
   if (!superadmin) return <Navigate to="/settings" replace />;
 
   return (
@@ -312,6 +333,13 @@ const SettingsCategories = () => {
                     disabled={!hasUnsavedChanges || saveMutation.isPending || allCategoryIds.length === 0}
                   >
                     {saveMutation.isPending ? "Saving…" : "Save"}
+                  </Button>
+                  <Button
+                    className="w-full mt-2"
+                    onClick={() => syncMutation.mutate()}
+                    disabled={syncMutation.isPending}
+                  >
+                    {syncMutation.isPending ? "Syncing Categories…" : "Sync Categories from Snipe-IT"}
                   </Button>
                   <div className="text-xs text-muted-foreground">
                     Users without Superadmin cannot change this setting.

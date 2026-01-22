@@ -967,7 +967,7 @@ export const TaskDetailDialog = (props: {
   return (
     <>
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden glass border-border">
+      <DialogContent className="w-[95vw] max-w-5xl h-[90vh] glass border-border flex flex-col">
         <DialogHeader className="pb-4 border-b border-border">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -979,7 +979,7 @@ export const TaskDetailDialog = (props: {
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <Button
                 variant="outline"
                 disabled={!task || startMutation.isPending || !canStart}
@@ -1122,7 +1122,7 @@ export const TaskDetailDialog = (props: {
           </div>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[70vh]">
+        <ScrollArea className="flex-1">
           <div className="py-4 space-y-6">
             {taskQuery.isLoading ? (
               <div className="text-sm text-muted-foreground">Loading…</div>

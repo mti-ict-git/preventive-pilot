@@ -697,3 +697,20 @@
 ## Thursday, January 22, 2026 8:33:27 AM
 - Fixed git force-main script to handle current HEAD on target branch using `git reset --hard`.
 - Validated with dry-run and live run; origin/main now points to a275986.
+
+## Thursday, January 22, 2026 11:10:46 AM
+- Fixed PM Task Detail dialog cropping by restructuring layout: flex column container, scrollable body, wrapped header actions.
+- Verified with lint and development build.
+
+## 2026-01-22 11:39
+- Added "Sync Categories from Snipe-IT" button on Settings → Categories page.
+- Triggered backend job via POST /api/system/jobs/snipe-sync/run using apiRunJob.
+- Superadmin-only access; shows success/error notifications; invalidates lookups after start.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+ - Added delayed re-fetches (3s, 7s) post-start to surface updated categories.
+
+## 2026-01-22 11:53
+- Updated Snipe-IT sync job to deactivate missing categories.
+- Backend marks categories with SnipeCategoryId not in the latest Snipe list as Inactive.
+- Logged deactivatedCategories count to system logs for visibility.
+- Verified backend typecheck with `npm run typecheck --prefix backend`.

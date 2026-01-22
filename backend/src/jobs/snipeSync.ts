@@ -207,6 +207,36 @@ const upsertLocations = async (locations: SnipeLocation[]): Promise<void> => {
   }
 };
 
+const deactivateMissingCategories = async (snipeCategoryIds: number[]): Promise<number> => {
+  if (snipeCategoryIds.length === 0) return 0;
+  const idsCsv = snipeCategoryIds.join(",");
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("idsCsv", sql.NVarChar(sql.MAX), idsCsv)
+    .query(
+      [
+        "UPDATE c",
+        "SET",
+        "  IsActive = 0,",
+        "  UpdatedAt = sysutcdatetime()",
+        "FROM pm.AssetCategories c",
+        "LEFT JOIN (",
+        "  SELECT DISTINCT TRY_CONVERT(int, value) AS SnipeCategoryId",
+        "  FROM string_split(@idsCsv, ',')",
+        "  WHERE TRY_CONVERT(int, value) IS NOT NULL",
+        ") ids ON ids.SnipeCategoryId = c.SnipeCategoryId",
+        "WHERE c.SnipeCategoryId IS NOT NULL",
+        "  AND c.IsActive = 1",
+        "  AND ids.SnipeCategoryId IS NULL;",
+        "SELECT @@ROWCOUNT AS DeactivatedCount;",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as { DeactivatedCount?: number } | undefined;
+  return typeof row?.DeactivatedCount === "number" ? row.DeactivatedCount : 0;
+};
+
 const loadCategoryIdMap = async (): Promise<Map<number, string>> => {
   const db = await getDb();
   const result = await db
@@ -438,6 +468,7 @@ export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<vo
     const assets = await listAll<SnipeHardware>(requestConfig, "/hardware");
 
     await upsertCategories(categories);
+    const deactivatedCategoriesCount = await deactivateMissingCategories(categories.map((c) => c.id));
     await upsertLocations(locations);
     const categoryIdBySnipeCategoryId = await loadCategoryIdMap();
     const locationIdBySnipeLocationId = await loadLocationIdMap();
@@ -455,6 +486,7 @@ export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<vo
         locations: locations.length,
         assets: assetsProcessed,
         archivedMissing: archivedMissingCount,
+          deactivatedCategories: deactivatedCategoriesCount,
       },
     });
   } catch (err) {
