@@ -153,6 +153,13 @@ Required environment variables:
 - Calendar/day views include projected upcoming PM occurrences when tasks have not been generated yet.
 - Asset Detail  Schedule tab shows upcoming scheduled + projected occurrences (blackout-aware).
 
+### Phase 1 PM backend validation
+
+- Asset PM settings enforce template category matching when `template.applicableCategoryId` is set.
+- PM Now is idempotent for assets and facilities and returns the existing task id when a duplicate is attempted.
+- When no assignment rule matches, PM tasks fall back to the template's required role for assignment.
+- Core PM endpoints use a unified 4xx error shape `{ message, code, details[] }` and are documented under `/api/docs`.
+
 ### Asset-level PM: "PM Now" and schedule recalc
 
 - Open an Asset and use the PM section to enable PM and choose a template.

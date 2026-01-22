@@ -1,5 +1,10 @@
 # Journal
 
+## Thursday, January 22, 2026 3:02:02 PM
+- Implemented Phase 1 PM backend validation updates (category enforcement, assignment fallback, PM Now errors).
+- Standardized error responses for PM-related endpoints to use code and details fields.
+- Ran `npm run db:verify`, `npm run lint`, and `npx tsc --noEmit`.
+
 ## 2026-01-22 14:10:00
 - Added CM reporting backend for breakdowns, MTTR, and monthly incidents.
 - Extended compliance and overdue reports with PM/CM maintenance type filter and CSV exports.
