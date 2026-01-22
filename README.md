@@ -139,6 +139,14 @@ Required environment variables:
 - When enabled, they must provide a past completion date/time and a reason for backdating.
 - Backdated completions update PM history and next-due scheduling using the chosen completion date, while the system still records when the entry was made.
 
+## Reports and CM metrics
+
+- Reports page shows compliance summary, overdue tasks, system logs, and assets without PM.
+- A maintenance type filter (PM, CM, PM+CM) applies to compliance and overdue reports.
+- Corrective Maintenance metrics widget shows breakdowns by category, location, failure category, and impact level.
+- CM metrics also include MTTR (reported-to-complete) by category and location, plus monthly incident counts.
+- All report cards include CSV export actions for offline analysis.
+
 ## Scheduling
 
 - Open PM Scheduling to view calendar counts and select a day to see tasks.

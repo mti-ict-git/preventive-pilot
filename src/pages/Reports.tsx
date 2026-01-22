@@ -8,6 +8,7 @@ import {
   TrendingUp,
   AlertTriangle,
   Server,
+  Activity,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
@@ -28,10 +29,13 @@ import {
   apiDownloadComplianceReportCsv,
   apiDownloadOverdueReportCsv,
   apiDownloadSystemLogsCsv,
+  apiDownloadCmMetricsCsv,
   apiGetComplianceReport,
+  apiGetCmMetrics,
   apiGetLookups,
   apiGetOverdueReport,
   apiGetSystemLogs,
+  type MaintenanceTypeFilter,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import type { DateRange } from "react-day-picker";
@@ -41,11 +45,19 @@ const Reports = () => {
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
   const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
-  const [exporting, setExporting] = useState<{ compliance: boolean; overdue: boolean; logs: boolean; assetsWithoutPm: boolean }>({
+  const [maintenanceType, setMaintenanceType] = useState<MaintenanceTypeFilter>("PM");
+  const [exporting, setExporting] = useState<{
+    compliance: boolean;
+    overdue: boolean;
+    logs: boolean;
+    assetsWithoutPm: boolean;
+    cmMetrics: boolean;
+  }>({
     compliance: false,
     overdue: false,
     logs: false,
     assetsWithoutPm: false,
+    cmMetrics: false,
   });
 
   const setPeriod = (next: string) => {
@@ -114,14 +126,14 @@ const Reports = () => {
   });
 
   const complianceQuery = useQuery({
-    queryKey: ["reports", "compliance", from, to, locationId ?? null, categoryId ?? null],
-    queryFn: () => apiGetComplianceReport({ from, to, locationId, categoryId }),
+    queryKey: ["reports", "compliance", from, to, locationId ?? null, categoryId ?? null, maintenanceType],
+    queryFn: () => apiGetComplianceReport({ from, to, locationId, categoryId, maintenanceType }),
     staleTime: 30_000,
   });
 
   const overdueQuery = useQuery({
-    queryKey: ["reports", "overdue", locationId ?? null, categoryId ?? null],
-    queryFn: () => apiGetOverdueReport({ page: 1, pageSize: 50, locationId, categoryId }),
+    queryKey: ["reports", "overdue", locationId ?? null, categoryId ?? null, maintenanceType],
+    queryFn: () => apiGetOverdueReport({ page: 1, pageSize: 50, locationId, categoryId, maintenanceType }),
     staleTime: 30_000,
   });
 
@@ -129,6 +141,12 @@ const Reports = () => {
     queryKey: ["system", "logs", "recent"],
     queryFn: () => apiGetSystemLogs({ page: 1, pageSize: 8 }),
     staleTime: 15_000,
+  });
+
+  const cmMetricsQuery = useQuery({
+    queryKey: ["reports", "cm-metrics", from, to, locationId ?? null, categoryId ?? null],
+    queryFn: () => apiGetCmMetrics({ from, to, locationId, categoryId }),
+    staleTime: 30_000,
   });
 
   const complianceRateText =
@@ -173,7 +191,7 @@ const Reports = () => {
   const exportComplianceCsv = async () => {
     try {
       setExporting((prev) => ({ ...prev, compliance: true }));
-      const res = await apiDownloadComplianceReportCsv({ from, to, locationId, categoryId });
+      const res = await apiDownloadComplianceReportCsv({ from, to, locationId, categoryId, maintenanceType });
       downloadBlob(res, `compliance-summary_${from.slice(0, 10)}_${to.slice(0, 10)}.csv`);
       toast({ title: "Exported", description: "Compliance CSV downloaded." });
     } catch (err: unknown) {
@@ -187,7 +205,7 @@ const Reports = () => {
   const exportOverdueCsv = async () => {
     try {
       setExporting((prev) => ({ ...prev, overdue: true }));
-      const res = await apiDownloadOverdueReportCsv({ locationId, categoryId });
+      const res = await apiDownloadOverdueReportCsv({ locationId, categoryId, maintenanceType });
       downloadBlob(res, `overdue-tasks_${new Date().toISOString().slice(0, 10)}.csv`);
       toast({ title: "Exported", description: "Overdue tasks CSV downloaded." });
     } catch (err: unknown) {
@@ -226,8 +244,22 @@ const Reports = () => {
     }
   };
 
+  const exportCmMetricsCsv = async () => {
+    try {
+      setExporting((prev) => ({ ...prev, cmMetrics: true }));
+      const res = await apiDownloadCmMetricsCsv({ from, to, locationId, categoryId });
+      downloadBlob(res, `cm-metrics_${from.slice(0, 10)}_${to.slice(0, 10)}.csv`);
+      toast({ title: "Exported", description: "CM metrics CSV downloaded." });
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Export failed";
+      toast({ title: "Export failed", description: message, variant: "destructive" });
+    } finally {
+      setExporting((prev) => ({ ...prev, cmMetrics: false }));
+    }
+  };
+
   const reportTypes: Array<{
-    key: "compliance" | "overdue" | "logs" | "assets-without-pm";
+    key: "compliance" | "overdue" | "logs" | "assets-without-pm" | "cm-metrics";
     title: string;
     description: string;
     icon: typeof TrendingUp;
@@ -243,6 +275,17 @@ const Reports = () => {
       action: () => {
         void complianceQuery.refetch();
         toast({ title: "Compliance refreshed" });
+      },
+    },
+    {
+      key: "cm-metrics",
+      title: "CM Metrics",
+      description: "Corrective maintenance breakdowns and MTTR (reported-to-complete)",
+      icon: Activity,
+      color: "accent",
+      action: () => {
+        void cmMetricsQuery.refetch();
+        toast({ title: "CM metrics refreshed" });
       },
     },
     {
@@ -352,6 +395,22 @@ const Reports = () => {
             </Select>
           </div>
 
+          <div className="col-span-12 md:col-span-4">
+            <Select
+              value={maintenanceType}
+              onValueChange={(value) => setMaintenanceType(value as MaintenanceTypeFilter)}
+            >
+              <SelectTrigger className="w-full bg-muted/50">
+                <SelectValue placeholder="Maintenance type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PM">PM only</SelectItem>
+                <SelectItem value="CM">CM only</SelectItem>
+                <SelectItem value="all">PM + CM</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="col-span-12 md:col-span-6">
             <Popover>
               <PopoverTrigger asChild>
@@ -378,6 +437,7 @@ const Reports = () => {
               onClick={() => {
                 setSelectedLocationId("all");
                 setSelectedCategoryId("all");
+                setMaintenanceType("PM");
               }}
             >
               Clear Filters
@@ -423,12 +483,14 @@ const Reports = () => {
                           if (report.key === "overdue") void exportOverdueCsv();
                           if (report.key === "logs") void exportLogsCsv();
                           if (report.key === "assets-without-pm") void exportAssetsWithoutPmCsv();
+                          if (report.key === "cm-metrics") void exportCmMetricsCsv();
                         }}
                         disabled={
                           (report.key === "compliance" && exporting.compliance) ||
                           (report.key === "overdue" && exporting.overdue) ||
                           (report.key === "logs" && exporting.logs) ||
-                          (report.key === "assets-without-pm" && exporting.assetsWithoutPm)
+                          (report.key === "assets-without-pm" && exporting.assetsWithoutPm) ||
+                          (report.key === "cm-metrics" && exporting.cmMetrics)
                         }
                       >
                         <Download className="w-4 h-4" />
@@ -457,6 +519,115 @@ const Reports = () => {
             </motion.div>
           ))}
         </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="glass rounded-xl p-6"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">CM Metrics Overview</h3>
+              <p className="text-sm text-muted-foreground">Breakdowns and MTTR for corrective maintenance</p>
+            </div>
+          </div>
+
+          {cmMetricsQuery.isLoading ? (
+            <div className="text-sm text-muted-foreground">Loading CM metrics…</div>
+          ) : cmMetricsQuery.isError ? (
+            <div className="text-sm text-destructive">Failed to load CM metrics.</div>
+          ) : !cmMetricsQuery.data ? (
+            <div className="text-sm text-muted-foreground">No CM metrics available for the selected filters.</div>
+          ) : (
+            <div className="grid grid-cols-12 gap-4">
+              <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
+                <p className="text-xs font-medium uppercase text-muted-foreground">By Category</p>
+                <div className="space-y-1">
+                  {cmMetricsQuery.data.breakdownByCategory.map((row) => (
+                    <div key={`cat-${row.name}`} className="flex justify-between text-sm">
+                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Uncategorized"}</span>
+                      <span className="text-muted-foreground">{row.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
+                <p className="text-xs font-medium uppercase text-muted-foreground">By Location</p>
+                <div className="space-y-1">
+                  {cmMetricsQuery.data.breakdownByLocation.map((row) => (
+                    <div key={`loc-${row.name}`} className="flex justify-between text-sm">
+                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Unassigned"}</span>
+                      <span className="text-muted-foreground">{row.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
+                <p className="text-xs font-medium uppercase text-muted-foreground">By Failure Category</p>
+                <div className="space-y-1">
+                  {cmMetricsQuery.data.breakdownByFailureCategory.map((row) => (
+                    <div key={`fail-${row.name}`} className="flex justify-between text-sm">
+                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Unspecified"}</span>
+                      <span className="text-muted-foreground">{row.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
+                <p className="text-xs font-medium uppercase text-muted-foreground">By Impact Level</p>
+                <div className="space-y-1">
+                  {cmMetricsQuery.data.breakdownByImpactLevel.map((row) => (
+                    <div key={`impact-${row.name}`} className="flex justify-between text-sm">
+                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Unspecified"}</span>
+                      <span className="text-muted-foreground">{row.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="col-span-12 md:col-span-6 lg:col-span-4 space-y-2">
+                <p className="text-xs font-medium uppercase text-muted-foreground">MTTR by Category (hours)</p>
+                <div className="space-y-1">
+                  {cmMetricsQuery.data.mttrByCategory.map((row) => (
+                    <div key={`mttr-cat-${row.name}`} className="flex justify-between text-sm">
+                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Uncategorized"}</span>
+                      <span className="text-muted-foreground">
+                        {row.seconds > 0 ? (row.seconds / 3600).toFixed(1) : "0.0"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-6 lg:col-span-4 space-y-2">
+                <p className="text-xs font-medium uppercase text-muted-foreground">MTTR by Location (hours)</p>
+                <div className="space-y-1">
+                  {cmMetricsQuery.data.mttrByLocation.map((row) => (
+                    <div key={`mttr-loc-${row.name}`} className="flex justify-between text-sm">
+                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Unassigned"}</span>
+                      <span className="text-muted-foreground">
+                        {row.seconds > 0 ? (row.seconds / 3600).toFixed(1) : "0.0"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-12 lg:col-span-4 space-y-2">
+                <p className="text-xs font-medium uppercase text-muted-foreground">Monthly Incidents</p>
+                <div className="space-y-1">
+                  {cmMetricsQuery.data.monthlyIncidents.map((row) => (
+                    <div key={`month-${row.monthStart}`} className="flex justify-between text-sm">
+                      <span className="text-foreground">
+                        {row.monthStart ? format(new Date(row.monthStart), "yyyy-MM") : "Unknown"}
+                      </span>
+                      <span className="text-muted-foreground">{row.incidentCount}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
 
         {/* Audit Trail Preview */}
         <motion.div

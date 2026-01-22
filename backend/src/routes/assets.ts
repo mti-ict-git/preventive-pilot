@@ -43,7 +43,7 @@ const UpdatePmSchema = z
     defaultTemplateId: z.string().uuid().nullable().optional(),
     nextPmDueAt: z.string().datetime().nullable().optional(),
   })
-  .refine((v) => Object.keys(v).length > 0, { message: "No updates" });
+  .refine((value) => Object.keys(value).length > 0, { message: "No updates" });
 
 const BulkSetPmEnabledSchema = z.object({
   assetIds: z.array(z.string().uuid()).min(1).max(500),
@@ -527,13 +527,26 @@ assetsRouter.get("/:assetId/history", async (req, res) => {
 assetsRouter.patch("/:assetId/pm", requireManager, async (req, res) => {
   const assetId = req.params.assetId;
   if (!z.string().uuid().safeParse(assetId).success) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "assetId",
+          issue: "Invalid UUID",
+        },
+      ],
+    });
     return;
   }
 
   const parsed = UpdatePmSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [],
+    });
     return;
   }
 
@@ -544,15 +557,100 @@ assetsRouter.patch("/:assetId/pm", requireManager, async (req, res) => {
   const tx = new sql.Transaction(db);
   await tx.begin();
   try {
-    const existing = await tx
+    const existingResult = await tx
       .request()
       .input("assetId", sql.UniqueIdentifier, assetId)
-      .query("SELECT TOP (1) AssetId FROM pm.Assets WHERE AssetId = @assetId AND IsArchived = 0");
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  a.AssetId AS AssetId,",
+          "  a.CategoryId AS CategoryId",
+          "FROM pm.Assets a",
+          "WHERE a.AssetId = @assetId AND a.IsArchived = 0",
+        ].join("\n"),
+      );
 
-    if (!existing.recordset[0]) {
-      res.status(404).json({ message: "Not found" });
+    const existingRow = existingResult.recordset[0] as
+      | {
+          AssetId?: string;
+          CategoryId?: string | null;
+        }
+      | undefined;
+
+    if (!existingRow) {
+      res.status(404).json({
+        message: "Not found",
+        code: "NOT_FOUND",
+        details: [
+          {
+            field: "assetId",
+            issue: "Asset not found",
+          },
+        ],
+      });
       await tx.rollback();
       return;
+    }
+
+    if (hasDefaultTemplateId && parsed.data.defaultTemplateId) {
+      const validationResult = await tx
+        .request()
+        .input("assetId", sql.UniqueIdentifier, assetId)
+        .input("templateId", sql.UniqueIdentifier, parsed.data.defaultTemplateId)
+        .query(
+          [
+            "SELECT TOP (1)",
+            "  a.CategoryId AS AssetCategoryId,",
+            "  tpl.TemplateId AS TemplateId,",
+            "  tpl.ApplicableCategoryId AS TemplateCategoryId",
+            "FROM pm.Assets a",
+            "LEFT JOIN pm.PMTemplates tpl ON tpl.TemplateId = @templateId",
+            "WHERE a.AssetId = @assetId AND a.IsArchived = 0",
+          ].join("\n"),
+        );
+
+      const validationRow = validationResult.recordset[0] as
+        | {
+            AssetCategoryId?: string | null;
+            TemplateId?: string | null;
+            TemplateCategoryId?: string | null;
+          }
+        | undefined;
+
+      const templateIdValue = typeof validationRow?.TemplateId === "string" ? validationRow.TemplateId : null;
+      if (!templateIdValue) {
+        res.status(400).json({
+          message: "Template not found",
+          code: "VALIDATION_ERROR",
+          details: [
+            {
+              field: "defaultTemplateId",
+              issue: "Template not found",
+            },
+          ],
+        });
+        await tx.rollback();
+        return;
+      }
+
+      const assetCategoryId = typeof validationRow?.AssetCategoryId === "string" ? validationRow.AssetCategoryId : null;
+      const templateCategoryId =
+        typeof validationRow?.TemplateCategoryId === "string" ? validationRow.TemplateCategoryId : null;
+
+      if (templateCategoryId && templateCategoryId !== assetCategoryId) {
+        res.status(400).json({
+          message: "Invalid request",
+          code: "VALIDATION_ERROR",
+          details: [
+            {
+              field: "defaultTemplateId",
+              issue: "Category mismatch",
+            },
+          ],
+        });
+        await tx.rollback();
+        return;
+      }
     }
 
     await tx

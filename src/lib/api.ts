@@ -951,6 +951,8 @@ export const apiUploadTaskChecklistEvidenceFile = async (input: {
   return { id };
 };
 
+export type MaintenanceTypeFilter = "PM" | "CM" | "all";
+
 export type OverdueReportItem = {
   id: string;
   taskNumber: string;
@@ -979,12 +981,14 @@ export const apiGetOverdueReport = async (input: {
   pageSize?: number;
   locationId?: string;
   categoryId?: string;
+  maintenanceType?: MaintenanceTypeFilter;
 }): Promise<OverdueReportResponse> => {
   const params = new URLSearchParams();
   if (input.page) params.set("page", String(input.page));
   if (input.pageSize) params.set("pageSize", String(input.pageSize));
   if (input.locationId) params.set("locationId", input.locationId);
   if (input.categoryId) params.set("categoryId", input.categoryId);
+  if (input.maintenanceType) params.set("maintenanceType", input.maintenanceType);
   const query = params.toString();
   return apiFetchJson<OverdueReportResponse>(`/api/reports/overdue${query ? `?${query}` : ""}`);
 };
@@ -1004,10 +1008,12 @@ export const apiGetComplianceReport = async (input: {
   to: string;
   locationId?: string;
   categoryId?: string;
+  maintenanceType?: MaintenanceTypeFilter;
 }): Promise<ComplianceReportResponse> => {
   const params = new URLSearchParams({ from: input.from, to: input.to });
   if (input.locationId) params.set("locationId", input.locationId);
   if (input.categoryId) params.set("categoryId", input.categoryId);
+  if (input.maintenanceType) params.set("maintenanceType", input.maintenanceType);
   return apiFetchJson<ComplianceReportResponse>(`/api/reports/compliance?${params.toString()}`);
 };
 
@@ -1043,10 +1049,12 @@ export const apiDownloadTaskPdf = async (taskId: string): Promise<DownloadEviden
 export const apiDownloadOverdueReportCsv = async (input: {
   locationId?: string;
   categoryId?: string;
+  maintenanceType?: MaintenanceTypeFilter;
 }): Promise<DownloadEvidenceResponse> => {
   const params = new URLSearchParams();
   if (input.locationId) params.set("locationId", input.locationId);
   if (input.categoryId) params.set("categoryId", input.categoryId);
+  if (input.maintenanceType) params.set("maintenanceType", input.maintenanceType);
   const query = params.toString();
   return apiFetchBlob(`/api/reports/overdue/export.csv${query ? `?${query}` : ""}`);
 };
@@ -1056,11 +1064,64 @@ export const apiDownloadComplianceReportCsv = async (input: {
   to: string;
   locationId?: string;
   categoryId?: string;
+  maintenanceType?: MaintenanceTypeFilter;
 }): Promise<DownloadEvidenceResponse> => {
   const params = new URLSearchParams({ from: input.from, to: input.to });
   if (input.locationId) params.set("locationId", input.locationId);
   if (input.categoryId) params.set("categoryId", input.categoryId);
+  if (input.maintenanceType) params.set("maintenanceType", input.maintenanceType);
   return apiFetchBlob(`/api/reports/compliance/export.csv?${params.toString()}`);
+};
+
+export type CmBreakdownRow = {
+  name: string;
+  count: number;
+};
+
+export type CmMttrRow = {
+  name: string;
+  seconds: number;
+};
+
+export type CmMonthlyIncidentRow = {
+  monthStart: string;
+  incidentCount: number;
+};
+
+export type CmMetricsResponse = {
+  from: string;
+  to: string;
+  breakdownByCategory: CmBreakdownRow[];
+  breakdownByLocation: CmBreakdownRow[];
+  breakdownByFailureCategory: CmBreakdownRow[];
+  breakdownByImpactLevel: CmBreakdownRow[];
+  monthlyIncidents: CmMonthlyIncidentRow[];
+  mttrByCategory: CmMttrRow[];
+  mttrByLocation: CmMttrRow[];
+};
+
+export const apiGetCmMetrics = async (input: {
+  from: string;
+  to: string;
+  locationId?: string;
+  categoryId?: string;
+}): Promise<CmMetricsResponse> => {
+  const params = new URLSearchParams({ from: input.from, to: input.to });
+  if (input.locationId) params.set("locationId", input.locationId);
+  if (input.categoryId) params.set("categoryId", input.categoryId);
+  return apiFetchJson<CmMetricsResponse>(`/api/reports/cm/metrics?${params.toString()}`);
+};
+
+export const apiDownloadCmMetricsCsv = async (input: {
+  from: string;
+  to: string;
+  locationId?: string;
+  categoryId?: string;
+}): Promise<DownloadEvidenceResponse> => {
+  const params = new URLSearchParams({ from: input.from, to: input.to });
+  if (input.locationId) params.set("locationId", input.locationId);
+  if (input.categoryId) params.set("categoryId", input.categoryId);
+  return apiFetchBlob(`/api/reports/cm/metrics/export.csv?${params.toString()}`);
 };
 
 export const apiDownloadSystemLogsCsv = async (input: {

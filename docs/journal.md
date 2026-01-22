@@ -1,6 +1,12 @@
 # Journal
 
-## 2026-01-22 1:08:59 PM
+## 2026-01-22 14:10:00
+- Added CM reporting backend for breakdowns, MTTR, and monthly incidents.
+- Extended compliance and overdue reports with PM/CM maintenance type filter and CSV exports.
+- Implemented CM Metrics card and overview widget on Reports page with Shadcn UI.
+- Wired CM metrics CSV export on web and documented Reports behavior in README.
+
+## 2026-01-22 13:08:59 PM
 - Added CM reported by/channel and downtime fields to Work Order detail response and UI.
 - Added Close Downtime action in Work Order detail.
 - Updated README with downtime detail note.

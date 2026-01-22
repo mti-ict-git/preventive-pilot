@@ -48,6 +48,13 @@ const AssetsWithoutPmExportQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
 });
 
+const CmMetricsQuerySchema = z.object({
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+  locationId: z.string().uuid().optional(),
+  categoryId: z.string().uuid().optional(),
+});
+
 const csvEscape = (value: string): string => {
   if (value.includes("\"") || value.includes(",") || value.includes("\n") || value.includes("\r")) {
     return `"${value.replace(/"/g, '""')}"`;
@@ -93,6 +100,299 @@ const writeAuditLog = async (input: {
         ")",
       ].join("\n"),
     );
+};
+
+type CmMetricsParams = {
+  from: string;
+  to: string;
+  locationId: string | null;
+  categoryId: string | null;
+};
+
+type CmBreakdownRow = {
+  name: string;
+  count: number;
+};
+
+type CmMttrRow = {
+  name: string;
+  seconds: number;
+};
+
+type CmMonthlyIncidentRow = {
+  monthStart: string;
+  incidentCount: number;
+};
+
+type CmMetricsResult = {
+  from: string;
+  to: string;
+  breakdownByCategory: CmBreakdownRow[];
+  breakdownByLocation: CmBreakdownRow[];
+  breakdownByFailureCategory: CmBreakdownRow[];
+  breakdownByImpactLevel: CmBreakdownRow[];
+  monthlyIncidents: CmMonthlyIncidentRow[];
+  mttrByCategory: CmMttrRow[];
+  mttrByLocation: CmMttrRow[];
+};
+
+const loadCmMetrics = async (params: CmMetricsParams): Promise<CmMetricsResult> => {
+  const db = await getDb();
+
+  const breakdownByCategoryResult = await db
+    .request()
+    .input("from", sql.DateTime2(0), params.from)
+    .input("to", sql.DateTime2(0), params.to)
+    .input("locationId", sql.UniqueIdentifier, params.locationId)
+    .input("categoryId", sql.UniqueIdentifier, params.categoryId)
+    .query(
+      [
+        "SELECT",
+        "  ISNULL(c.Name, N'Uncategorized') AS Name,",
+        "  COUNT(1) AS Cnt",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.AssetCategories c ON c.CategoryId = a.CategoryId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+        "WHERE",
+        "  t.MaintenanceType = N'CM'",
+        "  AND t.ReportedAt IS NOT NULL",
+        "  AND t.ReportedAt >= @from",
+        "  AND t.ReportedAt <= @to",
+        "  AND (@locationId IS NULL OR a.LocationId = @locationId OR fac.LocationId = @locationId)",
+        "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "GROUP BY ISNULL(c.Name, N'Uncategorized')",
+        "ORDER BY ISNULL(c.Name, N'Uncategorized') ASC",
+      ].join("\n"),
+    );
+
+  const breakdownByLocationResult = await db
+    .request()
+    .input("from", sql.DateTime2(0), params.from)
+    .input("to", sql.DateTime2(0), params.to)
+    .input("locationId", sql.UniqueIdentifier, params.locationId)
+    .input("categoryId", sql.UniqueIdentifier, params.categoryId)
+    .query(
+      [
+        "SELECT",
+        "  ISNULL(loc.Name, N'Unassigned') AS Name,",
+        "  COUNT(1) AS Cnt",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+        "LEFT JOIN pm.Locations loc ON loc.LocationId = COALESCE(a.LocationId, fac.LocationId)",
+        "WHERE",
+        "  t.MaintenanceType = N'CM'",
+        "  AND t.ReportedAt IS NOT NULL",
+        "  AND t.ReportedAt >= @from",
+        "  AND t.ReportedAt <= @to",
+        "  AND (@locationId IS NULL OR a.LocationId = @locationId OR fac.LocationId = @locationId)",
+        "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "GROUP BY ISNULL(loc.Name, N'Unassigned')",
+        "ORDER BY ISNULL(loc.Name, N'Unassigned') ASC",
+      ].join("\n"),
+    );
+
+  const breakdownByFailureCategoryResult = await db
+    .request()
+    .input("from", sql.DateTime2(0), params.from)
+    .input("to", sql.DateTime2(0), params.to)
+    .input("locationId", sql.UniqueIdentifier, params.locationId)
+    .input("categoryId", sql.UniqueIdentifier, params.categoryId)
+    .query(
+      [
+        "SELECT",
+        "  ISNULL(NULLIF(t.FailureCategory, N''), N'Unspecified') AS Name,",
+        "  COUNT(1) AS Cnt",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+        "WHERE",
+        "  t.MaintenanceType = N'CM'",
+        "  AND t.ReportedAt IS NOT NULL",
+        "  AND t.ReportedAt >= @from",
+        "  AND t.ReportedAt <= @to",
+        "  AND (@locationId IS NULL OR a.LocationId = @locationId OR fac.LocationId = @locationId)",
+        "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "GROUP BY ISNULL(NULLIF(t.FailureCategory, N''), N'Unspecified')",
+        "ORDER BY ISNULL(NULLIF(t.FailureCategory, N''), N'Unspecified') ASC",
+      ].join("\n"),
+    );
+
+  const breakdownByImpactLevelResult = await db
+    .request()
+    .input("from", sql.DateTime2(0), params.from)
+    .input("to", sql.DateTime2(0), params.to)
+    .input("locationId", sql.UniqueIdentifier, params.locationId)
+    .input("categoryId", sql.UniqueIdentifier, params.categoryId)
+    .query(
+      [
+        "SELECT",
+        "  ISNULL(NULLIF(t.ImpactLevel, N''), N'Unspecified') AS Name,",
+        "  COUNT(1) AS Cnt",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+        "WHERE",
+        "  t.MaintenanceType = N'CM'",
+        "  AND t.ReportedAt IS NOT NULL",
+        "  AND t.ReportedAt >= @from",
+        "  AND t.ReportedAt <= @to",
+        "  AND (@locationId IS NULL OR a.LocationId = @locationId OR fac.LocationId = @locationId)",
+        "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "GROUP BY ISNULL(NULLIF(t.ImpactLevel, N''), N'Unspecified')",
+        "ORDER BY ISNULL(NULLIF(t.ImpactLevel, N''), N'Unspecified') ASC",
+      ].join("\n"),
+    );
+
+  const monthlyIncidentsResult = await db
+    .request()
+    .input("from", sql.DateTime2(0), params.from)
+    .input("to", sql.DateTime2(0), params.to)
+    .input("locationId", sql.UniqueIdentifier, params.locationId)
+    .input("categoryId", sql.UniqueIdentifier, params.categoryId)
+    .query(
+      [
+        "SELECT",
+        "  DATEFROMPARTS(YEAR(t.ReportedAt), MONTH(t.ReportedAt), 1) AS MonthStart,",
+        "  COUNT(1) AS IncidentCount",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+        "WHERE",
+        "  t.MaintenanceType = N'CM'",
+        "  AND t.ReportedAt IS NOT NULL",
+        "  AND t.ReportedAt >= @from",
+        "  AND t.ReportedAt <= @to",
+        "  AND (@locationId IS NULL OR a.LocationId = @locationId OR fac.LocationId = @locationId)",
+        "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "GROUP BY DATEFROMPARTS(YEAR(t.ReportedAt), MONTH(t.ReportedAt), 1)",
+        "ORDER BY DATEFROMPARTS(YEAR(t.ReportedAt), MONTH(t.ReportedAt), 1) ASC",
+      ].join("\n"),
+    );
+
+  const mttrByCategoryResult = await db
+    .request()
+    .input("from", sql.DateTime2(0), params.from)
+    .input("to", sql.DateTime2(0), params.to)
+    .input("locationId", sql.UniqueIdentifier, params.locationId)
+    .input("categoryId", sql.UniqueIdentifier, params.categoryId)
+    .query(
+      [
+        "SELECT",
+        "  ISNULL(c.Name, N'Uncategorized') AS Name,",
+        "  AVG(DATEDIFF(SECOND, t.ReportedAt, t.CompletedAt)) AS AvgSeconds",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.AssetCategories c ON c.CategoryId = a.CategoryId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+        "WHERE",
+        "  t.MaintenanceType = N'CM'",
+        "  AND t.ReportedAt IS NOT NULL",
+        "  AND t.CompletedAt IS NOT NULL",
+        "  AND t.ReportedAt >= @from",
+        "  AND t.ReportedAt <= @to",
+        "  AND (@locationId IS NULL OR a.LocationId = @locationId OR fac.LocationId = @locationId)",
+        "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "GROUP BY ISNULL(c.Name, N'Uncategorized')",
+        "ORDER BY ISNULL(c.Name, N'Uncategorized') ASC",
+      ].join("\n"),
+    );
+
+  const mttrByLocationResult = await db
+    .request()
+    .input("from", sql.DateTime2(0), params.from)
+    .input("to", sql.DateTime2(0), params.to)
+    .input("locationId", sql.UniqueIdentifier, params.locationId)
+    .input("categoryId", sql.UniqueIdentifier, params.categoryId)
+    .query(
+      [
+        "SELECT",
+        "  ISNULL(loc.Name, N'Unassigned') AS Name,",
+        "  AVG(DATEDIFF(SECOND, t.ReportedAt, t.CompletedAt)) AS AvgSeconds",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+        "LEFT JOIN pm.Locations loc ON loc.LocationId = COALESCE(a.LocationId, fac.LocationId)",
+        "WHERE",
+        "  t.MaintenanceType = N'CM'",
+        "  AND t.ReportedAt IS NOT NULL",
+        "  AND t.CompletedAt IS NOT NULL",
+        "  AND t.ReportedAt >= @from",
+        "  AND t.ReportedAt <= @to",
+        "  AND (@locationId IS NULL OR a.LocationId = @locationId OR fac.LocationId = @locationId)",
+        "  AND (@categoryId IS NULL OR a.CategoryId = @categoryId)",
+        "GROUP BY ISNULL(loc.Name, N'Unassigned')",
+        "ORDER BY ISNULL(loc.Name, N'Unassigned') ASC",
+      ].join("\n"),
+    );
+
+  const breakdownByCategoryRows = breakdownByCategoryResult.recordset as Array<Record<string, unknown>>;
+  const breakdownByLocationRows = breakdownByLocationResult.recordset as Array<Record<string, unknown>>;
+  const breakdownByFailureCategoryRows = breakdownByFailureCategoryResult.recordset as Array<Record<string, unknown>>;
+  const breakdownByImpactLevelRows = breakdownByImpactLevelResult.recordset as Array<Record<string, unknown>>;
+  const monthlyIncidentRows = monthlyIncidentsResult.recordset as Array<Record<string, unknown>>;
+  const mttrByCategoryRows = mttrByCategoryResult.recordset as Array<Record<string, unknown>>;
+  const mttrByLocationRows = mttrByLocationResult.recordset as Array<Record<string, unknown>>;
+
+  const toBreakdownRows = (rows: Array<Record<string, unknown>>): CmBreakdownRow[] => {
+    return rows.map((r) => ({
+      name: String(r.Name ?? ""),
+      count: Number(r.Cnt ?? 0),
+    }));
+  };
+
+  const toMttrRows = (rows: Array<Record<string, unknown>>): CmMttrRow[] => {
+    return rows
+      .map((r) => {
+        const secondsRaw = r.AvgSeconds;
+        const secondsValue =
+          typeof secondsRaw === "number" && Number.isFinite(secondsRaw)
+            ? secondsRaw
+            : secondsRaw instanceof Date
+            ? 0
+            : Number(secondsRaw ?? 0);
+        return {
+          name: String(r.Name ?? ""),
+          seconds: secondsValue,
+        };
+      })
+      .filter((row) => row.seconds > 0);
+  };
+
+  const breakdownByCategory = toBreakdownRows(breakdownByCategoryRows);
+  const breakdownByLocation = toBreakdownRows(breakdownByLocationRows);
+  const breakdownByFailureCategory = toBreakdownRows(breakdownByFailureCategoryRows);
+  const breakdownByImpactLevel = toBreakdownRows(breakdownByImpactLevelRows);
+
+  const monthlyIncidents: CmMonthlyIncidentRow[] = monthlyIncidentRows.map((r) => {
+    const monthStartRaw = r.MonthStart;
+    const monthStartValue =
+      monthStartRaw instanceof Date
+        ? monthStartRaw.toISOString()
+        : typeof monthStartRaw === "string"
+        ? monthStartRaw
+        : null;
+    return {
+      monthStart: monthStartValue ?? "",
+      incidentCount: Number(r.IncidentCount ?? 0),
+    };
+  });
+
+  const mttrByCategory = toMttrRows(mttrByCategoryRows);
+  const mttrByLocation = toMttrRows(mttrByLocationRows);
+
+  return {
+    from: params.from,
+    to: params.to,
+    breakdownByCategory,
+    breakdownByLocation,
+    breakdownByFailureCategory,
+    breakdownByImpactLevel,
+    monthlyIncidents,
+    mttrByCategory,
+    mttrByLocation,
+  };
 };
 
 export const reportsRouter = Router();
@@ -587,6 +887,143 @@ reportsRouter.get("/assets-without-pm/export.csv", async (req, res) => {
         csvCell(r.TemplateName),
       ].join(","),
     );
+  }
+
+  res.send(lines.join("\n"));
+});
+
+reportsRouter.get("/cm/metrics", async (req, res) => {
+  const parsed = CmMetricsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const metrics = await loadCmMetrics({
+    from: parsed.data.from,
+    to: parsed.data.to,
+    locationId: parsed.data.locationId ?? null,
+    categoryId: parsed.data.categoryId ?? null,
+  });
+
+  res.json(metrics);
+});
+
+reportsRouter.get("/cm/metrics/export.csv", async (req, res) => {
+  const parsed = CmMetricsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const metrics = await loadCmMetrics({
+    from: parsed.data.from,
+    to: parsed.data.to,
+    locationId: parsed.data.locationId ?? null,
+    categoryId: parsed.data.categoryId ?? null,
+  });
+
+  const nowIso = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `cm-metrics_${nowIso}.csv`;
+
+  await writeAuditLog({
+    actorUserId: req.user.sub,
+    action: "report.export",
+    entityType: "report",
+    entityId: null,
+    metadata: {
+      report: "cm-metrics",
+      format: "csv",
+      filters: parsed.data,
+    },
+    ipAddress: typeof req.ip === "string" ? req.ip : null,
+    userAgent: req.get("user-agent") ?? null,
+  });
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+  const lines: string[] = [];
+  lines.push(
+    "\ufeff" +
+      ["Section", "Name", "Count", "MttrSeconds", "MonthStart", "MonthlyIncidentCount"].map(csvEscape).join(","),
+  );
+
+  for (const row of metrics.breakdownByCategory) {
+    lines.push([
+      csvCell("breakdown-category"),
+      csvCell(row.name),
+      csvCell(row.count),
+      csvCell(null),
+      csvCell(null),
+      csvCell(null),
+    ].join(","));
+  }
+
+  for (const row of metrics.breakdownByLocation) {
+    lines.push([
+      csvCell("breakdown-location"),
+      csvCell(row.name),
+      csvCell(row.count),
+      csvCell(null),
+      csvCell(null),
+      csvCell(null),
+    ].join(","));
+  }
+
+  for (const row of metrics.breakdownByFailureCategory) {
+    lines.push([
+      csvCell("breakdown-failure-category"),
+      csvCell(row.name),
+      csvCell(row.count),
+      csvCell(null),
+      csvCell(null),
+      csvCell(null),
+    ].join(","));
+  }
+
+  for (const row of metrics.breakdownByImpactLevel) {
+    lines.push([
+      csvCell("breakdown-impact-level"),
+      csvCell(row.name),
+      csvCell(row.count),
+      csvCell(null),
+      csvCell(null),
+      csvCell(null),
+    ].join(","));
+  }
+
+  for (const row of metrics.mttrByCategory) {
+    lines.push([
+      csvCell("mttr-category"),
+      csvCell(row.name),
+      csvCell(null),
+      csvCell(row.seconds),
+      csvCell(null),
+      csvCell(null),
+    ].join(","));
+  }
+
+  for (const row of metrics.mttrByLocation) {
+    lines.push([
+      csvCell("mttr-location"),
+      csvCell(row.name),
+      csvCell(null),
+      csvCell(row.seconds),
+      csvCell(null),
+      csvCell(null),
+    ].join(","));
+  }
+
+  for (const row of metrics.monthlyIncidents) {
+    lines.push([
+      csvCell("monthly-incidents"),
+      csvCell(""),
+      csvCell(null),
+      csvCell(null),
+      csvCell(row.monthStart),
+      csvCell(row.incidentCount),
+    ].join(","));
   }
 
   res.send(lines.join("\n"));
