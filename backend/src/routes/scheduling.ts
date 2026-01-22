@@ -26,6 +26,7 @@ const BlackoutWindowSchema = z.object({
 
 const RecalcSchema = z.object({
   assetId: z.string().uuid().optional(),
+  facilityId: z.string().uuid().optional(),
   force: z.boolean().optional().default(false),
 });
 
@@ -336,90 +337,183 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
   const tx = new sql.Transaction(db);
   await tx.begin();
   try {
-    const request = tx
-      .request()
-      .input("force", sql.Bit, parsed.data.force ? 1 : 0)
-      .input("assetId", sql.UniqueIdentifier, parsed.data.assetId ?? null)
-      .query(
-        [
-          "SELECT",
-          "  a.AssetId AS AssetId,",
-          "  s.DefaultTemplateId AS DefaultTemplateId,",
-          "  COALESCE(h.LastCompletedAt, s.LastPMCompletedAt) AS LastPMCompletedAt,",
-          "  due.NextDueAt AS NextPMDueAt",
-          "FROM pm.Assets a",
-          "INNER JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
-          "INNER JOIN pm.PMTemplates t ON t.TemplateId = s.DefaultTemplateId",
-          "OUTER APPLY (",
-          "  SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
-          "  FROM pm.PMTasks tt",
-          "  WHERE tt.AssetId = a.AssetId",
-          "    AND tt.TemplateId = s.DefaultTemplateId",
-          "    AND tt.Status = N'completed'",
-          "    AND tt.CompletedAt IS NOT NULL",
-          ") h",
-          "OUTER APPLY (",
-          "  SELECT pm.fn_CalculateNextDueAt(",
-          "    h.LastCompletedAt,",
-          "    s.LastPMCompletedAt,",
-          "    t.IntervalDays,",
-          "    CASE WHEN @force = 1 THEN NULL ELSE s.NextPMDueAt END",
-          "  ) AS NextDueAt",
-          ") due",
-          "WHERE a.IsArchived = 0",
-          "  AND s.PMEnabled = 1",
-          "  AND t.IsActive = 1",
-          "  AND (@assetId IS NULL OR a.AssetId = @assetId)",
-        ].join("\n"),
-      );
-
-    const rows = (await request).recordset as Array<Record<string, unknown>>;
     let updatedCount = 0;
+    const hasAssetFilter = parsed.data.assetId !== undefined;
+    const hasFacilityFilter = parsed.data.facilityId !== undefined;
+    const recalcAll = !hasAssetFilter && !hasFacilityFilter;
 
-    for (const row of rows) {
-      const assetId = row.AssetId as string;
-      const templateId = row.DefaultTemplateId as string;
-      const lastPmCompletedAt = (row.LastPMCompletedAt as Date | null) ?? null;
-      const computedNextDueAt = row.NextPMDueAt as Date;
-
-      await tx
+    if (hasAssetFilter || recalcAll) {
+      const assetRequest = tx
         .request()
-        .input("assetId", sql.UniqueIdentifier, assetId)
-        .input("templateId", sql.UniqueIdentifier, templateId)
-        .input("nextDueAt", sql.DateTime2(0), computedNextDueAt)
+        .input("force", sql.Bit, parsed.data.force ? 1 : 0)
+        .input("assetId", sql.UniqueIdentifier, parsed.data.assetId ?? null)
         .query(
           [
-            "MERGE pm.PMSchedules WITH (HOLDLOCK) AS target",
-            "USING (SELECT @assetId AS AssetId, @templateId AS TemplateId) AS source",
-            "ON target.AssetId = source.AssetId AND target.TemplateId = source.TemplateId",
-            "WHEN MATCHED THEN",
-            "  UPDATE SET",
-            "    NextDueAt = @nextDueAt,",
-            "    LastCalculatedAt = sysutcdatetime(),",
-            "    UpdatedAt = sysutcdatetime()",
-            "WHEN NOT MATCHED THEN",
-            "  INSERT (AssetId, TemplateId, NextDueAt)",
-            "  VALUES (@assetId, @templateId, @nextDueAt);",
+            "SELECT",
+            "  a.AssetId AS AssetId,",
+            "  s.DefaultTemplateId AS DefaultTemplateId,",
+            "  COALESCE(h.LastCompletedAt, s.LastPMCompletedAt) AS LastPMCompletedAt,",
+            "  due.NextDueAt AS NextPMDueAt",
+            "FROM pm.Assets a",
+            "INNER JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
+            "INNER JOIN pm.PMTemplates t ON t.TemplateId = s.DefaultTemplateId",
+            "OUTER APPLY (",
+            "  SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
+            "  FROM pm.PMTasks tt",
+            "  WHERE tt.AssetId = a.AssetId",
+            "    AND tt.TemplateId = s.DefaultTemplateId",
+            "    AND tt.Status = N'completed'",
+            "    AND tt.CompletedAt IS NOT NULL",
+            ") h",
+            "OUTER APPLY (",
+            "  SELECT pm.fn_CalculateNextDueAt(",
+            "    h.LastCompletedAt,",
+            "    s.LastPMCompletedAt,",
+            "    t.IntervalDays,",
+            "    CASE WHEN @force = 1 THEN NULL ELSE s.NextPMDueAt END",
+            "  ) AS NextDueAt",
+            ") due",
+            "WHERE a.IsArchived = 0",
+            "  AND s.PMEnabled = 1",
+            "  AND t.IsActive = 1",
+            "  AND (@assetId IS NULL OR a.AssetId = @assetId)",
           ].join("\n"),
         );
 
-      await tx
+      const assetRows = (await assetRequest).recordset as Array<Record<string, unknown>>;
+
+      for (const row of assetRows) {
+        const assetId = row.AssetId as string;
+        const templateId = row.DefaultTemplateId as string;
+        const lastPmCompletedAt = (row.LastPMCompletedAt as Date | null) ?? null;
+        const computedNextDueAt = row.NextPMDueAt as Date;
+
+        await tx
+          .request()
+          .input("assetId", sql.UniqueIdentifier, assetId)
+          .input("templateId", sql.UniqueIdentifier, templateId)
+          .input("nextDueAt", sql.DateTime2(0), computedNextDueAt)
+          .query(
+            [
+              "MERGE pm.PMSchedules WITH (HOLDLOCK) AS target",
+              "USING (SELECT @assetId AS AssetId, @templateId AS TemplateId) AS source",
+              "ON target.AssetId = source.AssetId AND target.TemplateId = source.TemplateId",
+              "WHEN MATCHED THEN",
+              "  UPDATE SET",
+              "    NextDueAt = @nextDueAt,",
+              "    LastCalculatedAt = sysutcdatetime(),",
+              "    UpdatedAt = sysutcdatetime()",
+              "WHEN NOT MATCHED THEN",
+              "  INSERT (AssetId, TemplateId, NextDueAt)",
+              "  VALUES (@assetId, @templateId, @nextDueAt);",
+            ].join("\n"),
+          );
+
+        await tx
+          .request()
+          .input("assetId", sql.UniqueIdentifier, assetId)
+          .input("nextDueAt", sql.DateTime2(0), computedNextDueAt)
+          .input("lastPmCompletedAt", sql.DateTime2(0), lastPmCompletedAt)
+          .query(
+            [
+              "UPDATE pm.AssetPMSettings",
+              "SET",
+              "  LastPMCompletedAt = COALESCE(@lastPmCompletedAt, LastPMCompletedAt),",
+              "  NextPMDueAt = @nextDueAt,",
+              "  UpdatedAt = sysutcdatetime()",
+              "WHERE AssetId = @assetId",
+            ].join("\n"),
+          );
+
+        updatedCount += 1;
+      }
+    }
+
+    if (hasFacilityFilter || recalcAll) {
+      const facilityRequest = tx
         .request()
-        .input("assetId", sql.UniqueIdentifier, assetId)
-        .input("nextDueAt", sql.DateTime2(0), computedNextDueAt)
-        .input("lastPmCompletedAt", sql.DateTime2(0), lastPmCompletedAt)
+        .input("force", sql.Bit, parsed.data.force ? 1 : 0)
+        .input("facilityId", sql.UniqueIdentifier, parsed.data.facilityId ?? null)
         .query(
           [
-            "UPDATE pm.AssetPMSettings",
-            "SET",
-            "  LastPMCompletedAt = COALESCE(@lastPmCompletedAt, LastPMCompletedAt),",
-            "  NextPMDueAt = @nextDueAt,",
-            "  UpdatedAt = sysutcdatetime()",
-            "WHERE AssetId = @assetId",
+            "SELECT",
+            "  f.FacilityId AS FacilityId,",
+            "  s.DefaultTemplateId AS DefaultTemplateId,",
+            "  COALESCE(h.LastCompletedAt, s.LastPMCompletedAt) AS LastPMCompletedAt,",
+            "  due.NextDueAt AS NextPMDueAt",
+            "FROM pm.Facilities f",
+            "INNER JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
+            "INNER JOIN pm.PMTemplates t ON t.TemplateId = s.DefaultTemplateId",
+            "OUTER APPLY (",
+            "  SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
+            "  FROM pm.PMTasks tt",
+            "  WHERE tt.FacilityId = f.FacilityId",
+            "    AND tt.TemplateId = s.DefaultTemplateId",
+            "    AND tt.Status = N'completed'",
+            "    AND tt.CompletedAt IS NOT NULL",
+            ") h",
+            "OUTER APPLY (",
+            "  SELECT pm.fn_CalculateNextDueAt(",
+            "    h.LastCompletedAt,",
+            "    s.LastPMCompletedAt,",
+            "    t.IntervalDays,",
+            "    CASE WHEN @force = 1 THEN NULL ELSE s.NextPMDueAt END",
+            "  ) AS NextDueAt",
+            ") due",
+            "WHERE f.IsActive = 1",
+            "  AND s.PMEnabled = 1",
+            "  AND t.IsActive = 1",
+            "  AND (@facilityId IS NULL OR f.FacilityId = @facilityId)",
           ].join("\n"),
         );
 
-      updatedCount += 1;
+      const facilityRows = (await facilityRequest).recordset as Array<Record<string, unknown>>;
+
+      for (const row of facilityRows) {
+        const facilityId = row.FacilityId as string;
+        const templateId = row.DefaultTemplateId as string;
+        const lastPmCompletedAt = (row.LastPMCompletedAt as Date | null) ?? null;
+        const computedNextDueAt = row.NextPMDueAt as Date;
+
+        await tx
+          .request()
+          .input("facilityId", sql.UniqueIdentifier, facilityId)
+          .input("templateId", sql.UniqueIdentifier, templateId)
+          .input("nextDueAt", sql.DateTime2(0), computedNextDueAt)
+          .query(
+            [
+              "MERGE pm.FacilityPMSchedules WITH (HOLDLOCK) AS target",
+              "USING (SELECT @facilityId AS FacilityId, @templateId AS TemplateId) AS source",
+              "ON target.FacilityId = source.FacilityId AND target.TemplateId = source.TemplateId",
+              "WHEN MATCHED THEN",
+              "  UPDATE SET",
+              "    NextDueAt = @nextDueAt,",
+              "    LastCalculatedAt = sysutcdatetime(),",
+              "    UpdatedAt = sysutcdatetime()",
+              "WHEN NOT MATCHED THEN",
+              "  INSERT (FacilityId, TemplateId, NextDueAt)",
+              "  VALUES (@facilityId, @templateId, @nextDueAt);",
+            ].join("\n"),
+          );
+
+        await tx
+          .request()
+          .input("facilityId", sql.UniqueIdentifier, facilityId)
+          .input("nextDueAt", sql.DateTime2(0), computedNextDueAt)
+          .input("lastPmCompletedAt", sql.DateTime2(0), lastPmCompletedAt)
+          .query(
+            [
+              "UPDATE pm.FacilityPMSettings",
+              "SET",
+              "  LastPMCompletedAt = COALESCE(@lastPmCompletedAt, LastPMCompletedAt),",
+              "  NextPMDueAt = @nextDueAt,",
+              "  UpdatedAt = sysutcdatetime()",
+              "WHERE FacilityId = @facilityId",
+            ].join("\n"),
+          );
+
+        updatedCount += 1;
+      }
     }
 
     await tx.commit();
@@ -499,6 +593,26 @@ schedulingRouter.get("/day", async (req, res) => {
         "    AND t.Status NOT IN (N'completed', N'cancelled')",
         "  UNION ALL",
         "  SELECT",
+        "    CAST(t.TaskId AS nvarchar(64)) AS TaskId,",
+        "    t.TaskNumber AS TaskNumber,",
+        "    t.ScheduledDueAt AS ScheduledDueAt,",
+        "    t.Status AS Status,",
+        "    t.Priority AS Priority,",
+        "    f.FacilityId AS AssetId,",
+        "    CAST(N'' AS nvarchar(64)) AS AssetTag,",
+        "    f.Name AS AssetName,",
+        "    tpl.TemplateId AS TemplateId,",
+        "    tpl.Name AS TemplateName",
+        "  FROM pm.PMTasks t",
+        "  INNER JOIN pm.Facilities f ON f.FacilityId = t.FacilityId",
+        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "  WHERE t.ScheduledDueAt >= @from",
+        "    AND t.ScheduledDueAt < @to",
+        "    AND t.Status NOT IN (N'completed', N'cancelled')",
+        "    AND t.AssetId IS NULL",
+        "    AND t.FacilityId IS NOT NULL",
+        "  UNION ALL",
+        "  SELECT",
         "    CONCAT(N'projected:', a.AssetId, N':', s.DefaultTemplateId, N':', CONVERT(varchar(19), due.DueAt, 126)) AS TaskId,",
         "    N'Projected' AS TaskNumber,",
         "    due.DueAt AS ScheduledDueAt,",
@@ -538,6 +652,51 @@ schedulingRouter.get("/day", async (req, res) => {
         "      SELECT 1",
         "      FROM pm.PMTasks t2",
         "      WHERE t2.AssetId = a.AssetId",
+        "        AND t2.TemplateId = s.DefaultTemplateId",
+        "        AND t2.ScheduledDueAt = due.DueAt",
+        "        AND t2.Status NOT IN (N'completed', N'cancelled')",
+        "    )",
+        "  UNION ALL",
+        "  SELECT",
+        "    CONCAT(N'projected-facility:', f.FacilityId, N':', s.DefaultTemplateId, N':', CONVERT(varchar(19), due.DueAt, 126)) AS TaskId,",
+        "    N'Projected' AS TaskNumber,",
+        "    due.DueAt AS ScheduledDueAt,",
+        "    N'projected' AS Status,",
+        "    N'normal' AS Priority,",
+        "    f.FacilityId AS AssetId,",
+        "    CAST(N'' AS nvarchar(64)) AS AssetTag,",
+        "    f.Name AS AssetName,",
+        "    tpl.TemplateId AS TemplateId,",
+        "    tpl.Name AS TemplateName",
+        "  FROM pm.Facilities f",
+        "  INNER JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
+        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
+        "  OUTER APPLY (",
+        "    SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
+        "    FROM pm.PMTasks tt",
+        "    WHERE tt.FacilityId = f.FacilityId",
+        "      AND tt.TemplateId = s.DefaultTemplateId",
+        "      AND tt.Status = N'completed'",
+        "      AND tt.CompletedAt IS NOT NULL",
+        "  ) h",
+        "  OUTER APPLY (",
+        "    SELECT pm.fn_CalculateNextDueAt(",
+        "      h.LastCompletedAt,",
+        "      s.LastPMCompletedAt,",
+        "      tpl.IntervalDays,",
+        "      s.NextPMDueAt",
+        "    ) AS DueAt",
+        "  ) due",
+        "  WHERE f.IsActive = 1",
+        "    AND s.PMEnabled = 1",
+        "    AND s.DefaultTemplateId IS NOT NULL",
+        "    AND tpl.IsActive = 1",
+        "    AND due.DueAt >= @from",
+        "    AND due.DueAt < @to",
+        "    AND NOT EXISTS (",
+        "      SELECT 1",
+        "      FROM pm.PMTasks t2",
+        "      WHERE t2.FacilityId = f.FacilityId",
         "        AND t2.TemplateId = s.DefaultTemplateId",
         "        AND t2.ScheduledDueAt = due.DueAt",
         "        AND t2.Status NOT IN (N'completed', N'cancelled')",
@@ -704,6 +863,41 @@ schedulingRouter.get("/calendar", async (req, res) => {
         "      SELECT 1",
         "      FROM pm.PMTasks t2",
         "      WHERE t2.AssetId = a.AssetId",
+        "        AND t2.TemplateId = s.DefaultTemplateId",
+        "        AND t2.ScheduledDueAt = due.DueAt",
+        "        AND t2.Status NOT IN (N'completed', N'cancelled')",
+        "    )",
+        "  UNION ALL",
+        "  SELECT due.DueAt AS ScheduledDueAt",
+        "  FROM pm.Facilities f",
+        "  INNER JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
+        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
+        "  OUTER APPLY (",
+        "    SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
+        "    FROM pm.PMTasks tt",
+        "    WHERE tt.FacilityId = f.FacilityId",
+        "      AND tt.TemplateId = s.DefaultTemplateId",
+        "      AND tt.Status = N'completed'",
+        "      AND tt.CompletedAt IS NOT NULL",
+        "  ) h",
+        "  OUTER APPLY (",
+        "    SELECT pm.fn_CalculateNextDueAt(",
+        "      h.LastCompletedAt,",
+        "      s.LastPMCompletedAt,",
+        "      tpl.IntervalDays,",
+        "      s.NextPMDueAt",
+        "    ) AS DueAt",
+        "  ) due",
+        "  WHERE f.IsActive = 1",
+        "    AND s.PMEnabled = 1",
+        "    AND s.DefaultTemplateId IS NOT NULL",
+        "    AND tpl.IsActive = 1",
+        "    AND due.DueAt >= @from",
+        "    AND due.DueAt < @to",
+        "    AND NOT EXISTS (",
+        "      SELECT 1",
+        "      FROM pm.PMTasks t2",
+        "      WHERE t2.FacilityId = f.FacilityId",
         "        AND t2.TemplateId = s.DefaultTemplateId",
         "        AND t2.ScheduledDueAt = due.DueAt",
         "        AND t2.Status NOT IN (N'completed', N'cancelled')",

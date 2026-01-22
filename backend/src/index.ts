@@ -595,6 +595,7 @@ const openApiSpec: OpenApiSchema = {
     { name: "Auth" },
     { name: "Assets" },
     { name: "Facilities" },
+    { name: "Scheduling" },
     { name: "Tasks" },
     { name: "Work Orders" },
     { name: "Notifications" },
