@@ -340,13 +340,26 @@ facilitiesRouter.put("/:facilityId", requireManager, async (req, res) => {
 facilitiesRouter.put("/:facilityId/pm-settings", requireManager, async (req, res) => {
   const facilityId = req.params.facilityId;
   if (!z.string().uuid().safeParse(facilityId).success) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "facilityId",
+          issue: "Invalid UUID",
+        },
+      ],
+    });
     return;
   }
 
   const parsed = FacilityPmSettingsSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [],
+    });
     return;
   }
 
@@ -388,7 +401,16 @@ facilitiesRouter.put("/:facilityId/pm-settings", requireManager, async (req, res
 facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) => {
   const facilityId = req.params.facilityId;
   if (!z.string().uuid().safeParse(facilityId).success) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "facilityId",
+          issue: "Invalid UUID",
+        },
+      ],
+    });
     return;
   }
 
@@ -405,7 +427,8 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
         "  s.PMEnabled AS PMEnabled,",
         "  s.DefaultTemplateId AS DefaultTemplateId,",
         "  tpl.TemplateId AS TemplateId,",
-        "  tpl.IsActive AS TemplateIsActive",
+        "  tpl.IsActive AS TemplateIsActive,",
+        "  tpl.RequiredRoleId AS RequiredRoleId",
         "FROM pm.Facilities f",
         "LEFT JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
         "LEFT JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
@@ -415,7 +438,16 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
 
   const facilityRow = facilityResult.recordset[0] as Record<string, unknown> | undefined;
   if (!facilityRow) {
-    res.status(404).json({ message: "Facility not found" });
+    res.status(404).json({
+      message: "Not found",
+      code: "NOT_FOUND",
+      details: [
+        {
+          field: "facilityId",
+          issue: "Facility not found",
+        },
+      ],
+    });
     return;
   }
 
@@ -427,7 +459,16 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
         ? facilityIsActiveValue === 1
         : false;
   if (!facilityIsActive) {
-    res.status(400).json({ message: "Facility is inactive" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "facilityId",
+          issue: "Facility is inactive",
+        },
+      ],
+    });
     return;
   }
 
@@ -439,7 +480,16 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
         ? pmEnabledValue === 1
         : false;
   if (!pmEnabled) {
-    res.status(400).json({ message: "PM is not enabled for this facility" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "facilityId",
+          issue: "PM is not enabled for this facility",
+        },
+      ],
+    });
     return;
   }
 
@@ -454,9 +504,16 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
         : false;
 
   if (!templateId || !templateIsActive) {
-    res
-      .status(400)
-      .json({ message: "PM template is not configured or inactive for this facility" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "facilityId",
+          issue: "PM template is not configured or inactive for this facility",
+        },
+      ],
+    });
     return;
   }
 
@@ -485,7 +542,17 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
   const existingRow = existingResult.recordset[0] as Record<string, unknown> | undefined;
   const existingTaskId = typeof existingRow?.TaskId === "string" ? existingRow.TaskId : null;
   if (existingTaskId) {
-    res.status(409).json({ message: "PM Now already created recently", id: existingTaskId });
+    res.status(409).json({
+      message: "PM Now already created recently",
+      code: "PM_NOW_DUPLICATE",
+      details: [
+        {
+          field: "facilityId",
+          issue: "PM Now already created recently",
+        },
+      ],
+      id: existingTaskId,
+    });
     return;
   }
 
@@ -525,20 +592,24 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
   const assignToUserIdValue = assignmentRow?.AssignToUserId ?? null;
   const assignToRoleIdValue = assignmentRow?.AssignToRoleId ?? null;
 
+  let assignedToUserId: string | null =
+    typeof assignToUserIdValue === "string" ? assignToUserIdValue : null;
+  let assignedToRoleId: string | null =
+    typeof assignToRoleIdValue === "string" ? assignToRoleIdValue : null;
+
+  if (!assignedToUserId && !assignedToRoleId) {
+    const requiredRoleIdValue = (facilityRow as Record<string, unknown>).RequiredRoleId;
+    const requiredRoleId =
+      typeof requiredRoleIdValue === "string" ? requiredRoleIdValue : null;
+    assignedToRoleId = requiredRoleId;
+  }
+
   const insertResult = await db
     .request()
     .input("facilityId", sql.UniqueIdentifier, facilityId)
     .input("templateId", sql.UniqueIdentifier, templateId)
-    .input(
-      "assignedToUserId",
-      sql.UniqueIdentifier,
-      typeof assignToUserIdValue === "string" ? assignToUserIdValue : null,
-    )
-    .input(
-      "assignedToRoleId",
-      sql.UniqueIdentifier,
-      typeof assignToRoleIdValue === "string" ? assignToRoleIdValue : null,
-    )
+    .input("assignedToUserId", sql.UniqueIdentifier, assignedToUserId)
+    .input("assignedToRoleId", sql.UniqueIdentifier, assignedToRoleId)
     .query(
       [
         "DECLARE @now datetime2(0) = sysutcdatetime();",

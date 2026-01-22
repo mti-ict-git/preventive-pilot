@@ -40,9 +40,30 @@ const resolveAssignment = async (candidate: CandidateRow): Promise<{
     );
 
   const row = result.recordset[0] as { AssignToUserId?: string; AssignToRoleId?: string } | undefined;
+  let assignToUserId: string | null = row?.AssignToUserId ?? null;
+  let assignToRoleId: string | null = row?.AssignToRoleId ?? null;
+
+  if (!assignToUserId && !assignToRoleId) {
+    const templateResult = await db
+      .request()
+      .input("templateId", sql.UniqueIdentifier, candidate.TemplateId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  RequiredRoleId",
+          "FROM pm.PMTemplates",
+          "WHERE TemplateId = @templateId",
+        ].join("\n"),
+      );
+
+    const templateRow = templateResult.recordset[0] as { RequiredRoleId?: string | null } | undefined;
+    const requiredRoleId = templateRow?.RequiredRoleId ?? null;
+    assignToRoleId = requiredRoleId;
+  }
+
   return {
-    assignToUserId: row?.AssignToUserId ?? null,
-    assignToRoleId: row?.AssignToRoleId ?? null,
+    assignToUserId,
+    assignToRoleId,
   };
 };
 

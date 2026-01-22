@@ -1023,7 +1023,11 @@ tasksRouter.get("/", async (req, res) => {
 tasksRouter.post("/pm-now", requireManager, async (req, res) => {
   const parsed = PmNowSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [],
+    });
     return;
   }
 
@@ -1041,7 +1045,8 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
         "  s.PMEnabled AS PMEnabled,",
         "  s.DefaultTemplateId AS DefaultTemplateId,",
         "  tpl.TemplateId AS TemplateId,",
-        "  tpl.IsActive AS TemplateIsActive",
+        "  tpl.IsActive AS TemplateIsActive,",
+        "  tpl.RequiredRoleId AS RequiredRoleId",
         "FROM pm.Assets a",
         "LEFT JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
         "LEFT JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
@@ -1051,7 +1056,16 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
 
   const assetRow = assetResult.recordset[0] as Record<string, unknown> | undefined;
   if (!assetRow) {
-    res.status(404).json({ message: "Asset not found" });
+    res.status(404).json({
+      message: "Not found",
+      code: "NOT_FOUND",
+      details: [
+        {
+          field: "assetId",
+          issue: "Asset not found",
+        },
+      ],
+    });
     return;
   }
 
@@ -1063,7 +1077,16 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
         ? pmEnabledValue === 1
         : false;
   if (!pmEnabled) {
-    res.status(400).json({ message: "PM is not enabled for this asset" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "assetId",
+          issue: "PM is not enabled for this asset",
+        },
+      ],
+    });
     return;
   }
 
@@ -1078,7 +1101,16 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
         : false;
 
   if (!templateId || !templateIsActive) {
-    res.status(400).json({ message: "PM template is not configured or inactive for this asset" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "assetId",
+          issue: "PM template is not configured or inactive for this asset",
+        },
+      ],
+    });
     return;
   }
 
@@ -1107,7 +1139,17 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
   const existingRow = existingResult.recordset[0] as Record<string, unknown> | undefined;
   const existingTaskId = typeof existingRow?.TaskId === "string" ? existingRow.TaskId : null;
   if (existingTaskId) {
-    res.status(409).json({ message: "PM Now already created recently", id: existingTaskId });
+    res.status(409).json({
+      message: "PM Now already created recently",
+      code: "PM_NOW_DUPLICATE",
+      details: [
+        {
+          field: "assetId",
+          issue: "PM Now already created recently",
+        },
+      ],
+      id: existingTaskId,
+    });
     return;
   }
 
@@ -1141,12 +1183,24 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
   const assignToUserIdValue = assignmentRow?.AssignToUserId ?? null;
   const assignToRoleIdValue = assignmentRow?.AssignToRoleId ?? null;
 
+  let assignedToUserId: string | null =
+    typeof assignToUserIdValue === "string" ? assignToUserIdValue : null;
+  let assignedToRoleId: string | null =
+    typeof assignToRoleIdValue === "string" ? assignToRoleIdValue : null;
+
+  if (!assignedToUserId && !assignedToRoleId) {
+    const requiredRoleIdValue = (assetRow as Record<string, unknown>).RequiredRoleId;
+    const requiredRoleId =
+      typeof requiredRoleIdValue === "string" ? requiredRoleIdValue : null;
+    assignedToRoleId = requiredRoleId;
+  }
+
   const insertResult = await db
     .request()
     .input("assetId", sql.UniqueIdentifier, parsed.data.assetId)
     .input("templateId", sql.UniqueIdentifier, templateId)
-    .input("assignedToUserId", sql.UniqueIdentifier, typeof assignToUserIdValue === "string" ? assignToUserIdValue : null)
-    .input("assignedToRoleId", sql.UniqueIdentifier, typeof assignToRoleIdValue === "string" ? assignToRoleIdValue : null)
+    .input("assignedToUserId", sql.UniqueIdentifier, assignedToUserId)
+    .input("assignedToRoleId", sql.UniqueIdentifier, assignedToRoleId)
     .query(
       [
         "DECLARE @now datetime2(0) = sysutcdatetime();",

@@ -324,7 +324,11 @@ schedulingRouter.delete(
 schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
   const parsed = RecalcSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [],
+    });
     return;
   }
 
@@ -429,7 +433,11 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
 schedulingRouter.get("/day", async (req, res) => {
   const parsed = DayQuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [],
+    });
     return;
   }
 
@@ -446,7 +454,16 @@ schedulingRouter.get("/day", async (req, res) => {
     day < 1 ||
     day > 31
   ) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "date",
+          issue: "Invalid date",
+        },
+      ],
+    });
     return;
   }
 
@@ -609,7 +626,11 @@ schedulingRouter.get("/day", async (req, res) => {
 schedulingRouter.get("/calendar", async (req, res) => {
   const parsed = CalendarQuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [],
+    });
     return;
   }
 
@@ -621,7 +642,16 @@ schedulingRouter.get("/calendar", async (req, res) => {
   const year = Number(yearPart);
   const monthIndex = Number(monthPart) - 1;
   if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
-    res.status(400).json({ message: "Invalid request" });
+    res.status(400).json({
+      message: "Invalid request",
+      code: "VALIDATION_ERROR",
+      details: [
+        {
+          field: "month",
+          issue: "Invalid month",
+        },
+      ],
+    });
     return;
   }
 
