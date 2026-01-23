@@ -16,6 +16,28 @@ const parseBoolean = (value: unknown): boolean | null => {
   return null;
 };
 
+const preprocessDateStart = (value: unknown): Date | undefined => {
+  if (typeof value !== "string") return undefined;
+  const s = value.trim();
+  if (!s) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return new Date(`${s}T00:00:00Z`);
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+};
+
+const preprocessDateEnd = (value: unknown): Date | undefined => {
+  if (typeof value !== "string") return undefined;
+  const s = value.trim();
+  if (!s) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return new Date(`${s}T23:59:59Z`);
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+};
+
 const TaskListQuerySchema = z.object({
   status: z.string().max(32).optional(),
   assigned: z.enum(["me", "unassigned", "any"]).optional().default("any"),
@@ -24,8 +46,8 @@ const TaskListQuerySchema = z.object({
   assetId: z.string().uuid().optional(),
   facilityId: z.string().uuid().optional(),
   templateId: z.string().uuid().optional(),
-  dueFrom: z.string().datetime().optional(),
-  dueTo: z.string().datetime().optional(),
+  dueFrom: z.preprocess(preprocessDateStart, z.date()).optional(),
+  dueTo: z.preprocess(preprocessDateEnd, z.date()).optional(),
   page: z.string().optional().default("1"),
   pageSize: z.string().optional().default("50"),
 });
@@ -43,8 +65,8 @@ const BulkAssignUnassignedSchema = z
   .object({
     assignedToUserId: z.string().uuid().optional(),
     assignedToRoleId: z.string().uuid().optional(),
-    dueFrom: z.string().datetime().optional(),
-    dueTo: z.string().datetime().optional(),
+    dueFrom: z.preprocess(preprocessDateStart, z.date()).optional(),
+    dueTo: z.preprocess(preprocessDateEnd, z.date()).optional(),
   })
   .refine(
     (v) => {
