@@ -801,3 +801,13 @@
 - Mobile: mapped backend `cancelled` status to UI and excluded cancelled tasks from Today/This Week/Overdue counts.
 - Updated TasksPage filters and count computations to ignore cancelled tasks.
 - Re-ran mobile lint and typecheck; passed.
+
+## 2026-01-23 19:14:43 WITA
+- Mobile: restricted `/tasks` requests to `assigned=me` so the page reflects "My PM Tasks" only.
+- Updated range-based fetching to include `assigned=me` for consistency.
+- Re-verified lint and typecheck; passed.
+
+## 2026-01-23 19:19:22 WITA
+- Mobile: removed invalid date-only `dueFrom/dueTo` attempts in range fetch to avoid backend 400.
+- Kept a single valid `dueFrom/dueTo` with ISO timestamps for calendar queries.
+- Re-ran mobile lint and typecheck; passed.
