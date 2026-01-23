@@ -1813,6 +1813,16 @@ app.use(
   }),
 );
 
+app.options(
+  "*",
+  cors({
+    origin: originConfig,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-filename"],
+    exposedHeaders: ["Content-Disposition"],
+  }),
+);
+
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => {
