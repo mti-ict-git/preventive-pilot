@@ -811,3 +811,9 @@
 - Mobile: removed invalid date-only `dueFrom/dueTo` attempts in range fetch to avoid backend 400.
 - Kept a single valid `dueFrom/dueTo` with ISO timestamps for calendar queries.
 - Re-ran mobile lint and typecheck; passed.
+
+## 2026-01-23 19:27:54 +08:00
+- Backend: accepted date-only `dueFrom/dueTo` on `/api/tasks` by preprocessing to UTC day start/end.
+- OpenAPI: updated `/api/tasks` query params to allow `date` or `date-time` with descriptions.
+- Validation: ran web lint and typecheck (`npm run lint`, `npx tsc --noEmit`) and backend typecheck (`npm run typecheck`); passed.
+- Outcome: mobile requests like `dueFrom=YYYY-MM-DD&dueTo=YYYY-MM-DD` now return 200 and filter correctly.
