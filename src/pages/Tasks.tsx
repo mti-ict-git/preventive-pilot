@@ -70,34 +70,35 @@ const Tasks = () => {
 
 	const queryClient = useQueryClient();
 
-  const listQueryInput = useMemo(() => {
+  const listQueryInput: Parameters<typeof apiListTasks>[0] = useMemo(() => {
     const now = new Date();
     if (activeTab === "overdue") {
-      return { overdue: true, page: 1, pageSize: 100 };
+      return { overdue: true, maintenanceType: "PM", page: 1, pageSize: 100 };
     }
 
     if (activeTab === "in_progress") {
-      return { status: "in_progress", page: 1, pageSize: 100 };
+      return { status: "in_progress", maintenanceType: "PM", page: 1, pageSize: 100 };
     }
 
     if (activeTab === "due_today") {
       return {
         dueFrom: startOfDay(now).toISOString(),
         dueTo: endOfDay(now).toISOString(),
+        maintenanceType: "PM",
         page: 1,
         pageSize: 100,
       };
     }
 
     if (activeTab === "upcoming") {
-      return { dueFrom: now.toISOString(), page: 1, pageSize: 100 };
+      return { dueFrom: now.toISOString(), maintenanceType: "PM", page: 1, pageSize: 100 };
     }
 
     if (activeTab === "cancelled") {
-      return { status: "cancelled", page: 1, pageSize: 100 };
+      return { status: "cancelled", maintenanceType: "PM", page: 1, pageSize: 100 };
     }
 
-    return { page: 1, pageSize: 100 };
+    return { maintenanceType: "PM", page: 1, pageSize: 100 };
   }, [activeTab]);
 
   const tasksQuery = useQuery({
@@ -107,7 +108,7 @@ const Tasks = () => {
 
   const statsQuery = useQuery({
     queryKey: ["task-stats"],
-    queryFn: () => apiListTasks({ page: 1, pageSize: 200 }),
+    queryFn: () => apiListTasks({ maintenanceType: "PM", page: 1, pageSize: 200 }),
     staleTime: 30_000,
   });
 
@@ -689,6 +690,10 @@ export const TaskDetailDialog = (props: {
   const taskFileInputRef = useRef<HTMLInputElement | null>(null);
   const checklistFileInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingChecklistItemId, setPendingChecklistItemId] = useState<string | null>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingReplace, setPendingReplace] = useState<
+    { kind: "task" | "checklist"; evidenceId: string; templateChecklistItemId?: string }
+  | null>(null);
   const [reportBreakdownOpen, setReportBreakdownOpen] = useState(false);
 
   const closePreview = useCallback(() => {
@@ -764,6 +769,40 @@ export const TaskDetailDialog = (props: {
     onError: (err: unknown) => {
       toast({
         title: "Upload failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const replaceEvidenceMutation = useMutation({
+    mutationFn: async (input: {
+      kind: "task" | "checklist";
+      evidenceId: string;
+      file: File;
+      templateChecklistItemId?: string;
+    }) => {
+      if (!props.taskId) throw new Error("No task selected");
+      if (input.file.size > 50 * 1024 * 1024) throw new Error("File too large (max 50MB)");
+      if (input.kind === "task") {
+        await apiDeleteEvidence({ evidenceId: input.evidenceId });
+        return apiUploadTaskEvidenceFile({ taskId: props.taskId, file: input.file });
+      }
+      await apiDeleteChecklistEvidence({ checklistEvidenceId: input.evidenceId });
+      if (!input.templateChecklistItemId) throw new Error("Missing checklist item");
+      return apiUploadTaskChecklistEvidenceFile({
+        taskId: props.taskId,
+        templateChecklistItemId: input.templateChecklistItemId,
+        file: input.file,
+      });
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "Attachment replaced" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Replace failed",
         description: err instanceof Error ? err.message : "Request failed",
         variant: "destructive",
       });
@@ -1289,7 +1328,7 @@ export const TaskDetailDialog = (props: {
                                             })
                                           }
                                         >
-                                          Preview
+                                          View
                                         </Button>
                                         <Button
                                           size="sm"
@@ -1297,6 +1336,21 @@ export const TaskDetailDialog = (props: {
                                           onClick={() => downloadEvidence({ kind: "checklist", id: e.id })}
                                         >
                                           Download
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          disabled={replaceEvidenceMutation.isPending}
+                                          onClick={() => {
+                                            setPendingReplace({
+                                              kind: "checklist",
+                                              evidenceId: e.id,
+                                              templateChecklistItemId: e.templateChecklistItemId,
+                                            });
+                                            replaceFileInputRef.current?.click();
+                                          }}
+                                        >
+                                          Replace
                                         </Button>
                                         <Button
                                           size="sm"
@@ -1385,7 +1439,7 @@ export const TaskDetailDialog = (props: {
                                 })
                               }
                             >
-                              Preview
+                              View
                             </Button>
                             <Button
                               size="sm"
@@ -1393,6 +1447,17 @@ export const TaskDetailDialog = (props: {
                               onClick={() => downloadEvidence({ kind: "task", id: e.id })}
                             >
                               Download
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={replaceEvidenceMutation.isPending}
+                              onClick={() => {
+                                setPendingReplace({ kind: "task", evidenceId: e.id });
+                                replaceFileInputRef.current?.click();
+                              }}
+                            >
+                              Replace
                             </Button>
                             <Button
                               size="sm"
@@ -1494,6 +1559,24 @@ export const TaskDetailDialog = (props: {
                     setPendingChecklistItemId(null);
                     if (!file || !targetItemId) return;
                     uploadChecklistEvidenceMutation.mutate({ templateChecklistItemId: targetItemId, file });
+                  }}
+                />
+                <input
+                  ref={replaceFileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    const target = pendingReplace;
+                    e.target.value = "";
+                    setPendingReplace(null);
+                    if (!file || !target) return;
+                    replaceEvidenceMutation.mutate({
+                      kind: target.kind,
+                      evidenceId: target.evidenceId,
+                      file,
+                      templateChecklistItemId: target.templateChecklistItemId,
+                    });
                   }}
                 />
               </>

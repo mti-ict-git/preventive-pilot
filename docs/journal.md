@@ -1,9 +1,25 @@
 # Journal
 
+## Friday, January 23, 2026 5:18:16 PM
+- Web: added Replace buttons for checklist attachments and task evidence in Task Detail.
+- Renamed attachment action label from Preview to View for clarity.
+- Confirmed attachment uploads happen immediately to the server when files are attached.
+- Ran `npm run lint` and `npx tsc --noEmit`; both passed.
+
+## Friday, January 23, 2026 5:22:50 PM
+- Mobile: added apiDownloadChecklistEvidence and apiDeleteChecklistEvidence in mobile client.
+- Fixed type predicate in TaskDetailPage for checklist evidence mapping.
+- Verified mobile lint (warnings only) and typecheck passes.
+
 ## 2026-01-23 10:05:57 +08:00
 - Updated docker-compose FRONTEND_ORIGIN to allow mobile dev origins (http://localhost:8081) and Capacitor (capacitor://localhost) via env default.
 - This resolves CORS preflight failures when the mobile app calls ngrok-hosted API.
 - Next: restart api service to apply env change; verify /api/auth/login preflight succeeds.
+## 2026-01-23 16:59:41 +08:00
+- Mobile: enabled starting overdue tasks on TaskDetailPage and added refetch after start/pause/resume/cancel.
+- Fixed JSX variable scope by moving action gating booleans out of render.
+- Ran mobile lint and typecheck; warnings only, no errors.
+- Audited web PM Tasks: Start allowed for open/scheduled; parity confirmed.
 ## Thursday, January 22, 2026 3:02:02 PM
 - Implemented Phase 1 PM backend validation updates (category enforcement, assignment fallback, PM Now errors).
 - Standardized error responses for PM-related endpoints to use code and details fields.
@@ -769,3 +785,14 @@
 - Added SQL due-date primitive `pm.fn_CalculateNextDueAt` and routed schedule calc + calendar/day queries through it.
 - Applied schema and verified via `npm run db:apply-schema` and `npm run db:verify`.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+\
+## 2026-01-23 19:04:33 WITA
+- Mobile: enforced PM-only filter by adding `maintenanceType=PM` to all `/tasks` requests in TasksPage.
+- Backend: confirmed `/api/tasks` supports `maintenanceType` query with SQL condition `(@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)`.
+- Ensured overdue counts on mobile exclude CM tasks and align with backend reports.
+- Ran mobile lint and typecheck (`npm run lint`, `npx tsc --noEmit`) and backend typecheck; all passed.
+
+## 2026-01-23 19:08:08 WITA
+- Web: fixed type mismatch in Tasks page by annotating `listQueryInput` as `Parameters<typeof apiListTasks>[0]`.
+- Web: aligned stats fetching to PM-only by adding `maintenanceType: "PM"` to `apiListTasks` in `statsQuery`.
+- Ran web lint and typecheck (`npm run lint`, `npx tsc --noEmit`); passed.

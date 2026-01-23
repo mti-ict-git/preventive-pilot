@@ -102,6 +102,8 @@ Required environment variables:
 - Configure server-side file storage with `EVIDENCE_STORAGE_ROOT`.
 - Evidence uploads are stored under the existing `Qx YYYY` folder structure.
 - Max upload size is 50MB per file.
+- Attachments can be viewed, downloaded, deleted, and replaced from Task Detail.
+- File uploads occur immediately when a user selects a file to attach.
 
 ### Checklist attachment behavior
 

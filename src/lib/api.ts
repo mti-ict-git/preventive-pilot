@@ -363,6 +363,7 @@ export const apiListTasks = async (input: {
   status?: string;
   assigned?: "me" | "unassigned" | "any";
   overdue?: boolean;
+  maintenanceType?: MaintenanceTypeFilter;
   assetId?: string;
   facilityId?: string;
   templateId?: string;
@@ -375,6 +376,7 @@ export const apiListTasks = async (input: {
   if (input.status) params.set("status", input.status);
   if (input.assigned) params.set("assigned", input.assigned);
   if (input.overdue !== undefined) params.set("overdue", input.overdue ? "true" : "false");
+  if (input.maintenanceType) params.set("maintenanceType", input.maintenanceType);
   if (input.assetId) params.set("assetId", input.assetId);
    if (input.facilityId) params.set("facilityId", input.facilityId);
   if (input.templateId) params.set("templateId", input.templateId);

@@ -20,6 +20,7 @@ const TaskListQuerySchema = z.object({
   status: z.string().max(32).optional(),
   assigned: z.enum(["me", "unassigned", "any"]).optional().default("any"),
   overdue: z.string().optional(),
+  maintenanceType: z.enum(["PM", "CM", "all"]).optional(),
   assetId: z.string().uuid().optional(),
   facilityId: z.string().uuid().optional(),
   templateId: z.string().uuid().optional(),
@@ -874,6 +875,7 @@ tasksRouter.get("/", async (req, res) => {
     .input("status", sql.NVarChar(32), parsed.data.status ?? null)
     .input("assigned", sql.NVarChar(16), parsed.data.assigned)
     .input("overdue", sql.Bit, overdue)
+    .input("maintenanceType", sql.NVarChar(8), parsed.data.maintenanceType === "all" ? null : parsed.data.maintenanceType ?? null)
     .input("assetId", sql.UniqueIdentifier, parsed.data.assetId ?? null)
     .input("facilityId", sql.UniqueIdentifier, parsed.data.facilityId ?? null)
     .input("templateId", sql.UniqueIdentifier, parsed.data.templateId ?? null)
@@ -928,6 +930,7 @@ tasksRouter.get("/", async (req, res) => {
         "LEFT JOIN pm.Roles ar ON ar.RoleId = t.AssignedToRoleId",
         "WHERE",
         "  (@status IS NULL OR t.Status = @status)",
+      "  AND (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
         "  AND (@assetId IS NULL OR t.AssetId = @assetId)",
         "  AND (@facilityId IS NULL OR t.FacilityId = @facilityId)",
         "  AND (@templateId IS NULL OR t.TemplateId = @templateId)",

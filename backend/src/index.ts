@@ -994,6 +994,7 @@ const openApiSpec: OpenApiSchema = {
           { name: "status", in: "query", required: false, schema: { type: "string" } },
           { name: "assigned", in: "query", required: false, schema: { type: "string", enum: ["me", "unassigned", "any"], default: "any" } },
           { name: "overdue", in: "query", required: false, schema: { type: "string", enum: ["true", "false"] } },
+          { name: "maintenanceType", in: "query", required: false, schema: { type: "string", enum: ["PM", "CM", "all"] } },
           { name: "assetId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
           { name: "templateId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
           { name: "dueFrom", in: "query", required: false, schema: { type: "string", format: "date-time" } },
