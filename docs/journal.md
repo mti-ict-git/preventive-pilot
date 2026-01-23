@@ -796,3 +796,8 @@
 - Web: fixed type mismatch in Tasks page by annotating `listQueryInput` as `Parameters<typeof apiListTasks>[0]`.
 - Web: aligned stats fetching to PM-only by adding `maintenanceType: "PM"` to `apiListTasks` in `statsQuery`.
 - Ran web lint and typecheck (`npm run lint`, `npx tsc --noEmit`); passed.
+
+## 2026-01-23 19:12:50 WITA
+- Mobile: mapped backend `cancelled` status to UI and excluded cancelled tasks from Today/This Week/Overdue counts.
+- Updated TasksPage filters and count computations to ignore cancelled tasks.
+- Re-ran mobile lint and typecheck; passed.
