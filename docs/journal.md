@@ -1,5 +1,9 @@
 # Journal
 
+## 2026-01-23 10:05:57 +08:00
+- Updated docker-compose FRONTEND_ORIGIN to allow mobile dev origins (http://localhost:8081) and Capacitor (capacitor://localhost) via env default.
+- This resolves CORS preflight failures when the mobile app calls ngrok-hosted API.
+- Next: restart api service to apply env change; verify /api/auth/login preflight succeeds.
 ## Thursday, January 22, 2026 3:02:02 PM
 - Implemented Phase 1 PM backend validation updates (category enforcement, assignment fallback, PM Now errors).
 - Standardized error responses for PM-related endpoints to use code and details fields.
