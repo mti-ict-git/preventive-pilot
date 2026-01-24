@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import * as QRCode from "qrcode";
 import {
   QrCode,
   Printer,
@@ -172,14 +174,346 @@ export default function LabelDesigner() {
     });
   };
 
-  const handlePrint = () => {
-    window.print();
-    toast.success("Print dialog opened");
+  const handlePrint = async () => {
+    if (selectedAssets.length === 0) {
+      toast.error("Select assets first");
+      return;
+    }
+    try {
+      const mmToPt = (mm: number): number => mm * 2.834645669291339;
+      const doc = await PDFDocument.create();
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+      const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
+      const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
+
+      const tapeWidthMm = Math.min(config.width, config.height);
+      const padMm = config.padding;
+      const isLandscape = config.orientation === "landscape";
+
+      for (const asset of selectedAssets) {
+        let qrValue: string = String(asset.id);
+        if (qrPayloadMode === "assetTag" && asset.assetTag) {
+          qrValue = asset.assetTag;
+        } else if (qrPayloadMode === "snipeItUrl") {
+          if (normalizedBaseUrl && asset.snipeAssetId !== null) {
+            qrValue = `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`;
+          } else if (asset.assetTag) {
+            qrValue = asset.assetTag;
+          }
+        }
+
+        const pngDataUrl = await QRCode.toDataURL(qrValue, { margin: 0, errorCorrectionLevel: "M" });
+        const qrPng = await doc.embedPng(pngDataUrl);
+
+        const lines: Array<{ text: string; size: number; bold: boolean }> = [];
+        if (config.showAssetTag && asset.assetTag) lines.push({ text: asset.assetTag, size: config.fontSize + 2, bold: true });
+        if (config.showAssetName && asset.name) lines.push({ text: asset.name, size: config.fontSize, bold: false });
+        if (config.showCategory && asset.category.name) lines.push({ text: asset.category.name, size: config.fontSize, bold: false });
+        if (config.showLocation && asset.location.name) lines.push({ text: asset.location.name, size: config.fontSize, bold: false });
+        if (config.showCustomText && config.customText) lines.push({ text: config.customText, size: config.fontSize - 1, bold: false });
+
+        let maxLineWidthPts = 0;
+        for (const l of lines) {
+          const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
+          if (w > maxLineWidthPts) maxLineWidthPts = w;
+        }
+
+        const qrSizePts = mmToPt(config.qrSize);
+        const gapPts = mmToPt(2);
+        const padPts = mmToPt(padMm);
+        const tapeWidthPts = mmToPt(tapeWidthMm);
+        const contentSpanPts = qrSizePts + gapPts + maxLineWidthPts;
+
+        const pageWidthPts = isLandscape ? contentSpanPts + padPts * 2 : tapeWidthPts;
+        const pageHeightPts = isLandscape ? tapeWidthPts : contentSpanPts + padPts * 2;
+
+        const page = doc.addPage([pageWidthPts, pageHeightPts]);
+
+        if (config.showBorder) {
+          page.drawRectangle({ x: mmToPt(0.5), y: mmToPt(0.5), width: pageWidthPts - mmToPt(1), height: pageHeightPts - mmToPt(1), borderColor: rgb(0.89, 0.93, 0.97), borderWidth: 1 });
+        }
+
+        if (isLandscape) {
+          const qrX = padPts;
+          const qrY = (pageHeightPts - qrSizePts) / 2;
+          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
+          const textX = qrX + qrSizePts + gapPts;
+          const lineHeights = lines.map((l) => l.size * 1.25);
+          const totalTextH = lineHeights.reduce((a, b) => a + b, 0);
+          let baseY = (pageHeightPts - totalTextH) / 2 + (lineHeights[0] - (lines[0]?.size ?? 0));
+          for (let i = 0; i < lines.length; i++) {
+            const l = lines[i];
+            const y = baseY + lineHeights.slice(0, i).reduce((a, b) => a + b, 0);
+            page.drawText(l.text, { x: textX, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
+          }
+        } else {
+          const qrX = (pageWidthPts - qrSizePts) / 2;
+          const qrY = padPts;
+          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
+          const lineHeights = lines.map((l) => l.size * 1.25);
+          let y = qrY + qrSizePts + gapPts;
+          for (const l of lines) {
+            const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
+            const x = (pageWidthPts - w) / 2;
+            page.drawText(l.text, { x, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
+            y += l.size * 1.25;
+          }
+        }
+      }
+
+      const pdfBytes = await doc.save();
+      const ab = new ArrayBuffer(pdfBytes.byteLength);
+      new Uint8Array(ab).set(pdfBytes);
+      const blob = new Blob([ab], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          URL.revokeObjectURL(url);
+        }, 60_000);
+      };
+      toast.success("Print dialog opened");
+    } catch {
+      toast.error("Failed to print labels");
+    }
   };
 
-  const handleExport = () => {
-    window.print();
-    toast.success("Print dialog opened (choose Save as PDF)");
+  const handleExport = async () => {
+    if (selectedAssets.length === 0) {
+      toast.error("Select assets first");
+      return;
+    }
+    try {
+      const mmToPt = (mm: number): number => mm * 2.834645669291339;
+      const doc = await PDFDocument.create();
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+      const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
+      const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
+
+      const tapeWidthMm = Math.min(config.width, config.height);
+      const padMm = config.padding;
+      const isLandscape = config.orientation === "landscape";
+
+      for (const asset of selectedAssets) {
+        let qrValue: string = String(asset.id);
+        if (qrPayloadMode === "assetTag" && asset.assetTag) {
+          qrValue = asset.assetTag;
+        } else if (qrPayloadMode === "snipeItUrl") {
+          if (normalizedBaseUrl && asset.snipeAssetId !== null) {
+            qrValue = `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`;
+          } else if (asset.assetTag) {
+            qrValue = asset.assetTag;
+          }
+        }
+
+        const pngDataUrl = await QRCode.toDataURL(qrValue, { margin: 0, errorCorrectionLevel: "M" });
+        const qrPng = await doc.embedPng(pngDataUrl);
+
+        const lines: Array<{ text: string; size: number; bold: boolean }> = [];
+        if (config.showAssetTag && asset.assetTag) lines.push({ text: asset.assetTag, size: config.fontSize + 2, bold: true });
+        if (config.showAssetName && asset.name) lines.push({ text: asset.name, size: config.fontSize, bold: false });
+        if (config.showCategory && asset.category.name) lines.push({ text: asset.category.name, size: config.fontSize, bold: false });
+        if (config.showLocation && asset.location.name) lines.push({ text: asset.location.name, size: config.fontSize, bold: false });
+        if (config.showCustomText && config.customText) lines.push({ text: config.customText, size: config.fontSize - 1, bold: false });
+
+        let maxLineWidthPts = 0;
+        for (const l of lines) {
+          const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
+          if (w > maxLineWidthPts) maxLineWidthPts = w;
+        }
+
+        const qrSizePts = mmToPt(config.qrSize);
+        const gapPts = mmToPt(2);
+        const padPts = mmToPt(padMm);
+        const tapeWidthPts = mmToPt(tapeWidthMm);
+        const contentSpanPts = qrSizePts + gapPts + maxLineWidthPts;
+
+        const pageWidthPts = isLandscape ? contentSpanPts + padPts * 2 : tapeWidthPts;
+        const pageHeightPts = isLandscape ? tapeWidthPts : contentSpanPts + padPts * 2;
+
+        const page = doc.addPage([pageWidthPts, pageHeightPts]);
+
+        if (config.showBorder) {
+          page.drawRectangle({ x: mmToPt(0.5), y: mmToPt(0.5), width: pageWidthPts - mmToPt(1), height: pageHeightPts - mmToPt(1), borderColor: rgb(0.89, 0.93, 0.97), borderWidth: 1 });
+        }
+
+        if (isLandscape) {
+          const qrX = padPts;
+          const qrY = (pageHeightPts - qrSizePts) / 2;
+          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
+          const textX = qrX + qrSizePts + gapPts;
+          const lineHeights = lines.map((l) => l.size * 1.25);
+          const totalTextH = lineHeights.reduce((a, b) => a + b, 0);
+          let baseY = (pageHeightPts - totalTextH) / 2 + (lineHeights[0] - (lines[0]?.size ?? 0));
+          for (let i = 0; i < lines.length; i++) {
+            const l = lines[i];
+            const y = baseY + lineHeights.slice(0, i).reduce((a, b) => a + b, 0);
+            page.drawText(l.text, { x: textX, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
+          }
+        } else {
+          const qrX = (pageWidthPts - qrSizePts) / 2;
+          const qrY = padPts;
+          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
+          const lineHeights = lines.map((l) => l.size * 1.25);
+          let y = qrY + qrSizePts + gapPts;
+          for (const l of lines) {
+            const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
+            const x = (pageWidthPts - w) / 2;
+            page.drawText(l.text, { x, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
+            y += l.size * 1.25;
+          }
+        }
+      }
+
+      const pdfBytes = await doc.save();
+      const ab = new ArrayBuffer(pdfBytes.byteLength);
+      new Uint8Array(ab).set(pdfBytes);
+      const blob = new Blob([ab], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "labels.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      toast.success("PDF exported");
+    } catch (err) {
+      toast.error("Failed to export PDF");
+    }
+  };
+
+  const PdfLabelPreview = ({ asset }: { asset: Asset }) => {
+    const [url, setUrl] = useState<string | null>(null);
+    const [dimsMm, setDimsMm] = useState<{ w: number; h: number } | null>(null);
+    useEffect(() => {
+      let isMounted = true;
+      let prevUrl: string | null = null;
+      const mmToPt = (mm: number): number => mm * 2.834645669291339;
+      const ptToMm = (pt: number): number => pt / 2.834645669291339;
+
+      const run = async (): Promise<void> => {
+        const doc = await PDFDocument.create();
+        const font = await doc.embedFont(StandardFonts.Helvetica);
+        const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+        const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
+        const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
+
+        let qrValue: string = String(asset.id);
+        if (qrPayloadMode === "assetTag" && asset.assetTag) {
+          qrValue = asset.assetTag;
+        } else if (qrPayloadMode === "snipeItUrl") {
+          if (normalizedBaseUrl && asset.snipeAssetId !== null) {
+            qrValue = `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`;
+          } else if (asset.assetTag) {
+            qrValue = asset.assetTag;
+          }
+        }
+
+        const pngDataUrl = await QRCode.toDataURL(qrValue, { margin: 0, errorCorrectionLevel: "M" });
+        const qrPng = await doc.embedPng(pngDataUrl);
+
+        const lines: Array<{ text: string; size: number; bold: boolean }> = [];
+        if (config.showAssetTag && asset.assetTag) lines.push({ text: asset.assetTag, size: config.fontSize + 2, bold: true });
+        if (config.showAssetName && asset.name) lines.push({ text: asset.name, size: config.fontSize, bold: false });
+        if (config.showCategory && asset.category.name) lines.push({ text: asset.category.name, size: config.fontSize, bold: false });
+        if (config.showLocation && asset.location.name) lines.push({ text: asset.location.name, size: config.fontSize, bold: false });
+        if (config.showCustomText && config.customText) lines.push({ text: config.customText, size: config.fontSize - 1, bold: false });
+
+        let maxLineWidthPts = 0;
+        for (const l of lines) {
+          const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
+          if (w > maxLineWidthPts) maxLineWidthPts = w;
+        }
+
+        const tapeWidthMm = Math.min(config.width, config.height);
+        const qrSizePts = mmToPt(config.qrSize);
+        const gapPts = mmToPt(2);
+        const padPts = mmToPt(config.padding);
+        const tapeWidthPts = mmToPt(tapeWidthMm);
+        const contentSpanPts = qrSizePts + gapPts + maxLineWidthPts;
+
+        const isLandscape = config.orientation === "landscape";
+        const pageWidthPts = isLandscape ? contentSpanPts + padPts * 2 : tapeWidthPts;
+        const pageHeightPts = isLandscape ? tapeWidthPts : contentSpanPts + padPts * 2;
+
+        const page = doc.addPage([pageWidthPts, pageHeightPts]);
+
+        if (config.showBorder) {
+          page.drawRectangle({ x: mmToPt(0.5), y: mmToPt(0.5), width: pageWidthPts - mmToPt(1), height: pageHeightPts - mmToPt(1), borderColor: rgb(0.89, 0.93, 0.97), borderWidth: 1 });
+        }
+
+        if (isLandscape) {
+          const qrX = padPts;
+          const qrY = (pageHeightPts - qrSizePts) / 2;
+          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
+          const textX = qrX + qrSizePts + gapPts;
+          const lineHeights = lines.map((l) => l.size * 1.25);
+          const totalTextH = lineHeights.reduce((a, b) => a + b, 0);
+          let baseY = (pageHeightPts - totalTextH) / 2 + (lineHeights[0] - (lines[0]?.size ?? 0));
+          for (let i = 0; i < lines.length; i++) {
+            const l = lines[i];
+            const y = baseY + lineHeights.slice(0, i).reduce((a, b) => a + b, 0);
+            page.drawText(l.text, { x: textX, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
+          }
+        } else {
+          const qrX = (pageWidthPts - qrSizePts) / 2;
+          const qrY = padPts;
+          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
+          const lineHeights = lines.map((l) => l.size * 1.25);
+          let y = qrY + qrSizePts + gapPts;
+          for (const l of lines) {
+            const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
+            const x = (pageWidthPts - w) / 2;
+            page.drawText(l.text, { x, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
+            y += l.size * 1.25;
+          }
+        }
+
+        const pdfBytes = await doc.save();
+        const ab = new ArrayBuffer(pdfBytes.byteLength);
+        new Uint8Array(ab).set(pdfBytes);
+        const blob = new Blob([ab], { type: "application/pdf" });
+        prevUrl = URL.createObjectURL(blob);
+        if (isMounted) setUrl(prevUrl);
+        if (isMounted) setDimsMm({ w: ptToMm(pageWidthPts), h: ptToMm(pageHeightPts) });
+      };
+
+      void run();
+      return () => {
+        isMounted = false;
+        if (prevUrl) URL.revokeObjectURL(prevUrl);
+      };
+    }, [asset, config, qrPayloadMode, systemStatusQuery.data?.snipeIt.baseUrl]);
+
+    const scale = 4;
+    const widthMm = dimsMm?.w ?? Math.min(config.width, config.height);
+    const heightMm = dimsMm?.h ?? Math.max(config.width, config.height);
+
+    return (
+      <div
+        className="bg-white text-slate-900 flex items-center justify-center"
+        style={{ width: widthMm * scale, height: heightMm * scale, border: config.showBorder ? "1px solid #e2e8f0" : "none" }}
+      >
+        {url ? <object data={url} type="application/pdf" className="w-full h-full" /> : <div className="text-xs text-muted-foreground">Rendering…</div>}
+      </div>
+    );
   };
 
   const resetConfig = () => {
@@ -722,7 +1056,7 @@ export default function LabelDesigner() {
                       animate={{ opacity: 1, scale: 1 }}
                       className="flex items-center justify-center"
                     >
-                      <LabelPreview asset={asset} />
+                      <PdfLabelPreview asset={asset} />
                     </motion.div>
                   ))}
                 </div>

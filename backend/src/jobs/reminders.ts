@@ -506,7 +506,8 @@ const processQueuedNotifications = async (): Promise<{ attempted: number; sent: 
     const channelType = row.ChannelType.toLowerCase();
     const isEmailChannel = channelType.includes("mail") || channelType.includes("email") || channelType.includes("graph");
     const isWhatsAppChannel = channelType.includes("whatsapp");
-    if (!isEmailChannel && !isWhatsAppChannel) {
+    const isPushChannel = channelType.includes("push");
+    if (!isEmailChannel && !isWhatsAppChannel && !isPushChannel) {
       await updateNotificationStatus(row.NotificationLogId, "failed", `Unsupported channel type: ${row.ChannelType}`);
       failed += 1;
       continue;
@@ -524,6 +525,8 @@ const processQueuedNotifications = async (): Promise<{ attempted: number; sent: 
     try {
       if (isWhatsAppChannel) {
         await sendWhatsAppMessage(whatsAppSettings, parsedPayload);
+      } else if (isPushChannel) {
+        await sendPushNotification(parsedPayload);
       } else {
         await sendMicrosoftGraphEmail(settings, parsedPayload);
       }
@@ -537,6 +540,71 @@ const processQueuedNotifications = async (): Promise<{ attempted: number; sent: 
   }
 
   return { attempted: rows.length, sent, failed };
+};
+
+type PushPayload = {
+  rule: { id: string; name: string; eventType: string };
+  channel: { id: string; type: string };
+  task: { id: string; taskNumber: string; scheduledDueAt: string | Date; status: string; priority: string };
+  asset: { id: string; assetTag: string | null; name: string };
+  template: { id: string; name: string };
+  user: { id: string | null; email: string | null; phone: string | null } | null;
+  message: string;
+};
+
+const loadUserDeviceTokens = async (userId: string): Promise<Array<{ token: string; platform: string }>> => {
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("userId", sql.UniqueIdentifier, userId)
+    .query(
+      [
+        "SELECT Token AS Token, Platform AS Platform",
+        "FROM pm.Devices",
+        "WHERE UserId = @userId",
+        "  AND IsActive = 1",
+      ].join("\n"),
+    );
+  const rows = result.recordset as Array<{ Token: string; Platform: string }>;
+  return rows.map((r) => ({ token: r.Token, platform: r.Platform }));
+};
+
+const sendFcmLegacy = async (token: string, title: string, body: string, data: Record<string, string>): Promise<void> => {
+  const key = env.FCM_SERVER_KEY?.trim();
+  if (!key) throw new Error("FCM not configured");
+  const res = await fetch("https://fcm.googleapis.com/fcm/send", {
+    method: "POST",
+    headers: {
+      Authorization: "key=" + key,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to: token,
+      notification: { title, body },
+      data,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error("FCM send failed: " + String(res.status));
+  }
+};
+
+const sendPushNotification = async (payload: unknown): Promise<void> => {
+  if (!isRecord(payload)) throw new Error("Invalid payload");
+  const p = payload as PushPayload;
+  const userId = p.user && typeof p.user.id === "string" ? p.user.id : null;
+  if (!userId) throw new Error("No user to notify");
+  const tokens = await loadUserDeviceTokens(userId);
+  if (tokens.length === 0) throw new Error("No device tokens");
+  const title = p.rule?.eventType === "task_assigned" ? "Task Assigned" : "Notification";
+  const body = p.message;
+  const data: Record<string, string> = {
+    taskId: p.task?.id ?? "",
+    taskNumber: p.task?.taskNumber ?? "",
+  };
+  for (const t of tokens) {
+    await sendFcmLegacy(t.token, title, body, data);
+  }
 };
 
 const loadActiveRules = async (): Promise<NotificationRuleRow[]> => {

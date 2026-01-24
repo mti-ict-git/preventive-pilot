@@ -107,6 +107,7 @@ const EnvSchema = z.object({
   MS_GRAPH_EMAIL_BODY_TEMPLATE: z.string().optional(),
   MS_GRAPH_USE_LOGGED_IN_USER_AS_SENDER: z.string().optional().default("true").pipe(booleanFromString).pipe(z.boolean()),
   MS_GRAPH_ENABLED: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
+  FCM_SERVER_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -13,6 +13,7 @@ import { notificationsRouter } from "./routes/notifications.js";
 import { systemRouter } from "./routes/system.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { workOrdersRouter } from "./routes/workOrders.js";
+import { devicesRouter } from "./routes/devices.js";
 import { startJobs } from "./jobs/index.js";
 
 const app = express();
@@ -1859,6 +1860,7 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/system", systemRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/devices", devicesRouter);
 
 app.listen(env.BACKEND_PORT, () => {
   process.stdout.write(`Backend listening on http://localhost:${env.BACKEND_PORT}\n`);

@@ -8,6 +8,7 @@ import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireAnyRole } from "../middleware/requireRole.js";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { runJobNow } from "../jobs/index.js";
 
 const parseBoolean = (value: unknown): boolean | null => {
   if (value === undefined || value === null) return null;
@@ -2507,6 +2508,11 @@ tasksRouter.post("/:taskId/assign", requireManager, async (req, res) => {
   const assignedUserAfter = afterRow?.AssignedToUserId ?? null;
   if (assignedUserAfter && assignedUserAfter !== assignedUserBefore) {
     await enqueueTaskAssignedNotifications(taskId);
+    try {
+      await runJobNow("notifications");
+    } catch {
+      // ignore
+    }
   }
 
   res.json({ ok: true });

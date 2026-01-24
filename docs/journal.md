@@ -817,3 +817,13 @@
 - OpenAPI: updated `/api/tasks` query params to allow `date` or `date-time` with descriptions.
 - Validation: ran web lint and typecheck (`npm run lint`, `npx tsc --noEmit`) and backend typecheck (`npm run typecheck`); passed.
 - Outcome: mobile requests like `dueFrom=YYYY-MM-DD&dueTo=YYYY-MM-DD` now return 200 and filter correctly.
+
+## 2026-01-24 09:34:48 +08:00
+- Mobile: enhanced Tasks page to merge `assigned=me` and `assigned=unassigned` for list and range queries.
+- Purpose: show both personal tasks and unassigned tasks so technicians see available work.
+- Validation: ran mobile lint (`npm run lint`) – warnings only – and confirmed typecheck at repo root (`npx tsc --noEmit`) passes.
+
+## 2026-01-24 15:51:09 +08:00
+- Mobile: reverted HomePage to original task fetch scope to avoid altering Home counters.
+- Mobile: added scope toggle on Tasks page (Mine vs All) and defaulted to All to match Home counters; range queries respect scope.
+- Validation: ran mobile lint (warnings only) and project typecheck; both pass.

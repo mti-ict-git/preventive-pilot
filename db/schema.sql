@@ -811,6 +811,23 @@ BEGIN
   );
 END;
 
+IF OBJECT_ID(N'pm.Devices', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.Devices (
+    DeviceId uniqueidentifier NOT NULL CONSTRAINT DF_pm_Devices_DeviceId DEFAULT (newsequentialid()),
+    UserId uniqueidentifier NOT NULL,
+    Platform nvarchar(32) NOT NULL,
+    Token nvarchar(512) NOT NULL,
+    IsActive bit NOT NULL CONSTRAINT DF_pm_Devices_IsActive DEFAULT (1),
+    LastSeenAt datetime2(0) NULL,
+    CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_Devices_CreatedAt DEFAULT (sysutcdatetime()),
+    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_Devices_UpdatedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_Devices PRIMARY KEY CLUSTERED (DeviceId),
+    CONSTRAINT UQ_pm_Devices_TokenPlatform UNIQUE (Token, Platform),
+    CONSTRAINT FK_pm_Devices_Users FOREIGN KEY (UserId) REFERENCES pm.Users(UserId)
+  );
+END;
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_Assets_CategoryId' AND object_id = OBJECT_ID(N'pm.Assets'))
 BEGIN
   CREATE INDEX IX_pm_Assets_CategoryId ON pm.Assets(CategoryId);
