@@ -537,6 +537,13 @@
 
 ## 2026-01-07 13:38:26 WIB
 - Implemented JWT refresh tokens on backend (sign/verify, env REFRESH_TOKEN_EXPIRES_IN).
+
+## 2026-01-25 22:49:13 WITA
+- Added unified Report Breakdown bottom sheet component for the Field-Ready mobile app.
+- HomePage: surfaced a Report Breakdown quick action that opens the unified sheet.
+- AssetDetailPage: wired the Corrective Maintenance card to reuse the unified sheet with the current asset pre-selected.
+- Unified flow supports both asset and facility breakdowns and routes to Work Order detail after creation.
+- Verified with `npm run lint`.
 - Added /api/auth/refresh endpoint and updated OpenAPI schemas and paths.
 - Mobile: store refresh token on login and auto-refresh on 401 in request wrapper.
 - Mobile: clear refresh token on logout.

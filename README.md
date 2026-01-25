@@ -135,6 +135,13 @@ Required environment variables:
 - Asset Detail and Facility Detail include a **Report Breakdown** dialog to create a new work order with symptom, impact level, optional failure category/code, optional downtime start, and reported channel.
 - PM Task Detail provides a **Create Work Order** button for cross-flow from PM to CM when issues are found during inspection.
 
+### Field-Ready mobile
+
+- Home screen includes a **Report Breakdown** quick action that opens a unified bottom sheet.
+- Technicians can choose whether they are reporting against an asset or a facility, then search and select the specific context.
+- Asset Detail screen includes a **Corrective Maintenance** card whose Report button opens the same sheet with the current asset pre-selected.
+- Breakdown form collects symptom, impact level, optional failure category/code, optional downtime start, and reported channel, then creates a CM Work Order and navigates to its detail view.
+
 ### Backdated completion (supervisor+)
 
 - Supervisors and above can optionally backdate task completion from the Task Detail dialog.
