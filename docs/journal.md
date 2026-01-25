@@ -199,6 +199,16 @@
 - Added missing PM template warnings in Assets list and Asset Detail.
 - Fixed backend asset PM PATCH to allow clearing template and next due date.
 
+## Sun Jan 25 11:43:35 WITA 2026
+- Added PM Task Enhancement Delta Plan document capturing concrete implementation gaps and next steps.
+- Documented facility scheduling job work, broken/frozen behavior, capacity overlays, and OpenAPI deltas.
+- No code changes yet; this is a planning-only update.
+
+## Sun Jan 25 11:14:50 WITA 2026
+- Installed frontend dependencies including pdf-lib and qrcode to support Label Designer.
+- Resolved Vite module resolution errors for LabelDesigner imports.
+- Ran `npm run lint` and `npx tsc --noEmit`; both completed successfully.
+
 ## 2026-01-05 09:29
 - Added Assets per-page selector (50/100/200/500) and increased backend page-size cap.
 
@@ -253,6 +263,11 @@
 - Implemented backdated evidence importer job (file move + task/evidence creation + duplicate handling).
 - Added System Settings UI to run evidence import with template and duplicate options.
 - Added system endpoint to trigger evidence import and new env/scheduler toggles.
+## Sun Jan 25 11:41:09 WITA 2026
+- Mobile: added Push Notifications Debug section on Profile page to register device tokens.
+- Uses Capacitor PushNotifications to request permissions, register, and call /devices/register.
+- Exposes FCM token in-app so backend or Firebase console can send test pushes.
+- Updated mobile README with steps to test push notifications.
 - Fixed backend import path resolution for evidence import job wiring.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
