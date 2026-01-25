@@ -154,6 +154,10 @@ Required environment variables:
 - Open PM Scheduling to view calendar counts and select a day to see tasks.
 - Calendar/day views include projected upcoming PM occurrences when tasks have not been generated yet.
 - Asset Detail  Schedule tab shows upcoming scheduled + projected occurrences (blackout-aware).
+ - The global schedule calculation job only generates new PM tasks for assets whose `AssetOperationalStatus` is not `broken` or `archived`, so broken assets are automatically excluded from new PM schedules.
+ - When a schedule row in `pm.PMSchedules` or `pm.FacilityPMSchedules` has `Frozen = 1`, both the background schedule job and the manual Recalculate action skip creating new tasks and skip updating `NextPMDueAt` for that asset or facility until it is unfrozen.
+ - Calendar and day APIs still return existing PM tasks for frozen schedules, but they no longer project new occurrences for broken assets or frozen schedule rows; only non-frozen, operational assets/facilities contribute projected events.
+ - The day API now includes an `estimatedMinutes` field per item, derived from the linked PM template `EstimatedDurationMinutes` with a 60-minute fallback when the template duration is null, so the UI can show total minutes for the selected date.
 
 ### Phase 1 PM backend validation
 
@@ -176,6 +180,7 @@ Required environment variables:
 - Click **Details** on a facility row to edit its name, location, and description, and to manage PM settings.
 - Select multiple facilities to run bulk PM actions (enable, disable, set template) or **Archive Facilities** to soft-delete them from the active list while keeping history.
  - Use **Clone** to duplicate a facility; optionally copy PM settings.
+ - Facility PM defaults participate in the same schedule calculation job as assets: the job creates facility PM tasks up to the configured horizon, and keeps `pm.FacilityPMSchedules` and `pm.FacilityPMSettings` in sync with the latest calculated next-due dates.
 
 ## PM Templates checklist editor
 

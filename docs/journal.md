@@ -46,6 +46,14 @@
 
 ## 2026-01-22 12:36:58 PM
 - Added PM Task Enhancement Plan document with phased roadmap and specs.
+## Sun Jan 25 12:57:05 WITA 2026
+- Updated scheduling day and calendar projections to respect asset broken state and frozen schedules.
+- Ensured projected events are suppressed for broken assets and frozen schedules while existing tasks remain visible.
+- Ran `npm run lint` and `npx tsc --noEmit` in repo root.
+## Sun Jan 25 20:08:46 WITA 2026
+- Extended GET /api/scheduling/day to include per-item estimatedMinutes based on template EstimatedDurationMinutes with a 60-minute fallback when null.
+- Verified asset, facility, and projected occurrences return estimatedMinutes for capacity calculations.
+- Ran `npm run lint` and `npx tsc --noEmit` after backend changes.
 ## 2026-01-22 13:00:12
 - Added PM Now idempotency settings with env fallback and system endpoints.
 - Enforced PM Now idempotency checks for assets and facilities.
@@ -208,6 +216,21 @@
 - Extended schedule calculation job to create facility PM tasks using facility candidates.
 - Implemented facility-aware assignment resolution and IF NOT EXISTS guard aligned with facility unique index.
 - Verified repository lint and TypeScript typecheck with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Jan 25 12:22:45 WITA 2026
+- Extended schedule calculation job to maintain FacilityPMSchedules and FacilityPMSettings for facilities.
+- Mirrored Scheduling recalc endpoint logic: MERGE pm.FacilityPMSchedules and update LastPMCompletedAt/NextPMDueAt via pm.FacilityPMSettings.
+- Ran `npm run lint` and `npx tsc --noEmit`; both completed successfully.
+
+## Sun Jan 25 12:40:07 WITA 2026
+- Updated schedule calculation job asset candidate query to exclude broken and archived assets.
+- Used pm.Assets.AssetOperationalStatus to filter out `broken` and `archived` while keeping existing PMEnabled and IsArchived filters.
+- Re-ran `npm run lint` and `npx tsc --noEmit`; both passed.
+
+## Sun Jan 25 12:44:05 WITA 2026
+- Taught schedule calculation job and manual recalc endpoint to respect Frozen flags in pm.PMSchedules and pm.FacilityPMSchedules.
+- Asset and facility candidate queries now join to schedules and skip rows where Frozen = 1, preventing new tasks and schedule/NextPMDueAt updates while frozen.
+- Verified with `npm run lint` and `npx tsc --noEmit` for the full repo.
 
 ## Sun Jan 25 11:14:50 WITA 2026
 - Installed frontend dependencies including pdf-lib and qrcode to support Label Designer.

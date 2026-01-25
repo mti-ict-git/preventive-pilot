@@ -1275,6 +1275,7 @@ export type SchedulingCalendarDay = {
   date: string;
   type: "scheduled" | "due" | "overdue";
   count: number;
+  capacityMinutes: number;
 };
 
 export type SchedulingDayEventItem = {
