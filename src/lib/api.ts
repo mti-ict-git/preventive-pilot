@@ -1284,6 +1284,7 @@ export type SchedulingDayEventItem = {
   scheduledDueAt: string;
   status: string;
   priority: string;
+  estimatedMinutes: number;
   bucket: "scheduled" | "due" | "overdue";
   asset: { id: string; assetTag: string; name: string };
   template: { id: string; name: string };

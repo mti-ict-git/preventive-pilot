@@ -158,6 +158,9 @@ Required environment variables:
  - When a schedule row in `pm.PMSchedules` or `pm.FacilityPMSchedules` has `Frozen = 1`, both the background schedule job and the manual Recalculate action skip creating new tasks and skip updating `NextPMDueAt` for that asset or facility until it is unfrozen.
  - Calendar and day APIs still return existing PM tasks for frozen schedules, but they no longer project new occurrences for broken assets or frozen schedule rows; only non-frozen, operational assets/facilities contribute projected events.
  - The day API now includes an `estimatedMinutes` field per item, derived from the linked PM template `EstimatedDurationMinutes` with a 60-minute fallback when the template duration is null, so the UI can show total minutes for the selected date.
+ - The calendar API now returns `capacityMinutes` per date alongside the existing scheduled/due/overdue counts, using the same `EstimatedDurationMinutes` + 60-minute fallback rules as the day API so the UI can render utilization states per day.
+ - The PM Scheduling calendar overlays each day with a capacity badge showing total estimated minutes versus an 8-hour default threshold, with color-coded states for within, near, and over capacity.
+ - The selected day view includes a capacity summary card displaying used versus threshold minutes for that date, alongside each task's estimated duration.
 
 ### Phase 1 PM backend validation
 

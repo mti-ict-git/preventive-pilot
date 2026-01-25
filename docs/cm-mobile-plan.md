@@ -114,38 +114,49 @@ All API calls are made via `mobile/field-ready/src/lib/api.ts`, using the existi
 
 ### Objective
 
-Allow technicians to **create CM work orders directly from the field** using the mobile app, from either asset or facility context.
+Allow technicians to **create CM work orders directly from the field** using the mobile app, using a unified breakdown flow that supports both asset and facility contexts.
 
 ### Scope
 
-- Add a "Report Breakdown" action to relevant mobile screens.
-- Implement a breakdown form that creates CM work orders via `/api/work-orders`.
-- Route technicians from creation back into the CM flow (list or detail).
+- Add a "Report Breakdown" entry point in the mobile app that lets technicians choose whether they are reporting against an asset or a facility.
+- Keep a fast-path "Report Breakdown" action on `AssetDetailPage` that pre-selects the current asset.
+- Implement a two-step breakdown flow that first chooses context (asset or facility and specific record), then collects CM details in a form.
+- Submit breakdowns via `/api/work-orders` and route technicians from creation back into the CM flow (list or detail).
 
 ### High-Level UX Flow
 
-1. Technician opens an asset (or facility) in the mobile app.
-2. Technician taps **Report Breakdown**.
-3. A bottom sheet or full-screen form collects:
+1. Technician opens the app.
+2. From Home or another prominent screen, technician taps **Report Breakdown**.
+3. A bottom sheet (or full-screen view) first asks where the issue is:
+   - Technician chooses **Asset** or **Facility**.
+   - Technician searches and selects a specific asset or facility.
+4. After a context is selected, the same bottom sheet transitions to the breakdown form, which collects:
    - Symptom (required text).
    - Impact level (normal/high/critical).
    - Failure category and code (optional text fields).
    - Optional downtime start.
    - Optional reported channel (default `mobile`).
-4. Technician submits the form.
-5. App calls `POST /api/work-orders` with `assetId` or `facilityId` and the CM metadata.
-6. On success, technician is redirected to either:
+5. Technician submits the form.
+6. App calls `POST /api/work-orders` with either `assetId` or `facilityId` (exactly one) and the CM metadata.
+7. On success, technician is redirected to either:
    - The new work order detail view, or
    - The Work Orders list with the new item highlighted.
+8. When the technician starts from `AssetDetailPage`, the flow skips the context selection step and opens the breakdown form pre-bound to that asset.
 
 ### Mobile Component Tree Additions
 
+- `ReportBreakdownEntry`
+  - A card or button surfaced from Home (and optionally other screens) that opens the unified breakdown sheet.
+- `ReportBreakdownSheet` (or `ReportBreakdownPage` on smaller screens)
+  - Step 1: context selection and lookup:
+    - Toggle between Asset and Facility.
+    - Searchable list to select a specific asset or facility.
+  - Step 2: breakdown form:
+    - Fields for symptom, impact, failure category/code, downtime start, reported channel.
+    - Submits to the work orders create API and handles success/failure.
 - `AssetDetailPage`
   - Adds a **Report Breakdown** quick action button.
-  - Opens `ReportBreakdownSheet`.
-- `ReportBreakdownSheet` (or `ReportBreakdownPage` on smaller screens)
-  - Fields for symptom, impact, failure category/code, downtime start, reported channel.
-  - Submits to the work orders create API and handles success/failure.
+  - Opens `ReportBreakdownSheet` with the current asset pre-selected and the flow positioned on the breakdown form.
 
 ### Backend/API Usage
 

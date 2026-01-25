@@ -54,6 +54,14 @@
 - Extended GET /api/scheduling/day to include per-item estimatedMinutes based on template EstimatedDurationMinutes with a 60-minute fallback when null.
 - Verified asset, facility, and projected occurrences return estimatedMinutes for capacity calculations.
 - Ran `npm run lint` and `npx tsc --noEmit` after backend changes.
+## Sun Jan 25 20:29:44 WITA 2026
+- Extended GET /api/scheduling/calendar to compute CapacityMinutes per date using the same estimated duration rules as the day API.
+- Calendar response items now include capacityMinutes alongside bucketed counts for each date.
+- Ran `npm run lint` and `npx tsc --noEmit` after calendar capacity changes.
+## Sun Jan 25 21:40:26 WITA 2026
+- Updated Scheduling page to display per-day capacity badges in the calendar based on total estimated minutes versus an 8-hour threshold.
+- Added a capacity summary card for the selected date showing used versus threshold minutes and overall utilization.
+- Exposed per-task estimatedMinutes in the day view and updated README to document the new capacity overlays.
 ## 2026-01-22 13:00:12
 - Added PM Now idempotency settings with env fallback and system endpoints.
 - Enforced PM Now idempotency checks for assets and facilities.
@@ -258,6 +266,12 @@
 - Updated docker-compose ngrok-api service to use `start --all --config /etc/ngrok/ngrok.yml` and mount config.
 
 ## 2026-01-22 16:37:54 +08:00
+
+## Sun Jan 25 20:29:50 WITA 2026
+- Extended GET /api/scheduling/calendar to compute daily CapacityMinutes using EstimatedDurationMinutes per occurrence.
+- Updated backend calendar endpoint to return capacityMinutes per date alongside scheduled/due/overdue counts.
+- Aligned web and mobile scheduling API client types with new capacityMinutes field.
+- Ran `npm run lint` and `npx tsc --noEmit` in repo root; both completed successfully.
 - Added Facilities clone feature (backend + frontend).
 - Backend: POST /api/facilities/{facilityId}/clone with optional name and includePmSettings.
 - Frontend: apiCloneFacility and Clone dialog on Facilities page.

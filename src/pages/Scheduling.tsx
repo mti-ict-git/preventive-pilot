@@ -42,6 +42,32 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { isManager, isSuperadmin } from "@/lib/auth";
 
+const DAILY_CAPACITY_MINUTES = 480;
+
+type CapacityState = "ok" | "near" | "over";
+
+const evaluateCapacity = (estimatedMinutes: number, thresholdMinutes: number): { utilization: number; state: CapacityState } => {
+  if (thresholdMinutes <= 0) {
+    return { utilization: 0, state: "ok" };
+  }
+
+  const utilization = estimatedMinutes / thresholdMinutes;
+
+  if (!Number.isFinite(utilization) || utilization <= 0) {
+    return { utilization: 0, state: "ok" };
+  }
+
+  if (utilization >= 1) {
+    return { utilization, state: "over" };
+  }
+
+  if (utilization >= 0.8) {
+    return { utilization, state: "near" };
+  }
+
+  return { utilization, state: "ok" };
+};
+
 const Scheduling = () => {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -339,39 +365,62 @@ const Scheduling = () => {
     queryFn: () => apiGetSchedulingDayEvents({ date: selectedDateKey }),
   });
 
+  type CalendarDayBuckets = {
+    buckets: Array<{ count: number; type: "scheduled" | "due" | "overdue" }>;
+    capacityMinutes: number;
+  };
+
   const scheduledTasks = useMemo(() => {
-    const map: Record<number, Array<{ count: number; type: "scheduled" | "due" | "overdue" }>> = {};
+    const map: Record<number, CalendarDayBuckets> = {};
     const items = calendarQuery.data?.items ?? [];
     for (const item of items) {
       const date = new Date(`${item.date}T00:00:00`);
       if (date.getFullYear() !== currentMonth.getFullYear() || date.getMonth() !== currentMonth.getMonth()) continue;
       const day = date.getDate();
-      const list = map[day] ?? [];
-      list.push({ count: item.count, type: item.type });
-      map[day] = list;
+      const existing = map[day] ?? { buckets: [], capacityMinutes: 0 };
+      const nextBuckets = existing.buckets.concat({ count: item.count, type: item.type });
+      map[day] = {
+        buckets: nextBuckets,
+        capacityMinutes: item.capacityMinutes,
+      };
     }
 
     for (const day of Object.keys(map)) {
-      map[Number(day)] = map[Number(day)].slice().sort((a, b) => {
+      const dayIndex = Number(day);
+      const value = map[dayIndex];
+      const sortedBuckets = value.buckets.slice().sort((a, b) => {
         const order: Record<typeof a.type, number> = { overdue: 0, due: 1, scheduled: 2 };
         return order[a.type] - order[b.type];
       });
+      map[dayIndex] = {
+        buckets: sortedBuckets,
+        capacityMinutes: value.capacityMinutes,
+      };
     }
 
     return map;
   }, [calendarQuery.data, currentMonth]);
+
+  const dayCapacity = useMemo(() => {
+    const items = dayEventsQuery.data?.items ?? [];
+    const totalEstimatedMinutes = items.reduce((sum, item) => sum + item.estimatedMinutes, 0);
+    const thresholdMinutes = DAILY_CAPACITY_MINUTES;
+    const { utilization, state } = evaluateCapacity(totalEstimatedMinutes, thresholdMinutes);
+
+    return { totalEstimatedMinutes, thresholdMinutes, utilization, state };
+  }, [dayEventsQuery.data]);
 
   return (
     <div className="min-h-screen">
       <Header title="PM Scheduling" subtitle="Manage schedules and assignment rules" />
 
       <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-12 gap-6">
           {/* Calendar */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="lg:col-span-2 glass rounded-xl p-6"
+            className="col-span-12 lg:col-span-7 glass rounded-xl p-6"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-foreground">PM Calendar</h3>
@@ -410,7 +459,8 @@ const Scheduling = () => {
               ))}
               {Array.from({ length: getDaysInMonth(currentMonth) }).map((_, i) => {
                 const day = i + 1;
-                const tasks = scheduledTasks[day];
+                const aggregate = scheduledTasks[day];
+                const tasks = aggregate?.buckets;
                 const today = new Date();
                 const isToday =
                   day === today.getDate() &&
@@ -447,6 +497,29 @@ const Scheduling = () => {
                       >
                         {day}
                       </span>
+                      {aggregate && aggregate.capacityMinutes > 0 && (
+                        (() => {
+                          const capacity = evaluateCapacity(aggregate.capacityMinutes, DAILY_CAPACITY_MINUTES);
+                          const capacityLabel = `${Math.round(aggregate.capacityMinutes)}m`;
+                          const capacityClasses =
+                            capacity.state === "over"
+                              ? "bg-destructive/20 text-destructive border border-destructive/40"
+                              : capacity.state === "near"
+                                ? "bg-warning/20 text-warning border border-warning/40"
+                                : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/30";
+
+                          return (
+                            <div className="mt-1 flex justify-start">
+                              <span
+                                className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] ${capacityClasses}`}
+                                aria-label={`Capacity ${capacityLabel}, ${capacity.state} capacity`}
+                              >
+                                {capacityLabel}
+                              </span>
+                            </div>
+                          );
+                        })()
+                      )}
                       {tasks && (
                         <div className="mt-auto">
                           {tasks.map((task, idx) => (
@@ -495,7 +568,7 @@ const Scheduling = () => {
           </motion.div>
 
           {/* Right Panel */}
-          <div className="space-y-6">
+          <div className="col-span-12 lg:col-span-5 space-y-6">
             {/* Assignment Rules */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -741,6 +814,55 @@ const Scheduling = () => {
             >
               <Card className="glass border-border">
                 <CardHeader className="pb-3">
+                  <CardTitle className="text-foreground">Capacity • {selectedDateLabel}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {dayEventsQuery.isLoading ? (
+                    <div className="text-sm text-muted-foreground">Loading capacity…</div>
+                  ) : dayEventsQuery.isError ? (
+                    <div className="text-sm text-destructive">Failed to load capacity.</div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">Estimated minutes</div>
+                        <div className="text-lg font-semibold text-foreground">
+                          {Math.round(dayCapacity.totalEstimatedMinutes)}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">/ {dayCapacity.thresholdMinutes}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div
+                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs ${
+                            dayCapacity.state === "over"
+                              ? "bg-destructive/20 text-destructive border border-destructive/40"
+                              : dayCapacity.state === "near"
+                                ? "bg-warning/20 text-warning border border-warning/40"
+                                : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/30"
+                          }`}
+                        >
+                          {dayCapacity.state === "over"
+                            ? "Over capacity"
+                            : dayCapacity.state === "near"
+                              ? "Near capacity"
+                              : "Within capacity"}
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          Utilization {Math.round(dayCapacity.utilization * 100)}%
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Card className="glass border-border">
+                <CardHeader className="pb-3">
                   <CardTitle className="text-foreground">Events • {selectedDateLabel}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -777,6 +899,9 @@ const Scheduling = () => {
                                     {item.asset.assetTag} • {item.asset.name}
                                   </div>
                                   <div className="text-xs text-muted-foreground truncate">{item.template.name}</div>
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {item.estimatedMinutes > 0 ? `${item.estimatedMinutes} min` : "—"}
+                                  </div>
                                 </div>
                                 <div className="text-xs text-muted-foreground whitespace-nowrap capitalize">{item.status}</div>
                               </div>
