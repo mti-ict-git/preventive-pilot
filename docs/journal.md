@@ -204,6 +204,11 @@
 - Documented facility scheduling job work, broken/frozen behavior, capacity overlays, and OpenAPI deltas.
 - No code changes yet; this is a planning-only update.
 
+## Sun Jan 25 12:05:11 WITA 2026
+- Extended schedule calculation job to create facility PM tasks using facility candidates.
+- Implemented facility-aware assignment resolution and IF NOT EXISTS guard aligned with facility unique index.
+- Verified repository lint and TypeScript typecheck with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Jan 25 11:14:50 WITA 2026
 - Installed frontend dependencies including pdf-lib and qrcode to support Label Designer.
 - Resolved Vite module resolution errors for LabelDesigner imports.
@@ -268,6 +273,10 @@
 - Uses Capacitor PushNotifications to request permissions, register, and call /devices/register.
 - Exposes FCM token in-app so backend or Firebase console can send test pushes.
 - Updated mobile README with steps to test push notifications.
+## Sun Jan 25 11:59:15 WITA 2026
+- Mobile: changed Push Notifications Debug to reuse stored push_token from login instead of calling PushNotifications again.
+- AuthProvider now saves the FCM token to Preferences/localStorage at registration time.
+- Profile page button now reads stored token and only calls /devices/register, avoiding native crashes.
 - Fixed backend import path resolution for evidence import job wiring.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
