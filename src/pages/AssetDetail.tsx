@@ -22,6 +22,7 @@ import {
   Wrench,
   Shield,
   Activity,
+  Paperclip,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ import {
   ApiError,
   apiDownloadEvidence,
   apiDownloadTaskPdf,
+  apiDownloadChecklistEvidence,
   apiGetAsset,
   apiGetSystemStatus,
   apiGetTask,
@@ -184,6 +186,7 @@ const AssetDetail = () => {
   const { assetId } = useParams();
   const [expandedHistoryTaskId, setExpandedHistoryTaskId] = useState<string | null>(null);
   const [previewEvidenceId, setPreviewEvidenceId] = useState<string | null>(null);
+  const [previewKind, setPreviewKind] = useState<"task" | "checklist">("task");
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -515,24 +518,37 @@ const AssetDetail = () => {
     setPreviewContentType(null);
   };
 
-  const openEvidencePreview = async (evidence: TaskEvidence): Promise<void> => {
-    if (evidence.uri !== "imported") {
-      const target = evidence.uri.trim();
+  type EvidencePreviewInput = {
+    kind: "task" | "checklist";
+    id: string;
+    uri: string;
+    fileName: string | null;
+    contentType: string | null;
+  };
+
+  const openEvidencePreviewInternal = async (input: EvidencePreviewInput): Promise<void> => {
+    const isInternal = input.uri === "imported" || input.uri === "stored" || input.uri === "uploaded";
+    if (!isInternal) {
+      const target = input.uri.trim();
       if (target) window.open(target, "_blank", "noreferrer");
       return;
     }
 
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewEvidenceId(evidence.id);
-    setPreviewFileName(evidence.fileName);
-    setPreviewContentType(evidence.contentType);
+    setPreviewEvidenceId(input.id);
+    setPreviewFileName(input.fileName);
+    setPreviewContentType(input.contentType);
     setPreviewUrl(null);
     setPreviewOpen(true);
     setPreviewLoading(true);
+    setPreviewKind(input.kind);
     try {
-      const res = await apiDownloadEvidence({ evidenceId: evidence.id });
+      const res =
+        input.kind === "task"
+          ? await apiDownloadEvidence({ evidenceId: input.id })
+          : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id });
       const preferredType =
-        res.contentType ?? evidence.contentType ?? inferMimeTypeFromFileName(res.fileName ?? evidence.fileName);
+        res.contentType ?? input.contentType ?? inferMimeTypeFromFileName(res.fileName ?? input.fileName);
       const blob = preferredType && res.blob.type !== preferredType ? new Blob([res.blob], { type: preferredType }) : res.blob;
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
@@ -548,9 +564,37 @@ const AssetDetail = () => {
     }
   };
 
-  const viewEvidence = async (evidenceId: string) => {
+  const openEvidencePreview = async (evidence: TaskEvidence): Promise<void> => {
+    await openEvidencePreviewInternal({
+      kind: "task",
+      id: evidence.id,
+      uri: evidence.uri,
+      fileName: evidence.fileName,
+      contentType: evidence.contentType,
+    });
+  };
+
+  const openChecklistEvidencePreview = async (input: {
+    id: string;
+    uri: string;
+    fileName: string | null;
+    contentType: string | null;
+  }): Promise<void> => {
+    await openEvidencePreviewInternal({
+      kind: "checklist",
+      id: input.id,
+      uri: input.uri,
+      fileName: input.fileName,
+      contentType: input.contentType,
+    });
+  };
+
+  const viewEvidence = async (evidenceId: string, kind: "task" | "checklist"): Promise<void> => {
     try {
-      const res = await apiDownloadEvidence({ evidenceId });
+      const res =
+        kind === "task"
+          ? await apiDownloadEvidence({ evidenceId })
+          : await apiDownloadChecklistEvidence({ checklistEvidenceId: evidenceId });
       const preferredType = res.contentType ?? inferMimeTypeFromFileName(res.fileName);
       const blob = preferredType && res.blob.type !== preferredType ? new Blob([res.blob], { type: preferredType }) : res.blob;
       const url = URL.createObjectURL(blob);
@@ -562,9 +606,12 @@ const AssetDetail = () => {
     }
   };
 
-  const downloadEvidence = async (evidenceId: string) => {
+  const downloadEvidence = async (evidenceId: string, kind: "task" | "checklist"): Promise<void> => {
     try {
-      const res = await apiDownloadEvidence({ evidenceId, download: true });
+      const res =
+        kind === "task"
+          ? await apiDownloadEvidence({ evidenceId, download: true })
+          : await apiDownloadChecklistEvidence({ checklistEvidenceId: evidenceId, download: true });
       const preferredType = res.contentType ?? inferMimeTypeFromFileName(res.fileName);
       const blob = preferredType && res.blob.type !== preferredType ? new Blob([res.blob], { type: preferredType }) : res.blob;
       const url = URL.createObjectURL(blob);
@@ -625,6 +672,13 @@ const AssetDetail = () => {
       default:
         return null;
     }
+  };
+
+  const getTotalEvidenceCount = (taskDetail: TaskDetail): number => {
+    const checklistEvidenceCount = taskDetail.checklistItems.reduce((total, item) => {
+      return total + item.evidence.length;
+    }, 0);
+    return taskDetail.evidence.length + checklistEvidenceCount;
   };
 
   const getPMStatusBadge = () => {
@@ -705,7 +759,7 @@ const AssetDetail = () => {
                       window.open(previewUrl, "_blank", "noreferrer");
                       return;
                     }
-                    if (previewEvidenceId) viewEvidence(previewEvidenceId);
+                    if (previewEvidenceId) viewEvidence(previewEvidenceId, previewKind);
                   }}
                   disabled={previewLoading || (!previewUrl && !previewEvidenceId)}
                   aria-label="Open in new tab"
@@ -717,7 +771,7 @@ const AssetDetail = () => {
                   variant="outline"
                   size="icon"
                   onClick={() => {
-                    if (previewEvidenceId) downloadEvidence(previewEvidenceId);
+                    if (previewEvidenceId) downloadEvidence(previewEvidenceId, previewKind);
                   }}
                   disabled={previewLoading || !previewEvidenceId}
                   aria-label="Download"
@@ -1164,7 +1218,7 @@ const AssetDetail = () => {
                           <div className="text-right hidden md:block">
                             <p className="text-sm text-muted-foreground">{checksLabel}</p>
                             {showExpandedDetail ? (
-                              <p className="text-sm text-muted-foreground">{expandedTask.evidence.length} evidence files</p>
+                              <p className="text-sm text-muted-foreground">{getTotalEvidenceCount(expandedTask)} evidence files</p>
                             ) : null}
                           </div>
                           {isExpanded ? (
@@ -1205,7 +1259,7 @@ const AssetDetail = () => {
                                 </div>
                                 <div className="p-4 rounded-lg bg-muted/30">
                                   <p className="text-sm text-muted-foreground mb-1">Evidence Files</p>
-                                  <p className="text-lg font-semibold text-foreground">{expandedTask.evidence.length}</p>
+                                  <p className="text-lg font-semibold text-foreground">{getTotalEvidenceCount(expandedTask)}</p>
                                 </div>
                               </div>
 
@@ -1251,6 +1305,10 @@ const AssetDetail = () => {
                                     .map((item) => {
                                       const outcome = item.result?.outcomeLabel ?? "skip";
                                       const notes = item.result?.notes;
+                                      const attachments = item.evidence;
+                                      const attachmentCount = attachments.length;
+                                      const hasAttachments = attachmentCount > 0;
+                                      const visibleAttachments = attachments.slice(0, 3);
                                       return (
                                         <div
                                           key={item.id}
@@ -1269,7 +1327,41 @@ const AssetDetail = () => {
                                               </Badge>
                                             ) : null}
                                           </div>
-                                          {notes ? <span className="text-sm text-muted-foreground">{notes}</span> : null}
+                                          <div className="flex flex-col items-end gap-1 ml-4">
+                                            {notes ? (
+                                              <span className="text-sm text-muted-foreground max-w-xs text-right truncate">{notes}</span>
+                                            ) : null}
+                                            {hasAttachments ? (
+                                              <div className="flex flex-wrap justify-end gap-1">
+                                                {visibleAttachments.map((attachment) => (
+                                                  <button
+                                                    key={attachment.id}
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      void openChecklistEvidencePreview({
+                                                        id: attachment.id,
+                                                        uri: attachment.uri,
+                                                        fileName: attachment.fileName,
+                                                        contentType: attachment.contentType,
+                                                      });
+                                                    }}
+                                                    className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-background"
+                                                  >
+                                                    <Paperclip className="h-3 w-3" />
+                                                    <span className="max-w-[8rem] truncate">
+                                                      {attachment.fileName ?? attachment.uri}
+                                                    </span>
+                                                  </button>
+                                                ))}
+                                                {attachmentCount > visibleAttachments.length ? (
+                                                  <span className="text-[11px] text-muted-foreground">
+                                                    +{attachmentCount - visibleAttachments.length} more
+                                                  </span>
+                                                ) : null}
+                                              </div>
+                                            ) : null}
+                                          </div>
                                         </div>
                                       );
                                     })}
@@ -1359,7 +1451,7 @@ const AssetDetail = () => {
                                                 className="h-8 w-8 opacity-0 group-hover:opacity-100"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  downloadEvidence(file.id);
+                                                  void downloadEvidence(file.id, "task");
                                                 }}
                                                 aria-label="Download evidence"
                                               >

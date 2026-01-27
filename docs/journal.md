@@ -93,6 +93,11 @@
 - Adjusted task completion validation and UI to respect new attachment semantics.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Wed Jan 28 05:43:51 WITA 2026
+- Asset Detail PM History now counts both task-level and per-checklist attachments in the Evidence Files total.
+- Checklist Results in Asset Detail show a condensed per-item list of attached files with quick preview actions.
+- Updated README evidence section accordingly and ran `npm run lint` plus `npx tsc --noEmit`.
+
 ## 2026-01-01 14:03
 - Added initial SQL Server `pm` schema script and apply runner.
 - Added implementation plan document for database, API, jobs, and UI integration.

@@ -105,6 +105,11 @@ Required environment variables:
 - Attachments can be viewed, downloaded, deleted, and replaced from Task Detail.
 - File uploads occur immediately when a user selects a file to attach.
 
+### Asset PM history evidence visibility
+
+- Asset Detail PM History now counts both task-level and per-checklist attachments in the "Evidence Files" total.
+- Checklist Results in Asset Detail show a condensed, per-item list of attached files with quick preview actions.
+
 ### Checklist attachment behavior
 
 - Each template checklist item now has two attachment flags:
