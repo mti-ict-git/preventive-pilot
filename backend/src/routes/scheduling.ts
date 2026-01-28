@@ -357,6 +357,7 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
             "FROM pm.Assets a",
             "INNER JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
             "INNER JOIN pm.PMTemplates t ON t.TemplateId = s.DefaultTemplateId",
+            "LEFT JOIN pm.PMSchedules sch ON sch.AssetId = a.AssetId AND sch.TemplateId = s.DefaultTemplateId",
             "OUTER APPLY (",
             "  SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
             "  FROM pm.PMTasks tt",
@@ -376,6 +377,7 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
             "WHERE a.IsArchived = 0",
             "  AND s.PMEnabled = 1",
             "  AND t.IsActive = 1",
+            "  AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
             "  AND (@assetId IS NULL OR a.AssetId = @assetId)",
           ].join("\n"),
         );
@@ -444,6 +446,7 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
             "FROM pm.Facilities f",
             "INNER JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
             "INNER JOIN pm.PMTemplates t ON t.TemplateId = s.DefaultTemplateId",
+            "LEFT JOIN pm.FacilityPMSchedules sch ON sch.FacilityId = f.FacilityId AND sch.TemplateId = s.DefaultTemplateId",
             "OUTER APPLY (",
             "  SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
             "  FROM pm.PMTasks tt",
@@ -463,6 +466,7 @@ schedulingRouter.post("/recalculate", requireManager, async (req, res) => {
             "WHERE f.IsActive = 1",
             "  AND s.PMEnabled = 1",
             "  AND t.IsActive = 1",
+            "  AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
             "  AND (@facilityId IS NULL OR f.FacilityId = @facilityId)",
           ].join("\n"),
         );
@@ -584,7 +588,8 @@ schedulingRouter.get("/day", async (req, res) => {
         "    a.AssetTag AS AssetTag,",
         "    a.Name AS AssetName,",
         "    tpl.TemplateId AS TemplateId,",
-        "    tpl.Name AS TemplateName",
+        "    tpl.Name AS TemplateName,",
+        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.PMTasks t",
         "  INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
         "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
@@ -602,7 +607,8 @@ schedulingRouter.get("/day", async (req, res) => {
         "    CAST(N'' AS nvarchar(64)) AS AssetTag,",
         "    f.Name AS AssetName,",
         "    tpl.TemplateId AS TemplateId,",
-        "    tpl.Name AS TemplateName",
+        "    tpl.Name AS TemplateName,",
+        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.PMTasks t",
         "  INNER JOIN pm.Facilities f ON f.FacilityId = t.FacilityId",
         "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
@@ -622,10 +628,12 @@ schedulingRouter.get("/day", async (req, res) => {
         "    a.AssetTag AS AssetTag,",
         "    a.Name AS AssetName,",
         "    tpl.TemplateId AS TemplateId,",
-        "    tpl.Name AS TemplateName",
+        "    tpl.Name AS TemplateName,",
+        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.Assets a",
         "  INNER JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
         "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
+        "  LEFT JOIN pm.PMSchedules sch ON sch.AssetId = a.AssetId AND sch.TemplateId = s.DefaultTemplateId",
         "  OUTER APPLY (",
         "    SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
         "    FROM pm.PMTasks tt",
@@ -643,9 +651,11 @@ schedulingRouter.get("/day", async (req, res) => {
         "    ) AS DueAt",
         "  ) due",
         "  WHERE a.IsArchived = 0",
+        "    AND (a.AssetOperationalStatus IS NULL OR a.AssetOperationalStatus NOT IN (N'broken', N'archived'))",
         "    AND s.PMEnabled = 1",
         "    AND s.DefaultTemplateId IS NOT NULL",
         "    AND tpl.IsActive = 1",
+        "    AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
         "    AND due.DueAt >= @from",
         "    AND due.DueAt < @to",
         "    AND NOT EXISTS (",
@@ -667,10 +677,12 @@ schedulingRouter.get("/day", async (req, res) => {
         "    CAST(N'' AS nvarchar(64)) AS AssetTag,",
         "    f.Name AS AssetName,",
         "    tpl.TemplateId AS TemplateId,",
-        "    tpl.Name AS TemplateName",
+        "    tpl.Name AS TemplateName,",
+        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.Facilities f",
         "  INNER JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
         "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
+        "  LEFT JOIN pm.FacilityPMSchedules sch ON sch.FacilityId = f.FacilityId AND sch.TemplateId = s.DefaultTemplateId",
         "  OUTER APPLY (",
         "    SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
         "    FROM pm.PMTasks tt",
@@ -691,6 +703,7 @@ schedulingRouter.get("/day", async (req, res) => {
         "    AND s.PMEnabled = 1",
         "    AND s.DefaultTemplateId IS NOT NULL",
         "    AND tpl.IsActive = 1",
+        "    AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
         "    AND due.DueAt >= @from",
         "    AND due.DueAt < @to",
         "    AND NOT EXISTS (",
@@ -713,6 +726,7 @@ schedulingRouter.get("/day", async (req, res) => {
         "  i.AssetName AS AssetName,",
         "  i.TemplateId AS TemplateId,",
         "  i.TemplateName AS TemplateName,",
+        "  i.EstimatedMinutes AS EstimatedMinutes,",
         "  CASE",
         "    WHEN i.ScheduledDueAt < @todayStart THEN N'overdue'",
         "    WHEN i.ScheduledDueAt < @todayEnd THEN N'due'",
@@ -738,6 +752,11 @@ schedulingRouter.get("/day", async (req, res) => {
         const templateId = typeof r.TemplateId === "string" ? r.TemplateId : null;
         const templateName = typeof r.TemplateName === "string" ? r.TemplateName : null;
         const bucket = typeof r.Bucket === "string" ? r.Bucket : null;
+        const estimatedMinutesRaw =
+          typeof (r as { EstimatedMinutes?: unknown }).EstimatedMinutes === "number" &&
+          Number.isFinite((r as { EstimatedMinutes?: unknown }).EstimatedMinutes as number)
+            ? ((r as { EstimatedMinutes: number }).EstimatedMinutes as number)
+            : null;
 
         if (
           !id ||
@@ -756,12 +775,15 @@ schedulingRouter.get("/day", async (req, res) => {
 
         if (bucket !== "scheduled" && bucket !== "due" && bucket !== "overdue") return null;
 
+        const estimatedMinutes = estimatedMinutesRaw ?? 0;
+
         return {
           id,
           taskNumber,
           scheduledDueAt,
           status,
           priority,
+          estimatedMinutes,
           bucket: bucket as "scheduled" | "due" | "overdue",
           asset: { id: assetId, assetTag, name: assetName },
           template: { id: templateId, name: templateName },
@@ -774,6 +796,7 @@ schedulingRouter.get("/day", async (req, res) => {
           scheduledDueAt: string;
           status: string;
           priority: string;
+          estimatedMinutes: number;
           bucket: "scheduled" | "due" | "overdue";
           asset: { id: string; assetTag: string; name: string };
           template: { id: string; name: string };
@@ -827,16 +850,22 @@ schedulingRouter.get("/calendar", async (req, res) => {
         "DECLARE @todayStart datetime2(0) = dateadd(day, datediff(day, 0, sysutcdatetime()), 0);",
         "DECLARE @todayEnd datetime2(0) = dateadd(day, 1, @todayStart);",
         "WITH occurrences AS (",
-        "  SELECT t.ScheduledDueAt AS ScheduledDueAt",
+        "  SELECT",
+        "    t.ScheduledDueAt AS ScheduledDueAt,",
+        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.PMTasks t",
+        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
         "  WHERE t.ScheduledDueAt >= @from",
         "    AND t.ScheduledDueAt < @to",
         "    AND t.Status NOT IN (N'completed', N'cancelled')",
         "  UNION ALL",
-        "  SELECT due.DueAt AS ScheduledDueAt",
+        "  SELECT",
+        "    due.DueAt AS ScheduledDueAt,",
+        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.Assets a",
         "  INNER JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
         "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
+        "  LEFT JOIN pm.PMSchedules sch ON sch.AssetId = a.AssetId AND sch.TemplateId = s.DefaultTemplateId",
         "  OUTER APPLY (",
         "    SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
         "    FROM pm.PMTasks tt",
@@ -854,9 +883,11 @@ schedulingRouter.get("/calendar", async (req, res) => {
         "    ) AS DueAt",
         "  ) due",
         "  WHERE a.IsArchived = 0",
+        "    AND (a.AssetOperationalStatus IS NULL OR a.AssetOperationalStatus NOT IN (N'broken', N'archived'))",
         "    AND s.PMEnabled = 1",
         "    AND s.DefaultTemplateId IS NOT NULL",
         "    AND tpl.IsActive = 1",
+        "    AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
         "    AND due.DueAt >= @from",
         "    AND due.DueAt < @to",
         "    AND NOT EXISTS (",
@@ -868,10 +899,13 @@ schedulingRouter.get("/calendar", async (req, res) => {
         "        AND t2.Status NOT IN (N'completed', N'cancelled')",
         "    )",
         "  UNION ALL",
-        "  SELECT due.DueAt AS ScheduledDueAt",
+        "  SELECT",
+        "    due.DueAt AS ScheduledDueAt,",
+        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.Facilities f",
         "  INNER JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
         "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
+        "  LEFT JOIN pm.FacilityPMSchedules sch ON sch.FacilityId = f.FacilityId AND sch.TemplateId = s.DefaultTemplateId",
         "  OUTER APPLY (",
         "    SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
         "    FROM pm.PMTasks tt",
@@ -892,6 +926,7 @@ schedulingRouter.get("/calendar", async (req, res) => {
         "    AND s.PMEnabled = 1",
         "    AND s.DefaultTemplateId IS NOT NULL",
         "    AND tpl.IsActive = 1",
+        "    AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
         "    AND due.DueAt >= @from",
         "    AND due.DueAt < @to",
         "    AND NOT EXISTS (",
@@ -910,7 +945,8 @@ schedulingRouter.get("/calendar", async (req, res) => {
         "    WHEN o.ScheduledDueAt < @todayEnd THEN N'due'",
         "    ELSE N'scheduled'",
         "  END AS Bucket,",
-        "  COUNT(1) AS Cnt",
+        "  COUNT(1) AS Cnt,",
+        "  SUM(o.EstimatedMinutes) OVER (PARTITION BY CAST(o.ScheduledDueAt AS date)) AS CapacityMinutes",
         "FROM occurrences o",
         "GROUP BY CAST(o.ScheduledDueAt AS date),",
         "  CASE",
@@ -929,6 +965,8 @@ schedulingRouter.get("/calendar", async (req, res) => {
         const dueDate = r.DueDate instanceof Date ? r.DueDate : null;
         const bucket = typeof r.Bucket === "string" ? r.Bucket : null;
         const count = typeof r.Cnt === "number" ? r.Cnt : null;
+        const capacityMinutesRaw = r.CapacityMinutes;
+        const capacityMinutes = typeof capacityMinutesRaw === "number" ? capacityMinutesRaw : 0;
         if (!dueDate || !bucket || count === null) return null;
 
         const date = new Date(Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate()))
@@ -936,8 +974,11 @@ schedulingRouter.get("/calendar", async (req, res) => {
           .slice(0, 10);
 
         if (bucket !== "scheduled" && bucket !== "due" && bucket !== "overdue") return null;
-        return { date, type: bucket as "scheduled" | "due" | "overdue", count };
+        return { date, type: bucket as "scheduled" | "due" | "overdue", count, capacityMinutes };
       })
-      .filter((v): v is { date: string; type: "scheduled" | "due" | "overdue"; count: number } => v !== null),
+      .filter(
+        (v): v is { date: string; type: "scheduled" | "due" | "overdue"; count: number; capacityMinutes: number } =>
+          v !== null,
+      ),
   });
 });

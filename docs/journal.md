@@ -46,6 +46,22 @@
 
 ## 2026-01-22 12:36:58 PM
 - Added PM Task Enhancement Plan document with phased roadmap and specs.
+## Sun Jan 25 12:57:05 WITA 2026
+- Updated scheduling day and calendar projections to respect asset broken state and frozen schedules.
+- Ensured projected events are suppressed for broken assets and frozen schedules while existing tasks remain visible.
+- Ran `npm run lint` and `npx tsc --noEmit` in repo root.
+## Sun Jan 25 20:08:46 WITA 2026
+- Extended GET /api/scheduling/day to include per-item estimatedMinutes based on template EstimatedDurationMinutes with a 60-minute fallback when null.
+- Verified asset, facility, and projected occurrences return estimatedMinutes for capacity calculations.
+- Ran `npm run lint` and `npx tsc --noEmit` after backend changes.
+## Sun Jan 25 20:29:44 WITA 2026
+- Extended GET /api/scheduling/calendar to compute CapacityMinutes per date using the same estimated duration rules as the day API.
+- Calendar response items now include capacityMinutes alongside bucketed counts for each date.
+- Ran `npm run lint` and `npx tsc --noEmit` after calendar capacity changes.
+## Sun Jan 25 21:40:26 WITA 2026
+- Updated Scheduling page to display per-day capacity badges in the calendar based on total estimated minutes versus an 8-hour threshold.
+- Added a capacity summary card for the selected date showing used versus threshold minutes and overall utilization.
+- Exposed per-task estimatedMinutes in the day view and updated README to document the new capacity overlays.
 ## 2026-01-22 13:00:12
 - Added PM Now idempotency settings with env fallback and system endpoints.
 - Enforced PM Now idempotency checks for assets and facilities.
@@ -76,6 +92,11 @@
 - Enforced mandatory checklist items to require non-skip outcomes with notes.
 - Adjusted task completion validation and UI to respect new attachment semantics.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Wed Jan 28 05:43:51 WITA 2026
+- Asset Detail PM History now counts both task-level and per-checklist attachments in the Evidence Files total.
+- Checklist Results in Asset Detail show a condensed per-item list of attached files with quick preview actions.
+- Updated README evidence section accordingly and ran `npm run lint` plus `npx tsc --noEmit`.
 
 ## 2026-01-01 14:03
 - Added initial SQL Server `pm` schema script and apply runner.
@@ -199,6 +220,36 @@
 - Added missing PM template warnings in Assets list and Asset Detail.
 - Fixed backend asset PM PATCH to allow clearing template and next due date.
 
+## Sun Jan 25 11:43:35 WITA 2026
+- Added PM Task Enhancement Delta Plan document capturing concrete implementation gaps and next steps.
+- Documented facility scheduling job work, broken/frozen behavior, capacity overlays, and OpenAPI deltas.
+- No code changes yet; this is a planning-only update.
+
+## Sun Jan 25 12:05:11 WITA 2026
+- Extended schedule calculation job to create facility PM tasks using facility candidates.
+- Implemented facility-aware assignment resolution and IF NOT EXISTS guard aligned with facility unique index.
+- Verified repository lint and TypeScript typecheck with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Jan 25 12:22:45 WITA 2026
+- Extended schedule calculation job to maintain FacilityPMSchedules and FacilityPMSettings for facilities.
+- Mirrored Scheduling recalc endpoint logic: MERGE pm.FacilityPMSchedules and update LastPMCompletedAt/NextPMDueAt via pm.FacilityPMSettings.
+- Ran `npm run lint` and `npx tsc --noEmit`; both completed successfully.
+
+## Sun Jan 25 12:40:07 WITA 2026
+- Updated schedule calculation job asset candidate query to exclude broken and archived assets.
+- Used pm.Assets.AssetOperationalStatus to filter out `broken` and `archived` while keeping existing PMEnabled and IsArchived filters.
+- Re-ran `npm run lint` and `npx tsc --noEmit`; both passed.
+
+## Sun Jan 25 12:44:05 WITA 2026
+- Taught schedule calculation job and manual recalc endpoint to respect Frozen flags in pm.PMSchedules and pm.FacilityPMSchedules.
+- Asset and facility candidate queries now join to schedules and skip rows where Frozen = 1, preventing new tasks and schedule/NextPMDueAt updates while frozen.
+- Verified with `npm run lint` and `npx tsc --noEmit` for the full repo.
+
+## Sun Jan 25 11:14:50 WITA 2026
+- Installed frontend dependencies including pdf-lib and qrcode to support Label Designer.
+- Resolved Vite module resolution errors for LabelDesigner imports.
+- Ran `npm run lint` and `npx tsc --noEmit`; both completed successfully.
+
 ## 2026-01-05 09:29
 - Added Assets per-page selector (50/100/200/500) and increased backend page-size cap.
 
@@ -220,6 +271,12 @@
 - Updated docker-compose ngrok-api service to use `start --all --config /etc/ngrok/ngrok.yml` and mount config.
 
 ## 2026-01-22 16:37:54 +08:00
+
+## Sun Jan 25 20:29:50 WITA 2026
+- Extended GET /api/scheduling/calendar to compute daily CapacityMinutes using EstimatedDurationMinutes per occurrence.
+- Updated backend calendar endpoint to return capacityMinutes per date alongside scheduled/due/overdue counts.
+- Aligned web and mobile scheduling API client types with new capacityMinutes field.
+- Ran `npm run lint` and `npx tsc --noEmit` in repo root; both completed successfully.
 - Added Facilities clone feature (backend + frontend).
 - Backend: POST /api/facilities/{facilityId}/clone with optional name and includePmSettings.
 - Frontend: apiCloneFacility and Clone dialog on Facilities page.
@@ -253,6 +310,15 @@
 - Implemented backdated evidence importer job (file move + task/evidence creation + duplicate handling).
 - Added System Settings UI to run evidence import with template and duplicate options.
 - Added system endpoint to trigger evidence import and new env/scheduler toggles.
+## Sun Jan 25 11:41:09 WITA 2026
+- Mobile: added Push Notifications Debug section on Profile page to register device tokens.
+- Uses Capacitor PushNotifications to request permissions, register, and call /devices/register.
+- Exposes FCM token in-app so backend or Firebase console can send test pushes.
+- Updated mobile README with steps to test push notifications.
+## Sun Jan 25 11:59:15 WITA 2026
+- Mobile: changed Push Notifications Debug to reuse stored push_token from login instead of calling PushNotifications again.
+- AuthProvider now saves the FCM token to Preferences/localStorage at registration time.
+- Profile page button now reads stored token and only calls /devices/register, avoiding native crashes.
 - Fixed backend import path resolution for evidence import job wiring.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
@@ -476,6 +542,13 @@
 
 ## 2026-01-07 13:38:26 WIB
 - Implemented JWT refresh tokens on backend (sign/verify, env REFRESH_TOKEN_EXPIRES_IN).
+
+## 2026-01-25 22:49:13 WITA
+- Added unified Report Breakdown bottom sheet component for the Field-Ready mobile app.
+- HomePage: surfaced a Report Breakdown quick action that opens the unified sheet.
+- AssetDetailPage: wired the Corrective Maintenance card to reuse the unified sheet with the current asset pre-selected.
+- Unified flow supports both asset and facility breakdowns and routes to Work Order detail after creation.
+- Verified with `npm run lint`.
 - Added /api/auth/refresh endpoint and updated OpenAPI schemas and paths.
 - Mobile: store refresh token on login and auto-refresh on 401 in request wrapper.
 - Mobile: clear refresh token on logout.
