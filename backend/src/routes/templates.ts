@@ -316,33 +316,100 @@ templatesRouter.put("/:templateId", requireSuperadmin, async (req, res) => {
       );
 
     if (parsed.data.checklistItems) {
-      await tx
+      const existing = await tx
         .request()
         .input("templateId", sql.UniqueIdentifier, templateId)
-        .query("DELETE FROM pm.PMTemplateChecklistItems WHERE TemplateId = @templateId");
+        .query(
+          [
+            "SELECT",
+            "  TemplateChecklistItemId",
+            "FROM pm.PMTemplateChecklistItems",
+            "WHERE TemplateId = @templateId",
+          ].join("\n"),
+        );
+
+      const existingIds = new Set<string>(
+        (existing.recordset as Array<{ TemplateChecklistItemId: string }>).map((r) => String(r.TemplateChecklistItemId)),
+      );
+
+      const incomingIds = new Set<string>();
 
       for (const item of parsed.data.checklistItems) {
-        await tx
-          .request()
-          .input("templateId", sql.UniqueIdentifier, templateId)
-          .input("sortOrder", sql.Int, item.sortOrder)
-          .input("itemText", sql.NVarChar(512), item.itemText)
-          .input("isMandatory", sql.Bit, item.isMandatory ? 1 : 0)
-          .input("requiresNotes", sql.Bit, item.requiresNotes ? 1 : 0)
-          .input("requiresPassFail", sql.Bit, item.requiresPassFail ? 1 : 0)
-          .input("enableAttachment", sql.Bit, item.enableAttachment ? 1 : 0)
-          .input("requiresAttachment", sql.Bit, item.requiresAttachment ? 1 : 0)
-          .input("isActive", sql.Bit, item.isActive ? 1 : 0)
-          .query(
-            [
-              "INSERT INTO pm.PMTemplateChecklistItems (",
-              "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, EnableAttachment, RequiresAttachment, IsActive",
-              ")",
-              "VALUES (",
-              "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @enableAttachment, @requiresAttachment, @isActive",
-              ")",
-            ].join("\n"),
-          );
+        const hasId = typeof item.id === "string" && item.id.trim().length > 0;
+        if (hasId) incomingIds.add(item.id as string);
+
+        if (hasId) {
+          await tx
+            .request()
+            .input("templateId", sql.UniqueIdentifier, templateId)
+            .input("itemId", sql.UniqueIdentifier, item.id)
+            .input("sortOrder", sql.Int, item.sortOrder)
+            .input("itemText", sql.NVarChar(512), item.itemText)
+            .input("isMandatory", sql.Bit, item.isMandatory ? 1 : 0)
+            .input("requiresNotes", sql.Bit, item.requiresNotes ? 1 : 0)
+            .input("requiresPassFail", sql.Bit, item.requiresPassFail ? 1 : 0)
+            .input("enableAttachment", sql.Bit, item.enableAttachment ? 1 : 0)
+            .input("requiresAttachment", sql.Bit, item.requiresAttachment ? 1 : 0)
+            .input("isActive", sql.Bit, item.isActive ? 1 : 0)
+            .query(
+              [
+                "UPDATE pm.PMTemplateChecklistItems",
+                "SET",
+                "  SortOrder = @sortOrder,",
+                "  ItemText = @itemText,",
+                "  IsMandatory = @isMandatory,",
+                "  RequiresNotes = @requiresNotes,",
+                "  RequiresPassFail = @requiresPassFail,",
+                "  EnableAttachment = @enableAttachment,",
+                "  RequiresAttachment = @requiresAttachment,",
+                "  IsActive = @isActive,",
+                "  UpdatedAt = sysutcdatetime()",
+                "WHERE TemplateChecklistItemId = @itemId",
+                "  AND TemplateId = @templateId",
+              ].join("\n"),
+            );
+        } else {
+          await tx
+            .request()
+            .input("templateId", sql.UniqueIdentifier, templateId)
+            .input("sortOrder", sql.Int, item.sortOrder)
+            .input("itemText", sql.NVarChar(512), item.itemText)
+            .input("isMandatory", sql.Bit, item.isMandatory ? 1 : 0)
+            .input("requiresNotes", sql.Bit, item.requiresNotes ? 1 : 0)
+            .input("requiresPassFail", sql.Bit, item.requiresPassFail ? 1 : 0)
+            .input("enableAttachment", sql.Bit, item.enableAttachment ? 1 : 0)
+            .input("requiresAttachment", sql.Bit, item.requiresAttachment ? 1 : 0)
+            .input("isActive", sql.Bit, item.isActive ? 1 : 0)
+            .query(
+              [
+                "INSERT INTO pm.PMTemplateChecklistItems (",
+                "  TemplateId, SortOrder, ItemText, IsMandatory, RequiresNotes, RequiresPassFail, EnableAttachment, RequiresAttachment, IsActive",
+                ")",
+                "VALUES (",
+                "  @templateId, @sortOrder, @itemText, @isMandatory, @requiresNotes, @requiresPassFail, @enableAttachment, @requiresAttachment, @isActive",
+                ")",
+              ].join("\n"),
+            );
+        }
+      }
+
+      for (const id of existingIds) {
+        if (!incomingIds.has(id)) {
+          await tx
+            .request()
+            .input("templateId", sql.UniqueIdentifier, templateId)
+            .input("itemId", sql.UniqueIdentifier, id)
+            .query(
+              [
+                "UPDATE pm.PMTemplateChecklistItems",
+                "SET",
+                "  IsActive = 0,",
+                "  UpdatedAt = sysutcdatetime()",
+                "WHERE TemplateId = @templateId",
+                "  AND TemplateChecklistItemId = @itemId",
+              ].join("\n"),
+            );
+        }
       }
     }
 
