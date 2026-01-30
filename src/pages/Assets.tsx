@@ -535,6 +535,7 @@ const Assets = () => {
                   <TableHead className="text-muted-foreground">Asset ID</TableHead>
                   <TableHead className="text-muted-foreground">Name</TableHead>
                   <TableHead className="text-muted-foreground">Category</TableHead>
+                  <TableHead className="text-muted-foreground">Notes</TableHead>
                   <TableHead className="text-muted-foreground">Location</TableHead>
                   <TableHead className="text-muted-foreground">Operational</TableHead>
                   <TableHead className="text-muted-foreground">PM Status</TableHead>
@@ -578,6 +579,7 @@ const Assets = () => {
                       </SelectContent>
                     </Select>
                   </TableHead>
+                  <TableHead></TableHead>
                   <TableHead>
                     <Select
                       value={selectedLocationId}
@@ -704,6 +706,13 @@ const Assets = () => {
                       <TableCell className="font-medium text-foreground">{asset.name}</TableCell>
                       <TableCell>
                         <Badge variant="secondary">{asset.category.name ?? "—"}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground max-w-xs">
+                        <span className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-wrap">
+                          {asset.snipeNotes && asset.snipeNotes.trim().length > 0
+                            ? asset.snipeNotes
+                            : "—"}
+                        </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{asset.location.name ?? "—"}</TableCell>
                       <TableCell>

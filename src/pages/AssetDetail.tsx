@@ -1053,6 +1053,12 @@ const AssetDetail = () => {
                         <span className="font-medium text-foreground">{item.value ?? "—"}</span>
                       </div>
                     ))}
+                    <div className="pt-2">
+                      <span className="text-muted-foreground block mb-1">Snipe-IT Notes</span>
+                      <div className="text-sm font-medium text-foreground whitespace-pre-wrap max-h-40 overflow-auto rounded-md bg-muted/40 px-3 py-2">
+                        {asset.snipeNotes && asset.snipeNotes.trim().length > 0 ? asset.snipeNotes : "No notes"}
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>

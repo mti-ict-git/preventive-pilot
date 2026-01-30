@@ -29,6 +29,7 @@ type SnipeHardware = {
   category?: { id?: number | null; name?: string | null } | null;
   location?: { id?: number | null; name?: string | null } | null;
   assigned_to?: { name?: string | null } | null;
+  notes?: string | null;
 };
 
 type AssetOperationalStatus = "operational" | "broken" | "archived";
@@ -315,6 +316,7 @@ const upsertAssets = async (
     const status = a.status_label?.name ?? null;
     const operationalStatus = toOperationalStatus(status);
     const assignedToText = a.assigned_to?.name ?? null;
+    const notes = a.notes ?? null;
     const assetTag = a.asset_tag ?? null;
 
     await db
@@ -330,6 +332,7 @@ const upsertAssets = async (
       .input("assetStatus", sql.NVarChar(64), status)
       .input("assetOperationalStatus", sql.NVarChar(16), operationalStatus)
       .input("assignedToText", sql.NVarChar(256), assignedToText)
+      .input("notes", sql.NVarChar(sql.MAX), notes)
       .query(
         [
           "MERGE pm.Assets WITH (HOLDLOCK) AS target",
@@ -347,15 +350,16 @@ const upsertAssets = async (
           "    AssetStatus = @assetStatus,",
           "    AssetOperationalStatus = @assetOperationalStatus,",
           "    AssignedToText = @assignedToText,",
+          "    Notes = @notes,",
           "    IsArchived = 0,",
           "    LastSyncedAt = sysutcdatetime(),",
           "    UpdatedAt = sysutcdatetime()",
           "WHEN NOT MATCHED THEN",
           "  INSERT (",
-          "    SnipeAssetId, AssetTag, Name, Manufacturer, Model, SerialNumber, CategoryId, LocationId, AssetStatus, AssignedToText, AssetOperationalStatus, IsArchived, LastSyncedAt",
+          "    SnipeAssetId, AssetTag, Name, Manufacturer, Model, SerialNumber, CategoryId, LocationId, AssetStatus, AssignedToText, AssetOperationalStatus, Notes, IsArchived, LastSyncedAt",
           "  )",
           "  VALUES (",
-          "    @snipeAssetId, @assetTag, @name, @manufacturer, @model, @serialNumber, @categoryId, @locationId, @assetStatus, @assignedToText, @assetOperationalStatus, 0, sysutcdatetime()",
+          "    @snipeAssetId, @assetTag, @name, @manufacturer, @model, @serialNumber, @categoryId, @locationId, @assetStatus, @assignedToText, @assetOperationalStatus, @notes, 0, sysutcdatetime()",
           "  );",
         ].join("\n"),
       );

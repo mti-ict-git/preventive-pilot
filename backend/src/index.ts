@@ -154,6 +154,7 @@ const openApiSpec: OpenApiSchema = {
           assetStatus: { type: ["string", "null"] },
           assetOperationalStatus: { type: "string", enum: ["operational", "broken", "archived"] },
           assignedToText: { type: ["string", "null"] },
+          snipeNotes: { type: ["string", "null"] },
           category: { oneOf: [{ $ref: "#/components/schemas/EntityRef" }, { type: "null" }] },
           location: { oneOf: [{ $ref: "#/components/schemas/EntityRef" }, { type: "null" }] },
           pm: { $ref: "#/components/schemas/AssetPmInfo" },

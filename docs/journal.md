@@ -103,6 +103,16 @@
 - Confirmed GET /api/scheduling/calendar still returns bucketed counts plus per-day capacityMinutes using template EstimatedDurationMinutes with 60-minute fallback.
 - Ran `npm run lint` and `npx tsc --noEmit` in repo root; both passed.
 
+## Sat Jan 31 06:31:44 WITA 2026
+- Added Snipe-IT asset notes synchronization into pm.Assets.Notes and backend Asset Detail response.
+- Exposed read-only Snipe-IT Notes section on Asset Detail General Info card.
+- Updated README Snipe-IT sync section and verified with `npm run lint` plus `npx tsc --noEmit`.
+
+## Sat Jan 31 06:35:57 WITA 2026
+- Added Snipe-IT Notes column to Assets list table next to Category.
+- Updated assets list API to return snipeNotes from pm.Assets.Notes for each asset.
+- Ran `npm run lint` and `npx tsc --noEmit` in repo root; both passed.
+
 ## 2026-01-01 14:03
 - Added initial SQL Server `pm` schema script and apply runner.
 - Added implementation plan document for database, API, jobs, and UI integration.

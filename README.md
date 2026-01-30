@@ -96,6 +96,7 @@ Required environment variables:
 - `AssetStatus` stores the raw Snipe-IT status label name.
 - `AssetOperationalStatus` is normalized for PM decisions: `operational`, `broken`, `archived`.
 - If an asset disappears from Snipe-IT (deleted), the next sync archives it in PM (`IsArchived=1`, `AssetOperationalStatus=archived`) to preserve history.
+ - Asset notes from Snipe-IT are synchronized into `pm.Assets.Notes` and shown on the Asset Detail page as read-only additional information.
 
 ## Evidence attachments
 

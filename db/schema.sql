@@ -173,6 +173,7 @@ BEGIN
     AssetStatus nvarchar(64) NULL,
     AssignedToText nvarchar(256) NULL,
     AssetOperationalStatus nvarchar(16) NOT NULL CONSTRAINT DF_pm_Assets_AssetOperationalStatus DEFAULT (N'operational'),
+    Notes nvarchar(max) NULL,
     IsArchived bit NOT NULL CONSTRAINT DF_pm_Assets_IsArchived DEFAULT (0),
     LastSyncedAt datetime2(0) NULL,
     CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_Assets_CreatedAt DEFAULT (sysutcdatetime()),
@@ -182,6 +183,11 @@ BEGIN
     CONSTRAINT FK_pm_Assets_AssetCategories FOREIGN KEY (CategoryId) REFERENCES pm.AssetCategories(CategoryId),
     CONSTRAINT FK_pm_Assets_Locations FOREIGN KEY (LocationId) REFERENCES pm.Locations(LocationId)
   );
+END;
+
+IF COL_LENGTH(N'pm.Assets', N'Notes') IS NULL
+BEGIN
+  ALTER TABLE pm.Assets ADD Notes nvarchar(max) NULL;
 END;
 
 IF OBJECT_ID(N'pm.Facilities', N'U') IS NULL

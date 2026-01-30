@@ -108,6 +108,7 @@ assetsRouter.get("/", async (req, res) => {
       "  a.AssetStatus AS AssetStatus,",
       "  a.AssetOperationalStatus AS AssetOperationalStatus,",
       "  a.AssignedToText AS AssignedToText,",
+      "  a.Notes AS SnipeNotes,",
       "  a.CategoryId AS CategoryId,",
       "  c.Name AS CategoryName,",
       "  a.LocationId AS LocationId,",
@@ -190,6 +191,7 @@ assetsRouter.get("/", async (req, res) => {
           ? r.AssetOperationalStatus
           : "operational",
       assignedToText: r.AssignedToText,
+      snipeNotes: r.SnipeNotes ?? null,
       category: r.CategoryId
         ? { id: r.CategoryId, name: r.CategoryName ?? null }
         : { id: null, name: null },
@@ -383,6 +385,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
         "  a.AssetStatus AS AssetStatus,",
         "  a.AssetOperationalStatus AS AssetOperationalStatus,",
         "  a.AssignedToText AS AssignedToText,",
+          "  a.Notes AS Notes,",
         "  a.CategoryId AS CategoryId,",
         "  c.Name AS CategoryName,",
         "  a.LocationId AS LocationId,",
@@ -445,6 +448,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
         ? row.AssetOperationalStatus
         : "operational",
     assignedToText: row.AssignedToText,
+    snipeNotes: row.Notes ?? null,
     category: row.CategoryId ? { id: row.CategoryId, name: row.CategoryName ?? null } : null,
     location: row.LocationId ? { id: row.LocationId, name: row.LocationName ?? null } : null,
     pm: {
