@@ -731,7 +731,7 @@ export const TaskDetailDialog = (props: {
 		setBackdateCompletedAt("");
 		setBackdateReason("");
 		setBackdateTechnicianName("");
-  }, [props.open, task?.checklistItems]);
+  }, [props.open, task?.id]);
 
   const uploadTaskEvidenceMutation = useMutation({
     mutationFn: async (file: File) => {

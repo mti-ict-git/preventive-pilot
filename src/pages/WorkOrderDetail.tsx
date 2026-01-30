@@ -323,7 +323,7 @@ const WorkOrderDetail = () => {
     setBackdateCompletedAt("");
     setBackdateReason("");
     setBackdateTechnicianName("");
-  }, [taskDetail?.id, taskDetail?.checklistItems, closePreview]);
+  }, [taskDetail?.id, closePreview]);
 
   const uploadTaskEvidenceMutation = useMutation({
     mutationFn: async (file: File) => {

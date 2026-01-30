@@ -98,7 +98,6 @@
 - Checklist Results in Asset Detail show a condensed per-item list of attached files with quick preview actions.
 - Updated README evidence section accordingly and ran `npm run lint` plus `npx tsc --noEmit`.
 
-## 2026-01-01 14:03
 - Added initial SQL Server `pm` schema script and apply runner.
 - Added implementation plan document for database, API, jobs, and UI integration.
 
@@ -197,6 +196,11 @@
 
 ## 2026-01-03 11:01
 - Added bulk selection actions for Assets visible categories filter (active-only, inactive-only, invert, show all).
+
+## Friday, January 30, 2026 8:19:50 AM
+- Fixed PM Task Detail and Work Order Detail so uploading evidence no longer resets in-progress checklist notes.
+- Confirmed behavior by uploading checklist and task-level files with unsaved notes preserved.
+- Ran `npm run lint` and `npx tsc --noEmit` in repo root; both passed.
 
 ## 2026-01-03 11:45
 - Added category search input to Assets visible categories filter (More Filters).
