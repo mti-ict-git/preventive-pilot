@@ -202,20 +202,27 @@ const WorkOrders = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Asset/Facility</TableHead>
-                    <TableHead>Symptom</TableHead>
-                    <TableHead>Impact</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Reported</TableHead>
-                    <TableHead>Assigned</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-[120px]">ID</TableHead>
+                    <TableHead>Subject</TableHead>
+                    <TableHead className="w-[120px]">Impact</TableHead>
+                    <TableHead className="w-[140px]">Status</TableHead>
+                    <TableHead className="w-[180px]">Reported</TableHead>
+                    <TableHead className="w-[200px]">Assigned</TableHead>
+                    <TableHead className="text-right w-[110px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((w) => {
                     const s = statusBadge(w.status);
-                    const assetLabel = w.asset ? `${w.asset.assetTag ?? ""} ${w.asset.name ?? ""}`.trim() : w.facility ? w.facility.name ?? "—" : "—";
+                    const assetLabel = w.asset
+                      ? `${w.asset.assetTag ?? ""} ${w.asset.name ?? ""}`.trim()
+                      : w.facility
+                      ? w.facility.name ?? "—"
+                      : "—";
+                    const symptom = (w.symptom ?? "").trim();
+                    const subject = symptom
+                      ? `${assetLabel ? `${assetLabel} — ${symptom}` : symptom}`
+                      : assetLabel || "—";
                     const assignedLabel = w.assignedTo.displayName ?? w.assignedTo.roleName ?? "Unassigned";
                     const reported = w.reportedAt ? new Date(w.reportedAt).toLocaleString() : "—";
                     const workOrderPath = `/work-orders/${w.id}`;
@@ -233,33 +240,47 @@ const WorkOrders = () => {
                           }
                         }}
                       >
-                        <TableCell className="font-mono text-sm text-muted-foreground">{w.taskNumber}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {w.asset ? <Server className="w-4 h-4 text-muted-foreground" /> : <MapPin className="w-4 h-4 text-muted-foreground" />}
-                            <span className="text-foreground">{assetLabel || "—"}</span>
+                        <TableCell className="font-mono text-sm text-muted-foreground align-top pt-3">
+                          {w.taskNumber}
+                        </TableCell>
+                        <TableCell className="align-top pt-3">
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {w.asset ? (
+                                <Server className="w-4 h-4 text-muted-foreground shrink-0" />
+                              ) : (
+                                <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                              )}
+                              <span className="text-sm font-medium text-foreground truncate">
+                                {assetLabel || "—"}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate max-w-[420px]">
+                              {symptom || "No symptom provided"}
+                            </p>
                           </div>
                         </TableCell>
-                        <TableCell className="max-w-[300px] truncate">{w.symptom ?? "—"}</TableCell>
-                        <TableCell>
+                        <TableCell className="align-top pt-3">
                           <Badge variant="outline" className={impactBadgeClass(w.impactLevel)}>
                             {w.impactLevel ?? "—"}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="align-top pt-3">
                           <Badge variant="outline" className={s.color}>
                             <s.icon className="w-3 h-3 mr-1" />
                             {s.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{reported}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-muted-foreground align-top pt-3">{reported}</TableCell>
+                        <TableCell className="align-top pt-3">
                           <div className="flex items-center gap-2">
                             <User className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">{assignedLabel}</span>
+                            <span className="text-sm text-muted-foreground truncate max-w-[180px]">
+                              {assignedLabel}
+                            </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right align-top pt-3">
                           <Button
                             variant="outline"
                             size="sm"

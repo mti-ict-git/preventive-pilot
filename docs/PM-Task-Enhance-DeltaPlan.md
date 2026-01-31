@@ -134,4 +134,77 @@ Done when: tests fail if idempotency checks are removed or changed in a way that
   - Calendar and day endpoints do not project new occurrences for broken assets or frozen schedules, while still returning existing tasks.
   - Capacity totals per day align with the configured `EstimatedDurationMinutes` values and default fallbacks.
 
-Done when: the most important behaviors from Phases 2 and 3 are covered by automated tests and protected against regressions.
+137Done when: the most important behaviors from Phases 2 and 3 are covered by automated tests and protected against regressions.
+
+## 6. PM Task Approval Workflow (New)
+
+### 6.1 Extend schema for approval tracking
+- Introduce an approval state for PM tasks so that completion by a technician does not immediately count as fully approved work.
+- Extend `pm.PMTasks` with dedicated approval fields, for example:
+  - `ApprovalStatus` (enum or constrained nvarchar) with values such as `None`, `PendingSupervisor`, `PendingSuperadmin`, `Approved`, `Rejected`.
+  - `TechnicianCompletedAt` and `TechnicianCompletedByUserId` to capture when the technician submits the task for approval.
+  - `SupervisorApprovedAt` and `SupervisorApprovedByUserId` for the supervisor decision.
+  - `SuperadminApprovedAt` and `SuperadminApprovedByUserId` for the superadmin decision.
+- Keep existing lifecycle fields (`Status`, `CompletedAt`, `CompletedByUserId`) but clarify their meaning in relation to approval:
+  - `Status = 'Completed'` reflects technician completion.
+  - `ApprovalStatus` reflects whether the work has been through supervisor and superadmin review.
+
+Done when: the schema can represent technician completion separately from supervisor and superadmin approval, and `db/schema.sql` contains the new columns and constraints.
+
+### 6.2 Add approval workflow endpoints
+- Add dedicated approval endpoints under the existing task routes, for example:
+  - `POST /api/tasks/{taskId}/submit-for-approval`
+    - Marks the task as completed by the technician and sets `ApprovalStatus = 'PendingSupervisor'`.
+    - Records `TechnicianCompletedAt` and `TechnicianCompletedByUserId`.
+  - `POST /api/tasks/{taskId}/approve-by-supervisor`
+    - Requires a supervisor-level role.
+    - Transitions `ApprovalStatus` from `PendingSupervisor` to `PendingSuperadmin`.
+    - Records `SupervisorApprovedAt` and `SupervisorApprovedByUserId`.
+  - `POST /api/tasks/{taskId}/approve-by-superadmin`
+    - Requires a superadmin-level role.
+    - Transitions `ApprovalStatus` from `PendingSuperadmin` to `Approved`.
+    - Records `SuperadminApprovedAt` and `SuperadminApprovedByUserId`.
+  - Optional: `POST /api/tasks/{taskId}/reject-approval`
+    - Allows supervisor or superadmin to reject and send work back to technician with a reason.
+    - Sets `ApprovalStatus = 'Rejected'` and optionally reopens the task for editing.
+- Enforce role-based access control using the existing role model so that only supervisors and superadmins can perform the relevant approval steps.
+- Ensure all endpoints use the shared validation and error response shape with `{ message, code, details[] }`.
+
+Done when: approval endpoints exist, enforce the correct role checks, update approval fields as expected, and are covered in the OpenAPI specification.
+
+### 6.3 Update PM task APIs to surface approval state
+- Extend the task detail and list responses to include approval-related fields:
+  - `approvalStatus`.
+  - `technicianCompletedAt`, `technicianCompletedBy`.
+  - `supervisorApprovedAt`, `supervisorApprovedBy`.
+  - `superadminApprovedAt`, `superadminApprovedBy`.
+- Ensure PM history and reporting queries can filter or aggregate by approval status when needed (for example, counting only tasks with `ApprovalStatus = 'Approved'` for compliance metrics).
+- Keep backward compatibility for existing clients by adding fields rather than changing existing ones.
+
+Done when: tasks APIs expose approval metadata and PM history consumers can distinguish between completed vs fully approved tasks.
+
+### 6.4 Web UI flow for technician → supervisor → superadmin
+- In the Task Detail and Asset/Facility PM history views, introduce explicit steps for the approval workflow:
+  - For technicians:
+    - Provide a "Submit for approval" action instead of immediate final completion.
+    - Show a clear state indicator when a task is awaiting supervisor review.
+  - For supervisors:
+    - Show a queue of tasks in `PendingSupervisor` state with filters on asset, facility, and due date.
+    - Allow approve, reject, or send-back actions with optional notes.
+  - For superadmins:
+    - Show a queue of tasks in `PendingSuperadmin` state.
+    - Allow final approval or rejection with notes.
+- Update the PM history timeline to surface the full approval trail, including who approved at each step and when.
+- Ensure all new UI elements remain usable on desktop and mobile, following the existing responsive layout patterns.
+
+Done when: the web UI supports technician submission and supervisor/superadmin approval actions end-to-end, and users can see the approval status and history for each PM task.
+
+### 6.5 Audit, notifications, and regression coverage
+- Record audit events for key approval transitions, including submit, approve, reject, and send-back actions, with user and timestamp.
+- Optionally trigger notifications when tasks enter `PendingSupervisor` or `PendingSuperadmin` states so approvers are aware of items in their queue.
+- Add tests to cover the approval state machine and role enforcement:
+  - Technicians cannot approve their own tasks.
+  - Supervisors cannot perform superadmin-only approvals.
+  - Invalid transitions (for example, approving from `None` directly to `Approved`) are rejected.
+
+Done when: approval actions are audited, optional notifications are wired into the existing notification engine, and automated tests guard the approval workflow against regressions.

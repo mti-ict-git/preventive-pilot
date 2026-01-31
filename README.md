@@ -134,6 +134,7 @@ Required environment variables:
 - Work Order detail includes reported by/channel and downtime tracking with Close Downtime action.
 - Asset Detail and Facility Detail include a **Report Breakdown** dialog to create a new work order with symptom, impact level, optional failure category/code, optional downtime start, and reported channel.
 - PM Task Detail provides a **Create Work Order** button for cross-flow from PM to CM when issues are found during inspection.
+- Work Orders behave like a lightweight ticket queue: each row shows a Subject combining asset or facility context with the reported symptom, and Work Order detail adds a Resolution section summarizing completed or cancelled work and notes.
 
 ### Field-Ready mobile
 

@@ -895,3 +895,8 @@
 - Mobile: reverted HomePage to original task fetch scope to avoid altering Home counters.
 - Mobile: added scope toggle on Tasks page (Mine vs All) and defaulted to All to match Home counters; range queries respect scope.
 - Validation: ran mobile lint (warnings only) and project typecheck; both pass.
+
+## Sat Jan 31 19:58:01 WITA 2026
+- Web: updated Work Orders list to use a ticket-style Subject column combining asset/facility context with the reported symptom.
+- Web: updated Work Order detail header to show a ticket-style subject line with a separate ID badge and added a Resolution card summarizing status, timestamps, and resolution notes derived from checklist results.
+- Validation: ran `npm run lint` (ESLintIgnoreWarning about `.eslintignore`) and `npx tsc --noEmit` in the repo root; both exited successfully.

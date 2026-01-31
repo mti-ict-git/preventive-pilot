@@ -20,10 +20,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { apiAddTaskEvidence, apiAssignWorkOrder, ApiError, apiCancelWorkOrder, apiCloseDowntime, apiCompleteWorkOrder, apiDeleteChecklistEvidence, apiDeleteEvidence, apiDownloadChecklistEvidence, apiDownloadEvidence, apiGetLookups, apiGetTask, apiGetWorkOrder, apiListUsers, apiPauseWorkOrder, apiResumeWorkOrder, apiStartWorkOrder, apiUploadTaskChecklistEvidenceFile, apiUploadTaskEvidenceFile, type CompleteTaskChecklistResultInput, type LookupsResponse, type UserSummary } from "@/lib/api";
+import { apiAddTaskEvidence, apiAssignWorkOrder, ApiError, apiCancelWorkOrder, apiCloseDowntime, apiCompleteWorkOrder, apiDeleteEvidence, apiDownloadEvidence, apiGetLookups, apiGetTask, apiGetWorkOrder, apiListUsers, apiPauseWorkOrder, apiResumeWorkOrder, apiStartWorkOrder, apiUploadTaskEvidenceFile, type LookupsResponse, type UserSummary } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { isManager } from "@/lib/auth";
 
@@ -255,38 +254,18 @@ const WorkOrderDetail = () => {
   const canComplete = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
   const canCloseDowntime = Boolean(workOrder?.downtimeStartedAt && !workOrder?.downtimeEndedAt);
 
-  const getOutcomeOptions = (requiresPassFail: boolean) => {
-    if (requiresPassFail) {
-      return [
-        { value: "0", label: "Skip" },
-        { value: "1", label: "Pass" },
-        { value: "2", label: "Fail" },
-      ];
-    }
-    return [
-      { value: "0", label: "Skip" },
-      { value: "1", label: "Done" },
-    ];
-  };
-
   const [forceCompleted, setForceCompleted] = useState(false);
-  const [checklistDraft, setChecklistDraft] = useState<Record<string, { outcome: 0 | 1 | 2 | null; notes: string }>>(
-    {},
-  );
   const [evidenceUri, setEvidenceUri] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string | null>(null);
   const [previewContentType, setPreviewContentType] = useState<string | null>(null);
-  const [previewKind, setPreviewKind] = useState<"task" | "checklist">("task");
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const [pendingChecklistItemId, setPendingChecklistItemId] = useState<string | null>(null);
   const [backdateCompletedAt, setBackdateCompletedAt] = useState("");
   const [backdateReason, setBackdateReason] = useState("");
   const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
 
   const taskFileInputRef = useRef<HTMLInputElement | null>(null);
-  const checklistFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const closePreview = useCallback(() => {
     setPreviewOpen(false);
@@ -306,18 +285,8 @@ const WorkOrderDetail = () => {
 
   useEffect(() => {
     if (!taskDetail) return;
-    const next: Record<string, { outcome: 0 | 1 | 2 | null; notes: string }> = {};
-    for (const item of taskDetail.checklistItems ?? []) {
-      if (!item.isActive) continue;
-      next[item.id] = {
-        outcome: item.result ? item.result.outcome : null,
-        notes: item.result?.notes ?? "",
-      };
-    }
-    setChecklistDraft(next);
     setEvidenceUri("");
     closePreview();
-    setPendingChecklistItemId(null);
     setForceCompleted(false);
     setBackdateMode(false);
     setBackdateCompletedAt("");
@@ -340,27 +309,8 @@ const WorkOrderDetail = () => {
     },
   });
 
-  const uploadChecklistEvidenceMutation = useMutation({
-    mutationFn: async (input: { templateChecklistItemId: string; file: File }) => {
-      if (!taskId) throw new Error("No work order selected");
-      if (input.file.size > 50 * 1024 * 1024) throw new Error("File too large (max 50MB)");
-      return apiUploadTaskChecklistEvidenceFile({
-        taskId,
-        templateChecklistItemId: input.templateChecklistItemId,
-        file: input.file,
-      });
-    },
-    onSuccess: async () => {
-      await taskQuery.refetch();
-      toast({ title: "File uploaded" });
-    },
-    onError: (err: unknown) => {
-      toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Request failed", variant: "destructive" });
-    },
-  });
-
   const openEvidencePreview = useCallback(
-    async (input: { kind: "task" | "checklist"; id: string; uri: string; fileName: string | null; contentType: string | null }) => {
+    async (input: { id: string; uri: string; fileName: string | null; contentType: string | null }) => {
       const isInternal = input.uri === "imported" || input.uri === "stored" || input.uri === "uploaded";
       if (!isInternal) {
         const target = input.uri.trim();
@@ -368,12 +318,8 @@ const WorkOrderDetail = () => {
         return;
       }
 
-      const downloaded =
-        input.kind === "task"
-          ? await apiDownloadEvidence({ evidenceId: input.id })
-          : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id });
+      const downloaded = await apiDownloadEvidence({ evidenceId: input.id });
       const url = URL.createObjectURL(downloaded.blob);
-      setPreviewKind(input.kind);
       setPreviewId(input.id);
       setPreviewUrl(url);
       setPreviewFileName(downloaded.fileName ?? input.fileName);
@@ -384,11 +330,8 @@ const WorkOrderDetail = () => {
   );
 
   const downloadEvidence = useCallback(
-    async (input: { kind: "task" | "checklist"; id: string }) => {
-      const downloaded =
-        input.kind === "task"
-          ? await apiDownloadEvidence({ evidenceId: input.id, download: true })
-          : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id, download: true });
+    async (input: { id: string }) => {
+      const downloaded = await apiDownloadEvidence({ evidenceId: input.id, download: true });
       const url = URL.createObjectURL(downloaded.blob);
       const a = document.createElement("a");
       a.href = url;
@@ -402,9 +345,8 @@ const WorkOrderDetail = () => {
   );
 
   const deleteEvidenceMutation = useMutation({
-    mutationFn: async (input: { kind: "task" | "checklist"; id: string }) => {
-      if (input.kind === "task") return apiDeleteEvidence({ evidenceId: input.id });
-      return apiDeleteChecklistEvidence({ checklistEvidenceId: input.id });
+    mutationFn: async (input: { id: string }) => {
+      return apiDeleteEvidence({ evidenceId: input.id });
     },
     onSuccess: async () => {
       await taskQuery.refetch();
@@ -419,44 +361,6 @@ const WorkOrderDetail = () => {
   const completeMutation = useMutation({
     mutationFn: async () => {
       if (!taskId) throw new Error("No work order selected");
-      const items = taskDetail?.checklistItems ?? [];
-      const results: CompleteTaskChecklistResultInput[] = [];
-      for (const item of items) {
-        if (!item.isActive) continue;
-        const draft = checklistDraft[item.id];
-        const outcome = draft?.outcome ?? null;
-        if (outcome === null) {
-          if (item.isMandatory) {
-            throw new Error("Missing outcome for a mandatory checklist item");
-          }
-          continue;
-        }
-
-        if (!item.requiresPassFail && outcome === 2) {
-          throw new Error("Invalid outcome for this checklist item");
-        }
-
-        if (item.isMandatory && outcome === 0) {
-          throw new Error("Mandatory checklist items cannot be skipped");
-        }
-
-        const notesValue = draft?.notes ?? "";
-        const notesRequired = item.requiresNotes || item.isMandatory;
-        if (notesRequired && outcome !== 0 && notesValue.trim().length === 0) {
-          throw new Error("Notes are required for this checklist item");
-        }
-
-        if (item.enableAttachment && item.requiresAttachment && outcome !== 0 && item.evidence.length === 0) {
-          throw new Error("Attachment is required for this checklist item");
-        }
-
-        results.push({
-          templateChecklistItemId: item.id,
-          outcome,
-          notes: notesValue.trim() ? notesValue.trim() : null,
-        });
-      }
-
       const trimmedReason = backdateReason.trim();
       const completedAtValue = backdateCompletedAt.trim();
 
@@ -474,7 +378,7 @@ const WorkOrderDetail = () => {
 
       return apiCompleteWorkOrder({
         taskId,
-        checklistResults: results,
+        checklistResults: [],
         forceCompleted,
         completedAt: backdateMode ? new Date(completedAtValue).toISOString() : undefined,
         backdateReason: backdateMode ? trimmedReason : undefined,
@@ -513,25 +417,16 @@ const WorkOrderDetail = () => {
     },
   });
 
-  const checklistTotal = useMemo(() => {
-    const items = taskDetail?.checklistItems ?? [];
-    return items.filter((i) => i.isActive).length;
-  }, [taskDetail?.checklistItems]);
-
-  const checklistCompleted = useMemo(() => {
-    const items = taskDetail?.checklistItems ?? [];
-    return items.filter((i) => {
-      if (!i.isActive) return false;
-      const draft = checklistDraft[i.id];
-      return draft !== undefined && draft.outcome !== null;
-    }).length;
-  }, [taskDetail?.checklistItems, checklistDraft]);
-
-  const checklistProgress = checklistTotal > 0 ? Math.round((checklistCompleted / checklistTotal) * 100) : 0;
-
   const assetLabel = workOrder?.asset
     ? `${workOrder.asset.assetTag ?? ""} ${workOrder.asset.name ?? ""}`.trim()
     : workOrder?.facility?.name ?? "—";
+
+  const subject = useMemo(() => {
+    if (!workOrder) return assetLabel;
+    const symptom = (workOrder.symptom ?? "").trim();
+    if (!symptom) return assetLabel;
+    return assetLabel ? `${assetLabel} — ${symptom}` : symptom;
+  }, [assetLabel, workOrder]);
 
   const status = workOrder?.status ? statusBadge(workOrder.status) : null;
   const assignedLabel = workOrder?.assignedTo.displayName ?? workOrder?.assignedTo.roleName ?? "Unassigned";
@@ -550,16 +445,19 @@ const WorkOrderDetail = () => {
       <Header title="Work Order Detail" subtitle="Corrective maintenance work orders" />
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-4">
+            <div className="flex items-start gap-4">
             <Button variant="outline" className="gap-2" onClick={() => navigate("/work-orders")}
             >
               <ArrowLeft className="w-4 h-4" />
               Back
             </Button>
             <div className="min-w-0">
-              <h2 className="text-2xl font-semibold text-foreground">
-                {workOrder?.taskNumber ?? "Work Order"}
-              </h2>
+                <h2 className="text-2xl font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                  <span className="truncate max-w-full">{subject || "Work Order"}</span>
+                  <Badge variant="outline" className="font-mono text-xs px-2 py-0.5">
+                    {workOrder?.taskNumber ?? "WO"}
+                  </Badge>
+                </h2>
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1 flex-wrap">
                 {workOrder?.asset ? <Server className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
                 {workOrder?.asset ? (
@@ -738,21 +636,57 @@ const WorkOrderDetail = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Checklist Progress</CardTitle>
+                <CardTitle className="text-base">Resolution</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Checklist Completion</p>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 md:col-span-4">
+                    <p className="text-xs text-muted-foreground">Resolution Status</p>
                     <p className="text-sm text-foreground mt-1">
-                      {checklistCompleted}/{checklistTotal}
+                      {workOrder.status === "completed"
+                        ? "Resolved"
+                        : workOrder.status === "cancelled"
+                        ? "Cancelled"
+                        : "Unresolved"}
                     </p>
                   </div>
-                  <div className="w-full md:w-64">
-                    <Progress value={checklistProgress} className="h-2" />
+                  <div className="col-span-12 md:col-span-4">
+                    <p className="text-xs text-muted-foreground">Resolved At</p>
+                    <p className="text-sm text-foreground mt-1">
+                      {formatDateTime(workOrder.completedAt ?? workOrder.cancelledAt)}
+                    </p>
+                  </div>
+                  <div className="col-span-12 md:col-span-4">
+                    <p className="text-xs text-muted-foreground">
+                      {workOrder.status === "cancelled" ? "Cancelled By" : "Completed By"}
+                    </p>
+                    <p className="text-sm text-foreground mt-1">
+                      {workOrder.status === "completed"
+                        ? workOrder.completedBy?.displayName ?? workOrder.completedBy?.username ?? "—"
+                        : workOrder.status === "cancelled"
+                        ? workOrder.cancelledBy?.displayName ?? workOrder.cancelledBy?.username ?? "—"
+                        : "—"}
+                    </p>
                   </div>
                 </div>
-                <div className="mt-4 flex flex-col gap-3">
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Resolution Notes</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Resolution is summarized here by status, timestamps, and who completed or cancelled
+                    the work. A dedicated free-text resolution field can be added in a later backend
+                    phase if needed.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Completion Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Checkbox
@@ -840,166 +774,9 @@ const WorkOrderDetail = () => {
               </CardContent>
             </Card>
 
-            <div>
-              <h3 className="text-sm font-semibold text-foreground mb-2">Checklist</h3>
-              {taskDetail.checklistItems.filter((i) => i.isActive).length === 0 ? (
-                <div className="text-sm text-muted-foreground">No checklist items for this work order.</div>
-              ) : (
-                <div className="space-y-2">
-                  {taskDetail.checklistItems
-                    .filter((i) => i.isActive)
-                    .map((item) => (
-                      <div key={item.id} className="glass rounded-lg p-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <p className="text-sm text-foreground">{item.itemText}</p>
-                            <div className="flex items-center gap-3 mt-1 flex-wrap">
-                              {item.isMandatory ? (
-                                <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
-                                  Mandatory
-                                </Badge>
-                              ) : null}
-                              {item.requiresPassFail ? (
-                                <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">
-                                  Pass/Fail
-                                </Badge>
-                              ) : null}
-                              {item.requiresNotes ? (
-                                <Badge variant="outline" className="bg-accent/20 text-accent border-accent/30">
-                                  Notes
-                                </Badge>
-                              ) : null}
-                              {item.enableAttachment && item.requiresAttachment ? (
-                                <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">
-                                  Attachment Required
-                                </Badge>
-                              ) : null}
-                              {item.enableAttachment && !item.requiresAttachment ? (
-                                <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">
-                                  Attachment Optional
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="w-48">
-                            <p className="text-xs text-muted-foreground">Outcome</p>
-                            <Select
-                              value={
-                                checklistDraft[item.id]?.outcome === null
-                                  ? "__none__"
-                                  : String(checklistDraft[item.id]?.outcome)
-                              }
-                              onValueChange={(v) => {
-                                const nextOutcome = v === "__none__" ? null : (Number(v) as 0 | 1 | 2);
-                                setChecklistDraft((prev) => ({
-                                  ...prev,
-                                  [item.id]: { outcome: nextOutcome, notes: prev[item.id]?.notes ?? "" },
-                                }));
-                              }}
-                            >
-                              <SelectTrigger className="mt-1 bg-muted/50">
-                                <SelectValue placeholder="Select" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">None</SelectItem>
-                                {getOutcomeOptions(item.requiresPassFail).map((opt) => (
-                                  <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-xs text-muted-foreground">Notes</p>
-                          <Input
-                            value={checklistDraft[item.id]?.notes ?? ""}
-                            onChange={(e) => {
-                              const nextNotes = e.target.value;
-                              setChecklistDraft((prev) => ({
-                                ...prev,
-                                [item.id]: { outcome: prev[item.id]?.outcome ?? null, notes: nextNotes },
-                              }));
-                            }}
-                            className="mt-1 bg-muted/50"
-                          />
-                        </div>
-                        {item.enableAttachment ? (
-                          <div className="mt-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-xs text-muted-foreground">Attachments</p>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={uploadChecklistEvidenceMutation.isPending}
-                                onClick={() => {
-                                  setPendingChecklistItemId(item.id);
-                                  checklistFileInputRef.current?.click();
-                                }}
-                              >
-                                Attach file
-                              </Button>
-                            </div>
-                            {item.evidence.length === 0 ? (
-                              <div className="text-xs text-muted-foreground mt-2">No attachments.</div>
-                            ) : (
-                              <div className="space-y-2 mt-2">
-                                {item.evidence.map((e) => (
-                                  <div key={e.id} className="rounded-md border border-border bg-muted/30 p-2 flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="text-xs text-foreground truncate">{e.fileName ?? e.uri}</div>
-                                      <div className="text-[11px] text-muted-foreground truncate">
-                                        {e.uploadedBy?.displayName ?? e.uploadedBy?.username ?? ""}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          openEvidencePreview({
-                                            kind: "checklist",
-                                            id: e.id,
-                                            uri: e.uri,
-                                            fileName: e.fileName,
-                                            contentType: e.contentType,
-                                          })
-                                        }
-                                      >
-                                        Preview
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => downloadEvidence({ kind: "checklist", id: e.id })}
-                                      >
-                                        Download
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        disabled={deleteEvidenceMutation.isPending}
-                                        onClick={() => deleteEvidenceMutation.mutate({ kind: "checklist", id: e.id })}
-                                      >
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                </div>
-              )}
-
-              <div className="mt-4 flex items-center gap-2">
-                <Checkbox checked={forceCompleted} onCheckedChange={(v) => setForceCompleted(v === true)} />
-                <span className="text-sm text-muted-foreground">Force complete</span>
-              </div>
+            <div className="mt-4 flex items-center gap-2">
+              <Checkbox checked={forceCompleted} onCheckedChange={(v) => setForceCompleted(v === true)} />
+              <span className="text-sm text-muted-foreground">Force complete</span>
             </div>
 
             <div>
@@ -1054,7 +831,6 @@ const WorkOrderDetail = () => {
                           variant="outline"
                           onClick={() =>
                             openEvidencePreview({
-                              kind: "task",
                               id: e.id,
                               uri: e.uri,
                               fileName: e.fileName,
@@ -1064,14 +840,14 @@ const WorkOrderDetail = () => {
                         >
                           Preview
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => downloadEvidence({ kind: "task", id: e.id })}>
+                        <Button size="sm" variant="outline" onClick={() => downloadEvidence({ id: e.id })}>
                           Download
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
                           disabled={deleteEvidenceMutation.isPending}
-                          onClick={() => deleteEvidenceMutation.mutate({ kind: "task", id: e.id })}
+                          onClick={() => deleteEvidenceMutation.mutate({ id: e.id })}
                         >
                           Delete
                         </Button>
@@ -1085,9 +861,7 @@ const WorkOrderDetail = () => {
             <Dialog open={previewOpen} onOpenChange={(o) => (o ? setPreviewOpen(true) : closePreview())}>
               <DialogContent className="max-w-4xl">
                 <DialogHeader>
-                  <DialogTitle className="truncate">
-                    {previewFileName ?? (previewKind === "task" ? "Evidence" : "Checklist attachment")}
-                  </DialogTitle>
+                  <DialogTitle className="truncate">{previewFileName ?? "Evidence"}</DialogTitle>
                 </DialogHeader>
                 {previewUrl ? (
                   (previewContentType ?? "").startsWith("application/pdf") ||
@@ -1125,7 +899,7 @@ const WorkOrderDetail = () => {
                     variant="destructive"
                     onClick={() => {
                       if (!previewId) return;
-                      deleteEvidenceMutation.mutate({ kind: previewKind, id: previewId });
+                      deleteEvidenceMutation.mutate({ id: previewId });
                     }}
                     disabled={!previewId || deleteEvidenceMutation.isPending}
                   >
@@ -1134,7 +908,7 @@ const WorkOrderDetail = () => {
                   <Button
                     onClick={() => {
                       if (!previewId) return;
-                      void downloadEvidence({ kind: previewKind, id: previewId });
+                      void downloadEvidence({ id: previewId });
                     }}
                     disabled={!previewId}
                   >
@@ -1153,19 +927,6 @@ const WorkOrderDetail = () => {
                 e.target.value = "";
                 if (!file) return;
                 uploadTaskEvidenceMutation.mutate(file);
-              }}
-            />
-            <input
-              ref={checklistFileInputRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
-                const targetItemId = pendingChecklistItemId;
-                e.target.value = "";
-                setPendingChecklistItemId(null);
-                if (!file || !targetItemId) return;
-                uploadChecklistEvidenceMutation.mutate({ templateChecklistItemId: targetItemId, file });
               }}
             />
           </>
