@@ -18,13 +18,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { apiAddTaskEvidence, apiAssignWorkOrder, ApiError, apiCancelWorkOrder, apiCloseDowntime, apiCompleteWorkOrder, apiDeleteEvidence, apiDownloadEvidence, apiGetLookups, apiGetTask, apiGetWorkOrder, apiListUsers, apiPauseWorkOrder, apiResumeWorkOrder, apiStartWorkOrder, apiUploadTaskEvidenceFile, type LookupsResponse, type UserSummary } from "@/lib/api";
+import { apiAddTaskEvidence, apiAssignWorkOrder, ApiError, apiCancelWorkOrder, apiCloseDowntime, apiCompleteWorkOrder, apiDeleteEvidence, apiDownloadEvidence, apiGetLookups, apiGetTask, apiGetWorkOrder, apiListUsers, apiPauseWorkOrder, apiResumeWorkOrder, apiStartWorkOrder, apiUpdateWorkOrderResolution, apiUploadTaskEvidenceFile, apiDeleteWorkOrder, type LookupsResponse, type UserSummary } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { isManager } from "@/lib/auth";
+import { isManager, isSuperadmin } from "@/lib/auth";
 
 const impactBadgeClass = (level: string | null): string => {
   if (!level) return "bg-muted/40 text-muted-foreground border-muted/60";
@@ -78,6 +80,7 @@ const WorkOrderDetail = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const managerUser = isManager();
+  const superadminUser = isSuperadmin();
 
   const workOrderQuery = useQuery({
     queryKey: ["work-order", taskId],
@@ -99,6 +102,7 @@ const WorkOrderDetail = () => {
   const [assignUserId, setAssignUserId] = useState<string>("");
   const [assignRoleId, setAssignRoleId] = useState<string>("");
   const [backdateMode, setBackdateMode] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const lookupsQuery = useQuery<LookupsResponse>({
     queryKey: ["lookups"],
@@ -256,6 +260,7 @@ const WorkOrderDetail = () => {
 
   const [forceCompleted, setForceCompleted] = useState(false);
   const [evidenceUri, setEvidenceUri] = useState("");
+  const [resolutionNotesDraft, setResolutionNotesDraft] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string | null>(null);
@@ -294,6 +299,11 @@ const WorkOrderDetail = () => {
     setBackdateTechnicianName("");
   }, [taskDetail?.id, closePreview]);
 
+  useEffect(() => {
+    if (!workOrder) return;
+    setResolutionNotesDraft(workOrder.resolutionNotes ?? "");
+  }, [workOrder?.id]);
+
   const uploadTaskEvidenceMutation = useMutation({
     mutationFn: async (file: File) => {
       if (!taskId) throw new Error("No work order selected");
@@ -329,6 +339,22 @@ const WorkOrderDetail = () => {
     [],
   );
 
+  const deleteWorkOrderMutation = useMutation({
+    mutationFn: async () => {
+      if (!taskId) throw new Error("No work order selected");
+      return apiDeleteWorkOrder(taskId);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["work-orders"] });
+      toast({ title: "Work order deleted" });
+      navigate("/work-orders");
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Delete failed";
+      toast({ title: "Delete failed", description: message, variant: "destructive" });
+    },
+  });
+
   const downloadEvidence = useCallback(
     async (input: { id: string }) => {
       const downloaded = await apiDownloadEvidence({ evidenceId: input.id, download: true });
@@ -355,6 +381,20 @@ const WorkOrderDetail = () => {
     },
     onError: (err: unknown) => {
       toast({ title: "Delete failed", description: err instanceof Error ? err.message : "Request failed", variant: "destructive" });
+    },
+  });
+
+  const saveResolutionMutation = useMutation({
+    mutationFn: async () => {
+      if (!taskId) throw new Error("No work order selected");
+      return apiUpdateWorkOrderResolution({ taskId, resolutionNotes: resolutionNotesDraft });
+    },
+    onSuccess: async () => {
+      await workOrderQuery.refetch();
+      toast({ title: "Resolution updated" });
+    },
+    onError: (err: unknown) => {
+      toast({ title: "Failed to update", description: err instanceof Error ? err.message : "Request failed", variant: "destructive" });
     },
   });
 
@@ -510,6 +550,15 @@ const WorkOrderDetail = () => {
             <Button variant="outline" disabled={!workOrder || completeMutation.isPending || !canComplete} onClick={() => completeMutation.mutate()}>
               Complete
             </Button>
+            {superadminUser ? (
+              <Button
+                variant="destructive"
+                disabled={!workOrder || deleteWorkOrderMutation.isPending}
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -672,11 +721,21 @@ const WorkOrderDetail = () => {
 
                 <div>
                   <p className="text-xs text-muted-foreground">Resolution Notes</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Resolution is summarized here by status, timestamps, and who completed or cancelled
-                    the work. A dedicated free-text resolution field can be added in a later backend
-                    phase if needed.
-                  </p>
+                  <Textarea
+                    value={resolutionNotesDraft}
+                    onChange={(e) => setResolutionNotesDraft(e.target.value)}
+                    className="mt-1 bg-muted/50"
+                    placeholder="Add resolution details (free text)"
+                  />
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={saveResolutionMutation.isPending || !workOrder}
+                      onClick={() => saveResolutionMutation.mutate()}
+                    >
+                      {saveResolutionMutation.isPending ? "Saving…" : "Save resolution"}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1019,6 +1078,25 @@ const WorkOrderDetail = () => {
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this work order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the work order and its evidence. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteWorkOrderMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteWorkOrderMutation.mutate()}
+              disabled={deleteWorkOrderMutation.isPending}
+            >
+              Confirm Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

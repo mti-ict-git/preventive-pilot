@@ -3,7 +3,10 @@ import { z } from "zod";
 import sql from "mssql";
 import { getDb } from "../db/mssql.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { requireAnyRole } from "../middleware/requireRole.js";
+import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole.js";
+import fs from "node:fs";
+import path from "node:path";
+import { env } from "../config/env.js";
 
 const managerRoles = ["Superadmin", "Admin", "Supervisor"] as const;
 const requireManager = requireAnyRole(managerRoles);
@@ -11,6 +14,14 @@ const requireManager = requireAnyRole(managerRoles);
 type TaskAccessRow = {
   AssignedToUserId: string | null;
   AssignedToRoleName: string | null;
+};
+
+const resolveStoredFileAbs = (storageRootAbs: string, storagePath: string): string | null => {
+  const root = path.resolve(storageRootAbs);
+  const resolved = path.resolve(root, storagePath);
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (!resolved.startsWith(prefix)) return null;
+  return resolved;
 };
 
 const canModifyTask = (userId: string, userRoles: readonly string[], task: TaskAccessRow): boolean => {
@@ -473,7 +484,8 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
         "  t.ReportedChannel AS ReportedChannel,",
         "  t.ReportedByUserId AS ReportedByUserId,",
         "  rby.Username AS ReportedByUsername,",
-        "  rby.DisplayName AS ReportedByDisplayName",
+        "  rby.DisplayName AS ReportedByDisplayName,",
+        "  t.ResolutionNotes AS ResolutionNotes",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
         "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
@@ -541,6 +553,7 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
     cancelledBy: row.CancelledByUserId
       ? { userId: row.CancelledByUserId, username: row.CancelledByUsername, displayName: row.CancelledByDisplayName }
       : null,
+    resolutionNotes: row.ResolutionNotes ?? null,
   });
 });
 
@@ -780,6 +793,105 @@ workOrdersRouter.post("/:taskId/resume", async (req, res) => {
   res.json({ ok: true });
 });
 
+workOrdersRouter.delete("/:taskId", requireSuperadmin, async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+
+  const storagePathsResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT StoragePath",
+        "FROM pm.PMTaskEvidence",
+        "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
+        "UNION ALL",
+        "SELECT StoragePath",
+        "FROM pm.PMTaskChecklistEvidence",
+        "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
+      ].join("\n"),
+    );
+
+  const storagePathRows = storagePathsResult.recordset as Array<Record<string, unknown>>;
+  const storagePaths: string[] = storagePathRows
+    .map((r) => (typeof r.StoragePath === "string" ? r.StoragePath : null))
+    .filter((v): v is string => v !== null);
+
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const taskInfoResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.TaskId AS TaskId,",
+          "  t.AssetId AS AssetId,",
+          "  t.TaskNumber AS TaskNumber",
+          "FROM pm.PMTasks t",
+          "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'CM'",
+        ].join("\n"),
+      );
+
+    const taskRow = taskInfoResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!taskRow) {
+      await tx.rollback();
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "DELETE FROM pm.PMTaskEvidence WHERE TaskId = @taskId;",
+          "DELETE FROM pm.PMTaskChecklistEvidence WHERE TaskId = @taskId;",
+          "DELETE FROM pm.PMTaskChecklistResults WHERE TaskId = @taskId;",
+          "DELETE FROM pm.PMTasks WHERE TaskId = @taskId;",
+        ].join("\n"),
+      );
+
+    await tx.commit();
+
+    const assetId = typeof taskRow.AssetId === "string" ? (taskRow.AssetId as string) : null;
+    const taskNumber = typeof taskRow.TaskNumber === "string" ? (taskRow.TaskNumber as string) : null;
+
+    await writeAuditLog({
+      actorUserId: req.user.sub,
+      action: "work_order.delete",
+      entityType: "task",
+      entityId: taskId,
+      metadata: {
+        assetId,
+        taskNumber,
+        reason: "manual-delete",
+      },
+      ipAddress: typeof req.ip === "string" ? req.ip : null,
+      userAgent: req.get("user-agent") ?? null,
+    });
+
+    if (env.EVIDENCE_STORAGE_ROOT && storagePaths.length > 0) {
+      for (const storagePath of storagePaths) {
+        const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
+        if (!resolved) continue;
+        await fs.promises.unlink(resolved).catch(() => undefined);
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
+});
+
 const OutcomeSchema = z.union([z.literal(0), z.literal(1), z.literal(2)]);
 const ChecklistResultSchema = z.object({
   templateChecklistItemId: z.string().uuid(),
@@ -792,6 +904,10 @@ const CompleteSchema = z.object({
   completedAt: z.string().datetime().optional(),
   backdateReason: z.string().max(1024).optional(),
   technicianName: z.string().max(256).optional(),
+});
+
+const WorkOrderResolutionSchema = z.object({
+  resolutionNotes: z.string().max(2048).optional(),
 });
 
 const bitToBoolean = (value: unknown): boolean => value === true || value === 1;
@@ -1132,5 +1248,97 @@ workOrdersRouter.post("/:taskId/close-downtime", async (req, res) => {
         "WHERE TaskId = @taskId AND MaintenanceType = N'CM'",
       ].join("\n"),
     );
+  res.json({ ok: true });
+});
+
+workOrdersRouter.post("/:taskId/resolution", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const parsed = WorkOrderResolutionSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const access = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'CM'",
+      ].join("\n"),
+    );
+  const row = access.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  const accessRow: TaskAccessRow = {
+    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
+    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
+  };
+  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
+  const beforeResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  ResolutionNotes",
+        "FROM pm.PMTasks",
+        "WHERE TaskId = @taskId",
+      ].join("\n"),
+    );
+  const beforeRow = beforeResult.recordset[0] as { ResolutionNotes?: string | null } | undefined;
+
+  const trimmed = (parsed.data.resolutionNotes ?? "").trim();
+  const notesValue = trimmed.length > 0 ? trimmed : null;
+
+  const updated = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .input("notes", sql.NVarChar(2048), notesValue)
+    .query(
+      [
+        "UPDATE pm.PMTasks",
+        "SET",
+        "  ResolutionNotes = @notes,",
+        "  DataEntryAt = COALESCE(DataEntryAt, sysutcdatetime())",
+        "WHERE TaskId = @taskId AND MaintenanceType = N'CM'",
+      ].join("\n"),
+    );
+
+  if (updated.rowsAffected[0] === 0) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  await writeAuditLog({
+    actorUserId: req.user.sub,
+    action: "work_order.update_resolution",
+    entityType: "task",
+    entityId: taskId,
+    metadata: {
+      before: { resolutionNotes: beforeRow?.ResolutionNotes ?? null },
+      after: { resolutionNotes: notesValue },
+    },
+    ipAddress: typeof req.ip === "string" ? req.ip : null,
+    userAgent: req.get("user-agent") ?? null,
+  });
+
   res.json({ ok: true });
 });

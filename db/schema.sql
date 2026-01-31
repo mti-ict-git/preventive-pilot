@@ -572,6 +572,11 @@ BEGIN
   ALTER TABLE pm.PMTasks ADD TechnicianName nvarchar(256) NULL;
 END;
 
+IF COL_LENGTH(N'pm.PMTasks', N'ResolutionNotes') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD ResolutionNotes nvarchar(2048) NULL;
+END;
+
 IF COL_LENGTH(N'pm.PMTasks', N'DataEntryAt') IS NULL
 BEGIN
   ALTER TABLE pm.PMTasks

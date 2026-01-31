@@ -697,6 +697,7 @@ export type WorkOrderDetail = {
   };
   completedBy: TaskUserRef | null;
   cancelledBy: TaskUserRef | null;
+  resolutionNotes: string | null;
 };
 
 export const apiGetWorkOrder = async (taskId: string): Promise<WorkOrderDetail> => {
@@ -743,6 +744,18 @@ export const apiCompleteWorkOrder = async (input: {
 }): Promise<{ ok: true }> => {
   const { taskId, ...body } = input;
   return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/complete`, { method: "POST", body });
+};
+
+export const apiUpdateWorkOrderResolution = async (input: {
+  taskId: string;
+  resolutionNotes: string;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/resolution`, { method: "POST", body });
+};
+
+export const apiDeleteWorkOrder = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}`, { method: "DELETE" });
 };
 
 export type DownloadEvidenceResponse = {

@@ -1,5 +1,27 @@
 # Journal
 
+## 2026-01-31 13:18:10 UTC
+- CM Work Orders: added superadmin-only delete endpoint (DELETE /api/work-orders/:taskId).
+- Deletes DB rows and unlinks stored evidence files when configured.
+- Web: added Delete button on Work Order Detail for superadmins with confirmation dialog.
+- Wired frontend API client (apiDeleteWorkOrder) and cache invalidation.
+- Ran `npx tsc --noEmit` and `npm run lint` after changes.
+
+## 2026-01-31 13:08:38 UTC
+- Asset Detail: added CM History tab and CM incident count.
+- Implemented cmHistoryQuery using apiListWorkOrders filtered by asset and status.
+- Restricted PM History to PM-only by passing maintenanceType="PM".
+- Updated stats grid to include CM Incidents card.
+- Ran `npx tsc --noEmit` and `npm run lint` after changes.
+
+## 2026-01-31 20:36:41 WITA
+- CM Work Orders: removed checklist UI/logic from Work Order detail.
+- Added ResolutionNotes column to PMTasks schema.
+- Implemented backend endpoint POST /api/work-orders/:taskId/resolution to save free-text notes.
+- Extended work order detail API to return resolutionNotes.
+- Updated web UI Resolution card with editable Textarea and Save action.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
 ## Friday, January 23, 2026 5:18:16 PM
 - Web: added Replace buttons for checklist attachments and task evidence in Task Detail.
 - Renamed attachment action label from Preview to View for clarity.
@@ -176,6 +198,10 @@
 - Updated backend OpenAPI to document pause/cancel actions
 - Added frontend API functions: apiPauseTask, apiCancelTask
 - Added Pause and Cancel buttons to Task Detail dialog on web
+## 2026-01-31 13:21:56 UTC
+- Verified CM work order delete feature (backend + web).
+- Confirmed superadmin-only delete button with confirmation dialog in Work Order Detail.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
 - Ran lint and typecheck; addressed any arising issues
 2026-01-07 06:30:12 UTC
 - Added backend endpoint: POST /api/tasks/{taskId}/resume

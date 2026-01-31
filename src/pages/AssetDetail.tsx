@@ -62,6 +62,7 @@ import {
   apiGetTask,
   apiListBlackoutWindows,
   apiListTasks,
+    apiListWorkOrders,
   apiListTemplates,
   apiPatchAssetPm,
   apiCreatePmNowTask,
@@ -71,6 +72,7 @@ import {
   type TaskEvidence,
   type TaskDetail,
   type TaskListItem,
+    type WorkOrderListItem,
   type TemplateSummary,
 } from "@/lib/api";
 
@@ -226,7 +228,17 @@ const AssetDetail = () => {
     queryKey: ["tasks", "history", assetId],
     queryFn: async () => {
       if (!assetId) throw new Error("Missing assetId");
-      return apiListTasks({ assetId, status: "completed", page: 1, pageSize: 50 });
+      return apiListTasks({ assetId, status: "completed", maintenanceType: "PM", page: 1, pageSize: 50 });
+    },
+    enabled: Boolean(assetId),
+    staleTime: 30_000,
+  });
+
+  const cmHistoryQuery = useQuery({
+    queryKey: ["work-orders", "history", assetId],
+    queryFn: async () => {
+      if (!assetId) throw new Error("Missing assetId");
+      return apiListWorkOrders({ assetId, status: "completed", page: 1, pageSize: 50 });
     },
     enabled: Boolean(assetId),
     staleTime: 30_000,
@@ -476,6 +488,17 @@ const AssetDetail = () => {
         return bTime - aTime;
       });
   }, [historyTasksQuery.data?.items]);
+
+  const cmHistoryOrders = useMemo((): WorkOrderListItem[] => {
+    const items = cmHistoryQuery.data?.items ?? [];
+    return [...items]
+      .filter((t) => Boolean(t.completedAt))
+      .sort((a, b) => {
+        const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return bTime - aTime;
+      });
+  }, [cmHistoryQuery.data?.items]);
 
   const expandedTask = expandedTaskQuery.data as TaskDetail | undefined;
 
@@ -940,7 +963,7 @@ const AssetDetail = () => {
         </motion.div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1012,6 +1035,23 @@ const AssetDetail = () => {
               </div>
             </div>
           </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="stat-card"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                <Wrench className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">CM Incidents</p>
+                <p className="text-lg font-semibold text-foreground">{cmHistoryOrders.length}</p>
+              </div>
+            </div>
+          </motion.div>
         </div>
 
         {/* Tabs Content */}
@@ -1019,6 +1059,7 @@ const AssetDetail = () => {
           <TabsList className="bg-muted/50 p-1">
             <TabsTrigger value="general">General Info</TabsTrigger>
             <TabsTrigger value="history">PM History</TabsTrigger>
+            <TabsTrigger value="cm-history">CM History</TabsTrigger>
             <TabsTrigger value="schedule">Schedule</TabsTrigger>
           </TabsList>
 
@@ -1478,6 +1519,53 @@ const AssetDetail = () => {
                         </div>
                       </motion.div>
                     ) : null}
+                  </motion.div>
+                );
+              })
+            )}
+          </TabsContent>
+
+          {/* CM History Tab */}
+          <TabsContent value="cm-history" className="mt-4 space-y-4">
+            {cmHistoryQuery.isLoading ? (
+              <div className="p-6 text-sm text-muted-foreground">Loading CM history…</div>
+            ) : cmHistoryQuery.isError ? (
+              <div className="p-6 text-sm text-destructive">Failed to load CM history.</div>
+            ) : cmHistoryOrders.length === 0 ? (
+              <div className="p-6 text-sm text-muted-foreground">No completed CM work orders yet.</div>
+            ) : (
+              cmHistoryOrders.map((wo, index) => {
+                const completedDate = wo.completedAt ? new Date(wo.completedAt).toLocaleDateString() : "—";
+                return (
+                  <motion.div
+                    key={wo.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="glass rounded-xl overflow-hidden"
+                  >
+                    <div className="p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                            <Wrench className="w-6 h-6 text-primary" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-mono text-sm text-muted-foreground">{wo.taskNumber}</span>
+                              <Badge variant="outline" className="bg-success/20 text-success border-success/30">Completed</Badge>
+                            </div>
+                            <h3 className="font-semibold text-foreground">{wo.templateName ?? "Work Order"}</h3>
+                            <p className="text-sm text-muted-foreground">Completed on {completedDate}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Link to={`/work-orders/${wo.id}`} className="inline-flex">
+                            <Button type="button" variant="outline" size="sm">View</Button>
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
                   </motion.div>
                 );
               })
