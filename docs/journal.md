@@ -93,31 +93,6 @@
 - Adjusted task completion validation and UI to respect new attachment semantics.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
-## Wed Jan 28 05:43:51 WITA 2026
-- Asset Detail PM History now counts both task-level and per-checklist attachments in the Evidence Files total.
-- Checklist Results in Asset Detail show a condensed per-item list of attached files with quick preview actions.
-- Updated README evidence section accordingly and ran `npm run lint` plus `npx tsc --noEmit`.
-
-## Sat Jan 31 06:09:57 WITA 2026
-- Fixed SQL Server calendar capacity query to aggregate occurrences.EstimatedMinutes via a separate date_capacity CTE, avoiding non-grouped columns in SELECT.
-- Confirmed GET /api/scheduling/calendar still returns bucketed counts plus per-day capacityMinutes using template EstimatedDurationMinutes with 60-minute fallback.
-- Ran `npm run lint` and `npx tsc --noEmit` in repo root; both passed.
-
-## Sat Jan 31 06:31:44 WITA 2026
-- Added Snipe-IT asset notes synchronization into pm.Assets.Notes and backend Asset Detail response.
-- Exposed read-only Snipe-IT Notes section on Asset Detail General Info card.
-- Updated README Snipe-IT sync section and verified with `npm run lint` plus `npx tsc --noEmit`.
-
-## Sat Jan 31 06:35:57 WITA 2026
-- Added Snipe-IT Notes column to Assets list table next to Category.
-- Updated assets list API to return snipeNotes from pm.Assets.Notes for each asset.
-- Ran `npm run lint` and `npx tsc --noEmit` in repo root; both passed.
-
-## Saturday, January 31, 2026 1:59:03 PM
-- Web: registered Work Order detail route at `/work-orders/:taskId` in App router.
-- Verified CM Work Orders list rows and direct URLs navigate to Work Order Detail.
-- Validation: ran `npm run lint` and `npx tsc --noEmit`; both passed.
-
 ## 2026-01-01 14:03
 - Added initial SQL Server `pm` schema script and apply runner.
 - Added implementation plan document for database, API, jobs, and UI integration.
@@ -217,11 +192,6 @@
 
 ## 2026-01-03 11:01
 - Added bulk selection actions for Assets visible categories filter (active-only, inactive-only, invert, show all).
-
-## Friday, January 30, 2026 8:19:50 AM
-- Fixed PM Task Detail and Work Order Detail so uploading evidence no longer resets in-progress checklist notes.
-- Confirmed behavior by uploading checklist and task-level files with unsaved notes preserved.
-- Ran `npm run lint` and `npx tsc --noEmit` in repo root; both passed.
 
 ## 2026-01-03 11:45
 - Added category search input to Assets visible categories filter (More Filters).
