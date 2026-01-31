@@ -21,6 +21,7 @@ import SettingsCategories from "./pages/SettingsCategories";
 import SettingsNotifications from "./pages/SettingsNotifications";
 import LabelDesigner from "./pages/LabelDesigner";
 import WorkOrders from "./pages/WorkOrders";
+import WorkOrderDetail from "./pages/WorkOrderDetail";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
 import { getAccessToken, isSuperadmin } from "@/lib/auth";
@@ -61,6 +62,7 @@ const App = () => (
             <Route path="/scheduling" element={<Scheduling />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/work-orders" element={<WorkOrders />} />
+            <Route path="/work-orders/:taskId" element={<WorkOrderDetail />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/users" element={<UserManagement />} />

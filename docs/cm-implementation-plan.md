@@ -164,6 +164,46 @@
 
 ---
 
+## Phase 3.5  Web UI: Work Orders as Tickets (UX Refinement)
+
+### Objective
+- Evolve CM Work Orders into a clearer, ticket-like experience with explicit subject, impact, priority, assignment, and resolution fields, without breaking the existing PM/CM task model.
+
+### Deliverables
+- Ticket-style header and subject:
+  - Introduce a Work Order "subject" concept used in list rows, detail headers, and notifications.
+  - Initial implementation can compute subject in the web UI as:
+    - `<AssetTag> <AssetName>  <SymptomSnippet>` when an asset is present.
+    - `<FacilityName>  <SymptomSnippet>` for facility-only work orders.
+  - Optionally add a `Subject` column to `pm.PMTasks` in a later phase; Phase 3.5 focuses on UI-level subject computation.
+- Ticket field grouping in Work Order detail:
+  - Group `Status`, `ImpactLevel`, and `Priority` visually as a "Ticket Summary" block at the top of Work Order detail.
+  - Present `Symptom` as "Issue Description" in the Corrective Maintenance panel, matching ticket terminology.
+  - Ensure `FailureCategory` / `FailureCode` are clearly labeled as the Work Order category and subcode.
+- Assignment UX polish:
+  - Emphasize current assignee (user or role) in the header or summary block.
+  - Keep assignment/reassignment flows on Work Order detail but present them with clearer ticket language (e.g., "Reassign work order").
+- Resolution capture and display (UI-first):
+  - Add a dedicated "Resolution" section on Work Order detail that surfaces how the issue was resolved.
+  - Phase 3.5 can reuse existing checklist outcomes and notes to populate a read-only resolution summary area.
+  - A later backend phase may add explicit `ResolutionSummary` / `ResolutionNotes` fields on `pm.PMTasks` and wire them into complete flows.
+- Lists and navigation:
+  - Extend the Work Orders list to display a Subject column (computed as above) so the table reads like a ticket queue.
+  - Ensure list rows and detail headers use consistent labels for status, impact, priority, and subject.
+
+### Non-goals (Phase 3.5)
+- No changes to underlying lifecycle semantics or status values beyond improved labeling.
+- No new CM-specific tables; all changes build on the existing `pm.PMTasks` entity and Work Orders API.
+- No mandatory resolution fields yet; that can be enforced in a later phase once UX is validated.
+
+### Acceptance Criteria
+- Work Orders page and detail views present CM work orders using ticket-style fields: subject, status, impact, priority, assignee, and issue description.
+- Subject is consistently displayed in Work Orders list and detail header, derived from asset/facility label plus symptom.
+- Users can quickly understand who owns a work order, how urgent it is, and what the issue is from the header alone.
+- Resolution information is surfaced in a distinct section on completed work orders using existing checklist/notes data, without changing backend schema.
+
+---
+
 ## Phase 4 — Web UI: Work Order Detail and Lifecycle
 
 ### Objective

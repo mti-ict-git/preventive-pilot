@@ -113,6 +113,11 @@
 - Updated assets list API to return snipeNotes from pm.Assets.Notes for each asset.
 - Ran `npm run lint` and `npx tsc --noEmit` in repo root; both passed.
 
+## Saturday, January 31, 2026 1:59:03 PM
+- Web: registered Work Order detail route at `/work-orders/:taskId` in App router.
+- Verified CM Work Orders list rows and direct URLs navigate to Work Order Detail.
+- Validation: ran `npm run lint` and `npx tsc --noEmit`; both passed.
+
 ## 2026-01-01 14:03
 - Added initial SQL Server `pm` schema script and apply runner.
 - Added implementation plan document for database, API, jobs, and UI integration.
