@@ -62,7 +62,7 @@ import {
   apiGetTask,
   apiListBlackoutWindows,
   apiListTasks,
-    apiListWorkOrders,
+  apiListWorkOrders,
   apiListTemplates,
   apiPatchAssetPm,
   apiCreatePmNowTask,
@@ -72,7 +72,7 @@ import {
   type TaskEvidence,
   type TaskDetail,
   type TaskListItem,
-    type WorkOrderListItem,
+  type WorkOrderListItem,
   type TemplateSummary,
 } from "@/lib/api";
 
@@ -902,12 +902,12 @@ const AssetDetail = () => {
                   {getPMStatusBadge()}
                 </div>
                 <p className="text-muted-foreground font-mono">{asset.assetTag}</p>
-                <div className="flex flex-wrap items-center gap-4 mt-3">
-                  <Badge variant="secondary">{asset.category.name ?? "—"}</Badge>
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <MapPin className="w-4 h-4" />
-                    {asset.location.name ?? "—"}
-                  </div>
+				<div className="flex flex-wrap items-center gap-4 mt-3">
+					<Badge variant="secondary">{asset.category?.name ?? "—"}</Badge>
+					<div className="flex items-center gap-1 text-sm text-muted-foreground">
+						<MapPin className="w-4 h-4" />
+						{asset.location?.name ?? "—"}
+					</div>
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <User className="w-4 h-4" />
                     {asset.assignedToText ?? "—"}
@@ -1081,15 +1081,15 @@ const AssetDetail = () => {
                     <CardDescription>Synced from Snipe-IT</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {[
-                      { label: "Manufacturer", value: asset.manufacturer },
-                      { label: "Model", value: asset.model },
-                      { label: "Serial Number", value: asset.serialNumber },
-                      { label: "Category", value: asset.category.name },
-                      { label: "Status", value: asset.assetStatus },
-                      { label: "Operational Status", value: asset.assetOperationalStatus },
-                      { label: "Assigned To", value: asset.assignedToText },
-                    ].map((item, index) => (
+						{[
+							{ label: "Manufacturer", value: asset.manufacturer },
+							{ label: "Model", value: asset.model },
+							{ label: "Serial Number", value: asset.serialNumber },
+							{ label: "Category", value: asset.category?.name },
+							{ label: "Status", value: asset.assetStatus },
+							{ label: "Operational Status", value: asset.assetOperationalStatus },
+							{ label: "Assigned To", value: asset.assignedToText },
+						].map((item, index) => (
                       <div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-0">
                         <span className="text-muted-foreground">{item.label}</span>
                         <span className="font-medium text-foreground">{item.value ?? "—"}</span>

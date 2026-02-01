@@ -185,6 +185,11 @@
 - Web: PM Tasks assignment and backdate technician selectors now use the for-assignment API so Supervisors can assign/reassign tasks and choose technicians without full user admin access.
 - Ran `npm run lint` and `npx tsc --noEmit` after changes.
 
+## Sun Feb  1 17:47:49 WITA 2026
+- Asset Detail: hardened category and location rendering to tolerate null category/location rows from Snipe-IT sync.
+- UI now uses optional chaining so assets without a category or location (like MTI-PC-059) render with a fallback "—" instead of crashing with a null .name error.
+- Ran `npm run lint` and `npx tsc --noEmit` after changes.
+
 ## 2026-01-22 12:57:50 PM
 - Fixed backdateMode scope ordering in Work Order detail to satisfy TypeScript.
 
