@@ -1274,6 +1274,23 @@ export const apiListUsers = async (input?: {
   );
 };
 
+export const apiListAssignableUsers = async (input?: {
+	page?: number;
+	pageSize?: number;
+	search?: string;
+	isActive?: boolean;
+}): Promise<{ page: number; pageSize: number; total: number; items: UserSummary[] }> => {
+	const params = new URLSearchParams();
+	if (input?.page !== undefined) params.set("page", String(input.page));
+	if (input?.pageSize !== undefined) params.set("pageSize", String(input.pageSize));
+	if (input?.search?.trim()) params.set("search", input.search.trim());
+	if (input?.isActive !== undefined) params.set("isActive", input.isActive ? "true" : "false");
+	const query = params.toString();
+	return apiFetchJson<{ page: number; pageSize: number; total: number; items: UserSummary[] }>(
+		`/api/system/users/for-assignment${query ? `?${query}` : ""}`,
+	);
+};
+
 export const apiRefreshLdapUser = async (userId: string): Promise<{ ok: true }> => {
   return apiFetchJson<{ ok: true }>(`/api/system/users/${userId}/refresh-ldap`, { method: "POST" });
 };

@@ -121,6 +121,7 @@ Required environment variables:
 - PM Task Detail includes a Create Work Order action to report breakdowns; it opens a dialog pre-filled with the task's asset or facility context.
 - PM Tasks list includes a Calendar View button that navigates directly to the PM Scheduling calendar for capacity-aware planning.
 - PM Tasks list Filters dialog supports Assigned (any/me/unassigned), Approved only toggle, Due date range, and Status (All, Upcoming, In Progress, Due Today, Overdue, Completed, Cancelled) filters.
+ - Supervisors and above can assign/reassign PM tasks and pick technicians using a restricted user list that does not expose full user administration.
 
 ## PM Task Approval
 

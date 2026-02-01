@@ -12,6 +12,8 @@ import { lookupLdapUser, searchLdapUsers } from "../auth/ldap.js";
 import { upsertLdapUser } from "../db/users.js";
 
 const requireSystemAdmin = requireAnyRole(["Superadmin", "Admin"]);
+const managerRoles = ["Superadmin", "Admin", "Supervisor"] as const;
+const requireManager = requireAnyRole(managerRoles);
 
 const StatusJobSchema = z.enum(["snipe-sync", "schedule-calc", "notifications"]);
 
@@ -1703,6 +1705,126 @@ systemRouter.get("/users", requireSystemAdmin, async (req, res) => {
         isActive: bitToBoolean(r.IsActive),
         roles: rolesByUserId.get(id) ?? [],
         tasksCompleted: completedByUserId.get(id) ?? 0,
+      };
+    }),
+  });
+});
+
+systemRouter.get("/users/for-assignment", requireManager, async (req, res) => {
+  const parsed = UsersQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const page = Math.max(1, Number(parsed.data.page) || 1);
+  const pageSize = Math.min(200, Math.max(1, Number(parsed.data.pageSize) || 50));
+  const offset = (page - 1) * pageSize;
+  const search = parsed.data.search?.trim() ? `%${parsed.data.search.trim()}%` : null;
+  const isActive = parsed.data.isActive ? (parsed.data.isActive === "true" ? 1 : 0) : 1;
+
+  const db = await getDb();
+
+  const totalResult = await db
+    .request()
+    .input("search", sql.NVarChar(256), search)
+    .input("isActive", sql.Bit, isActive)
+    .query(
+      [
+        "SELECT COUNT(1) AS Total",
+        "FROM pm.Users",
+        "WHERE (@isActive IS NULL OR IsActive = @isActive)",
+        "  AND (",
+        "    @search IS NULL",
+        "    OR Username LIKE @search",
+        "    OR COALESCE(DisplayName, N'') LIKE @search",
+        "    OR COALESCE(Email, N'') LIKE @search",
+        "  )",
+      ].join("\n"),
+    );
+
+  const totalRow = totalResult.recordset[0] as Record<string, unknown> | undefined;
+  const total = totalRow && typeof totalRow.Total === "number" ? totalRow.Total : 0;
+
+  const usersResult = await db
+    .request()
+    .input("offset", sql.Int, offset)
+    .input("limit", sql.Int, pageSize)
+    .input("search", sql.NVarChar(256), search)
+    .input("isActive", sql.Bit, isActive)
+    .query(
+      [
+        "SELECT",
+        "  UserId, Username, DisplayName, Email, Phone, ExternalProvider, IsActive",
+        "FROM pm.Users",
+        "WHERE (@isActive IS NULL OR IsActive = @isActive)",
+        "  AND (",
+        "    @search IS NULL",
+        "    OR Username LIKE @search",
+        "    OR COALESCE(DisplayName, N'') LIKE @search",
+        "    OR COALESCE(Email, N'') LIKE @search",
+        "  )",
+        "ORDER BY Username ASC",
+        "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY",
+      ].join("\n"),
+    );
+
+  const userRows = usersResult.recordset as Array<Record<string, unknown>>;
+  const userIds = userRows
+    .map((r) => (typeof r.UserId === "string" ? r.UserId : null))
+    .filter((v): v is string => Boolean(v));
+
+  const rolesByUserId = new Map<string, string[]>();
+
+  if (userIds.length > 0) {
+    const userIdsCsv = userIds.join(",");
+
+    const rolesResult = await db
+      .request()
+      .input("userIdsCsv", sql.NVarChar(8192), userIdsCsv)
+      .query(
+        [
+          "SELECT",
+          "  ur.UserId AS UserId,",
+          "  r.Name AS RoleName",
+          "FROM pm.UserRoles ur",
+          "INNER JOIN pm.Roles r ON r.RoleId = ur.RoleId",
+          "WHERE ur.UserId IN (",
+          "  SELECT TRY_CONVERT(uniqueidentifier, value)",
+          "  FROM string_split(@userIdsCsv, ',')",
+          ")",
+        ].join("\n"),
+      );
+
+    const roleRows = rolesResult.recordset as Array<Record<string, unknown>>;
+    for (const row of roleRows) {
+      const userId = typeof row.UserId === "string" ? row.UserId : null;
+      const roleName = typeof row.RoleName === "string" ? row.RoleName : null;
+      if (!userId || !roleName) continue;
+      const existing = rolesByUserId.get(userId) ?? [];
+      if (!existing.includes(roleName)) {
+        existing.push(roleName);
+        rolesByUserId.set(userId, existing);
+      }
+    }
+  }
+
+  res.json({
+    page,
+    pageSize,
+    total,
+    items: userRows.map((r) => {
+      const id = typeof r.UserId === "string" ? r.UserId : "";
+      return {
+        id,
+        username: typeof r.Username === "string" ? r.Username : "",
+        displayName: typeof r.DisplayName === "string" ? r.DisplayName : null,
+        email: typeof r.Email === "string" ? r.Email : null,
+        phone: typeof r.Phone === "string" ? r.Phone : null,
+        externalProvider: typeof r.ExternalProvider === "string" ? r.ExternalProvider : null,
+        isActive: bitToBoolean(r.IsActive),
+        roles: rolesByUserId.get(id) ?? [],
+        tasksCompleted: 0,
       };
     }),
   });

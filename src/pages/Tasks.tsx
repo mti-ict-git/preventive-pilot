@@ -33,33 +33,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  apiAddTaskEvidence,
-  apiCompleteTask,
-  apiDeleteChecklistEvidence,
-  apiDeleteEvidence,
-  apiDownloadChecklistEvidence,
-  apiDownloadEvidence,
-  apiAssignTask,
-  apiGetLookups,
-  apiListUsers,
-  ApiError,
-  apiGetTask,
-  apiListTasks,
-  apiStartTask,
-  apiPauseTask,
-  apiCancelTask,
-  apiResumeTask,
-  apiReopenTask,
-  apiSubmitTaskForApproval,
-  apiApproveTaskBySupervisor,
-  apiApproveTaskBySuperadmin,
-  apiRejectTaskApproval,
-  apiUploadTaskChecklistEvidenceFile,
-  apiUploadTaskEvidenceFile,
-  type CompleteTaskChecklistResultInput,
-  type TaskListItem,
-  type LookupRole,
-  type UserSummary,
+	apiAddTaskEvidence,
+	apiCompleteTask,
+	apiDeleteChecklistEvidence,
+	apiDeleteEvidence,
+	apiDownloadChecklistEvidence,
+	apiDownloadEvidence,
+	apiAssignTask,
+	apiGetLookups,
+	apiListAssignableUsers,
+	ApiError,
+	apiGetTask,
+	apiListTasks,
+	apiStartTask,
+	apiPauseTask,
+	apiCancelTask,
+	apiResumeTask,
+	apiReopenTask,
+	apiSubmitTaskForApproval,
+	apiApproveTaskBySupervisor,
+	apiApproveTaskBySuperadmin,
+	apiRejectTaskApproval,
+	apiUploadTaskChecklistEvidenceFile,
+	apiUploadTaskEvidenceFile,
+	type CompleteTaskChecklistResultInput,
+	type TaskListItem,
+	type LookupRole,
+	type UserSummary,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { isManager, isSuperadmin, hasRole } from "@/lib/auth";
@@ -158,8 +158,8 @@ const Tasks = () => {
   });
 
   const usersQuery = useQuery({
-    queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
-    queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
+		queryKey: ["users-for-assignment", { page: 1, pageSize: 500, isActive: true }],
+		queryFn: () => apiListAssignableUsers({ page: 1, pageSize: 500, isActive: true }),
     enabled: assignDialogOpen,
   });
 
@@ -709,8 +709,8 @@ export const TaskDetailDialog = (props: {
 	const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
 
 	const usersQueryForBackdate = useQuery({
-		queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
-		queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
+		queryKey: ["users-for-backdate", { page: 1, pageSize: 500, isActive: true }],
+		queryFn: () => apiListAssignableUsers({ page: 1, pageSize: 500, isActive: true }),
 		enabled: backdateMode,
 	});
 

@@ -180,6 +180,11 @@
 - Filtering happens client-side based on the computed UI status so it can be combined with approval-stage tabs.
 - Ran `npm run lint` and `npx tsc --noEmit` after changes.
 
+## Sun Feb  1 13:20:09 WITA 2026
+- Permissions: added /api/system/users/for-assignment endpoint guarded by manager roles (Superadmin/Admin/Supervisor) and returning active users with roles for task assignment and backdated completion.
+- Web: PM Tasks assignment and backdate technician selectors now use the for-assignment API so Supervisors can assign/reassign tasks and choose technicians without full user admin access.
+- Ran `npm run lint` and `npx tsc --noEmit` after changes.
+
 ## 2026-01-22 12:57:50 PM
 - Fixed backdateMode scope ordering in Work Order detail to satisfy TypeScript.
 
