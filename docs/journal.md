@@ -1,5 +1,49 @@
 # Journal
 
+## Sun Feb  1 02:31:52 UTC 2026
+- PM Task Approval Workflow 6.2: added backend approval endpoints.
+- API: POST /api/tasks/{taskId}/submit-for-approval sets ApprovalStatus=PendingSupervisor and technician completion trail.
+- API: POST /api/tasks/{taskId}/approve-by-supervisor transitions to PendingSuperadmin.
+- API: POST /api/tasks/{taskId}/approve-by-superadmin finalizes approval, sets Approved, and updates AssetPMSettings with NextPMDueAt.
+- API: POST /api/tasks/{taskId}/reject-approval allows supervisor or superadmin to reject; optional reopen.
+- OpenAPI: documented approval workflow endpoints under backend entrypoint.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 10:30:54 WITA 2026
+- Notifications: added Test button on each channel row in Notifications page.
+- Web: test button calls settings test APIs with per-channel overrides (Mail/WhatsApp).
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 10:23:15 WITA 2026
+- PM Task Approval Workflow 6.1: extended DB schema for approval tracking.
+- DB: pm.PMTasks added ApprovalStatus (default None, enum constraint) and approval trail fields:
+- TechnicianCompletedAt/TechnicianCompletedByUserId, SupervisorApprovedAt/SupervisorApprovedByUserId, SuperadminApprovedAt/SuperadminApprovedByUserId with FKs to pm.Users.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
+## 2026-02-01 09:09:02 WITA
+- Notifications: applied per-channel overrides in backend delivery job.
+- Email: channel to/cc/bcc merge mode (override/append), sender and templates.
+- WhatsApp: channel base URL, target, number/group, and mentions merged.
+- Updated queue processor to load channel config and compute effective settings.
+- Ran `npx tsc --noEmit` (root + backend) and `npm run lint`; all passed.
+
+## 2026-02-01 09:25:52 WITA
+- Notifications: added per-channel display name across DB, API, and UI.
+- DB: pm.NotificationChannels.ChannelName with create-time and migration add.
+- API: channels list includes channelName; create/update accept channelName.
+- UI: Channel modal has Name field; list shows channelName fallback to type.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## 2026-02-01 10:19:44 WITA
+- Notifications: implemented delete channel backend route and UI confirmation.
+- Backend: DELETE /api/notifications/channels/:channelId with reference checks.
+- Frontend: Delete button with AlertDialog confirm; shows errors if references exist.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## 2026-02-01 10:21:53 WITA
+- Fix: added missing AlertDialogTrigger import to Notifications.tsx to resolve runtime error.
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
 ## 2026-01-31 13:18:10 UTC
 - CM Work Orders: added superadmin-only delete endpoint (DELETE /api/work-orders/:taskId).
 - Deletes DB rows and unlinks stored evidence files when configured.
@@ -201,6 +245,16 @@
 ## 2026-01-31 13:21:56 UTC
 - Verified CM work order delete feature (backend + web).
 - Confirmed superadmin-only delete button with confirmation dialog in Work Order Detail.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+## 2026-02-01 00:25:28 UTC
+- Work Order: Report Breakdown dialog now queries Notification Channels.
+- Added Select of active channels with Custom entry fallback.
+- wired apiListNotificationChannels and updated payload pass-through.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+## 2026-02-01 00:37:53 UTC
+- Refined Report Breakdown channel picker per clarifications.
+- Shows only active channels; defaults to "web" if available, else first active.
+- Removed custom and none options; labels use channelType strictly.
 - Ran `npx tsc --noEmit` and `npm run lint`; both passed.
 - Ran lint and typecheck; addressed any arising issues
 2026-01-07 06:30:12 UTC

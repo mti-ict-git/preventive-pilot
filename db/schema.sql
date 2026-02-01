@@ -599,6 +599,58 @@ BEGIN
   ALTER TABLE pm.PMTasks ADD DowntimeEndedAt datetime2(0) NULL;
 END;
 
+IF COL_LENGTH(N'pm.PMTasks', N'ApprovalStatus') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks
+    ADD ApprovalStatus nvarchar(32) NOT NULL
+      CONSTRAINT DF_pm_PMTasks_ApprovalStatus DEFAULT (N'None') WITH VALUES;
+
+  EXEC(
+    N'ALTER TABLE pm.PMTasks
+      ADD CONSTRAINT CK_pm_PMTasks_ApprovalStatus
+        CHECK (ApprovalStatus IN (N''None'', N''PendingSupervisor'', N''PendingSuperadmin'', N''Approved'', N''Rejected''));'
+  );
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'TechnicianCompletedAt') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD TechnicianCompletedAt datetime2(0) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'TechnicianCompletedByUserId') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD TechnicianCompletedByUserId uniqueidentifier NULL;
+
+  ALTER TABLE pm.PMTasks
+    ADD CONSTRAINT FK_pm_PMTasks_TechnicianCompletedByUser FOREIGN KEY (TechnicianCompletedByUserId) REFERENCES pm.Users(UserId);
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'SupervisorApprovedAt') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD SupervisorApprovedAt datetime2(0) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'SupervisorApprovedByUserId') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD SupervisorApprovedByUserId uniqueidentifier NULL;
+
+  ALTER TABLE pm.PMTasks
+    ADD CONSTRAINT FK_pm_PMTasks_SupervisorApprovedByUser FOREIGN KEY (SupervisorApprovedByUserId) REFERENCES pm.Users(UserId);
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'SuperadminApprovedAt') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD SuperadminApprovedAt datetime2(0) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'SuperadminApprovedByUserId') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD SuperadminApprovedByUserId uniqueidentifier NULL;
+
+  ALTER TABLE pm.PMTasks
+    ADD CONSTRAINT FK_pm_PMTasks_SuperadminApprovedByUser FOREIGN KEY (SuperadminApprovedByUserId) REFERENCES pm.Users(UserId);
+END;
+
 IF OBJECT_ID(N'pm.PMTaskChecklistResults', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.PMTaskChecklistResults (
@@ -686,6 +738,7 @@ IF OBJECT_ID(N'pm.NotificationChannels', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.NotificationChannels (
     ChannelId uniqueidentifier NOT NULL CONSTRAINT DF_pm_NotificationChannels_ChannelId DEFAULT (newsequentialid()),
+    ChannelName nvarchar(128) NULL,
     ChannelType nvarchar(32) NOT NULL,
     Config nvarchar(max) NULL,
     IsActive bit NOT NULL CONSTRAINT DF_pm_NotificationChannels_IsActive DEFAULT (1),
@@ -693,6 +746,11 @@ BEGIN
     UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_NotificationChannels_UpdatedAt DEFAULT (sysutcdatetime()),
     CONSTRAINT PK_pm_NotificationChannels PRIMARY KEY CLUSTERED (ChannelId)
   );
+END;
+
+IF COL_LENGTH(N'pm.NotificationChannels', N'ChannelName') IS NULL
+BEGIN
+  ALTER TABLE pm.NotificationChannels ADD ChannelName nvarchar(128) NULL;
 END;
 
 IF OBJECT_ID(N'pm.NotificationRules', N'U') IS NULL

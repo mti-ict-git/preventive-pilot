@@ -1516,6 +1516,7 @@ export const apiListBlackoutWindows = async (): Promise<{ items: BlackoutWindow[
 
 export type NotificationChannel = {
   id: string;
+  channelName?: string | null;
   channelType: string;
   config: string | null;
   isActive: boolean;
@@ -1553,6 +1554,7 @@ export const apiListNotificationChannels = async (): Promise<{ items: Notificati
 
 export const apiCreateNotificationChannel = async (input: {
   channelType: string;
+  channelName?: string | null;
   config?: string | null;
   isActive?: boolean;
 }): Promise<{ id: string }> => {
@@ -1560,6 +1562,7 @@ export const apiCreateNotificationChannel = async (input: {
     method: "POST",
     body: {
       channelType: input.channelType,
+      channelName: input.channelName ?? null,
       config: input.config ?? null,
       isActive: input.isActive ?? true,
     },
@@ -1569,6 +1572,7 @@ export const apiCreateNotificationChannel = async (input: {
 export const apiUpdateNotificationChannel = async (input: {
   channelId: string;
   channelType?: string;
+  channelName?: string | null;
   config?: string | null;
   isActive?: boolean;
 }): Promise<{ ok: true }> => {
@@ -1577,11 +1581,18 @@ export const apiUpdateNotificationChannel = async (input: {
       method: "PUT",
       body: {
         channelType: input.channelType,
+        channelName: input.channelName,
         config: input.config,
         isActive: input.isActive,
       },
     },
   );
+};
+
+export const apiDeleteNotificationChannel = async (input: { channelId: string }): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/notifications/channels/${input.channelId}`, {
+    method: "DELETE",
+  });
 };
 
 export const apiListNotificationRules = async (): Promise<{ items: NotificationRule[] }> => {

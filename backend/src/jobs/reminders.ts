@@ -275,7 +275,9 @@ const getMicrosoftGraphAccessToken = async (settings: EffectiveMicrosoftGraphSet
 
 type QueuedNotificationRow = {
   NotificationLogId: string;
+  ChannelId: string;
   ChannelType: string;
+  ChannelConfig: string | null;
   Payload: string | null;
 };
 
@@ -298,7 +300,9 @@ const claimQueuedNotifications = async (limit: number): Promise<QueuedNotificati
         "  Status = N'processing',",
         "  ErrorMessage = NULL",
         "OUTPUT inserted.NotificationLogId AS NotificationLogId,",
+        "  c.ChannelId AS ChannelId,",
         "  c.ChannelType AS ChannelType,",
+        "  c.Config AS ChannelConfig,",
         "  inserted.Payload AS Payload",
         "FROM pm.NotificationLog nl",
         "INNER JOIN candidates ON candidates.NotificationLogId = nl.NotificationLogId",
@@ -522,13 +526,16 @@ const processQueuedNotifications = async (): Promise<{ attempted: number; sent: 
       }
     }
 
+    const cfgRaw = typeof row.ChannelConfig === "string" ? row.ChannelConfig : null;
+    const emailSettings = isEmailChannel ? applyMailChannelOverrides(settings, cfgRaw) : null;
+    const waSettings = isWhatsAppChannel ? applyWhatsAppChannelOverrides(whatsAppSettings, cfgRaw) : null;
     try {
-      if (isWhatsAppChannel) {
-        await sendWhatsAppMessage(whatsAppSettings, parsedPayload);
+      if (isWhatsAppChannel && waSettings) {
+        await sendWhatsAppMessage(waSettings, parsedPayload);
       } else if (isPushChannel) {
         await sendPushNotification(parsedPayload);
-      } else {
-        await sendMicrosoftGraphEmail(settings, parsedPayload);
+      } else if (isEmailChannel && emailSettings) {
+        await sendMicrosoftGraphEmail(emailSettings, parsedPayload);
       }
       await updateNotificationStatus(row.NotificationLogId, "sent", null);
       sent += 1;
@@ -540,6 +547,136 @@ const processQueuedNotifications = async (): Promise<{ attempted: number; sent: 
   }
 
   return { attempted: rows.length, sent, failed };
+};
+
+type MailChannelConfig = {
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  senderEmail: string | null;
+  subjectTemplate: string | null;
+  bodyTemplate: string | null;
+  mergeMode: "override" | "append";
+};
+
+type WhatsAppChannelConfig = {
+  baseUrlOverride: string | null;
+  target: "single" | "group" | null;
+  number: string | null;
+  groupId: string | null;
+  groupName: string | null;
+  mentionNumbers: string[];
+};
+
+const parseMailChannelConfig = (value: string | null): MailChannelConfig => {
+  if (!value || !value.trim()) {
+    return { to: [], cc: [], bcc: [], senderEmail: null, subjectTemplate: null, bodyTemplate: null, mergeMode: "override" };
+  }
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    parsed = null;
+  }
+  const obj = isRecord(parsed) ? (parsed as Record<string, unknown>) : {};
+  const toRaw = Array.isArray(obj.to) ? (obj.to as unknown[]) : [];
+  const ccRaw = Array.isArray(obj.cc) ? (obj.cc as unknown[]) : [];
+  const bccRaw = Array.isArray(obj.bcc) ? (obj.bcc as unknown[]) : [];
+  const to: string[] = [];
+  for (const v of toRaw) if (typeof v === "string" && v.trim()) to.push(v.trim());
+  const cc: string[] = [];
+  for (const v of ccRaw) if (typeof v === "string" && v.trim()) cc.push(v.trim());
+  const bcc: string[] = [];
+  for (const v of bccRaw) if (typeof v === "string" && v.trim()) bcc.push(v.trim());
+  const senderEmail = typeof obj.senderEmail === "string" && obj.senderEmail.trim() ? obj.senderEmail.trim() : null;
+  const subjectTemplate = typeof obj.subjectTemplate === "string" && obj.subjectTemplate.trim() ? obj.subjectTemplate.trim() : null;
+  const bodyTemplate = typeof obj.bodyTemplate === "string" && obj.bodyTemplate.trim() ? obj.bodyTemplate : null;
+  const mergeModeRaw = obj.mergeMode;
+  const mergeMode: "override" | "append" = mergeModeRaw === "append" ? "append" : "override";
+  return { to, cc, bcc, senderEmail, subjectTemplate, bodyTemplate, mergeMode };
+};
+
+const parseWhatsAppChannelConfig = (value: string | null): WhatsAppChannelConfig => {
+  if (!value || !value.trim()) {
+    return { baseUrlOverride: null, target: null, number: null, groupId: null, groupName: null, mentionNumbers: [] };
+  }
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    parsed = null;
+  }
+  const obj = isRecord(parsed) ? (parsed as Record<string, unknown>) : {};
+  const baseUrlOverride = typeof obj.baseUrlOverride === "string" && obj.baseUrlOverride.trim() ? obj.baseUrlOverride.trim() : null;
+  const targetRaw = obj.target;
+  const target: "single" | "group" | null = targetRaw === "single" || targetRaw === "group" ? (targetRaw as "single" | "group") : null;
+  const number = typeof obj.number === "string" && obj.number.trim() ? obj.number.trim() : null;
+  const groupId = typeof obj.groupId === "string" && obj.groupId.trim() ? obj.groupId.trim() : null;
+  const groupName = typeof obj.groupName === "string" && obj.groupName.trim() ? obj.groupName.trim() : null;
+  const mentionNumbers: string[] = [];
+  const mentionRaw = Array.isArray(obj.mentionNumbers) ? (obj.mentionNumbers as unknown[]) : [];
+  for (const v of mentionRaw) if (typeof v === "string" && v.trim()) mentionNumbers.push(v.trim());
+  return { baseUrlOverride, target, number, groupId, groupName, mentionNumbers };
+};
+
+const dedupe = (values: string[]): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const v of values) {
+    const t = v.trim();
+    if (!t) continue;
+    const k = t.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    result.push(t);
+  }
+  return result;
+};
+
+const applyMailChannelOverrides = (
+  global: EffectiveMicrosoftGraphSettings,
+  channelConfigJson: string | null,
+): EffectiveMicrosoftGraphSettings => {
+  const cfg = parseMailChannelConfig(channelConfigJson);
+  const mergeMode = cfg.mergeMode;
+  const to = mergeMode === "override" ? cfg.to : dedupe([...global.defaultToRecipients, ...cfg.to]);
+  const cc = mergeMode === "override" ? cfg.cc : dedupe([...global.defaultCcRecipients, ...cfg.cc]);
+  const bcc = mergeMode === "override" ? cfg.bcc : dedupe([...global.defaultBccRecipients, ...cfg.bcc]);
+  return {
+    tenantId: global.tenantId,
+    clientId: global.clientId,
+    clientSecret: global.clientSecret,
+    scope: global.scope,
+    senderEmail: cfg.senderEmail ?? global.senderEmail,
+    defaultToRecipients: to,
+    defaultCcRecipients: cc,
+    defaultBccRecipients: bcc,
+    emailSubjectTemplate: cfg.subjectTemplate ?? global.emailSubjectTemplate,
+    emailBodyTemplate: cfg.bodyTemplate ?? global.emailBodyTemplate,
+    enabled: global.enabled,
+  };
+};
+
+const applyWhatsAppChannelOverrides = (
+  global: EffectiveWhatsAppSettings,
+  channelConfigJson: string | null,
+): EffectiveWhatsAppSettings => {
+  const cfg = parseWhatsAppChannelConfig(channelConfigJson);
+  const target = cfg.target ?? global.target;
+  const baseUrl = cfg.baseUrlOverride ? cfg.baseUrlOverride.replace(/\/+$/, "") : global.baseUrl;
+  const defaultNumber = cfg.number ?? global.defaultNumber;
+  const groupId = cfg.groupId ?? global.groupId;
+  const groupName = cfg.groupName ?? global.groupName;
+  const mentionNumbers = dedupe([...global.mentionNumbers, ...cfg.mentionNumbers]);
+  return {
+    enabled: global.enabled,
+    baseUrl,
+    target,
+    defaultNumber,
+    groupId,
+    groupName,
+    mentionNumbers,
+  };
 };
 
 type PushPayload = {

@@ -12,11 +12,24 @@ import {
   Settings,
   ChevronRight,
   Pencil,
+  Trash,
+  Send,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -31,12 +44,16 @@ import {
   apiUpdateNotificationChannel,
   apiUpdateNotificationRule,
   apiTestMicrosoftGraphSettings,
+  apiTestWhatsAppSettings,
   apiCreateNotificationRule,
   apiCreateNotificationChannel,
+  apiDeleteNotificationChannel,
   ApiError,
   type NotificationChannel,
   type NotificationRule,
   type NotificationLogEntry,
+  type TestMicrosoftGraphSettingsResponse,
+  type TestWhatsAppSettingsResponse,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
@@ -66,8 +83,34 @@ const Notifications = () => {
   const [channelModalMode, setChannelModalMode] = useState<"create" | "edit">("create");
   const [channelId, setChannelId] = useState<string | null>(null);
   const [channelType, setChannelType] = useState<string>("Mail");
+  const [channelName, setChannelName] = useState<string>("Mail");
   const [channelConfig, setChannelConfig] = useState<string>("");
   const [channelActive, setChannelActive] = useState<boolean>(true);
+
+  const splitList = (value: string): string[] => {
+    return value
+      .split(/[\n,;]+/)
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+  };
+  const joinList = (value: string[]): string => {
+    return value.join(", ");
+  };
+
+  const [mailToText, setMailToText] = useState<string>("");
+  const [mailCcText, setMailCcText] = useState<string>("");
+  const [mailBccText, setMailBccText] = useState<string>("");
+  const [mailSenderEmail, setMailSenderEmail] = useState<string>("");
+  const [mailSubjectTemplate, setMailSubjectTemplate] = useState<string>("");
+  const [mailBodyTemplate, setMailBodyTemplate] = useState<string>("");
+  const [mailMergeMode, setMailMergeMode] = useState<"override" | "append">("override");
+
+  const [waTarget, setWaTarget] = useState<"single" | "group">("group");
+  const [waNumber, setWaNumber] = useState<string>("");
+  const [waGroupId, setWaGroupId] = useState<string>("");
+  const [waGroupName, setWaGroupName] = useState<string>("");
+  const [waMentionText, setWaMentionText] = useState<string>("");
+  const [waBaseUrlOverride, setWaBaseUrlOverride] = useState<string>("");
 
   const channelsQuery = useQuery({
     queryKey: ["notification-channels"],
@@ -106,6 +149,96 @@ const Notifications = () => {
     onError: (err: unknown) => {
       const message = err instanceof ApiError ? err.message : "Failed to update channel";
       toast({ title: "Update failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const deleteChannelMutation = useMutation({
+    mutationFn: async (input: { channelId: string }) => apiDeleteNotificationChannel({ channelId: input.channelId }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["notification-channels"] });
+      toast({ title: "Channel deleted" });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to delete channel";
+      toast({ title: "Delete failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const testChannelMutation = useMutation<
+    TestMicrosoftGraphSettingsResponse | TestWhatsAppSettingsResponse,
+    unknown,
+    { channel: NotificationChannel }
+  >({
+    mutationFn: async (input) => {
+      const channel = input.channel;
+      const value = channel.channelType.toLowerCase();
+      const raw = channel.config ?? "";
+      let parsed: unknown = null;
+      try {
+        parsed = raw.trim() ? JSON.parse(raw) : null;
+      } catch {
+        parsed = null;
+      }
+      if (value.includes("mail") || value.includes("email") || value.includes("graph")) {
+        const obj = (parsed ?? {}) as Record<string, unknown>;
+        const toRaw = Array.isArray(obj.to) ? (obj.to as unknown[]) : [];
+        const ccRaw = Array.isArray(obj.cc) ? (obj.cc as unknown[]) : [];
+        const bccRaw = Array.isArray(obj.bcc) ? (obj.bcc as unknown[]) : [];
+        const to: string[] = [];
+        for (const v of toRaw) if (typeof v === "string" && v.trim()) to.push(v.trim());
+        const cc: string[] = [];
+        for (const v of ccRaw) if (typeof v === "string" && v.trim()) cc.push(v.trim());
+        const bcc: string[] = [];
+        for (const v of bccRaw) if (typeof v === "string" && v.trim()) bcc.push(v.trim());
+        const senderEmail = typeof obj.senderEmail === "string" && obj.senderEmail.trim() ? obj.senderEmail.trim() : undefined;
+        const subject = typeof obj.subjectTemplate === "string" && obj.subjectTemplate.trim() ? obj.subjectTemplate.trim() : undefined;
+        const body = typeof obj.bodyTemplate === "string" && obj.bodyTemplate.trim() ? obj.bodyTemplate : `Channel test at ${new Date().toISOString()}`;
+        return apiTestMicrosoftGraphSettings({
+          sendTestEmail: true,
+          senderEmail,
+          defaultToRecipients: to,
+          defaultCcRecipients: cc,
+          defaultBccRecipients: bcc,
+          emailSubjectTemplate: subject,
+          emailBodyTemplate: body,
+        });
+      }
+      if (value.includes("whatsapp")) {
+        const obj = (parsed ?? {}) as Record<string, unknown>;
+        const baseUrl = typeof obj.baseUrlOverride === "string" && obj.baseUrlOverride.trim() ? obj.baseUrlOverride.trim() : undefined;
+        const targetRaw = obj.target;
+        const target = targetRaw === "single" || targetRaw === "group" ? (targetRaw as "single" | "group") : undefined;
+        const number = typeof obj.number === "string" && obj.number.trim() ? obj.number.trim() : undefined;
+        const groupId = typeof obj.groupId === "string" && obj.groupId.trim() ? obj.groupId.trim() : undefined;
+        const groupName = typeof obj.groupName === "string" && obj.groupName.trim() ? obj.groupName.trim() : undefined;
+        const mentionRaw = Array.isArray(obj.mentionNumbers) ? (obj.mentionNumbers as unknown[]) : [];
+        const mentionNumbers: string[] = [];
+        for (const v of mentionRaw) if (typeof v === "string" && v.trim()) mentionNumbers.push(v.trim());
+        return apiTestWhatsAppSettings({
+          sendTestMessage: true,
+          baseUrl,
+          target,
+          defaultNumber: number,
+          groupId,
+          groupName,
+          mentionNumbers,
+        });
+      }
+      throw new ApiError("Unsupported channel type", 400);
+    },
+    onSuccess: (data) => {
+      let title = "Connection ok";
+      if ("testEmailSent" in data && typeof (data as { testEmailSent?: unknown }).testEmailSent === "boolean" && (data as { testEmailSent: boolean }).testEmailSent) {
+        title = "Test email sent";
+      }
+      if ("testMessageSent" in data && typeof (data as { testMessageSent?: unknown }).testMessageSent === "boolean" && (data as { testMessageSent: boolean }).testMessageSent) {
+        title = "Test message sent";
+      }
+      toast({ title });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Test failed";
+      toast({ title: "Test failed", description: message, variant: "destructive" });
     },
   });
 
@@ -177,15 +310,40 @@ const Notifications = () => {
 
   const saveChannelMutation = useMutation({
     mutationFn: async () => {
+      const buildConfig = (): string | null => {
+        if (channelType === "Mail") {
+          const obj: Record<string, unknown> = {
+            to: splitList(mailToText),
+            cc: splitList(mailCcText),
+            bcc: splitList(mailBccText),
+            senderEmail: mailSenderEmail.trim() ? mailSenderEmail.trim() : undefined,
+            subjectTemplate: mailSubjectTemplate.trim() ? mailSubjectTemplate.trim() : undefined,
+            bodyTemplate: mailBodyTemplate.trim() ? mailBodyTemplate : undefined,
+            mergeMode: mailMergeMode,
+          };
+          return JSON.stringify(obj);
+        }
+        if (channelType === "WhatsApp") {
+          const obj: Record<string, unknown> = {
+            target: waTarget,
+            number: waTarget === "single" && waNumber.trim() ? waNumber.trim() : undefined,
+            groupId: waTarget === "group" && waGroupId.trim() ? waGroupId.trim() : undefined,
+            groupName: waTarget === "group" && waGroupName.trim() ? waGroupName.trim() : undefined,
+            baseUrlOverride: waBaseUrlOverride.trim() ? waBaseUrlOverride.trim() : undefined,
+          };
+          if (waTarget === "group") {
+            obj.mentionNumbers = splitList(waMentionText);
+          }
+          return JSON.stringify(obj);
+        }
+        return channelConfig || null;
+      };
+
+      const cfg = buildConfig();
       if (channelModalMode === "create") {
-        return apiCreateNotificationChannel({ channelType, config: channelConfig || null, isActive: channelActive });
+        return apiCreateNotificationChannel({ channelType, channelName, config: cfg, isActive: channelActive });
       }
-      return apiUpdateNotificationChannel({
-        channelId: channelId ?? "",
-        channelType,
-        config: channelConfig || null,
-        isActive: channelActive,
-      });
+      return apiUpdateNotificationChannel({ channelId: channelId ?? "", channelType, channelName, config: cfg, isActive: channelActive });
     },
     onSuccess: async () => {
       setChannelModalOpen(false);
@@ -235,6 +393,11 @@ const Notifications = () => {
     }
 
     return rule.eventType;
+  };
+
+  const isChannelTestable = (channelType: string): boolean => {
+    const value = channelType.toLowerCase();
+    return value.includes("mail") || value.includes("email") || value.includes("graph") || value.includes("whatsapp");
   };
 
   useEffect(() => {
@@ -501,8 +664,22 @@ const Notifications = () => {
                       setChannelModalMode("create");
                       setChannelId(null);
                       setChannelType("Mail");
+                      setChannelName("Mail");
                       setChannelConfig("");
                       setChannelActive(true);
+                      setMailToText("");
+                      setMailCcText("");
+                      setMailBccText("");
+                      setMailSenderEmail("");
+                      setMailSubjectTemplate("");
+                      setMailBodyTemplate("");
+                      setMailMergeMode("override");
+                      setWaTarget("group");
+                      setWaNumber("");
+                      setWaGroupId("");
+                      setWaGroupName("");
+                      setWaMentionText("");
+                      setWaBaseUrlOverride("");
                       setChannelModalOpen(true);
                     }}
                   >
@@ -529,8 +706,76 @@ const Notifications = () => {
                           setChannelModalMode("edit");
                           setChannelId(channel.id);
                           setChannelType(channel.channelType);
+                          setChannelName(channel.channelName ?? channel.channelType);
                           setChannelConfig(channel.config ?? "");
                           setChannelActive(channel.isActive);
+                          const raw = channel.config ?? "";
+                          let parsed: unknown = null;
+                          try {
+                            parsed = raw.trim() ? JSON.parse(raw) : null;
+                          } catch {
+                            parsed = null;
+                          }
+                          if (channel.channelType === "Mail") {
+                            const obj = (parsed ?? {}) as Record<string, unknown>;
+                            const to = Array.isArray(obj.to) ? (obj.to as unknown[]).filter((v) => typeof v === "string") as string[] : [];
+                            const cc = Array.isArray(obj.cc) ? (obj.cc as unknown[]).filter((v) => typeof v === "string") as string[] : [];
+                            const bcc = Array.isArray(obj.bcc) ? (obj.bcc as unknown[]).filter((v) => typeof v === "string") as string[] : [];
+                            const senderEmail = typeof obj.senderEmail === "string" ? obj.senderEmail : "";
+                            const subjectTemplate = typeof obj.subjectTemplate === "string" ? obj.subjectTemplate : "";
+                            const bodyTemplate = typeof obj.bodyTemplate === "string" ? obj.bodyTemplate : "";
+                            const mergeModeRaw = obj.mergeMode;
+                            const mergeMode = mergeModeRaw === "append" ? "append" : "override";
+                            setMailToText(joinList(to));
+                            setMailCcText(joinList(cc));
+                            setMailBccText(joinList(bcc));
+                            setMailSenderEmail(senderEmail);
+                            setMailSubjectTemplate(subjectTemplate);
+                            setMailBodyTemplate(bodyTemplate);
+                            setMailMergeMode(mergeMode);
+                            setWaTarget("group");
+                            setWaNumber("");
+                            setWaGroupId("");
+                            setWaGroupName("");
+                            setWaMentionText("");
+                            setWaBaseUrlOverride("");
+                          } else if (channel.channelType === "WhatsApp") {
+                            const obj = (parsed ?? {}) as Record<string, unknown>;
+                            const targetRaw = obj.target;
+                            const target: "single" | "group" = targetRaw === "single" || targetRaw === "group" ? (targetRaw as "single" | "group") : "group";
+                            const number = typeof obj.number === "string" ? obj.number : "";
+                            const groupId = typeof obj.groupId === "string" ? obj.groupId : "";
+                            const groupName = typeof obj.groupName === "string" ? obj.groupName : "";
+                            const mentionRaw = Array.isArray(obj.mentionNumbers) ? (obj.mentionNumbers as unknown[]).filter((v) => typeof v === "string") as string[] : [];
+                            const baseUrlOverride = typeof obj.baseUrlOverride === "string" ? obj.baseUrlOverride : "";
+                            setWaTarget(target);
+                            setWaNumber(number);
+                            setWaGroupId(groupId);
+                            setWaGroupName(groupName);
+                            setWaMentionText(joinList(mentionRaw));
+                            setWaBaseUrlOverride(baseUrlOverride);
+                            setMailToText("");
+                            setMailCcText("");
+                            setMailBccText("");
+                            setMailSenderEmail("");
+                            setMailSubjectTemplate("");
+                            setMailBodyTemplate("");
+                            setMailMergeMode("override");
+                          } else {
+                            setMailToText("");
+                            setMailCcText("");
+                            setMailBccText("");
+                            setMailSenderEmail("");
+                            setMailSubjectTemplate("");
+                            setMailBodyTemplate("");
+                            setMailMergeMode("override");
+                            setWaTarget("group");
+                            setWaNumber("");
+                            setWaGroupId("");
+                            setWaGroupName("");
+                            setWaMentionText("");
+                            setWaBaseUrlOverride("");
+                          }
                           setChannelModalOpen(true);
                         }}
                       >
@@ -543,7 +788,7 @@ const Notifications = () => {
                             <Icon className={`w-5 h-5 ${active ? "text-success" : "text-warning"}`} />
                           </div>
                           <div>
-                            <p className="font-medium text-foreground">{channel.channelType}</p>
+                            <p className="font-medium text-foreground">{channel.channelName ?? channel.channelType}</p>
                             <p className="text-sm text-muted-foreground capitalize">
                               {active ? "active" : "inactive"}
                             </p>
@@ -557,6 +802,32 @@ const Notifications = () => {
                             }
                             disabled={updateChannelMutation.isPending}
                           />
+                          <Button size="icon" variant="outline" className="h-8 w-8" title="Test" onClick={() => testChannelMutation.mutate({ channel })} disabled={testChannelMutation.isPending}>
+                            <Send className="w-4 h-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="icon" variant="outline" className="h-8 w-8" title="Delete">
+                                <Trash className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete channel?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. The channel will be removed if no rules/logs reference it.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteChannelMutation.mutate({ channelId: channel.id })}
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                           <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                       </div>
@@ -827,19 +1098,97 @@ const Notifications = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-12 space-y-2">
-              <Label>Config (JSON or text)</Label>
-              <Textarea
-                value={channelConfig}
-                onChange={(e) => setChannelConfig(e.target.value)}
-                className="bg-muted/50"
-                rows={4}
-              />
-              <p className="text-xs text-muted-foreground">
-                Optional metadata for this channel. Currently not used by the notification job logic;
-                you can keep it empty or store notes like external IDs.
-              </p>
+            <div className="col-span-12 md:col-span-6 space-y-2">
+              <Label>Name</Label>
+              <Input value={channelName} onChange={(e) => setChannelName(e.target.value)} className="bg-muted/50" />
             </div>
+            {channelType === "Mail" ? (
+              <>
+                <div className="col-span-12 md:col-span-6 space-y-2">
+                  <Label>Sender Email (override)</Label>
+                  <Input value={mailSenderEmail} onChange={(e) => setMailSenderEmail(e.target.value)} className="bg-muted/50" />
+                </div>
+                <div className="col-span-12 md:col-span-6 space-y-2">
+                  <Label>Merge Mode</Label>
+                  <Select value={mailMergeMode} onValueChange={(v) => setMailMergeMode(v as typeof mailMergeMode)}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="append">Append to global</SelectItem>
+                      <SelectItem value="override">Override global</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-12 md:col-span-4 space-y-2">
+                  <Label>To (comma/newline)</Label>
+                  <Textarea value={mailToText} onChange={(e) => setMailToText(e.target.value)} rows={3} className="bg-muted/50" />
+                </div>
+                <div className="col-span-12 md:col-span-4 space-y-2">
+                  <Label>Cc</Label>
+                  <Textarea value={mailCcText} onChange={(e) => setMailCcText(e.target.value)} rows={3} className="bg-muted/50" />
+                </div>
+                <div className="col-span-12 md:col-span-4 space-y-2">
+                  <Label>Bcc</Label>
+                  <Textarea value={mailBccText} onChange={(e) => setMailBccText(e.target.value)} rows={3} className="bg-muted/50" />
+                </div>
+                <div className="col-span-12 md:col-span-6 space-y-2">
+                  <Label>Subject Template</Label>
+                  <Input value={mailSubjectTemplate} onChange={(e) => setMailSubjectTemplate(e.target.value)} className="bg-muted/50" />
+                </div>
+                <div className="col-span-12 space-y-2">
+                  <Label>Body Template</Label>
+                  <Textarea value={mailBodyTemplate} onChange={(e) => setMailBodyTemplate(e.target.value)} rows={6} className="bg-muted/50" />
+                </div>
+              </>
+            ) : channelType === "WhatsApp" ? (
+              <>
+                <div className="col-span-12 md:col-span-6 space-y-2">
+                  <Label>Base URL (override)</Label>
+                  <Input value={waBaseUrlOverride} onChange={(e) => setWaBaseUrlOverride(e.target.value)} className="bg-muted/50" />
+                </div>
+                <div className="col-span-12 md:col-span-6 space-y-2">
+                  <Label>Target</Label>
+                  <Select value={waTarget} onValueChange={(v) => setWaTarget(v as typeof waTarget)}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Target" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="group">Group</SelectItem>
+                      <SelectItem value="single">Single Number</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {waTarget === "single" ? (
+                  <div className="col-span-12 md:col-span-6 space-y-2">
+                    <Label>Number</Label>
+                    <Input value={waNumber} onChange={(e) => setWaNumber(e.target.value)} className="bg-muted/50" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="col-span-12 md:col-span-6 space-y-2">
+                      <Label>Group ID</Label>
+                      <Input value={waGroupId} onChange={(e) => setWaGroupId(e.target.value)} className="bg-muted/50" />
+                    </div>
+                    <div className="col-span-12 md:col-span-6 space-y-2">
+                      <Label>Group Name</Label>
+                      <Input value={waGroupName} onChange={(e) => setWaGroupName(e.target.value)} className="bg-muted/50" />
+                    </div>
+                  </>
+                )}
+                {waTarget === "group" && (
+                  <div className="col-span-12 space-y-2">
+                    <Label>Mentions (comma/newline)</Label>
+                    <Textarea value={waMentionText} onChange={(e) => setWaMentionText(e.target.value)} rows={2} className="bg-muted/50" />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="col-span-12 space-y-2">
+                <Label>Config (JSON or text)</Label>
+                <Textarea value={channelConfig} onChange={(e) => setChannelConfig(e.target.value)} className="bg-muted/50" rows={4} />
+              </div>
+            )}
             <div className="col-span-12">
               <div className="flex items-center justify-between rounded-lg border border-border p-3">
                 <div>

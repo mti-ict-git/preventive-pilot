@@ -6,7 +6,7 @@ import path from "node:path";
 import { getDb } from "../db/mssql.js";
 import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { requireAnyRole } from "../middleware/requireRole.js";
+import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole.js";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { runJobNow } from "../jobs/index.js";
 
@@ -3113,6 +3113,322 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
     throw err;
   }
 });
+
+const RejectApprovalSchema = z.object({
+  reason: z.string().max(1024).optional(),
+  reopenTask: z.boolean().optional(),
+});
+
+tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const accessResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName,",
+        "  t.ApprovalStatus AS ApprovalStatus",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const row = accessResult.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const accessRow: TaskAccessRow = {
+    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
+    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
+  };
+  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
+  const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : "None";
+  if (approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin" || approvalStatus === "Approved") {
+    res.status(400).json({ message: "Invalid state" });
+    return;
+  }
+
+  await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .query(
+      [
+        "UPDATE pm.PMTasks",
+        "SET",
+        "  TechnicianCompletedAt = COALESCE(TechnicianCompletedAt, sysutcdatetime()),",
+        "  TechnicianCompletedByUserId = COALESCE(TechnicianCompletedByUserId, @userId),",
+        "  ApprovalStatus = N'PendingSupervisor'",
+        "WHERE TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  res.json({ ok: true });
+});
+
+tasksRouter.post(
+  "/:taskId/approve-by-supervisor",
+  requireAnyRole(["Supervisor", "Admin", "Superadmin"]),
+  async (req, res) => {
+    const taskId = req.params.taskId;
+    if (!z.string().uuid().safeParse(taskId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const db = await getDb();
+    const statusResult = await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.ApprovalStatus AS ApprovalStatus",
+          "FROM pm.PMTasks t",
+          "WHERE t.TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+    if (approvalStatus !== "PendingSupervisor") {
+      res.status(400).json({ message: "Invalid state" });
+      return;
+    }
+
+    await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("userId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  ApprovalStatus = N'PendingSuperadmin',",
+          "  SupervisorApprovedAt = sysutcdatetime(),",
+          "  SupervisorApprovedByUserId = @userId",
+          "WHERE TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    res.json({ ok: true });
+  },
+);
+
+tasksRouter.post(
+  "/:taskId/approve-by-superadmin",
+  requireSuperadmin,
+  async (req, res) => {
+    const taskId = req.params.taskId;
+    if (!z.string().uuid().safeParse(taskId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const db = await getDb();
+    const tx = new sql.Transaction(db);
+    await tx.begin();
+    try {
+      const infoResult = await tx
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .query(
+          [
+            "SELECT TOP (1)",
+            "  t.TaskId AS TaskId,",
+            "  t.AssetId AS AssetId,",
+            "  t.TemplateId AS TemplateId,",
+            "  t.ApprovalStatus AS ApprovalStatus,",
+            "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
+            "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,",
+            "  tpl.IntervalDays AS IntervalDays",
+            "FROM pm.PMTasks t",
+            "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+            "WHERE t.TaskId = @taskId",
+          ].join("\n"),
+        );
+
+      const row = infoResult.recordset[0] as Record<string, unknown> | undefined;
+      if (!row) {
+        res.status(404).json({ message: "Not found" });
+        await tx.rollback();
+        return;
+      }
+
+      const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+      if (approvalStatus !== "PendingSuperadmin") {
+        res.status(400).json({ message: "Invalid state" });
+        await tx.rollback();
+        return;
+      }
+
+      const technicianCompletedAtValue = row.TechnicianCompletedAt as Date | string | null;
+      const technicianCompletedAt =
+        technicianCompletedAtValue instanceof Date
+          ? technicianCompletedAtValue
+          : typeof technicianCompletedAtValue === "string"
+            ? new Date(technicianCompletedAtValue)
+            : null;
+
+      const finalCompletedAt = technicianCompletedAt ?? new Date();
+      const intervalDays = Number(row.IntervalDays);
+
+      await tx
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .input("userId", sql.UniqueIdentifier, req.user.sub)
+        .input("finalCompletedAt", sql.DateTime2(0), finalCompletedAt)
+        .input("technicianUserId", sql.UniqueIdentifier, (row.TechnicianCompletedByUserId as string | null) ?? null)
+        .query(
+          [
+            "UPDATE pm.PMTasks",
+            "SET",
+            "  ApprovalStatus = N'Approved',",
+            "  SuperadminApprovedAt = sysutcdatetime(),",
+            "  SuperadminApprovedByUserId = @userId,",
+            "  Status = N'completed',",
+            "  CompletedAt = COALESCE(CompletedAt, @finalCompletedAt),",
+            "  CompletedByUserId = COALESCE(CompletedByUserId, @technicianUserId),",
+            "  DataEntryAt = COALESCE(DataEntryAt, sysutcdatetime())",
+            "WHERE TaskId = @taskId",
+          ].join("\n"),
+        );
+
+      await tx
+        .request()
+        .input("assetId", sql.UniqueIdentifier, row.AssetId as string)
+        .input("intervalDays", sql.Int, Number.isFinite(intervalDays) ? intervalDays : 0)
+        .input("completedAt", sql.DateTime2(0), finalCompletedAt)
+        .query(
+          [
+            "UPDATE pm.AssetPMSettings",
+            "SET",
+            "  LastPMCompletedAt = @completedAt,",
+            "  NextPMDueAt = CASE",
+            "    WHEN @intervalDays <= 0 THEN NextPMDueAt",
+            "    WHEN @intervalDays = 30 THEN dateadd(month, 1, @completedAt)",
+            "    WHEN @intervalDays = 90 THEN dateadd(month, 3, @completedAt)",
+            "    WHEN @intervalDays = 180 THEN dateadd(month, 6, @completedAt)",
+            "    WHEN @intervalDays = 365 THEN dateadd(year, 1, @completedAt)",
+            "    ELSE dateadd(day, @intervalDays, @completedAt)",
+            "  END,",
+            "  UpdatedAt = sysutcdatetime()",
+            "WHERE AssetId = @assetId",
+          ].join("\n"),
+        );
+
+      await tx.commit();
+      res.json({ ok: true });
+    } catch (err) {
+      await tx.rollback().catch(() => undefined);
+      throw err;
+    }
+  },
+);
+
+tasksRouter.post(
+  "/:taskId/reject-approval",
+  requireAnyRole(["Supervisor", "Superadmin"]),
+  async (req, res) => {
+    const taskId = req.params.taskId;
+    if (!z.string().uuid().safeParse(taskId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const parsed = RejectApprovalSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const db = await getDb();
+    const statusResult = await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.ApprovalStatus AS ApprovalStatus",
+          "FROM pm.PMTasks t",
+          "WHERE t.TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+    if (approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin") {
+      res.status(400).json({ message: "Invalid state" });
+      return;
+    }
+
+    await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  ApprovalStatus = N'Rejected'",
+          "WHERE TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    if (parsed.data.reopenTask) {
+      await db
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .query(
+          [
+            "UPDATE pm.PMTasks",
+            "SET",
+            "  Status = CASE WHEN Status IN (N'completed', N'cancelled') THEN Status ELSE N'in_progress' END",
+            "WHERE TaskId = @taskId",
+          ].join("\n"),
+        );
+    }
+
+    const reason = parsed.data.reason ?? null;
+    if (reason && reason.trim().length > 0) {
+      await writeAuditLog({
+        actorUserId: req.user.sub,
+        action: "approval_rejected",
+        entityType: "PMTask",
+        entityId: taskId,
+        metadata: { reason },
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers["user-agent"] ?? null,
+      });
+    }
+
+    res.json({ ok: true });
+  },
+);
 
 tasksRouter.post("/:taskId/evidence", async (req, res) => {
   const taskId = req.params.taskId;

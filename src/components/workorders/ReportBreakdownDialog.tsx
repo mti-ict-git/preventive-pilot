@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { apiCreateWorkOrder, ApiError } from "@/lib/api";
+import { apiCreateWorkOrder, ApiError, apiListNotificationChannels, type NotificationChannel } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
 type ReportBreakdownDialogProps = {
@@ -24,11 +24,35 @@ const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templa
   const [failureCategory, setFailureCategory] = useState("");
   const [failureCode, setFailureCode] = useState("");
   const [downtimeStartedAt, setDowntimeStartedAt] = useState("");
-  const [reportedChannel, setReportedChannel] = useState("");
+  const [reportedChannelSelect, setReportedChannelSelect] = useState<string>("");
+
+  const channelsQuery = useQuery<{ items: NotificationChannel[] }>({
+    queryKey: ["notification-channels"],
+    queryFn: apiListNotificationChannels,
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  const activeChannels = useMemo(() => {
+    const items = channelsQuery.data?.items ?? [];
+    return items.filter((c) => c.isActive);
+  }, [channelsQuery.data?.items]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (reportedChannelSelect) return;
+    const web = activeChannels.find((c) => c.channelType === "web");
+    if (web) {
+      setReportedChannelSelect("web");
+    } else if (activeChannels.length > 0) {
+      setReportedChannelSelect(activeChannels[0].channelType);
+    }
+  }, [open, activeChannels, reportedChannelSelect]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!symptom.trim()) throw new Error("Enter symptom");
+      const channelValue = reportedChannelSelect.trim();
       const payload = {
         assetId,
         facilityId,
@@ -38,7 +62,7 @@ const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templa
         failureCategory: failureCategory.trim() || undefined,
         failureCode: failureCode.trim() || undefined,
         downtimeStartedAt: downtimeStartedAt ? new Date(downtimeStartedAt).toISOString() : undefined,
-        reportedChannel: reportedChannel.trim() || undefined,
+        reportedChannel: channelValue || undefined,
       };
       return apiCreateWorkOrder(payload);
     },
@@ -49,7 +73,7 @@ const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templa
       setFailureCategory("");
       setFailureCode("");
       setDowntimeStartedAt("");
-      setReportedChannel("");
+      setReportedChannelSelect("");
       onOpenChange(false);
       navigate("/work-orders");
     },
@@ -105,7 +129,19 @@ const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templa
           </div>
           <div className="space-y-2">
             <label className="text-sm text-muted-foreground">Reported channel</label>
-            <Input value={reportedChannel} onChange={(e) => setReportedChannel(e.target.value)} placeholder="Phone/WhatsApp/Web" />
+            <Select
+              value={reportedChannelSelect}
+              onValueChange={(v) => setReportedChannelSelect(v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select channel" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeChannels.map((c) => (
+                  <SelectItem key={c.id} value={c.channelType}>{c.channelType}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={createMutation.isPending}>Cancel</Button>

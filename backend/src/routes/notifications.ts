@@ -9,6 +9,7 @@ const requireNotificationAdmin = requireAnyRole(["Superadmin", "Admin"]);
 
 const ChannelCreateSchema = z.object({
   channelType: z.string().min(1).max(32),
+  channelName: z.string().min(1).max(128).nullable().optional(),
   config: z.string().nullable().optional(),
   isActive: z.boolean().default(true),
 });
@@ -43,6 +44,49 @@ export const notificationsRouter = Router();
 
 notificationsRouter.use(requireAuth);
 
+notificationsRouter.delete("/channels/:channelId", requireNotificationAdmin, async (req, res) => {
+  const channelId = req.params.channelId;
+  if (!z.string().uuid().safeParse(channelId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const refs = await db
+    .request()
+    .input("channelId", sql.UniqueIdentifier, channelId)
+    .query(
+      [
+        "SELECT",
+        "  (SELECT TOP (1) 1 FROM pm.NotificationRules WHERE ChannelId = @channelId) AS HasRules,",
+        "  (SELECT TOP (1) 1 FROM pm.NotificationLog WHERE ChannelId = @channelId) AS HasLog",
+      ].join("\n"),
+    );
+
+  const row = refs.recordset[0] as { HasRules?: number; HasLog?: number } | undefined;
+  const hasRules = (row?.HasRules ?? 0) === 1;
+  const hasLog = (row?.HasLog ?? 0) === 1;
+  if (hasRules || hasLog) {
+    res.status(409).json({ message: "Channel cannot be deleted while rules or logs reference it. Deactivate or remove references first." });
+    return;
+  }
+
+  const deleted = await db
+    .request()
+    .input("channelId", sql.UniqueIdentifier, channelId)
+    .query(
+      [
+        "DELETE FROM pm.NotificationChannels WHERE ChannelId = @channelId",
+      ].join("\n"),
+    );
+
+  if (deleted.rowsAffected[0] === 0) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  res.json({ ok: true });
+});
 notificationsRouter.get("/channels", async (_req, res) => {
   const db = await getDb();
   const result = await db
@@ -50,7 +94,7 @@ notificationsRouter.get("/channels", async (_req, res) => {
     .query(
       [
         "SELECT",
-        "  ChannelId, ChannelType, Config, IsActive, CreatedAt, UpdatedAt",
+        "  ChannelId, ChannelName, ChannelType, Config, IsActive, CreatedAt, UpdatedAt",
         "FROM pm.NotificationChannels",
         "ORDER BY UpdatedAt DESC",
       ].join("\n"),
@@ -60,6 +104,7 @@ notificationsRouter.get("/channels", async (_req, res) => {
   res.json({
     items: rows.map((r) => ({
       id: r.ChannelId,
+      channelName: r.ChannelName,
       channelType: r.ChannelType,
       config: r.Config,
       isActive: r.IsActive,
@@ -80,13 +125,14 @@ notificationsRouter.post("/channels", requireNotificationAdmin, async (req, res)
   const inserted = await db
     .request()
     .input("channelType", sql.NVarChar(32), parsed.data.channelType)
+    .input("channelName", sql.NVarChar(128), parsed.data.channelName ?? null)
     .input("config", sql.NVarChar(sql.MAX), parsed.data.config ?? null)
     .input("isActive", sql.Bit, parsed.data.isActive ? 1 : 0)
     .query(
       [
-        "INSERT INTO pm.NotificationChannels (ChannelType, Config, IsActive)",
+        "INSERT INTO pm.NotificationChannels (ChannelType, ChannelName, Config, IsActive)",
         "OUTPUT inserted.ChannelId AS ChannelId",
-        "VALUES (@channelType, @config, @isActive)",
+        "VALUES (@channelType, @channelName, @config, @isActive)",
       ].join("\n"),
     );
 
@@ -113,6 +159,7 @@ notificationsRouter.put("/channels/:channelId", requireNotificationAdmin, async 
   }
 
   const hasChannelType = Object.prototype.hasOwnProperty.call(parsed.data, "channelType");
+  const hasChannelName = Object.prototype.hasOwnProperty.call(parsed.data, "channelName");
   const hasConfig = Object.prototype.hasOwnProperty.call(parsed.data, "config");
   const hasIsActive = Object.prototype.hasOwnProperty.call(parsed.data, "isActive");
 
@@ -122,6 +169,8 @@ notificationsRouter.put("/channels/:channelId", requireNotificationAdmin, async 
     .input("channelId", sql.UniqueIdentifier, channelId)
     .input("hasChannelType", sql.Bit, hasChannelType ? 1 : 0)
     .input("channelType", sql.NVarChar(32), parsed.data.channelType ?? null)
+    .input("hasChannelName", sql.Bit, hasChannelName ? 1 : 0)
+    .input("channelName", sql.NVarChar(128), parsed.data.channelName ?? null)
     .input("hasConfig", sql.Bit, hasConfig ? 1 : 0)
     .input("config", sql.NVarChar(sql.MAX), parsed.data.config ?? null)
     .input("hasIsActive", sql.Bit, hasIsActive ? 1 : 0)
@@ -131,6 +180,7 @@ notificationsRouter.put("/channels/:channelId", requireNotificationAdmin, async 
         "UPDATE pm.NotificationChannels",
         "SET",
         "  ChannelType = CASE WHEN @hasChannelType = 1 THEN @channelType ELSE ChannelType END,",
+        "  ChannelName = CASE WHEN @hasChannelName = 1 THEN @channelName ELSE ChannelName END,",
         "  Config = CASE WHEN @hasConfig = 1 THEN @config ELSE Config END,",
         "  IsActive = CASE WHEN @hasIsActive = 1 THEN @isActive ELSE IsActive END,",
         "  UpdatedAt = sysutcdatetime()",

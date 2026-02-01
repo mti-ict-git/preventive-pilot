@@ -217,7 +217,11 @@ Required environment variables:
   - `{{templateName}}`
   - `{{technicianNumber}}` (the assigned technician's phone number when available)
   - `{{message}}` (the rendered per-rule message body)
-- The Notification Channel **Config (JSON or text)** field is optional and currently treated as free-form metadata. You can leave it empty or store notes like external IDs or routing hints for future integrations; it is not required for the built-in reminder job to work.
+- Notification Channel config is typed per channel and overrides global settings:
+  - Mail: to, cc, bcc, senderEmail, subjectTemplate, bodyTemplate, mergeMode (override|append).
+  - WhatsApp: target (single|group), number, groupId/groupName, mentionNumbers, baseUrlOverride.
+  - Global Microsoft Graph and WhatsApp settings provide credentials and defaults; channel config customizes recipients and routing per audience.
+  - Channels can be deleted from the Notifications page; deletion is blocked if rules or logs still reference the channel.
 
 ## Docker (web + api)
 
