@@ -395,6 +395,15 @@ const Notifications = () => {
     return rule.eventType;
   };
 
+  useEffect(() => {
+    if (ruleModalType === "reminder" && eventType === "task_assigned") {
+      setEventType("task_due");
+    }
+    if (ruleModalType === "escalation" && eventType !== "task_overdue") {
+      setEventType("task_overdue");
+    }
+  }, [ruleModalType]);
+
   const isChannelTestable = (channelType: string): boolean => {
     const value = channelType.toLowerCase();
     return value.includes("mail") || value.includes("email") || value.includes("graph") || value.includes("whatsapp");
@@ -545,7 +554,7 @@ const Notifications = () => {
                       </div>
                       <div className="flex items-center gap-2 ml-11">
                         <Badge variant="outline" className="text-xs">
-                          {channelById.get(rule.channel.id)?.channelType ?? rule.channel.channelType}
+                          {channelById.get(rule.channel.id)?.channelName ?? channelById.get(rule.channel.id)?.channelType ?? rule.channel.channelType}
                         </Badge>
                       </div>
                     </div>
@@ -634,7 +643,7 @@ const Notifications = () => {
                         />
                       </div>
                       <p className="text-sm text-muted-foreground ml-11">
-                        {formatRuleTiming(rule)} → Channel {rule.channel.channelType}
+                        {formatRuleTiming(rule)} → Channel {channelById.get(rule.channel.id)?.channelName ?? channelById.get(rule.channel.id)?.channelType ?? rule.channel.channelType}
                       </p>
                     </div>
                   ))
@@ -1002,9 +1011,14 @@ const Notifications = () => {
                   <SelectValue placeholder="Event" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="task_due">Task Due</SelectItem>
-                  <SelectItem value="task_overdue">Task Overdue</SelectItem>
-                  <SelectItem value="task_assigned">Task Assigned</SelectItem>
+                  {ruleModalType === "reminder" ? (
+                    <>
+                      <SelectItem value="task_due">Task Due</SelectItem>
+                      <SelectItem value="task_overdue">Task Overdue</SelectItem>
+                    </>
+                  ) : (
+                    <SelectItem value="task_overdue">Task Overdue</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1042,7 +1056,7 @@ const Notifications = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {channelItems.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.channelType}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{c.channelName ?? c.channelType}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

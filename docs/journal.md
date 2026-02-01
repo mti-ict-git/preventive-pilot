@@ -9,6 +9,18 @@
 - OpenAPI: documented approval workflow endpoints under backend entrypoint.
 - Verified repository with `npx tsc --noEmit` and `npm run lint`.
 
+## Sun Feb  1 02:38:54 UTC 2026
+- PM Task Approval Workflow 6.3: surfaced approval state in tasks APIs.
+- Tasks list: added approvalStatus and approver/submission fields (technician/supervisor/superadmin).
+- Task detail: included full approval metadata for display and audit.
+- Asset PM history: added approvalStatus field and optional approvedOnly filter.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 02:39:52 UTC 2026
+- Reports: added optional approvedOnly filter to compliance summary and CSV.
+- Compliance metrics can count only Approved tasks when requested.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
 ## Sun Feb  1 10:30:54 WITA 2026
 - Notifications: added Test button on each channel row in Notifications page.
 - Web: test button calls settings test APIs with per-channel overrides (Mail/WhatsApp).
@@ -18,6 +30,12 @@
 - Notifications: disabled Test button for unsupported channel types (e.g., Teams).
 - Button shows "Unsupported" tooltip when channel type cannot be tested.
 - Re-ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## Sun Feb  1 10:39:48 WITA 2026
+- Notifications: updated Reminder Rule flow to match new implementation.
+- Event options limited by type (Reminder: Due/Overdue; Escalation: Overdue).
+- Channel display uses channel name in Rule modal and rule cards.
+- Verified with `npx tsc --noEmit` and `npm run lint`.
 
 ## Sun Feb  1 10:23:15 WITA 2026
 - PM Task Approval Workflow 6.1: extended DB schema for approval tracking.

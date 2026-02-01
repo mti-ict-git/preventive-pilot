@@ -467,6 +467,8 @@ assetsRouter.get("/:assetId/history", async (req, res) => {
     return;
   }
 
+  const approvedOnly = typeof req.query.approvedOnly === "string" ? req.query.approvedOnly === "true" : false;
+
   const db = await getDb();
 
   const existsResult = await db
@@ -482,6 +484,7 @@ assetsRouter.get("/:assetId/history", async (req, res) => {
   const historyResult = await db
     .request()
     .input("assetId", sql.UniqueIdentifier, assetId)
+    .input("approvedOnly", sql.Bit, approvedOnly ? 1 : 0)
     .input("limit", sql.Int, 50)
     .query(
       [
@@ -489,6 +492,7 @@ assetsRouter.get("/:assetId/history", async (req, res) => {
         "  t.TaskId AS TaskId,",
         "  t.CompletedAt AS CompletedAt,",
         "  t.Status AS Status,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
         "  tpl.Name AS TemplateName,",
         "  cu.Username AS CompletedByUsername,",
         "  cu.DisplayName AS CompletedByDisplayName",
@@ -498,6 +502,7 @@ assetsRouter.get("/:assetId/history", async (req, res) => {
         "WHERE t.AssetId = @assetId",
         "  AND t.Status = N'completed'",
         "  AND t.CompletedAt IS NOT NULL",
+        "  AND (@approvedOnly = 0 OR t.ApprovalStatus = N'Approved')",
         "ORDER BY t.CompletedAt DESC",
       ].join("\n"),
     );
@@ -523,6 +528,7 @@ assetsRouter.get("/:assetId/history", async (req, res) => {
         type: typeof r.TemplateName === "string" ? r.TemplateName : null,
         technician,
         status: typeof r.Status === "string" ? r.Status : "completed",
+        approvalStatus: typeof r.ApprovalStatus === "string" ? r.ApprovalStatus : null,
       };
     }),
   );

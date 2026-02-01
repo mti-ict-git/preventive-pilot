@@ -20,6 +20,7 @@ const ComplianceQuerySchema = z.object({
   locationId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
   maintenanceType: MaintenanceTypeSchema,
+  approvedOnly: z.string().optional(),
 });
 
 const OverdueExportQuerySchema = z.object({
@@ -34,6 +35,7 @@ const ComplianceExportQuerySchema = z.object({
   locationId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
   maintenanceType: MaintenanceTypeSchema,
+  approvedOnly: z.string().optional(),
 });
 
 const SystemLogsExportQuerySchema = z.object({
@@ -606,6 +608,7 @@ reportsRouter.get("/compliance", async (req, res) => {
   }
 
   const db = await getDb();
+  const approvedOnlyBit = parsed.data.approvedOnly === "true" ? 1 : 0;
   const result = await db
     .request()
     .input("from", sql.DateTime2(0), parsed.data.from)
@@ -613,12 +616,13 @@ reportsRouter.get("/compliance", async (req, res) => {
     .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("categoryId", sql.UniqueIdentifier, parsed.data.categoryId ?? null)
     .input("maintenanceType", sql.NVarChar(8), parsed.data.maintenanceType === "all" ? null : parsed.data.maintenanceType)
+    .input("approvedOnly", sql.Bit, approvedOnlyBit)
     .query(
       [
         "SELECT",
         "  COUNT(1) AS TotalDue,",
-        "  SUM(CASE WHEN t.CompletedAt IS NOT NULL AND t.CompletedAt <= t.ScheduledDueAt THEN 1 ELSE 0 END) AS CompletedOnTime,",
-        "  SUM(CASE WHEN t.CompletedAt IS NOT NULL THEN 1 ELSE 0 END) AS CompletedTotal,",
+        "  SUM(CASE WHEN t.CompletedAt IS NOT NULL AND t.CompletedAt <= t.ScheduledDueAt AND (@approvedOnly = 0 OR t.ApprovalStatus = N'Approved') THEN 1 ELSE 0 END) AS CompletedOnTime,",
+        "  SUM(CASE WHEN t.CompletedAt IS NOT NULL AND (@approvedOnly = 0 OR t.ApprovalStatus = N'Approved') THEN 1 ELSE 0 END) AS CompletedTotal,",
         "  SUM(CASE WHEN t.CompletedAt IS NULL AND t.CancelledAt IS NULL AND t.ScheduledDueAt < sysutcdatetime() THEN 1 ELSE 0 END) AS CurrentlyOverdue",
         "FROM pm.PMTasks t",
         "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
@@ -657,6 +661,7 @@ reportsRouter.get("/compliance/export.csv", async (req, res) => {
   }
 
   const db = await getDb();
+  const approvedOnlyBit = parsed.data.approvedOnly === "true" ? 1 : 0;
   const result = await db
     .request()
     .input("from", sql.DateTime2(0), parsed.data.from)
@@ -664,12 +669,13 @@ reportsRouter.get("/compliance/export.csv", async (req, res) => {
     .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
     .input("categoryId", sql.UniqueIdentifier, parsed.data.categoryId ?? null)
     .input("maintenanceType", sql.NVarChar(8), parsed.data.maintenanceType === "all" ? null : parsed.data.maintenanceType)
+    .input("approvedOnly", sql.Bit, approvedOnlyBit)
     .query(
       [
         "SELECT",
         "  COUNT(1) AS TotalDue,",
-        "  SUM(CASE WHEN t.CompletedAt IS NOT NULL AND t.CompletedAt <= t.ScheduledDueAt THEN 1 ELSE 0 END) AS CompletedOnTime,",
-        "  SUM(CASE WHEN t.CompletedAt IS NOT NULL THEN 1 ELSE 0 END) AS CompletedTotal,",
+        "  SUM(CASE WHEN t.CompletedAt IS NOT NULL AND t.CompletedAt <= t.ScheduledDueAt AND (@approvedOnly = 0 OR t.ApprovalStatus = N'Approved') THEN 1 ELSE 0 END) AS CompletedOnTime,",
+        "  SUM(CASE WHEN t.CompletedAt IS NOT NULL AND (@approvedOnly = 0 OR t.ApprovalStatus = N'Approved') THEN 1 ELSE 0 END) AS CompletedTotal,",
         "  SUM(CASE WHEN t.CompletedAt IS NULL AND t.CancelledAt IS NULL AND t.ScheduledDueAt < sysutcdatetime() THEN 1 ELSE 0 END) AS CurrentlyOverdue",
         "FROM pm.PMTasks t",
         "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",

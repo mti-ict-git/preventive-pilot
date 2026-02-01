@@ -922,6 +922,19 @@ tasksRouter.get("/", async (req, res) => {
         "  t.ScheduledDueAt AS ScheduledDueAt,",
         "  t.Status AS Status,",
         "  t.Priority AS Priority,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
+        "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
+        "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,",
+        "  tc.Username AS TechnicianCompletedByUsername,",
+        "  tc.DisplayName AS TechnicianCompletedByDisplayName,",
+        "  t.SupervisorApprovedAt AS SupervisorApprovedAt,",
+        "  t.SupervisorApprovedByUserId AS SupervisorApprovedByUserId,",
+        "  su.Username AS SupervisorApprovedByUsername,",
+        "  su.DisplayName AS SupervisorApprovedByDisplayName,",
+        "  t.SuperadminApprovedAt AS SuperadminApprovedAt,",
+        "  t.SuperadminApprovedByUserId AS SuperadminApprovedByUserId,",
+        "  sa.Username AS SuperadminApprovedByUsername,",
+        "  sa.DisplayName AS SuperadminApprovedByDisplayName,",
         "  t.AssignedToUserId AS AssignedToUserId,",
         "  au.Username AS AssignedToUsername,",
         "  au.DisplayName AS AssignedToDisplayName,",
@@ -951,6 +964,9 @@ tasksRouter.get("/", async (req, res) => {
         "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
         "LEFT JOIN pm.Users au ON au.UserId = t.AssignedToUserId",
         "LEFT JOIN pm.Roles ar ON ar.RoleId = t.AssignedToRoleId",
+        "LEFT JOIN pm.Users tc ON tc.UserId = t.TechnicianCompletedByUserId",
+        "LEFT JOIN pm.Users su ON su.UserId = t.SupervisorApprovedByUserId",
+        "LEFT JOIN pm.Users sa ON sa.UserId = t.SuperadminApprovedByUserId",
         "WHERE",
         "  (@status IS NULL OR t.Status = @status)",
       "  AND (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
@@ -1017,6 +1033,31 @@ tasksRouter.get("/", async (req, res) => {
       createdAt: r.CreatedAt,
       startedAt: r.StartedAt,
       completedAt: r.CompletedAt,
+      approvalStatus: r.ApprovalStatus,
+      technicianCompletedAt: r.TechnicianCompletedAt,
+      technicianCompletedBy: r.TechnicianCompletedByUserId
+        ? {
+            userId: r.TechnicianCompletedByUserId,
+            username: r.TechnicianCompletedByUsername,
+            displayName: r.TechnicianCompletedByDisplayName,
+          }
+        : null,
+      supervisorApprovedAt: r.SupervisorApprovedAt,
+      supervisorApprovedBy: r.SupervisorApprovedByUserId
+        ? {
+            userId: r.SupervisorApprovedByUserId,
+            username: r.SupervisorApprovedByUsername,
+            displayName: r.SupervisorApprovedByDisplayName,
+          }
+        : null,
+      superadminApprovedAt: r.SuperadminApprovedAt,
+      superadminApprovedBy: r.SuperadminApprovedByUserId
+        ? {
+            userId: r.SuperadminApprovedByUserId,
+            username: r.SuperadminApprovedByUsername,
+            displayName: r.SuperadminApprovedByDisplayName,
+          }
+        : null,
       checklistTotal: Number(r.ChecklistTotal ?? 0),
       checklistCompleted: Number(r.ChecklistCompleted ?? 0),
       asset: {
@@ -1846,6 +1887,19 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "  ar.Name AS AssignedToRoleName,",
         "  t.Status AS Status,",
         "  t.Priority AS Priority,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
+        "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
+        "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,",
+        "  tc.Username AS TechnicianCompletedByUsername,",
+        "  tc.DisplayName AS TechnicianCompletedByDisplayName,",
+        "  t.SupervisorApprovedAt AS SupervisorApprovedAt,",
+        "  t.SupervisorApprovedByUserId AS SupervisorApprovedByUserId,",
+        "  su.Username AS SupervisorApprovedByUsername,",
+        "  su.DisplayName AS SupervisorApprovedByDisplayName,",
+        "  t.SuperadminApprovedAt AS SuperadminApprovedAt,",
+        "  t.SuperadminApprovedByUserId AS SuperadminApprovedByUserId,",
+        "  sa.Username AS SuperadminApprovedByUsername,",
+        "  sa.DisplayName AS SuperadminApprovedByDisplayName,",
         "  t.CreatedAt AS CreatedAt,",
         "  t.StartedAt AS StartedAt,",
         "  t.CompletedAt AS CompletedAt,",
@@ -1864,6 +1918,9 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "LEFT JOIN pm.Users au ON au.UserId = t.AssignedToUserId",
         "LEFT JOIN pm.Roles ar ON ar.RoleId = t.AssignedToRoleId",
         "LEFT JOIN pm.Users cu ON cu.UserId = t.CompletedByUserId",
+        "LEFT JOIN pm.Users tc ON tc.UserId = t.TechnicianCompletedByUserId",
+        "LEFT JOIN pm.Users su ON su.UserId = t.SupervisorApprovedByUserId",
+        "LEFT JOIN pm.Users sa ON sa.UserId = t.SuperadminApprovedByUserId",
         "LEFT JOIN pm.Users xu ON xu.UserId = t.CancelledByUserId",
         "WHERE t.TaskId = @taskId",
       ].join("\n"),
@@ -2013,6 +2070,31 @@ tasksRouter.get( "/:taskId", async (req, res) => {
     maintenanceType: taskRow.MaintenanceType,
     status: taskRow.Status,
     priority: taskRow.Priority,
+      approvalStatus: taskRow.ApprovalStatus,
+      technicianCompletedAt: taskRow.TechnicianCompletedAt,
+      technicianCompletedBy: taskRow.TechnicianCompletedByUserId
+        ? {
+            userId: taskRow.TechnicianCompletedByUserId,
+            username: taskRow.TechnicianCompletedByUsername,
+            displayName: taskRow.TechnicianCompletedByDisplayName,
+          }
+        : null,
+      supervisorApprovedAt: taskRow.SupervisorApprovedAt,
+      supervisorApprovedBy: taskRow.SupervisorApprovedByUserId
+        ? {
+            userId: taskRow.SupervisorApprovedByUserId,
+            username: taskRow.SupervisorApprovedByUsername,
+            displayName: taskRow.SupervisorApprovedByDisplayName,
+          }
+        : null,
+      superadminApprovedAt: taskRow.SuperadminApprovedAt,
+      superadminApprovedBy: taskRow.SuperadminApprovedByUserId
+        ? {
+            userId: taskRow.SuperadminApprovedByUserId,
+            username: taskRow.SuperadminApprovedByUsername,
+            displayName: taskRow.SuperadminApprovedByDisplayName,
+          }
+        : null,
     scheduledDueAt: taskRow.ScheduledDueAt,
     createdAt: taskRow.CreatedAt,
     startedAt: taskRow.StartedAt,
