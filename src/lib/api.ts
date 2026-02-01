@@ -340,6 +340,16 @@ export type TaskListItem = {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  approvalStatus: string | null;
+  technicianCompletedAt: string | null;
+  technicianCompletedBy: TaskUserRef | null;
+  supervisorApprovedAt: string | null;
+  supervisorApprovedBy: TaskUserRef | null;
+  superadminApprovedAt: string | null;
+  superadminApprovedBy: TaskUserRef | null;
+  rejectedAt: string | null;
+  rejectedBy: TaskUserRef | null;
+  rejectionReason: string | null;
   checklistTotal: number;
   checklistCompleted: number;
   asset: { id: string | null; assetTag: string | null; name: string | null };
@@ -370,6 +380,7 @@ export const apiListTasks = async (input: {
   templateId?: string;
   dueFrom?: string;
   dueTo?: string;
+  approvedOnly?: boolean;
   page?: number;
   pageSize?: number;
 }): Promise<ListTasksResponse> => {
@@ -383,6 +394,7 @@ export const apiListTasks = async (input: {
   if (input.templateId) params.set("templateId", input.templateId);
   if (input.dueFrom) params.set("dueFrom", input.dueFrom);
   if (input.dueTo) params.set("dueTo", input.dueTo);
+  if (input.approvedOnly !== undefined) params.set("approvedOnly", input.approvedOnly ? "true" : "false");
   if (input.page) params.set("page", String(input.page));
   if (input.pageSize) params.set("pageSize", String(input.pageSize));
   const query = params.toString();
@@ -481,6 +493,16 @@ export type TaskDetail = {
   cancelledAt: string | null;
   cancelledBy: TaskUserRef | null;
   forceCompleted: boolean | null;
+  approvalStatus: string | null;
+  technicianCompletedAt: string | null;
+  technicianCompletedBy: TaskUserRef | null;
+  supervisorApprovedAt: string | null;
+  supervisorApprovedBy: TaskUserRef | null;
+  superadminApprovedAt: string | null;
+  superadminApprovedBy: TaskUserRef | null;
+  rejectedAt: string | null;
+  rejectedBy: TaskUserRef | null;
+  rejectionReason: string | null;
   asset: { id: string; assetTag: string; name: string };
   facility: { id: string; name: string | null } | null;
   template: { id: string; name: string };
@@ -497,6 +519,30 @@ export type TaskDetail = {
 
 export const apiGetTask = async (taskId: string): Promise<TaskDetail> => {
   return apiFetchJson<TaskDetail>(`/api/tasks/${taskId}`);
+};
+
+export const apiSubmitTaskForApproval = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/submit-for-approval`, { method: "POST" });
+};
+
+export const apiApproveTaskBySupervisor = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/approve-by-supervisor`, { method: "POST" });
+};
+
+export const apiApproveTaskBySuperadmin = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/approve-by-superadmin`, { method: "POST" });
+};
+
+export const apiRejectTaskApproval = async (input: {
+  taskId: string;
+  reason?: string | null;
+  reopenTask?: boolean;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/reject-approval`, {
+    method: "POST",
+    body,
+  });
 };
 
 export const apiAssignTask = async (input: {

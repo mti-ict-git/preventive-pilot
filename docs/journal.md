@@ -37,6 +37,11 @@
 - Channel display uses channel name in Rule modal and rule cards.
 - Verified with `npx tsc --noEmit` and `npm run lint`.
 
+## Sun Feb  1 10:46:26 WITA 2026
+- Notifications: Test button now stops row click; no edit modal opens.
+- Clicking Test only runs the test and shows a toast result.
+- Re-ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
 ## Sun Feb  1 10:23:15 WITA 2026
 - PM Task Approval Workflow 6.1: extended DB schema for approval tracking.
 - DB: pm.PMTasks added ApprovalStatus (default None, enum constraint) and approval trail fields:
@@ -124,6 +129,11 @@
 - Added CM reported by/channel and downtime fields to Work Order detail response and UI.
 - Added Close Downtime action in Work Order detail.
 - Updated README with downtime detail note.
+
+## Sun Feb  1 10:50:35 WITA 2026
+- PM Tasks: wired Calendar View button to navigate directly to the PM Scheduling calendar.
+- Users can jump from the PM Tasks list to the calendar-based planning view in one click.
+- Ran `npm run lint` and `npx tsc --noEmit`; both passed.
 
 ## 2026-01-22 12:57:50 PM
 - Fixed backdateMode scope ordering in Work Order detail to satisfy TypeScript.
@@ -288,6 +298,17 @@
 - Extended mobile status badge to show Paused status
 - Standardized checklist outcomes (0=skip, 1=pass/done, 2=fail) and enforced in API.
 - Updated Tasks UI to use outcome dropdown instead of freeform numeric input.
+ - Updated Tasks UI to use outcome dropdown instead of freeform numeric input.
+
+## 2026-02-01 10:51:42 WITA
+- Asset Detail: integrated approval status badges in PM history items.
+- Asset Detail: added Approval Trail section in expanded PM task detail.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+## 2026-02-01 10:55:35 WITA
+- API types: extended TaskListItem/TaskDetail with rejection metadata.
+- Web: added Approved-only filter toggle in Asset PM History.
+- Web: surfaced rejection reason and who rejected in Approval Trail.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
 - Added DB check constraint to restrict checklist outcome values.
 
 ## 2026-01-03 07:00

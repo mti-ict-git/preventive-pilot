@@ -200,6 +200,7 @@ const AssetDetail = () => {
   const [reportBreakdownOpen, setReportBreakdownOpen] = useState<boolean>(false);
   const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false);
   const [deleteTaskTarget, setDeleteTaskTarget] = useState<{ id: string; taskNumber: string } | null>(null);
+  const [approvedOnly, setApprovedOnly] = useState<boolean>(false);
 
   const queryClient = useQueryClient();
 
@@ -225,10 +226,10 @@ const AssetDetail = () => {
   });
 
   const historyTasksQuery = useQuery({
-    queryKey: ["tasks", "history", assetId],
+    queryKey: ["tasks", "history", assetId, approvedOnly ? "approved-only" : "all"],
     queryFn: async () => {
       if (!assetId) throw new Error("Missing assetId");
-      return apiListTasks({ assetId, status: "completed", maintenanceType: "PM", page: 1, pageSize: 50 });
+      return apiListTasks({ assetId, status: "completed", maintenanceType: "PM", approvedOnly, page: 1, pageSize: 50 });
     },
     enabled: Boolean(assetId),
     staleTime: 30_000,
@@ -1217,6 +1218,12 @@ const AssetDetail = () => {
 
           {/* PM History Tab */}
           <TabsContent value="history" className="mt-4 space-y-4">
+            <div className="flex items-center justify-end">
+              <div className="flex items-center gap-2">
+                <Switch id="approved-only" checked={approvedOnly} onCheckedChange={(v) => setApprovedOnly(v === true)} />
+                <label htmlFor="approved-only" className="text-sm text-muted-foreground">Approved only</label>
+              </div>
+            </div>
             {historyTasksQuery.isLoading ? (
               <div className="p-6 text-sm text-muted-foreground">Loading PM history…</div>
             ) : historyTasksQuery.isError ? (
@@ -1254,6 +1261,23 @@ const AssetDetail = () => {
                               <Badge variant="outline" className="bg-success/20 text-success border-success/30">
                                 Completed
                               </Badge>
+                              {task.approvalStatus === "PendingSupervisor" ? (
+                                <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
+                                  Pending Supervisor
+                                </Badge>
+                              ) : task.approvalStatus === "PendingSuperadmin" ? (
+                                <Badge variant="outline" className="bg-accent/20 text-accent border-accent/30">
+                                  Pending Superadmin
+                                </Badge>
+                              ) : task.approvalStatus === "Approved" ? (
+                                <Badge variant="outline" className="bg-success/20 text-success border-success/30">
+                                  Approved
+                                </Badge>
+                              ) : task.approvalStatus === "Rejected" ? (
+                                <Badge variant="outline" className="bg-destructive/20 text-destructive border-destructive/30">
+                                  Rejected
+                                </Badge>
+                              ) : null}
                             </div>
                             <h3 className="font-semibold text-foreground">{task.template.name}</h3>
                             <p className="text-sm text-muted-foreground">
@@ -1308,6 +1332,54 @@ const AssetDetail = () => {
                                   <p className="text-sm text-muted-foreground mb-1">Evidence Files</p>
                                   <p className="text-lg font-semibold text-foreground">{getTotalEvidenceCount(expandedTask)}</p>
                                 </div>
+                              </div>
+
+                              <div className="mt-4">
+                                <h4 className="font-semibold text-foreground mb-3">Approval Trail</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div className="p-4 rounded-lg bg-muted/30">
+                                    <p className="text-sm text-muted-foreground mb-1">Technician</p>
+                                    <p className="text-lg font-semibold text-foreground">
+                                      {expandedTask.technicianCompletedBy?.displayName ?? expandedTask.technicianCompletedBy?.username ?? expandedTask.completedBy?.displayName ?? expandedTask.completedBy?.username ?? "—"}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {expandedTask.technicianCompletedAt
+                                        ? new Date(expandedTask.technicianCompletedAt).toLocaleString()
+                                        : expandedTask.completedAt
+                                        ? new Date(expandedTask.completedAt).toLocaleString()
+                                        : "—"}
+                                    </p>
+                                  </div>
+                                  <div className="p-4 rounded-lg bg-muted/30">
+                                    <p className="text-sm text-muted-foreground mb-1">Supervisor</p>
+                                    <p className="text-lg font-semibold text-foreground">
+                                      {expandedTask.supervisorApprovedBy?.displayName ?? expandedTask.supervisorApprovedBy?.username ?? "—"}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {expandedTask.supervisorApprovedAt ? new Date(expandedTask.supervisorApprovedAt).toLocaleString() : "—"}
+                                    </p>
+                                  </div>
+                                  <div className="p-4 rounded-lg bg-muted/30">
+                                    <p className="text-sm text-muted-foreground mb-1">Superadmin</p>
+                                    <p className="text-lg font-semibold text-foreground">
+                                      {expandedTask.superadminApprovedBy?.displayName ?? expandedTask.superadminApprovedBy?.username ?? "—"}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {expandedTask.superadminApprovedAt ? new Date(expandedTask.superadminApprovedAt).toLocaleString() : "—"}
+                                    </p>
+                                  </div>
+                                </div>
+                                {expandedTask.approvalStatus === "Rejected" ? (
+                                  <div className="mt-2 p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+                                    <p className="text-sm text-destructive">Rejected</p>
+                                    <p className="text-sm text-foreground">{expandedTask.rejectionReason ?? "—"}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {(expandedTask.rejectedBy?.displayName ?? expandedTask.rejectedBy?.username ?? "—")}
+                                      {" • "}
+                                      {expandedTask.rejectedAt ? new Date(expandedTask.rejectedAt).toLocaleString() : "—"}
+                                    </p>
+                                  </div>
+                                ) : null}
                               </div>
 
                               <div className="flex items-center justify-end gap-2">

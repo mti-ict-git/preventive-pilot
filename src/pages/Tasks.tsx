@@ -14,6 +14,7 @@ import {
   Calendar,
   Wrench,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,10 @@ import {
   apiCancelTask,
   apiResumeTask,
   apiReopenTask,
+  apiSubmitTaskForApproval,
+  apiApproveTaskBySupervisor,
+  apiApproveTaskBySuperadmin,
+  apiRejectTaskApproval,
   apiUploadTaskChecklistEvidenceFile,
   apiUploadTaskEvidenceFile,
   type CompleteTaskChecklistResultInput,
@@ -57,7 +62,7 @@ import {
   type UserSummary,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { isManager } from "@/lib/auth";
+import { isManager, isSuperadmin, hasRole } from "@/lib/auth";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
@@ -67,7 +72,8 @@ const Tasks = () => {
 	const [activeTab, setActiveTab] = useState("all");
 	const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 	const [taskDetailOpen, setTaskDetailOpen] = useState(false);
-
+	const navigate = useNavigate();
+	
 	const queryClient = useQueryClient();
 
   const listQueryInput: Parameters<typeof apiListTasks>[0] = useMemo(() => {
@@ -239,6 +245,12 @@ const Tasks = () => {
       if (activeTab === "due_today" && status === "cancelled") {
         return false;
       }
+      if (activeTab === "pending_supervisor") {
+        return (task.approvalStatus ?? "None") === "PendingSupervisor";
+      }
+      if (activeTab === "pending_superadmin") {
+        return (task.approvalStatus ?? "None") === "PendingSuperadmin";
+      }
       return true;
     });
     const q = searchQuery.trim().toLowerCase();
@@ -273,6 +285,7 @@ const Tasks = () => {
           checklistComplete: task.checklistCompleted,
           checklistTotal: task.checklistTotal,
           isAssigned,
+          approvalStatus: task.approvalStatus ?? "None",
         };
       })
       .filter((task) => {
@@ -321,7 +334,11 @@ const Tasks = () => {
             <Filter className="w-4 h-4" />
             Filters
           </Button>
-          <Button variant="outline" className="gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => navigate("/scheduling")}
+          >
             <Calendar className="w-4 h-4" />
             Calendar View
           </Button>
@@ -336,6 +353,8 @@ const Tasks = () => {
             <TabsTrigger value="in_progress">In Progress</TabsTrigger>
             <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
             <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+            <TabsTrigger value="pending_supervisor">Pending Supervisor</TabsTrigger>
+            <TabsTrigger value="pending_superadmin">Pending Superadmin</TabsTrigger>
           </TabsList>
 
           <TabsContent value={activeTab} className="mt-4">
@@ -653,6 +672,85 @@ export const TaskDetailDialog = (props: {
 
 	const task = taskQuery.data;
 
+  const submitForApprovalMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiSubmitTaskForApproval(props.taskId);
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "Submitted for approval" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Submission failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveBySupervisorMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiApproveTaskBySupervisor(props.taskId);
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "Supervisor approved" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Approve failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveBySuperadminMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiApproveTaskBySuperadmin(props.taskId);
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      toast({ title: "Superadmin approved" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Approve failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectReopen, setRejectReopen] = useState(false);
+
+  const rejectApprovalMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiRejectTaskApproval({ taskId: props.taskId, reason: rejectReason.trim() ? rejectReason.trim() : null, reopenTask: rejectReopen });
+    },
+    onSuccess: async () => {
+      setRejectDialogOpen(false);
+      setRejectReason("");
+      setRejectReopen(false);
+      await taskQuery.refetch();
+      toast({ title: "Approval rejected" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Reject failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
 	const normalizedStatus = task?.status.toLowerCase() ?? null;
   const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
   const canPause = normalizedStatus === "in_progress";
@@ -660,6 +758,12 @@ export const TaskDetailDialog = (props: {
   const canCancel = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
   const canComplete = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
   const canReopen = normalizedStatus === "cancelled" && isManager();
+
+  const approvalStatus = task?.approvalStatus ?? "None";
+  const canSubmitForApproval = task?.maintenanceType === "PM" && approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin" && approvalStatus !== "Approved";
+  const canApproveBySupervisor = hasRole("Supervisor") && approvalStatus === "PendingSupervisor";
+  const canApproveBySuperadmin = isSuperadmin() && approvalStatus === "PendingSuperadmin";
+  const canRejectApproval = (hasRole("Supervisor") || isSuperadmin()) && (approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin");
 
   const getOutcomeOptions = (requiresPassFail: boolean) => {
     if (requiresPassFail) {
@@ -1072,6 +1176,42 @@ export const TaskDetailDialog = (props: {
               >
                 Complete
               </Button>
+              {task ? (
+                <>
+                  {canSubmitForApproval ? (
+                    <Button
+                      variant="outline"
+                      disabled={submitForApprovalMutation.isPending}
+                      onClick={() => submitForApprovalMutation.mutate()}
+                    >
+                      Submit For Approval
+                    </Button>
+                  ) : null}
+                  {canApproveBySupervisor ? (
+                    <Button
+                      variant="outline"
+                      disabled={approveBySupervisorMutation.isPending}
+                      onClick={() => approveBySupervisorMutation.mutate()}
+                    >
+                      Approve (Supervisor)
+                    </Button>
+                  ) : null}
+                  {canApproveBySuperadmin ? (
+                    <Button
+                      variant="outline"
+                      disabled={approveBySuperadminMutation.isPending}
+                      onClick={() => approveBySuperadminMutation.mutate()}
+                    >
+                      Approve (Superadmin)
+                    </Button>
+                  ) : null}
+                  {canRejectApproval ? (
+                    <Button variant="destructive" onClick={() => setRejectDialogOpen(true)}>
+                      Reject
+                    </Button>
+                  ) : null}
+                </>
+              ) : null}
             </div>
           </div>
           <div className="mt-4 flex flex-col gap-3">
@@ -1177,6 +1317,20 @@ export const TaskDetailDialog = (props: {
                     </p>
                     <p className="text-xs text-muted-foreground mt-3">Status</p>
                     <p className="text-sm text-foreground mt-1">{task.status}</p>
+                    <p className="text-xs text-muted-foreground mt-3">Approval Status</p>
+                    <div className="mt-1">
+                      {approvalStatus === "PendingSupervisor" ? (
+                        <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">Pending Supervisor</Badge>
+                      ) : approvalStatus === "PendingSuperadmin" ? (
+                        <Badge variant="outline" className="bg-accent/20 text-accent border-accent/30">Pending Superadmin</Badge>
+                      ) : approvalStatus === "Approved" ? (
+                        <Badge variant="outline" className="bg-success/20 text-success border-success/30">Approved</Badge>
+                      ) : approvalStatus === "Rejected" ? (
+                        <Badge variant="outline" className="bg-destructive/20 text-destructive border-destructive/30">Rejected</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-muted/60">None</Badge>
+                      )}
+                    </div>
                   </div>
 
                   <div className="col-span-12 md:col-span-6 glass rounded-lg p-4">
@@ -1196,6 +1350,35 @@ export const TaskDetailDialog = (props: {
                     <p className="text-sm text-foreground mt-1">
                       {task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned"}
                     </p>
+                    <div className="grid grid-cols-12 gap-2 mt-3">
+                      <div className="col-span-12 md:col-span-4">
+                        <p className="text-xs text-muted-foreground">Technician Completed</p>
+                        <p className="text-sm text-foreground mt-1">
+                          {task.technicianCompletedAt ? format(parseISO(task.technicianCompletedAt), "yyyy-MM-dd HH:mm") : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {task.technicianCompletedBy?.displayName ?? task.technicianCompletedBy?.username ?? ""}
+                        </p>
+                      </div>
+                      <div className="col-span-12 md:col-span-4">
+                        <p className="text-xs text-muted-foreground">Supervisor Approved</p>
+                        <p className="text-sm text-foreground mt-1">
+                          {task.supervisorApprovedAt ? format(parseISO(task.supervisorApprovedAt), "yyyy-MM-dd HH:mm") : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {task.supervisorApprovedBy?.displayName ?? task.supervisorApprovedBy?.username ?? ""}
+                        </p>
+                      </div>
+                      <div className="col-span-12 md:col-span-4">
+                        <p className="text-xs text-muted-foreground">Superadmin Approved</p>
+                        <p className="text-sm text-foreground mt-1">
+                          {task.superadminApprovedAt ? format(parseISO(task.superadminApprovedAt), "yyyy-MM-dd HH:mm") : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {task.superadminApprovedBy?.displayName ?? task.superadminApprovedBy?.username ?? ""}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1583,6 +1766,33 @@ export const TaskDetailDialog = (props: {
             ) : null}
           </div>
         </ScrollArea>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Reject Approval</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Reason (optional)</Label>
+            <Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="mt-1" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="reject-reopen" checked={rejectReopen} onCheckedChange={(v) => setRejectReopen(v === true)} />
+            <Label htmlFor="reject-reopen">Reopen task</Label>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={rejectApprovalMutation.isPending}
+              onClick={() => rejectApprovalMutation.mutate()}
+            >
+              Confirm Reject
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
     <ReportBreakdownDialog

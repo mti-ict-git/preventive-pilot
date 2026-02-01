@@ -119,6 +119,7 @@ Required environment variables:
 - Start moves task to In Progress; Pause sets task to Paused.
 - Cancel records CancelledBy and timestamp; Complete enforces checklist rules.
 - PM Task Detail includes a Create Work Order action to report breakdowns; it opens a dialog pre-filled with the task's asset or facility context.
+- PM Tasks list includes a Calendar View button that navigates directly to the PM Scheduling calendar for capacity-aware planning.
 
 ## Corrective Maintenance (CM) Work Orders
 

@@ -816,7 +816,7 @@ const Notifications = () => {
                             variant="outline"
                             className="h-8 w-8"
                             title={isChannelTestable(channel.channelType) ? "Test" : "Unsupported"}
-                            onClick={() => testChannelMutation.mutate({ channel })}
+                            onClick={(e) => { e.stopPropagation(); testChannelMutation.mutate({ channel }); }}
                             disabled={testChannelMutation.isPending || !isChannelTestable(channel.channelType)}
                           >
                             <Send className="w-4 h-4" />
