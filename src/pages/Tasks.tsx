@@ -67,6 +67,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
 
+type SortMode = "due_asc" | "due_desc" | "created_desc" | "completed_desc";
+
 const Tasks = () => {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [activeTab, setActiveTab] = useState("all");
@@ -82,7 +84,8 @@ const Tasks = () => {
 	const [statusFilter, setStatusFilter] = useState<
 		"all" | "upcoming" | "in_progress" | "due_today" | "overdue" | "completed" | "cancelled"
 	>("all");
-	
+	const [sortMode, setSortMode] = useState<SortMode>("due_asc");
+
 	const queryClient = useQueryClient();
 
 	useEffect(() => {
@@ -281,7 +284,7 @@ const Tasks = () => {
 			return true;
 		});
 		const q = searchQuery.trim().toLowerCase();
-		return items
+		const mapped = items
 			.map((task) => {
 				const uiStatus = getUiStatus(task, now);
 				const pic = task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned";
@@ -313,6 +316,9 @@ const Tasks = () => {
 					checklistTotal: task.checklistTotal,
 					isAssigned,
 					approvalStatus: task.approvalStatus ?? "None",
+					_createdAt: task.createdAt,
+					_completedAt: task.completedAt,
+					_scheduledDueAt: task.scheduledDueAt,
 				};
 			})
 			.filter((task) => {
@@ -328,7 +334,42 @@ const Tasks = () => {
 					task.assetName.toLowerCase().includes(q)
 				);
 			});
-	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter]);
+
+		const sorted = mapped.slice();
+		sorted.sort((a, b) => {
+			const parseTime = (value: string | null | undefined): number => {
+				if (!value) {
+					return 0;
+				}
+				const time = new Date(value).getTime();
+				return Number.isFinite(time) ? time : 0;
+			};
+
+			if (sortMode === "due_asc") {
+				const aTime = parseTime(a._scheduledDueAt);
+				const bTime = parseTime(b._scheduledDueAt);
+				return aTime - bTime;
+			}
+			if (sortMode === "due_desc") {
+				const aTime = parseTime(a._scheduledDueAt);
+				const bTime = parseTime(b._scheduledDueAt);
+				return bTime - aTime;
+			}
+			if (sortMode === "created_desc") {
+				const aTime = parseTime(a._createdAt);
+				const bTime = parseTime(b._createdAt);
+				return bTime - aTime;
+			}
+			if (sortMode === "completed_desc") {
+				const aTime = parseTime(a._completedAt);
+				const bTime = parseTime(b._completedAt);
+				return bTime - aTime;
+			}
+			return 0;
+		});
+
+		return sorted.map(({ _createdAt, _completedAt, _scheduledDueAt, ...rest }) => rest);
+	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter, sortMode]);
 
   return (
     <div className="min-h-screen">
@@ -351,34 +392,47 @@ const Tasks = () => {
           ))}
         </div>
 
-        {/* Filters & Search */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by task ID, asset..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-muted/50"
-            />
-          </div>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setFiltersOpen(true)}
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => navigate("/scheduling")}
-          >
-            <Calendar className="w-4 h-4" />
-            Calendar View
-          </Button>
-        </div>
+		{/* Filters & Search */}
+		<div className="flex flex-col md:flex-row gap-4">
+			<div className="relative flex-1">
+				<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+				<Input
+					placeholder="Search by task ID, asset..."
+					value={searchQuery}
+					onChange={(e) => setSearchQuery(e.target.value)}
+					className="pl-10 bg-muted/50"
+				/>
+			</div>
+			<Button
+				variant="outline"
+				className="gap-2"
+				onClick={() => setFiltersOpen(true)}
+			>
+				<Filter className="w-4 h-4" />
+				Filters
+			</Button>
+			{activeTab === "all" ? (
+				<Select value={sortMode} onValueChange={(value: string) => setSortMode(value as SortMode)}>
+					<SelectTrigger className="w-[220px]">
+						<SelectValue placeholder="Sort by" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="due_asc">Due date (nearest first)</SelectItem>
+						<SelectItem value="due_desc">Due date (farthest first)</SelectItem>
+						<SelectItem value="created_desc">Created (latest first)</SelectItem>
+						<SelectItem value="completed_desc">Completed (latest first)</SelectItem>
+					</SelectContent>
+				</Select>
+			) : null}
+			<Button
+				variant="outline"
+				className="gap-2"
+				onClick={() => navigate("/scheduling")}
+			>
+				<Calendar className="w-4 h-4" />
+				Calendar View
+			</Button>
+		</div>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
