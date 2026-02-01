@@ -14,6 +14,11 @@
 - Web: test button calls settings test APIs with per-channel overrides (Mail/WhatsApp).
 - Verified with `npx tsc --noEmit` and `npm run lint`.
 
+## Sun Feb  1 10:35:48 WITA 2026
+- Notifications: disabled Test button for unsupported channel types (e.g., Teams).
+- Button shows "Unsupported" tooltip when channel type cannot be tested.
+- Re-ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
 ## Sun Feb  1 10:23:15 WITA 2026
 - PM Task Approval Workflow 6.1: extended DB schema for approval tracking.
 - DB: pm.PMTasks added ApprovalStatus (default None, enum constraint) and approval trail fields:

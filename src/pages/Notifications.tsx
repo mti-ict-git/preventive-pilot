@@ -802,7 +802,14 @@ const Notifications = () => {
                             }
                             disabled={updateChannelMutation.isPending}
                           />
-                          <Button size="icon" variant="outline" className="h-8 w-8" title="Test" onClick={() => testChannelMutation.mutate({ channel })} disabled={testChannelMutation.isPending}>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            title={isChannelTestable(channel.channelType) ? "Test" : "Unsupported"}
+                            onClick={() => testChannelMutation.mutate({ channel })}
+                            disabled={testChannelMutation.isPending || !isChannelTestable(channel.channelType)}
+                          >
                             <Send className="w-4 h-4" />
                           </Button>
                           <AlertDialog>
