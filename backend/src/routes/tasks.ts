@@ -262,6 +262,12 @@ const buildPmHistoryPdf = async (input: {
   assetName: string;
   rows: InspectionChecklistRow[];
   evidenceFileNames: string[];
+  technicianName: string;
+  supervisorName: string;
+  superadminName: string;
+  technicianDate: Date | null;
+  supervisorDate: Date | null;
+  superadminDate: Date | null;
 }): Promise<Uint8Array> => {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -409,13 +415,18 @@ const buildPmHistoryPdf = async (input: {
     const nameLineY = y - 98;
     const dateLineY = y - 120;
 
-    const labels = ["Reported By:", "Reviewed By:", "Acknowledge By:"];
+    const labels = ["Submitted By (Technician):", "Reviewed By (Supervisor):", "Approved By (Superadmin):"];
+    const names = [input.technicianName, input.supervisorName, input.superadminName];
+    const dates = [input.technicianDate, input.supervisorDate, input.superadminDate].map((d) => (d ? formatDateDmy(d) : ""));
+
     labels.forEach((t, i) => {
       page.drawText(t, { x: left + blockW * i + 2, y: y - 14, size: labelSize, font: fontBold });
       page.drawLine({ start: { x: left + blockW * i + 2, y: lineY1 }, end: { x: left + blockW * (i + 1) - 2, y: lineY1 }, thickness: 0.75, color: rgb(0, 0, 0) });
       page.drawText("Nama :", { x: left + blockW * i + 2, y: lineY2, size: labelSize, font });
+      page.drawText(names[i] ?? "—", { x: left + blockW * i + 42, y: nameLineY - 2, size: labelSize, font });
       page.drawLine({ start: { x: left + blockW * i + 42, y: nameLineY }, end: { x: left + blockW * (i + 1) - 2, y: nameLineY }, thickness: 0.75, color: rgb(0, 0, 0) });
       page.drawText("Tgl  :", { x: left + blockW * i + 2, y: lineY2 - 22, size: labelSize, font });
+      page.drawText(dates[i] ?? "—", { x: left + blockW * i + 42, y: dateLineY - 2, size: labelSize, font });
       page.drawLine({ start: { x: left + blockW * i + 42, y: dateLineY }, end: { x: left + blockW * (i + 1) - 2, y: dateLineY }, thickness: 0.75, color: rgb(0, 0, 0) });
     });
     return y - 130;
@@ -854,6 +865,212 @@ const enqueueTaskAssignedNotifications = async (taskId: string): Promise<void> =
               phone: taskRow.AssignedUserPhone,
             }
           : null,
+      message,
+    });
+
+    await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskRow.TaskId)
+      .input("ruleId", sql.UniqueIdentifier, rule.NotificationRuleId)
+      .input("channelId", sql.UniqueIdentifier, rule.ChannelId)
+      .input("status", sql.NVarChar(32), "queued")
+      .input("payload", sql.NVarChar(sql.MAX), payload)
+      .query(
+        [
+          "INSERT INTO pm.NotificationLog (TaskId, NotificationRuleId, ChannelId, Status, Payload)",
+          "VALUES (@taskId, @ruleId, @channelId, @status, @payload)",
+        ].join("\n"),
+      );
+  }
+};
+
+type NotificationRuleForApproval = {
+  NotificationRuleId: string;
+  RuleName: string;
+  EventType: string;
+  ChannelId: string;
+  ChannelType: string;
+  MessageTemplate: string | null;
+};
+
+type TaskRowForApproval = {
+  TaskId: string;
+  TaskNumber: string;
+  ScheduledDueAt: Date;
+  Status: string;
+  Priority: string;
+  AssetId: string;
+  AssetTag: string | null;
+  AssetName: string;
+  TemplateId: string;
+  TemplateName: string;
+  AssignedUserId: string | null;
+  AssignedUserEmail: string | null;
+  AssignedUserPhone: string | null;
+  TechnicianName: string | null;
+  TechnicianCompletedAt: Date | null;
+  SupervisorName: string | null;
+  SupervisorApprovedAt: Date | null;
+  SuperadminName: string | null;
+  SuperadminApprovedAt: Date | null;
+  RejectedByName: string | null;
+  RejectedAt: Date | null;
+  RejectionReason: string | null;
+};
+
+const enqueueTaskApprovalNotifications = async (
+  taskId: string,
+  eventType: "task_approved" | "task_rejected",
+  stage: "supervisor" | "superadmin",
+): Promise<void> => {
+  const db = await getDb();
+
+  const rulesResult = await db
+    .request()
+    .input("eventType", sql.NVarChar(64), eventType)
+    .query(
+      [
+        "SELECT",
+        "  r.NotificationRuleId AS NotificationRuleId,",
+        "  r.RuleName AS RuleName,",
+        "  r.EventType AS EventType,",
+        "  r.ChannelId AS ChannelId,",
+        "  c.ChannelType AS ChannelType,",
+        "  r.MessageTemplate AS MessageTemplate",
+        "FROM pm.NotificationRules r",
+        "INNER JOIN pm.NotificationChannels c ON c.ChannelId = r.ChannelId",
+        "WHERE r.IsActive = 1",
+        "  AND c.IsActive = 1",
+        "  AND r.EventType = @eventType",
+      ].join("\n"),
+    );
+
+  const rules = rulesResult.recordset as NotificationRuleForApproval[];
+  if (rules.length === 0) {
+    return;
+  }
+
+  const taskResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.TaskId AS TaskId,",
+        "  t.TaskNumber AS TaskNumber,",
+        "  t.ScheduledDueAt AS ScheduledDueAt,",
+        "  t.Status AS Status,",
+        "  t.Priority AS Priority,",
+        "  a.AssetId AS AssetId,",
+        "  a.AssetTag AS AssetTag,",
+        "  a.Name AS AssetName,",
+        "  tpl.TemplateId AS TemplateId,",
+        "  tpl.Name AS TemplateName,",
+        "  u.UserId AS AssignedUserId,",
+        "  u.Email AS AssignedUserEmail,",
+        "  u.Phone AS AssignedUserPhone,",
+        "  tc.DisplayName AS TechnicianName,",
+        "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
+        "  su.DisplayName AS SupervisorName,",
+        "  t.SupervisorApprovedAt AS SupervisorApprovedAt,",
+        "  sa.DisplayName AS SuperadminName,",
+        "  t.SuperadminApprovedAt AS SuperadminApprovedAt,",
+        "  rb.DisplayName AS RejectedByName,",
+        "  t.RejectedAt AS RejectedAt,",
+        "  t.RejectionReason AS RejectionReason",
+        "FROM pm.PMTasks t",
+        "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "LEFT JOIN pm.Users u ON u.UserId = t.AssignedToUserId",
+        "LEFT JOIN pm.Users tc ON tc.UserId = t.TechnicianCompletedByUserId",
+        "LEFT JOIN pm.Users su ON su.UserId = t.SupervisorApprovedByUserId",
+        "LEFT JOIN pm.Users sa ON sa.UserId = t.SuperadminApprovedByUserId",
+        "LEFT JOIN pm.Users rb ON rb.UserId = t.RejectedByUserId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const taskRow = taskResult.recordset[0] as TaskRowForApproval | undefined;
+  if (!taskRow) {
+    return;
+  }
+
+  const taskNumber = taskRow.TaskNumber;
+  const assetName = taskRow.AssetName;
+  const assetTag = taskRow.AssetTag ?? "";
+  const templateName = taskRow.TemplateName;
+  const supervisorName = taskRow.SupervisorName ?? "";
+  const superadminName = taskRow.SuperadminName ?? "";
+  const technicianName = taskRow.TechnicianName ?? "";
+  const approvedAtIso = stage === "supervisor"
+    ? (taskRow.SupervisorApprovedAt ? new Date(taskRow.SupervisorApprovedAt).toISOString() : "")
+    : (taskRow.SuperadminApprovedAt ? new Date(taskRow.SuperadminApprovedAt).toISOString() : "");
+  const rejectedAtIso = taskRow.RejectedAt ? new Date(taskRow.RejectedAt).toISOString() : "";
+  const rejectedByName = taskRow.RejectedByName ?? "";
+  const rejectionReason = taskRow.RejectionReason ?? "";
+
+  for (const rule of rules) {
+    const templateApproved =
+      rule.MessageTemplate ??
+      "PM task {{taskNumber}} for {{assetName}} ({{templateName}}) {{approvalStage}} approved at {{approvedAt}}.";
+    const templateRejected =
+      rule.MessageTemplate ??
+      "PM task {{taskNumber}} for {{assetName}} ({{templateName}}) rejected at {{rejectedAt}}. Reason: {{rejectionReason}}.";
+
+    const message = eventType === "task_approved"
+      ? renderNotificationTemplate(templateApproved, {
+          taskNumber,
+          assetTag,
+          assetName,
+          templateName,
+          approvalStage: stage,
+          approvedAt: approvedAtIso,
+          approvedByName: stage === "supervisor" ? supervisorName : superadminName,
+          technicianName,
+        })
+      : renderNotificationTemplate(templateRejected, {
+          taskNumber,
+          assetTag,
+          assetName,
+          templateName,
+          rejectedAt: rejectedAtIso,
+          rejectionReason,
+          rejectedByName,
+        });
+
+    const payload = JSON.stringify({
+      rule: { id: rule.NotificationRuleId, name: rule.RuleName, eventType: rule.EventType },
+      channel: { id: rule.ChannelId, type: rule.ChannelType },
+      task: {
+        id: taskRow.TaskId,
+        taskNumber: taskRow.TaskNumber,
+        scheduledDueAt: taskRow.ScheduledDueAt,
+        status: taskRow.Status,
+        priority: taskRow.Priority,
+      },
+      asset: { id: taskRow.AssetId, assetTag: taskRow.AssetTag, name: taskRow.AssetName },
+      template: { id: taskRow.TemplateId, name: taskRow.TemplateName },
+      user:
+        taskRow.AssignedUserId || taskRow.AssignedUserEmail || taskRow.AssignedUserPhone
+          ? {
+              id: taskRow.AssignedUserId,
+              email: taskRow.AssignedUserEmail,
+              phone: taskRow.AssignedUserPhone,
+            }
+          : null,
+      approval: eventType === "task_approved"
+        ? {
+            stage,
+            approvedAt: approvedAtIso,
+            approvedByName: stage === "supervisor" ? supervisorName : superadminName,
+            technicianName,
+          }
+        : {
+            stage,
+            rejectedAt: rejectedAtIso,
+            rejectionReason,
+            rejectedByName,
+          },
       message,
     });
 
@@ -1900,6 +2117,11 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "  t.SuperadminApprovedByUserId AS SuperadminApprovedByUserId,",
         "  sa.Username AS SuperadminApprovedByUsername,",
         "  sa.DisplayName AS SuperadminApprovedByDisplayName,",
+        "  t.RejectedAt AS RejectedAt,",
+        "  t.RejectedByUserId AS RejectedByUserId,",
+        "  rb.Username AS RejectedByUsername,",
+        "  rb.DisplayName AS RejectedByDisplayName,",
+        "  t.RejectionReason AS RejectionReason,",
         "  t.CreatedAt AS CreatedAt,",
         "  t.StartedAt AS StartedAt,",
         "  t.CompletedAt AS CompletedAt,",
@@ -1921,6 +2143,7 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "LEFT JOIN pm.Users tc ON tc.UserId = t.TechnicianCompletedByUserId",
         "LEFT JOIN pm.Users su ON su.UserId = t.SupervisorApprovedByUserId",
         "LEFT JOIN pm.Users sa ON sa.UserId = t.SuperadminApprovedByUserId",
+        "LEFT JOIN pm.Users rb ON rb.UserId = t.RejectedByUserId",
         "LEFT JOIN pm.Users xu ON xu.UserId = t.CancelledByUserId",
         "WHERE t.TaskId = @taskId",
       ].join("\n"),
@@ -2095,6 +2318,15 @@ tasksRouter.get( "/:taskId", async (req, res) => {
             displayName: taskRow.SuperadminApprovedByDisplayName,
           }
         : null,
+    rejectedAt: taskRow.RejectedAt,
+    rejectedBy: taskRow.RejectedByUserId
+      ? {
+          userId: taskRow.RejectedByUserId,
+          username: taskRow.RejectedByUsername,
+          displayName: taskRow.RejectedByDisplayName,
+        }
+      : null,
+    rejectionReason: (taskRow.RejectionReason as string | null) ?? null,
     scheduledDueAt: taskRow.ScheduledDueAt,
     createdAt: taskRow.CreatedAt,
     startedAt: taskRow.StartedAt,
@@ -2221,11 +2453,26 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
         "  t.CompletedAt AS CompletedAt,",
         "  t.CompletedByUserId AS CompletedByUserId,",
         "  cu.Username AS CompletedByUsername,",
-        "  cu.DisplayName AS CompletedByDisplayName",
+        "  cu.DisplayName AS CompletedByDisplayName,",
+        "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
+        "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,",
+        "  tc.Username AS TechnicianCompletedByUsername,",
+        "  tc.DisplayName AS TechnicianCompletedByDisplayName,",
+        "  t.SupervisorApprovedAt AS SupervisorApprovedAt,",
+        "  t.SupervisorApprovedByUserId AS SupervisorApprovedByUserId,",
+        "  su.Username AS SupervisorApprovedByUsername,",
+        "  su.DisplayName AS SupervisorApprovedByDisplayName,",
+        "  t.SuperadminApprovedAt AS SuperadminApprovedAt,",
+        "  t.SuperadminApprovedByUserId AS SuperadminApprovedByUserId,",
+        "  sa.Username AS SuperadminApprovedByUsername,",
+        "  sa.DisplayName AS SuperadminApprovedByDisplayName",
         "FROM pm.PMTasks t",
         "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
         "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
         "LEFT JOIN pm.Users cu ON cu.UserId = t.CompletedByUserId",
+        "LEFT JOIN pm.Users tc ON tc.UserId = t.TechnicianCompletedByUserId",
+        "LEFT JOIN pm.Users su ON su.UserId = t.SupervisorApprovedByUserId",
+        "LEFT JOIN pm.Users sa ON sa.UserId = t.SuperadminApprovedByUserId",
         "WHERE t.TaskId = @taskId",
       ].join("\n"),
     );
@@ -2317,6 +2564,20 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
     ),
   );
 
+  const technicianName = (typeof taskRow.TechnicianCompletedByDisplayName === "string" && taskRow.TechnicianCompletedByDisplayName.trim())
+    ? (taskRow.TechnicianCompletedByDisplayName as string)
+    : (typeof taskRow.TechnicianCompletedByUsername === "string" ? (taskRow.TechnicianCompletedByUsername as string) : "");
+  const supervisorName = (typeof taskRow.SupervisorApprovedByDisplayName === "string" && taskRow.SupervisorApprovedByDisplayName.trim())
+    ? (taskRow.SupervisorApprovedByDisplayName as string)
+    : (typeof taskRow.SupervisorApprovedByUsername === "string" ? (taskRow.SupervisorApprovedByUsername as string) : "");
+  const superadminName = (typeof taskRow.SuperadminApprovedByDisplayName === "string" && taskRow.SuperadminApprovedByDisplayName.trim())
+    ? (taskRow.SuperadminApprovedByDisplayName as string)
+    : (typeof taskRow.SuperadminApprovedByUsername === "string" ? (taskRow.SuperadminApprovedByUsername as string) : "");
+
+  const technicianDate = toDateOrNull(taskRow.TechnicianCompletedAt);
+  const supervisorDate = toDateOrNull(taskRow.SupervisorApprovedAt);
+  const superadminDate = toDateOrNull(taskRow.SuperadminApprovedAt);
+
   const bytes = await buildPmHistoryPdf({
     title: "Form End Device PC Laptop Inspection Checklist",
     name,
@@ -2325,6 +2586,12 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
     assetName,
     rows,
     evidenceFileNames,
+    technicianName,
+    supervisorName,
+    superadminName,
+    technicianDate,
+    supervisorDate,
+    superadminDate,
   });
 
   const nowIso = new Date().toISOString().replace(/[:.]/g, "-");
@@ -3312,7 +3579,10 @@ tasksRouter.post(
           "WHERE TaskId = @taskId",
         ].join("\n"),
       );
-
+    await enqueueTaskApprovalNotifications(taskId, "task_approved", "supervisor");
+    try {
+      await runJobNow("notifications");
+    } catch {}
     res.json({ ok: true });
   },
 );
@@ -3420,6 +3690,10 @@ tasksRouter.post(
         );
 
       await tx.commit();
+      await enqueueTaskApprovalNotifications(taskId, "task_approved", "superadmin");
+      try {
+        await runJobNow("notifications");
+      } catch {}
       res.json({ ok: true });
     } catch (err) {
       await tx.rollback().catch(() => undefined);
@@ -3472,11 +3746,16 @@ tasksRouter.post(
     await db
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("userId", sql.UniqueIdentifier, req.user.sub)
+      .input("reason", sql.NVarChar(1024), (parsed.data.reason ?? null) as string | null)
       .query(
         [
           "UPDATE pm.PMTasks",
           "SET",
-          "  ApprovalStatus = N'Rejected'",
+          "  ApprovalStatus = N'Rejected',",
+          "  RejectedAt = sysutcdatetime(),",
+          "  RejectedByUserId = @userId,",
+          "  RejectionReason = @reason",
           "WHERE TaskId = @taskId",
         ].join("\n"),
       );
@@ -3508,6 +3787,11 @@ tasksRouter.post(
       });
     }
 
+    const stage = approvalStatus === "PendingSupervisor" ? "supervisor" : "superadmin";
+    await enqueueTaskApprovalNotifications(taskId, "task_rejected", stage);
+    try {
+      await runJobNow("notifications");
+    } catch {}
     res.json({ ok: true });
   },
 );

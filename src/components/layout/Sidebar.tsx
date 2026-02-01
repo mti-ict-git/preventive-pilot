@@ -19,6 +19,7 @@ import {
   LogOut,
   QrCode,
   Building2,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { clearAccessToken, isSuperadmin } from "@/lib/auth";
@@ -39,6 +40,7 @@ const mainNavBase: Omit<NavItem, "badge">[] = [
   { title: "Scheduling", icon: Calendar, href: "/scheduling" },
   { title: "PM Tasks", icon: ClipboardList, href: "/tasks" },
   { title: "Work Orders", icon: Wrench, href: "/work-orders" },
+  { title: "Approvals", icon: CheckCircle2, href: "/approvals" },
   { title: "Reports", icon: BarChart3, href: "/reports" },
   { title: "Notifications", icon: Bell, href: "/notifications" },
   { title: "Label Designer", icon: QrCode, href: "/label-designer" },

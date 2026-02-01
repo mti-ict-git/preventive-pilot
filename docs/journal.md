@@ -1,5 +1,31 @@
 # Journal
 
+## Sun Feb  1 12:20:33 WITA 2026
+- Web: added Approvals Inbox page with role-based tabs and inline actions.
+- Routing: added /approvals route and sidebar navigation item.
+- UI: supervisor-only bulk approve for PendingSupervisor; reject dialog with reason.
+- Validation: ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## Sun Feb  1 12:29:05 WITA 2026
+- Fix: resolved Radix Select crash by replacing empty SelectItem values with sentinel `all` in Approvals page.
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 12:32:42 WITA 2026
+- UX: clicking View Task in Approvals now opens PM Task Detail via `?taskId` deep-link routing.
+- Web: Tasks page reads `taskId` search param to open Task Detail dialog and clears it on close.
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 12:37:17 WITA 2026
+- Approvals: aligned Task Detail approve gating with Approvals page (Supervisor/Admin/Superadmin can approve at supervisor stage; Superadmin final approval).
+- Header: added pending approvals sections to notification bell dropdown with counts and View Task links.
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
+## 2026-02-01 03:23:26 UTC
+- Notifications: added approval transition events (task_approved, task_rejected) processing.
+- Backend: enqueueTaskApprovalNotifications implemented; triggered on supervisor/superadmin approve and reject.
+- Frontend: Notifications page includes Task Approved/Rejected event options and updated placeholders.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
 ## Sun Feb  1 02:31:52 UTC 2026
 - PM Task Approval Workflow 6.2: added backend approval endpoints.
 - API: POST /api/tasks/{taskId}/submit-for-approval sets ApprovalStatus=PendingSupervisor and technician completion trail.
@@ -310,6 +336,15 @@
 - Web: surfaced rejection reason and who rejected in Approval Trail.
 - Ran `npx tsc --noEmit` and `npm run lint`; both passed.
 - Added DB check constraint to restrict checklist outcome values.
+
+## Sun Feb  1 11:09:49 WITA 2026
+- PM Task Approval Workflow 6.5: completed rejection metadata and PDF sign-offs.
+- DB: added pm.PMTasks.RejectedAt, RejectedByUserId (FK), and RejectionReason.
+- Backend: GET /api/tasks/{taskId} now returns rejection fields.
+- Backend: POST /api/tasks/{taskId}/reject-approval persists reason, who, and timestamp.
+- Backend: GET /api/tasks/{taskId}/export.pdf includes technician/supervisor/superadmin sign-off blocks with names and dates.
+- Web: Task Detail shows Rejected block with reason, who, and when.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-03 07:00
 - Normalized legacy checklist outcomes before adding DB constraint and clamped API output for older data.

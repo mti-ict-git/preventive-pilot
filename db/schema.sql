@@ -651,6 +651,24 @@ BEGIN
     ADD CONSTRAINT FK_pm_PMTasks_SuperadminApprovedByUser FOREIGN KEY (SuperadminApprovedByUserId) REFERENCES pm.Users(UserId);
 END;
 
+IF COL_LENGTH(N'pm.PMTasks', N'RejectedAt') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD RejectedAt datetime2(0) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'RejectedByUserId') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD RejectedByUserId uniqueidentifier NULL;
+
+  ALTER TABLE pm.PMTasks
+    ADD CONSTRAINT FK_pm_PMTasks_RejectedByUser FOREIGN KEY (RejectedByUserId) REFERENCES pm.Users(UserId);
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'RejectionReason') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD RejectionReason nvarchar(1024) NULL;
+END;
+
 IF OBJECT_ID(N'pm.PMTaskChecklistResults', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.PMTaskChecklistResults (

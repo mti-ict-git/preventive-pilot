@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { clearAccessToken } from "@/lib/auth";
+import { clearAccessToken, hasRole, isSuperadmin } from "@/lib/auth";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -22,6 +22,8 @@ import {
   type MeResponse,
   type ThemeMode,
   type UserPreferencesResponse,
+  apiListTasks,
+  type ListTasksResponse,
 } from "@/lib/api";
 
 interface HeaderProps {
@@ -64,6 +66,23 @@ const Header = ({ title, subtitle }: HeaderProps) => {
     queryKey: ["dashboard", "overview"],
     queryFn: apiGetDashboardOverview,
     staleTime: 30_000,
+  });
+
+  const canSupervisor = hasRole("Supervisor") || hasRole("Admin") || isSuperadmin();
+  const canSuperadmin = isSuperadmin();
+
+  const supervisorApprovalsQuery = useQuery({
+    queryKey: ["approvals", "header", "supervisor"],
+    queryFn: async () => apiListTasks({ maintenanceType: "PM", page: 1, pageSize: 50 }),
+    staleTime: 30_000,
+    enabled: canSupervisor,
+  });
+
+  const superadminApprovalsQuery = useQuery({
+    queryKey: ["approvals", "header", "superadmin"],
+    queryFn: async () => apiListTasks({ maintenanceType: "PM", page: 1, pageSize: 50 }),
+    staleTime: 30_000,
+    enabled: canSuperadmin,
   });
 
   useEffect(() => {
@@ -109,6 +128,17 @@ const Header = ({ title, subtitle }: HeaderProps) => {
   const dueTodayCount = overviewQuery.data?.stats.dueTodayCount ?? 0;
   const upcoming7DaysCount = overviewQuery.data?.stats.upcoming7DaysCount ?? 0;
   const totalPmAttentionCount = overdueCount + dueTodayCount + upcoming7DaysCount;
+  const stageLabel = (status: string): "supervisor" | "superadmin" | null => {
+    if (status === "PendingSupervisor") return "supervisor";
+    if (status === "PendingSuperadmin") return "superadmin";
+    return null;
+  };
+  const supervisorPendingItems = ((supervisorApprovalsQuery.data as ListTasksResponse | undefined)?.items ?? []).filter(
+    (t) => stageLabel(t.approvalStatus ?? "None") === "supervisor",
+  );
+  const superadminPendingItems = ((superadminApprovalsQuery.data as ListTasksResponse | undefined)?.items ?? []).filter(
+    (t) => stageLabel(t.approvalStatus ?? "None") === "superadmin",
+  );
   return (
     <header className="h-16 bg-card/50 backdrop-blur-sm border-b border-border px-6 flex items-center justify-between sticky top-0 z-30">
       <div>
@@ -163,6 +193,80 @@ const Header = ({ title, subtitle }: HeaderProps) => {
                   <span className="font-medium text-foreground">{upcoming7DaysCount} upcoming in 7 days</span>
                   <span className="text-xs text-muted-foreground">Due within the next week</span>
                 </DropdownMenuItem>
+                {canSupervisor ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Pending Supervisor Approvals</DropdownMenuLabel>
+                    {supervisorApprovalsQuery.isLoading ? (
+                      <DropdownMenuItem className="py-3 text-sm text-muted-foreground">Loading…</DropdownMenuItem>
+                    ) : (
+                      <>
+                        <DropdownMenuItem className="flex items-center justify-between gap-2 py-2">
+                          <span className="text-sm text-foreground">{supervisorPendingItems.length} pending</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate("/approvals")}
+                          >
+                            Open Inbox
+                          </Button>
+                        </DropdownMenuItem>
+                        {supervisorPendingItems.slice(0, 4).map((t) => (
+                          <DropdownMenuItem key={t.id} className="flex items-center justify-between gap-2 py-2">
+                            <span className="text-xs text-muted-foreground">#{t.taskNumber}</span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                navigate(`/tasks?taskId=${t.id}`);
+                              }}
+                            >
+                              View Task
+                            </Button>
+                          </DropdownMenuItem>
+                        ))}
+                      </>
+                    )}
+                  </>
+                ) : null}
+                {canSuperadmin ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Pending Superadmin Approvals</DropdownMenuLabel>
+                    {superadminApprovalsQuery.isLoading ? (
+                      <DropdownMenuItem className="py-3 text-sm text-muted-foreground">Loading…</DropdownMenuItem>
+                    ) : (
+                      <>
+                        <DropdownMenuItem className="flex items-center justify-between gap-2 py-2">
+                          <span className="text-sm text-foreground">{superadminPendingItems.length} pending</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate("/approvals")}
+                          >
+                            Open Inbox
+                          </Button>
+                        </DropdownMenuItem>
+                        {superadminPendingItems.slice(0, 4).map((t) => (
+                          <DropdownMenuItem key={t.id} className="flex items-center justify-between gap-2 py-2">
+                            <span className="text-xs text-muted-foreground">#{t.taskNumber}</span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                navigate(`/tasks?taskId=${t.id}`);
+                              }}
+                            >
+                              View Task
+                            </Button>
+                          </DropdownMenuItem>
+                        ))}
+                      </>
+                    )}
+                  </>
+                ) : null}
               </>
             )}
           </DropdownMenuContent>

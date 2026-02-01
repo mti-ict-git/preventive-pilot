@@ -2,19 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ClipboardList,
-  Search,
-  Filter,
-  Clock,
-  AlertTriangle,
-  CheckCircle,
-  User,
-  Server,
-  ChevronRight,
-  Calendar,
-  Wrench,
+	ClipboardList,
+	Search,
+	Filter,
+	Clock,
+	AlertTriangle,
+	CheckCircle,
+	User,
+	Server,
+	ChevronRight,
+	Calendar,
+	Wrench,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -73,39 +73,63 @@ const Tasks = () => {
 	const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 	const [taskDetailOpen, setTaskDetailOpen] = useState(false);
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
+	const [filtersOpen, setFiltersOpen] = useState(false);
+	const [assignedFilter, setAssignedFilter] = useState<"any" | "me" | "unassigned">("any");
+	const [approvedOnlyFilter, setApprovedOnlyFilter] = useState(false);
+	const [dueFromFilter, setDueFromFilter] = useState<string>("");
+	const [dueToFilter, setDueToFilter] = useState<string>("");
 	
 	const queryClient = useQueryClient();
 
-  const listQueryInput: Parameters<typeof apiListTasks>[0] = useMemo(() => {
-    const now = new Date();
-    if (activeTab === "overdue") {
-      return { overdue: true, maintenanceType: "PM", page: 1, pageSize: 100 };
-    }
+	useEffect(() => {
+		const tid = searchParams.get("taskId");
+		if (tid) {
+			setSelectedTaskId(tid);
+			setTaskDetailOpen(true);
+		}
+	}, [searchParams]);
 
-    if (activeTab === "in_progress") {
-      return { status: "in_progress", maintenanceType: "PM", page: 1, pageSize: 100 };
-    }
+	const listQueryInput: Parameters<typeof apiListTasks>[0] = useMemo(() => {
+		const now = new Date();
+		let input: Parameters<typeof apiListTasks>[0] = { maintenanceType: "PM", page: 1, pageSize: 100 };
 
-    if (activeTab === "due_today") {
-      return {
-        dueFrom: startOfDay(now).toISOString(),
-        dueTo: endOfDay(now).toISOString(),
-        maintenanceType: "PM",
-        page: 1,
-        pageSize: 100,
-      };
-    }
+		if (activeTab === "overdue") {
+			input = { ...input, overdue: true };
+		} else if (activeTab === "in_progress") {
+			input = { ...input, status: "in_progress" };
+		} else if (activeTab === "due_today") {
+			input = {
+				...input,
+				dueFrom: startOfDay(now).toISOString(),
+				dueTo: endOfDay(now).toISOString(),
+			};
+		} else if (activeTab === "upcoming") {
+			input = { ...input, dueFrom: now.toISOString() };
+		} else if (activeTab === "cancelled") {
+			input = { ...input, status: "cancelled" };
+		}
 
-    if (activeTab === "upcoming") {
-      return { dueFrom: now.toISOString(), maintenanceType: "PM", page: 1, pageSize: 100 };
-    }
+		if (assignedFilter !== "any") {
+			input = { ...input, assigned: assignedFilter };
+		}
 
-    if (activeTab === "cancelled") {
-      return { status: "cancelled", maintenanceType: "PM", page: 1, pageSize: 100 };
-    }
+		if (approvedOnlyFilter) {
+			input = { ...input, approvedOnly: true };
+		}
 
-    return { maintenanceType: "PM", page: 1, pageSize: 100 };
-  }, [activeTab]);
+		if (dueFromFilter.trim()) {
+			const from = startOfDay(new Date(dueFromFilter));
+			input = { ...input, dueFrom: from.toISOString() };
+		}
+
+		if (dueToFilter.trim()) {
+			const to = endOfDay(new Date(dueToFilter));
+			input = { ...input, dueTo: to.toISOString() };
+		}
+
+		return input;
+	}, [activeTab, assignedFilter, approvedOnlyFilter, dueFromFilter, dueToFilter]);
 
   const tasksQuery = useQuery({
     queryKey: ["tasks", listQueryInput],
@@ -330,7 +354,11 @@ const Tasks = () => {
               className="pl-10 bg-muted/50"
             />
           </div>
-          <Button variant="outline" className="gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setFiltersOpen(true)}
+          >
             <Filter className="w-4 h-4" />
             Filters
           </Button>
@@ -453,6 +481,7 @@ const Tasks = () => {
         onOpenChange={(next) => {
           setTaskDetailOpen(next);
           if (!next) setSelectedTaskId(null);
+          if (!next) navigate("/tasks", { replace: true });
         }}
         taskId={selectedTaskId}
         onStarted={async () => {
@@ -464,6 +493,80 @@ const Tasks = () => {
           await statsQuery.refetch();
         }}
       />
+
+      <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Filter Tasks</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-12 gap-4">
+              <div className="col-span-12 md:col-span-6 space-y-2">
+                <Label>Assigned</Label>
+                <Select
+                  value={assignedFilter}
+                  onValueChange={(value) => {
+                    if (value === "any" || value === "me" || value === "unassigned") {
+                      setAssignedFilter(value);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Assigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any</SelectItem>
+                    <SelectItem value="me">Assigned to me</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-12 md:col-span-6 flex items-end">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="approved-only"
+                    checked={approvedOnlyFilter}
+                    onCheckedChange={(checked) => setApprovedOnlyFilter(Boolean(checked))}
+                  />
+                  <Label htmlFor="approved-only">Approved only</Label>
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-6 space-y-2">
+                <Label>Due from</Label>
+                <Input
+                  type="date"
+                  value={dueFromFilter}
+                  onChange={(event) => setDueFromFilter(event.target.value)}
+                />
+              </div>
+              <div className="col-span-12 md:col-span-6 space-y-2">
+                <Label>Due to</Label>
+                <Input
+                  type="date"
+                  value={dueToFilter}
+                  onChange={(event) => setDueToFilter(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAssignedFilter("any");
+                  setApprovedOnlyFilter(false);
+                  setDueFromFilter("");
+                  setDueToFilter("");
+                  setFiltersOpen(false);
+                }}
+              >
+                Clear
+              </Button>
+              <Button onClick={() => setFiltersOpen(false)}>Apply</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={assignDialogOpen} onOpenChange={(o) => setAssignDialogOpen(o)}>
         <DialogContent className="max-w-lg">
@@ -761,7 +864,7 @@ export const TaskDetailDialog = (props: {
 
   const approvalStatus = task?.approvalStatus ?? "None";
   const canSubmitForApproval = task?.maintenanceType === "PM" && approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin" && approvalStatus !== "Approved";
-  const canApproveBySupervisor = hasRole("Supervisor") && approvalStatus === "PendingSupervisor";
+  const canApproveBySupervisor = (hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()) && approvalStatus === "PendingSupervisor";
   const canApproveBySuperadmin = isSuperadmin() && approvalStatus === "PendingSuperadmin";
   const canRejectApproval = (hasRole("Supervisor") || isSuperadmin()) && (approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin");
 
@@ -1379,6 +1482,16 @@ export const TaskDetailDialog = (props: {
                         </p>
                       </div>
                     </div>
+                    {approvalStatus === "Rejected" ? (
+                      <div className="mt-3 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+                        <p className="text-xs text-destructive">Rejected</p>
+                        <p className="text-sm text-foreground mt-1">{task.rejectionReason ?? "—"}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {(task.rejectedBy?.displayName ?? task.rejectedBy?.username ?? "—")} {" • "}
+                          {task.rejectedAt ? format(parseISO(task.rejectedAt), "yyyy-MM-dd HH:mm") : "—"}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 

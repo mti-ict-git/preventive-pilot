@@ -121,6 +121,14 @@ Required environment variables:
 - PM Task Detail includes a Create Work Order action to report breakdowns; it opens a dialog pre-filled with the task's asset or facility context.
 - PM Tasks list includes a Calendar View button that navigates directly to the PM Scheduling calendar for capacity-aware planning.
 
+## PM Task Approval
+
+- Technicians complete and submit PM tasks for approval; supervisors review; superadmins finalize approval.
+- Task Detail shows Approval Status with badges and an Approval Trail (technician, supervisor, superadmin).
+- Rejection records reason, who rejected, and timestamp; Task Detail displays a Rejected block with this metadata.
+- PDF export for a PM task includes sign-off sections labeled "Submitted By (Technician)", "Reviewed By (Supervisor)", and "Approved By (Superadmin)", with names and dates.
+ - Approvals Inbox at `/approvals` provides tabs for **Pending Supervisor** and **Pending Superadmin** with inline Approve/Reject actions; supervisors can perform bulk approve on the supervisor tab.
+
 ## Corrective Maintenance (CM) Work Orders
 
 - Dedicated API mounted at `/api/work-orders` for CM tasks.
@@ -208,7 +216,10 @@ Required environment variables:
 ### Notification rules and templates
 
 - Configure notification channels and rules from the Notifications page.
-- Reminder and escalation rules are time-based (due/overdue), while `task_assigned` rules fire immediately when a task is assigned or reassigned to a technician.
+- Reminder and escalation rules are time-based (due/overdue), while immediate rules fire on lifecycle transitions:
+  - `task_assigned` when a task is assigned or reassigned to a technician
+  - `task_approved` when a supervisor or superadmin approves a PM task
+  - `task_rejected` when a supervisor or superadmin rejects a PM task
 - Existing reminder and escalation rules can be edited from the Notifications page using the pencil icon next to each rule.
 - Reminder rules send Microsoft Graph emails (and optional WhatsApp messages) primarily to the task's assigned technician; if a task is unassigned or the technician has no email/phone, the system falls back to the rule's global recipients.
 - Message templates support the following placeholders, which are replaced per task when notifications are sent:
@@ -217,6 +228,9 @@ Required environment variables:
   - `{{assetName}}`
   - `{{templateName}}`
   - `{{technicianNumber}}` (the assigned technician's phone number when available)
+  - `{{approvalStage}}` (`supervisor` or `superadmin` for approvals/rejections)
+  - `{{approvedAt}}` and `{{approvedByName}}`
+  - `{{rejectedAt}}`, `{{rejectionReason}}`, and `{{rejectedByName}}`
   - `{{message}}` (the rendered per-rule message body)
 - Notification Channel config is typed per channel and overrides global settings:
   - Mail: to, cc, bcc, senderEmail, subjectTemplate, bodyTemplate, mergeMode (override|append).

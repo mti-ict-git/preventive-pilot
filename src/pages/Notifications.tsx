@@ -396,9 +396,6 @@ const Notifications = () => {
   };
 
   useEffect(() => {
-    if (ruleModalType === "reminder" && eventType === "task_assigned") {
-      setEventType("task_due");
-    }
     if (ruleModalType === "escalation" && eventType !== "task_overdue") {
       setEventType("task_overdue");
     }
@@ -1015,6 +1012,9 @@ const Notifications = () => {
                     <>
                       <SelectItem value="task_due">Task Due</SelectItem>
                       <SelectItem value="task_overdue">Task Overdue</SelectItem>
+                      <SelectItem value="task_assigned">Task Assigned</SelectItem>
+                      <SelectItem value="task_approved">Task Approved</SelectItem>
+                      <SelectItem value="task_rejected">Task Rejected</SelectItem>
                     </>
                   ) : (
                     <SelectItem value="task_overdue">Task Overdue</SelectItem>
@@ -1031,8 +1031,8 @@ const Notifications = () => {
                 <Label>Offset (days)</Label>
                 <Input value={offsetDays} onChange={(e) => setOffsetDays(e.target.value)} className="bg-muted/50" />
                 <p className="text-xs text-muted-foreground">Use negative for H+ and positive for H-; 0 for D-Day.</p>
-                {eventType === "task_assigned" && (
-                  <p className="text-xs text-muted-foreground">For Task Assigned events, this timing is ignored and notifications are sent immediately when a task is assigned.</p>
+                {(["task_assigned", "task_approved", "task_rejected"].includes(eventType)) && (
+                  <p className="text-xs text-muted-foreground">For Assigned/Approved/Rejected events, this timing is ignored and notifications are sent immediately on the event.</p>
                 )}
               </div>
             ) : (
@@ -1043,8 +1043,8 @@ const Notifications = () => {
                   onChange={(e) => setEscalateAfterDays(e.target.value)}
                   className="bg-muted/50"
                 />
-                {eventType === "task_assigned" && (
-                  <p className="text-xs text-muted-foreground">For Task Assigned events, this timing is ignored and notifications are sent immediately when a task is assigned.</p>
+                {(["task_assigned", "task_approved", "task_rejected"].includes(eventType)) && (
+                  <p className="text-xs text-muted-foreground">For Assigned/Approved/Rejected events, this timing is ignored and notifications are sent immediately on the event.</p>
                 )}
               </div>
             )}
@@ -1070,16 +1070,17 @@ const Notifications = () => {
                 rows={4}
               />
               <p className="text-xs text-muted-foreground">
-                Available placeholders: {"{{taskNumber}}"}, {"{{assetTag}}"}, {"{{assetName}}"}, {"{{templateName}}"}, {"{{dueAt}}"}, {"{{technicianNumber}}"}.
-                This template is rendered per task and used as the
-                {" "}
-                <code>{"{{message}}"}</code>
-                {" "}
-                value in email and WhatsApp notifications.
+                Available placeholders: {"{{taskNumber}}"}, {"{{assetTag}}"}, {"{{assetName}}"}, {"{{templateName}}"}, {"{{dueAt}}"}, {"{{technicianNumber}}"}, {"{{approvalStage}}"}, {"{{approvedAt}}"}, {"{{approvedByName}}"}, {"{{rejectedAt}}"}, {"{{rejectionReason}}"}, {"{{rejectedByName}}"}.
+                This template is rendered per task and used as the <code>{"{{message}}"}</code> value in email and WhatsApp notifications.
               </p>
               <p className="text-xs text-muted-foreground">
-                Example: {" "}
-                <code>{"Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}}). @{{technicianNumber}}"}</code>
+                Example (Due): <code>{"Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}}). @{{technicianNumber}}"}</code>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Example (Approved): <code>{"Task {{taskNumber}} {{approvalStage}} approved at {{approvedAt}} by {{approvedByName}}"}</code>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Example (Rejected): <code>{"Task {{taskNumber}} rejected at {{rejectedAt}} by {{rejectedByName}}. Reason: {{rejectionReason}}"}</code>
               </p>
             </div>
             <div className="col-span-12">
