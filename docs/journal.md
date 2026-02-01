@@ -20,6 +20,14 @@
 - Header: added pending approvals sections to notification bell dropdown with counts and View Task links.
 - Verified with `npx tsc --noEmit` and `npm run lint`.
 
+## Sun Feb  1 12:58:52 WITA 2026
+- Task Detail: restricted Reject to stage-specific roles (Supervisor/Admin at PendingSupervisor; Superadmin at PendingSuperadmin).
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 13:05:15 WITA 2026
+- Task Detail: added bottom workflow trail showing Submitted by → Reviewed by → Approved by with names.
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
 ## 2026-02-01 03:23:26 UTC
 - Notifications: added approval transition events (task_approved, task_rejected) processing.
 - Backend: enqueueTaskApprovalNotifications implemented; triggered on supervisor/superadmin approve and reject.
@@ -94,6 +102,12 @@
 - Frontend: Delete button with AlertDialog confirm; shows errors if references exist.
 - Ran `npx tsc --noEmit` and `npm run lint`; both passed.
 
+## Sun Feb  1 12:53:43 WITA 2026
+- PM Tasks: implemented Filters dialog on PM Tasks list.
+- Filters support Assigned (any/me/unassigned), Approved only toggle, and Due date range.
+- Filters feed into the apiListTasks query so list results and stats respect the selected criteria.
+- Ran `npm run lint` and `npx tsc --noEmit`; both passed.
+
 ## 2026-02-01 10:21:53 WITA
 - Fix: added missing AlertDialogTrigger import to Notifications.tsx to resolve runtime error.
 - Verified with `npx tsc --noEmit` and `npm run lint`.
@@ -160,6 +174,11 @@
 - PM Tasks: wired Calendar View button to navigate directly to the PM Scheduling calendar.
 - Users can jump from the PM Tasks list to the calendar-based planning view in one click.
 - Ran `npm run lint` and `npx tsc --noEmit`; both passed.
+
+## Sun Feb  1 13:01:47 WITA 2026
+- PM Tasks: added Status filter to Filters dialog with options (All, Upcoming, In Progress, Due Today, Overdue, Completed, Cancelled).
+- Filtering happens client-side based on the computed UI status so it can be combined with approval-stage tabs.
+- Ran `npm run lint` and `npx tsc --noEmit` after changes.
 
 ## 2026-01-22 12:57:50 PM
 - Fixed backdateMode scope ordering in Work Order detail to satisfy TypeScript.

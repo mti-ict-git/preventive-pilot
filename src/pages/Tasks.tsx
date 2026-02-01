@@ -79,6 +79,9 @@ const Tasks = () => {
 	const [approvedOnlyFilter, setApprovedOnlyFilter] = useState(false);
 	const [dueFromFilter, setDueFromFilter] = useState<string>("");
 	const [dueToFilter, setDueToFilter] = useState<string>("");
+	const [statusFilter, setStatusFilter] = useState<
+		"all" | "upcoming" | "in_progress" | "due_today" | "overdue" | "completed" | "cancelled"
+	>("all");
 	
 	const queryClient = useQueryClient();
 
@@ -262,65 +265,70 @@ const Tasks = () => {
     ];
   }, [statsQuery.data?.items]);
 
-  const filteredTasks = useMemo(() => {
-    const now = new Date();
-    const items = (tasksQuery.data?.items ?? []).filter((task) => {
-      const status = task.status.toLowerCase();
-      if (activeTab === "due_today" && status === "cancelled") {
-        return false;
-      }
-      if (activeTab === "pending_supervisor") {
-        return (task.approvalStatus ?? "None") === "PendingSupervisor";
-      }
-      if (activeTab === "pending_superadmin") {
-        return (task.approvalStatus ?? "None") === "PendingSuperadmin";
-      }
-      return true;
-    });
-    const q = searchQuery.trim().toLowerCase();
-    return items
-      .map((task) => {
-        const uiStatus = getUiStatus(task, now);
-        const pic = task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned";
-        const dueDate = format(parseISO(task.scheduledDueAt), "yyyy-MM-dd");
-        const assetTag = task.asset.assetTag ?? (task.facility ? task.facility.name ?? "" : "");
-        const assetName = task.asset.name ?? (task.facility ? task.facility.locationName ?? task.facility.name ?? "" : "");
-        const progress =
-          uiStatus === "completed"
-            ? 100
-            : task.checklistTotal > 0
-              ? Math.round((task.checklistCompleted / task.checklistTotal) * 100)
-              : uiStatus === "in_progress"
-                ? 50
-                : 0;
-        const isAssigned = Boolean(task.assignedTo.userId || task.assignedTo.roleId);
-        return {
-          id: task.id,
-          displayId: task.taskNumber,
-          taskId: task.id,
-          asset: assetTag,
-          assetName,
-          template: task.template.name,
-          status: uiStatus,
-          priority: task.priority,
-          dueDate,
-          pic,
-          progress,
-          checklistComplete: task.checklistCompleted,
-          checklistTotal: task.checklistTotal,
-          isAssigned,
-          approvalStatus: task.approvalStatus ?? "None",
-        };
-      })
-      .filter((task) => {
-        if (!q) return true;
-        return (
-          task.displayId.toLowerCase().includes(q) ||
-          task.asset.toLowerCase().includes(q) ||
-          task.assetName.toLowerCase().includes(q)
-        );
-      });
-  }, [searchQuery, tasksQuery.data?.items, activeTab]);
+	const filteredTasks = useMemo(() => {
+		const now = new Date();
+		const items = (tasksQuery.data?.items ?? []).filter((task) => {
+			const status = task.status.toLowerCase();
+			if (activeTab === "due_today" && status === "cancelled") {
+				return false;
+			}
+			if (activeTab === "pending_supervisor") {
+				return (task.approvalStatus ?? "None") === "PendingSupervisor";
+			}
+			if (activeTab === "pending_superadmin") {
+				return (task.approvalStatus ?? "None") === "PendingSuperadmin";
+			}
+			return true;
+		});
+		const q = searchQuery.trim().toLowerCase();
+		return items
+			.map((task) => {
+				const uiStatus = getUiStatus(task, now);
+				const pic = task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned";
+				const dueDate = format(parseISO(task.scheduledDueAt), "yyyy-MM-dd");
+				const assetTag = task.asset.assetTag ?? (task.facility ? task.facility.name ?? "" : "");
+				const assetName = task.asset.name ?? (task.facility ? task.facility.locationName ?? task.facility.name ?? "" : "");
+				const progress =
+					uiStatus === "completed"
+						? 100
+						: task.checklistTotal > 0
+							? Math.round((task.checklistCompleted / task.checklistTotal) * 100)
+							: uiStatus === "in_progress"
+								? 50
+								: 0;
+				const isAssigned = Boolean(task.assignedTo.userId || task.assignedTo.roleId);
+				return {
+					id: task.id,
+					displayId: task.taskNumber,
+					taskId: task.id,
+					asset: assetTag,
+					assetName,
+					template: task.template.name,
+					status: uiStatus,
+					priority: task.priority,
+					dueDate,
+					pic,
+					progress,
+					checklistComplete: task.checklistCompleted,
+					checklistTotal: task.checklistTotal,
+					isAssigned,
+					approvalStatus: task.approvalStatus ?? "None",
+				};
+			})
+			.filter((task) => {
+				if (statusFilter !== "all" && task.status !== statusFilter) {
+					return false;
+				}
+				if (!q) {
+					return true;
+				}
+				return (
+					task.displayId.toLowerCase().includes(q) ||
+					task.asset.toLowerCase().includes(q) ||
+					task.assetName.toLowerCase().includes(q)
+				);
+			});
+	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter]);
 
   return (
     <div className="min-h-screen">
@@ -547,6 +555,38 @@ const Tasks = () => {
                   onChange={(event) => setDueToFilter(event.target.value)}
                 />
               </div>
+					<div className="col-span-12 md:col-span-6 space-y-2">
+						<Label>Status</Label>
+						<Select
+							value={statusFilter}
+							onValueChange={(value) => {
+								if (
+									value === "all" ||
+									value === "upcoming" ||
+									value === "in_progress" ||
+									value === "due_today" ||
+									value === "overdue" ||
+									value === "completed" ||
+									value === "cancelled"
+								) {
+									setStatusFilter(value);
+								}
+							}}
+						>
+							<SelectTrigger>
+								<SelectValue placeholder="Status" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All</SelectItem>
+								<SelectItem value="upcoming">Upcoming</SelectItem>
+								<SelectItem value="in_progress">In Progress</SelectItem>
+								<SelectItem value="due_today">Due Today</SelectItem>
+								<SelectItem value="overdue">Overdue</SelectItem>
+								<SelectItem value="completed">Completed</SelectItem>
+								<SelectItem value="cancelled">Cancelled</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
             </div>
 
             <div className="flex items-center justify-end gap-2">
@@ -557,6 +597,7 @@ const Tasks = () => {
                   setApprovedOnlyFilter(false);
                   setDueFromFilter("");
                   setDueToFilter("");
+							setStatusFilter("all");
                   setFiltersOpen(false);
                 }}
               >
@@ -863,10 +904,36 @@ export const TaskDetailDialog = (props: {
   const canReopen = normalizedStatus === "cancelled" && isManager();
 
   const approvalStatus = task?.approvalStatus ?? "None";
-  const canSubmitForApproval = task?.maintenanceType === "PM" && approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin" && approvalStatus !== "Approved";
-  const canApproveBySupervisor = (hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()) && approvalStatus === "PendingSupervisor";
+  const canSubmitForApproval =
+    task?.maintenanceType === "PM" &&
+    approvalStatus !== "PendingSupervisor" &&
+    approvalStatus !== "PendingSuperadmin" &&
+    approvalStatus !== "Approved";
+  const canApproveBySupervisor =
+    (hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()) && approvalStatus === "PendingSupervisor";
   const canApproveBySuperadmin = isSuperadmin() && approvalStatus === "PendingSuperadmin";
-  const canRejectApproval = (hasRole("Supervisor") || isSuperadmin()) && (approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin");
+  const canRejectApproval =
+    approvalStatus === "PendingSupervisor"
+      ? hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()
+      : approvalStatus === "PendingSuperadmin"
+        ? isSuperadmin()
+        : false;
+
+  const submittedByName = useMemo(() => {
+    const u = task?.technicianCompletedBy;
+    const name = u?.displayName ?? u?.username ?? null;
+    return name;
+  }, [task?.technicianCompletedBy]);
+  const reviewedByName = useMemo(() => {
+    const u = task?.supervisorApprovedBy;
+    const name = u?.displayName ?? u?.username ?? null;
+    return name;
+  }, [task?.supervisorApprovedBy]);
+  const approvedByName = useMemo(() => {
+    const u = task?.superadminApprovedBy;
+    const name = u?.displayName ?? u?.username ?? null;
+    return name;
+  }, [task?.superadminApprovedBy]);
 
   const getOutcomeOptions = (requiresPassFail: boolean) => {
     if (requiresPassFail) {
@@ -1768,6 +1835,31 @@ export const TaskDetailDialog = (props: {
                       ))}
                     </div>
                   )}
+                </div>
+
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 glass rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground">Workflow</p>
+                    <div className="mt-2 flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Submitted by</span>
+                        <span className="text-sm text-foreground">{submittedByName ?? "—"}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Reviewed by</span>
+                        <span className="text-sm text-foreground">{reviewedByName ?? "—"}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Approved by</span>
+                        <span className="text-sm text-foreground">{approvedByName ?? "—"}</span>
+                        {approvedByName ? (
+                          <Badge variant="outline" className="bg-accent/20 text-accent border-accent/30">Superadmin</Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <Dialog open={previewOpen} onOpenChange={(o) => (o ? setPreviewOpen(true) : closePreview())}>
