@@ -151,6 +151,9 @@ const Tasks = () => {
   const [assignUserId, setAssignUserId] = useState<string>("");
   const [assignRoleId, setAssignRoleId] = useState<string>("");
 
+  type SortKey = "due_date_asc" | "due_date_desc" | "created_desc" | "created_asc";
+  const [sortKey, setSortKey] = useState<SortKey>("due_date_asc");
+
   const lookupsQuery = useQuery({
     queryKey: ["lookups"],
     queryFn: apiGetLookups,
@@ -281,54 +284,82 @@ const Tasks = () => {
 			return true;
 		});
 		const q = searchQuery.trim().toLowerCase();
-		return items
-			.map((task) => {
-				const uiStatus = getUiStatus(task, now);
-				const pic = task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned";
-				const dueDate = format(parseISO(task.scheduledDueAt), "yyyy-MM-dd");
-				const assetTag = task.asset.assetTag ?? (task.facility ? task.facility.name ?? "" : "");
-				const assetName = task.asset.name ?? (task.facility ? task.facility.locationName ?? task.facility.name ?? "" : "");
-				const progress =
-					uiStatus === "completed"
-						? 100
-						: task.checklistTotal > 0
-							? Math.round((task.checklistCompleted / task.checklistTotal) * 100)
-							: uiStatus === "in_progress"
-								? 50
-								: 0;
-				const isAssigned = Boolean(task.assignedTo.userId || task.assignedTo.roleId);
-				return {
-					id: task.id,
-					displayId: task.taskNumber,
-					taskId: task.id,
-					asset: assetTag,
-					assetName,
-					template: task.template.name,
-					status: uiStatus,
-					priority: task.priority,
-					dueDate,
-					pic,
-					progress,
-					checklistComplete: task.checklistCompleted,
-					checklistTotal: task.checklistTotal,
-					isAssigned,
-					approvalStatus: task.approvalStatus ?? "None",
-				};
-			})
-			.filter((task) => {
-				if (statusFilter !== "all" && task.status !== statusFilter) {
-					return false;
-				}
-				if (!q) {
-					return true;
-				}
+		const mapped = items.map((task) => {
+			const uiStatus = getUiStatus(task, now);
+			const pic = task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned";
+			const dueDate = format(parseISO(task.scheduledDueAt), "yyyy-MM-dd");
+			const assetTag = task.asset.assetTag ?? (task.facility ? task.facility.name ?? "" : "");
+			const assetName =
+				task.asset.name ?? (task.facility ? task.facility.locationName ?? task.facility.name ?? "" : "");
+			const progress =
+				uiStatus === "completed"
+					? 100
+					: task.checklistTotal > 0
+						? Math.round((task.checklistCompleted / task.checklistTotal) * 100)
+						: uiStatus === "in_progress"
+							? 50
+							: 0;
+			const isAssigned = Boolean(task.assignedTo.userId || task.assignedTo.roleId);
+			return {
+				id: task.id,
+				displayId: task.taskNumber,
+				taskId: task.id,
+				asset: assetTag,
+				assetName,
+				template: task.template.name,
+				status: uiStatus,
+				priority: task.priority,
+				dueDate,
+				createdAt: task.createdAt,
+				pic,
+				progress,
+				checklistComplete: task.checklistCompleted,
+				checklistTotal: task.checklistTotal,
+				isAssigned,
+				approvalStatus: task.approvalStatus ?? "None",
+			};
+		});
+		const filtered = mapped.filter((task) => {
+			if (statusFilter !== "all" && task.status !== statusFilter) {
+				return false;
+			}
+			if (!q) {
+				return true;
+			}
+			return (
+				task.displayId.toLowerCase().includes(q) ||
+				task.asset.toLowerCase().includes(q) ||
+				task.assetName.toLowerCase().includes(q)
+			);
+		});
+
+		const sorted = [...filtered].sort((a, b) => {
+			if (sortKey === "due_date_asc") {
 				return (
-					task.displayId.toLowerCase().includes(q) ||
-					task.asset.toLowerCase().includes(q) ||
-					task.assetName.toLowerCase().includes(q)
+					new Date(a.dueDate).getTime() -
+					new Date(b.dueDate).getTime()
 				);
-			});
-	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter]);
+			}
+			if (sortKey === "due_date_desc") {
+				return (
+					new Date(b.dueDate).getTime() -
+					new Date(a.dueDate).getTime()
+				);
+			}
+			if (sortKey === "created_desc") {
+				return (
+					new Date(b.createdAt).getTime() -
+					new Date(a.createdAt).getTime()
+				);
+			}
+			return (
+				new Date(a.createdAt).getTime() -
+				new Date(b.createdAt).getTime()
+			);
+		});
+
+		return sorted;
+	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter, sortKey]);
 
   return (
     <div className="min-h-screen">
@@ -352,7 +383,7 @@ const Tasks = () => {
         </div>
 
         {/* Filters & Search */}
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -361,6 +392,32 @@ const Tasks = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 bg-muted/50"
             />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground">Sort by</Label>
+            <Select
+              value={sortKey}
+              onValueChange={(value) => {
+                if (
+                  value === "due_date_asc" ||
+                  value === "due_date_desc" ||
+                  value === "created_desc" ||
+                  value === "created_asc"
+                ) {
+                  setSortKey(value);
+                }
+              }}
+            >
+              <SelectTrigger className="w-40 bg-muted/50">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="due_date_asc">Due date (soonest first)</SelectItem>
+                <SelectItem value="due_date_desc">Due date (latest first)</SelectItem>
+                <SelectItem value="created_desc">Latest submitted</SelectItem>
+                <SelectItem value="created_asc">Oldest submitted</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <Button
             variant="outline"

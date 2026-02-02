@@ -1365,6 +1365,8 @@ export type SchedulingDayEventItem = {
   bucket: "scheduled" | "due" | "overdue";
   asset: { id: string; assetTag: string; name: string };
   template: { id: string; name: string };
+  assetOperationalStatus: string | null;
+  scheduleFrozen: boolean;
 };
 
 export const apiGetSchedulingCalendar = async (input: {

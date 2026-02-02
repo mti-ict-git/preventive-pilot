@@ -589,10 +589,13 @@ schedulingRouter.get("/day", async (req, res) => {
         "    a.Name AS AssetName,",
         "    tpl.TemplateId AS TemplateId,",
         "    tpl.Name AS TemplateName,",
+        "    a.AssetOperationalStatus AS AssetOperationalStatus,",
+        "    sch.Frozen AS ScheduleFrozen,",
         "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.PMTasks t",
         "  INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
         "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "  LEFT JOIN pm.PMSchedules sch ON sch.AssetId = t.AssetId AND sch.TemplateId = t.TemplateId",
         "  WHERE t.ScheduledDueAt >= @from",
         "    AND t.ScheduledDueAt < @to",
         "    AND t.Status NOT IN (N'completed', N'cancelled')",
@@ -608,10 +611,13 @@ schedulingRouter.get("/day", async (req, res) => {
         "    f.Name AS AssetName,",
         "    tpl.TemplateId AS TemplateId,",
         "    tpl.Name AS TemplateName,",
+        "    CAST(NULL AS nvarchar(64)) AS AssetOperationalStatus,",
+        "    sch.Frozen AS ScheduleFrozen,",
         "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.PMTasks t",
         "  INNER JOIN pm.Facilities f ON f.FacilityId = t.FacilityId",
         "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "  LEFT JOIN pm.FacilityPMSchedules sch ON sch.FacilityId = t.FacilityId AND sch.TemplateId = t.TemplateId",
         "  WHERE t.ScheduledDueAt >= @from",
         "    AND t.ScheduledDueAt < @to",
         "    AND t.Status NOT IN (N'completed', N'cancelled')",
@@ -629,6 +635,8 @@ schedulingRouter.get("/day", async (req, res) => {
         "    a.Name AS AssetName,",
         "    tpl.TemplateId AS TemplateId,",
         "    tpl.Name AS TemplateName,",
+        "    a.AssetOperationalStatus AS AssetOperationalStatus,",
+        "    sch.Frozen AS ScheduleFrozen,",
         "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.Assets a",
         "  INNER JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
@@ -678,6 +686,8 @@ schedulingRouter.get("/day", async (req, res) => {
         "    f.Name AS AssetName,",
         "    tpl.TemplateId AS TemplateId,",
         "    tpl.Name AS TemplateName,",
+        "    CAST(NULL AS nvarchar(64)) AS AssetOperationalStatus,",
+        "    sch.Frozen AS ScheduleFrozen,",
         "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
         "  FROM pm.Facilities f",
         "  INNER JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
@@ -726,6 +736,8 @@ schedulingRouter.get("/day", async (req, res) => {
         "  i.AssetName AS AssetName,",
         "  i.TemplateId AS TemplateId,",
         "  i.TemplateName AS TemplateName,",
+        "  i.AssetOperationalStatus AS AssetOperationalStatus,",
+        "  i.ScheduleFrozen AS ScheduleFrozen,",
         "  i.EstimatedMinutes AS EstimatedMinutes,",
         "  CASE",
         "    WHEN i.ScheduledDueAt < @todayStart THEN N'overdue'",
@@ -751,6 +763,11 @@ schedulingRouter.get("/day", async (req, res) => {
         const assetName = typeof r.AssetName === "string" ? r.AssetName : null;
         const templateId = typeof r.TemplateId === "string" ? r.TemplateId : null;
         const templateName = typeof r.TemplateName === "string" ? r.TemplateName : null;
+        const assetOperationalStatus = typeof (r as { AssetOperationalStatus?: unknown }).AssetOperationalStatus === "string"
+          ? ((r as { AssetOperationalStatus: string }).AssetOperationalStatus as string)
+          : null;
+        const scheduleFrozenRaw = (r as { ScheduleFrozen?: unknown }).ScheduleFrozen;
+        const scheduleFrozen = scheduleFrozenRaw === 1 || scheduleFrozenRaw === true ? true : false;
         const bucket = typeof r.Bucket === "string" ? r.Bucket : null;
         const estimatedMinutesRaw =
           typeof (r as { EstimatedMinutes?: unknown }).EstimatedMinutes === "number" &&
@@ -787,6 +804,8 @@ schedulingRouter.get("/day", async (req, res) => {
           bucket: bucket as "scheduled" | "due" | "overdue",
           asset: { id: assetId, assetTag, name: assetName },
           template: { id: templateId, name: templateName },
+          assetOperationalStatus,
+          scheduleFrozen,
         };
       })
       .filter(
@@ -800,6 +819,8 @@ schedulingRouter.get("/day", async (req, res) => {
           bucket: "scheduled" | "due" | "overdue";
           asset: { id: string; assetTag: string; name: string };
           template: { id: string; name: string };
+          assetOperationalStatus: string | null;
+          scheduleFrozen: boolean;
         } => v !== null,
       ),
   });

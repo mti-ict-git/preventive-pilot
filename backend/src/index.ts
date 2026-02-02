@@ -471,6 +471,194 @@ const openApiSpec: OpenApiSchema = {
         },
         additionalProperties: false,
       },
+      SchedulingAssignmentRule: {
+        type: "object",
+        properties: {
+          RuleId: { type: "string", format: "uuid" },
+          Priority: { type: "integer" },
+          CategoryId: { type: ["string", "null"], format: "uuid" },
+          LocationId: { type: ["string", "null"], format: "uuid" },
+          AssetStatus: { type: ["string", "null"] },
+          AssignToUserId: { type: ["string", "null"], format: "uuid" },
+          AssignToRoleId: { type: ["string", "null"], format: "uuid" },
+          IsActive: { type: "boolean" },
+          EffectiveFrom: { type: ["string", "null"], format: "date-time" },
+          EffectiveTo: { type: ["string", "null"], format: "date-time" },
+          CreatedAt: { type: "string", format: "date-time" },
+          UpdatedAt: { type: "string", format: "date-time" },
+        },
+        required: ["RuleId", "Priority", "IsActive", "CreatedAt", "UpdatedAt"],
+        additionalProperties: false,
+      },
+      SchedulingAssignmentRuleListResponse: {
+        type: "object",
+        properties: {
+          items: { type: "array", items: { $ref: "#/components/schemas/SchedulingAssignmentRule" } },
+        },
+        required: ["items"],
+        additionalProperties: false,
+      },
+      SchedulingAssignmentRuleCreateRequest: {
+        type: "object",
+        properties: {
+          priority: { type: "integer" },
+          categoryId: { type: ["string", "null"], format: "uuid" },
+          locationId: { type: ["string", "null"], format: "uuid" },
+          assetStatus: { type: ["string", "null"] },
+          assignToUserId: { type: ["string", "null"], format: "uuid" },
+          assignToRoleId: { type: ["string", "null"], format: "uuid" },
+          isActive: { type: ["boolean", "null"] },
+          effectiveFrom: { type: ["string", "null"], format: "date-time" },
+          effectiveTo: { type: ["string", "null"], format: "date-time" },
+        },
+        required: ["priority"],
+        additionalProperties: false,
+      },
+      SchedulingAssignmentRuleUpdateRequest: {
+        type: "object",
+        properties: {
+          priority: { type: "integer" },
+          categoryId: { type: ["string", "null"], format: "uuid" },
+          locationId: { type: ["string", "null"], format: "uuid" },
+          assetStatus: { type: ["string", "null"] },
+          assignToUserId: { type: ["string", "null"], format: "uuid" },
+          assignToRoleId: { type: ["string", "null"], format: "uuid" },
+          isActive: { type: ["boolean", "null"] },
+          effectiveFrom: { type: ["string", "null"], format: "date-time" },
+          effectiveTo: { type: ["string", "null"], format: "date-time" },
+        },
+        additionalProperties: false,
+      },
+      SchedulingBlackoutWindow: {
+        type: "object",
+        properties: {
+          BlackoutWindowId: { type: "string", format: "uuid" },
+          Name: { type: "string" },
+          StartsAt: { type: "string", format: "date-time" },
+          EndsAt: { type: "string", format: "date-time" },
+          IsActive: { type: "boolean" },
+          CreatedAt: { type: "string", format: "date-time" },
+          UpdatedAt: { type: "string", format: "date-time" },
+        },
+        required: ["BlackoutWindowId", "Name", "StartsAt", "EndsAt", "IsActive", "CreatedAt", "UpdatedAt"],
+        additionalProperties: false,
+      },
+      SchedulingBlackoutWindowListResponse: {
+        type: "object",
+        properties: {
+          items: { type: "array", items: { $ref: "#/components/schemas/SchedulingBlackoutWindow" } },
+        },
+        required: ["items"],
+        additionalProperties: false,
+      },
+      SchedulingBlackoutWindowCreateRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          startsAt: { type: "string", format: "date-time" },
+          endsAt: { type: "string", format: "date-time" },
+          isActive: { type: ["boolean", "null"] },
+        },
+        required: ["name", "startsAt", "endsAt"],
+        additionalProperties: false,
+      },
+      SchedulingBlackoutWindowUpdateRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          startsAt: { type: "string", format: "date-time" },
+          endsAt: { type: "string", format: "date-time" },
+          isActive: { type: ["boolean", "null"] },
+        },
+        additionalProperties: false,
+      },
+      SchedulingCalendarDay: {
+        type: "object",
+        properties: {
+          date: { type: "string", format: "date" },
+          type: { type: "string", enum: ["scheduled", "due", "overdue"] },
+          count: { type: "integer" },
+          capacityMinutes: { type: "integer" },
+        },
+        required: ["date", "type", "count", "capacityMinutes"],
+        additionalProperties: false,
+      },
+      SchedulingCalendarResponse: {
+        type: "object",
+        properties: {
+          items: { type: "array", items: { $ref: "#/components/schemas/SchedulingCalendarDay" } },
+        },
+        required: ["items"],
+        additionalProperties: false,
+      },
+      SchedulingDayEventItem: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          taskNumber: { type: "string" },
+          scheduledDueAt: { type: "string", format: "date-time" },
+          status: { type: "string" },
+          priority: { type: "string" },
+          estimatedMinutes: { type: "integer" },
+          bucket: { type: "string", enum: ["scheduled", "due", "overdue"] },
+          asset: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              assetTag: { type: "string" },
+              name: { type: "string" },
+            },
+            required: ["id", "assetTag", "name"],
+            additionalProperties: false,
+          },
+          template: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              name: { type: "string" },
+            },
+            required: ["id", "name"],
+            additionalProperties: false,
+          },
+        },
+        required: [
+          "id",
+          "taskNumber",
+          "scheduledDueAt",
+          "status",
+          "priority",
+          "estimatedMinutes",
+          "bucket",
+          "asset",
+          "template",
+        ],
+        additionalProperties: false,
+      },
+      SchedulingDayEventsResponse: {
+        type: "object",
+        properties: {
+          items: { type: "array", items: { $ref: "#/components/schemas/SchedulingDayEventItem" } },
+        },
+        required: ["items"],
+        additionalProperties: false,
+      },
+      SchedulingRecalculateRequest: {
+        type: "object",
+        properties: {
+          assetId: { type: ["string", "null"], format: "uuid" },
+          facilityId: { type: ["string", "null"], format: "uuid" },
+          force: { type: ["boolean", "null"] },
+        },
+        additionalProperties: false,
+      },
+      SchedulingRecalculateResponse: {
+        type: "object",
+        properties: {
+          updated: { type: "integer" },
+        },
+        required: ["updated"],
+        additionalProperties: false,
+      },
       WorkOrderListItem: {
         type: "object",
         properties: {
@@ -1944,6 +2132,334 @@ const openApiSpec: OpenApiSchema = {
           "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/scheduling/assignment-rules": {
+      get: {
+        tags: ["Scheduling"],
+        summary: "List scheduling assignment rules",
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SchedulingAssignmentRuleListResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+      post: {
+        tags: ["Scheduling"],
+        summary: "Create scheduling assignment rule",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/SchedulingAssignmentRuleCreateRequest" } },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Created",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/scheduling/assignment-rules/{ruleId}": {
+      put: {
+        tags: ["Scheduling"],
+        summary: "Update scheduling assignment rule",
+        parameters: [
+          {
+            name: "ruleId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/SchedulingAssignmentRuleUpdateRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+      delete: {
+        tags: ["Scheduling"],
+        summary: "Deactivate scheduling assignment rule",
+        parameters: [
+          {
+            name: "ruleId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/scheduling/blackout-windows": {
+      get: {
+        tags: ["Scheduling"],
+        summary: "List blackout windows",
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SchedulingBlackoutWindowListResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+      post: {
+        tags: ["Scheduling"],
+        summary: "Create blackout window",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/SchedulingBlackoutWindowCreateRequest" } },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Created",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/scheduling/blackout-windows/{blackoutWindowId}": {
+      put: {
+        tags: ["Scheduling"],
+        summary: "Update blackout window",
+        parameters: [
+          {
+            name: "blackoutWindowId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/SchedulingBlackoutWindowUpdateRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+      delete: {
+        tags: ["Scheduling"],
+        summary: "Deactivate blackout window",
+        parameters: [
+          {
+            name: "blackoutWindowId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/scheduling/recalculate": {
+      post: {
+        tags: ["Scheduling"],
+        summary: "Recalculate PM schedules for assets and facilities",
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/SchedulingRecalculateRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SchedulingRecalculateResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/scheduling/day": {
+      get: {
+        tags: ["Scheduling"],
+        summary: "List scheduled, due, and projected PM tasks for a day",
+        parameters: [
+          {
+            name: "date",
+            in: "query",
+            required: true,
+            description: "UTC date in YYYY-MM-DD format",
+            schema: { type: "string", format: "date" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SchedulingDayEventsResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/scheduling/calendar": {
+      get: {
+        tags: ["Scheduling"],
+        summary: "Aggregate PM counts and capacity for a month",
+        parameters: [
+          {
+            name: "month",
+            in: "query",
+            required: false,
+            description: "UTC month in YYYY-MM format (defaults to current month)",
+            schema: { type: "string", format: "date" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SchedulingCalendarResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
         },
       },
     },

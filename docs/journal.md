@@ -1088,3 +1088,8 @@
 - Web: updated Work Orders list to use a ticket-style Subject column combining asset/facility context with the reported symptom.
 - Web: updated Work Order detail header to show a ticket-style subject line with a separate ID badge and added a Resolution card summarizing status, timestamps, and resolution notes derived from checklist results.
 - Validation: ran `npm run lint` (ESLintIgnoreWarning about `.eslintignore`) and `npx tsc --noEmit` in the repo root; both exited successfully.
+
+## Monday, February 2, 2026 3:04:14 PM
+- Backend: extended OpenAPI `/api/scheduling` documentation to cover assignment rules, blackout windows, calendar, and day events, aligned with current schedulingRouter behavior.
+- Web: added sort controls to PM Tasks list allowing ordering by due date (soonest/latest) and created date (latest/oldest submitted) while preserving existing filters and tabs.
+- Validation: reran `npm run lint` (ESLintIgnoreWarning about `.eslintignore`) and `npx tsc --noEmit` in the repo root; both exited successfully.
