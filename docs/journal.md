@@ -1093,3 +1093,8 @@
 - Backend: extended OpenAPI `/api/scheduling` documentation to cover assignment rules, blackout windows, calendar, and day events, aligned with current schedulingRouter behavior.
 - Web: added sort controls to PM Tasks list allowing ordering by due date (soonest/latest) and created date (latest/oldest submitted) while preserving existing filters and tabs.
 - Validation: reran `npm run lint` (ESLintIgnoreWarning about `.eslintignore`) and `npx tsc --noEmit` in the repo root; both exited successfully.
+
+## 2026-02-03 12:12:21 +08:00
+- Added PM Approval Workflow — Mobile Implementation Plan document under `docs/PM-workflow-mobile-plan.md`, organized by phases.
+- Plan includes UX flow, component tree for mobile and web parity, responsive examples, sample code, backend endpoints, and schema notes.
+- Documentation-only change; no code updates in this step.
