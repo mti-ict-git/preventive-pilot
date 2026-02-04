@@ -942,12 +942,17 @@ export const TaskDetailDialog = (props: {
   });
 
 	const normalizedStatus = task?.status.toLowerCase() ?? null;
-  const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
-  const canPause = normalizedStatus === "in_progress";
-  const canResume = normalizedStatus === "paused";
-  const canCancel = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
-  const canComplete = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
-  const canReopen = normalizedStatus === "cancelled" && isManager();
+	const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
+	const canPause = normalizedStatus === "in_progress";
+	const canResume = normalizedStatus === "paused";
+	const canCancel =
+		normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
+	const canComplete =
+		normalizedStatus !== null &&
+		normalizedStatus !== "completed" &&
+		normalizedStatus !== "cancelled" &&
+		isManager();
+	const canReopen = normalizedStatus === "cancelled" && isManager();
 
   const approvalStatus = task?.approvalStatus ?? "None";
   const canSubmitForApproval =

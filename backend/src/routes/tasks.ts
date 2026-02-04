@@ -711,10 +711,10 @@ type TaskAccessRow = {
 };
 
 const canModifyTask = (userId: string, userRoles: readonly string[], task: TaskAccessRow): boolean => {
-  if (userRoles.some((r) => (managerRoles as readonly string[]).includes(r))) return true;
-  if (task.AssignedToUserId && task.AssignedToUserId === userId) return true;
-  if (task.AssignedToRoleName && userRoles.includes(task.AssignedToRoleName)) return true;
-  return false;
+	if (userRoles.some((r) => (managerRoles as readonly string[]).includes(r))) return true;
+	if (task.AssignedToUserId && task.AssignedToUserId === userId) return true;
+	if (task.AssignedToRoleName && userRoles.includes(task.AssignedToRoleName)) return true;
+	return false;
 };
 
 const bitToBoolean = (value: unknown): boolean => value === true || value === 1;
@@ -3240,6 +3240,15 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       await tx.rollback();
       return;
     }
+
+		const isManagerUser = req.user.roles.some((role) =>
+			(managerRoles as readonly string[]).includes(role),
+		);
+		if (!isManagerUser) {
+			res.status(403).json({ message: "Forbidden" });
+			await tx.rollback();
+			return;
+		}
 
     const templateItemsResult = await tx
       .request()

@@ -1,8 +1,9 @@
 # Journal
 
-## Wed Feb  4 13:45:56 WITA 2026
+## Wed Feb  4 14:17:34 WITA 2026
 - PM Tasks: updated Assigned filter to support "Assigned (any assignee)" option.
-- Web: front-end now filters assigned-only tasks when that option is selected.
+- PM Tasks: restricted Complete button to supervisors and above in web UI.
+- Backend: /api/tasks/:taskId/complete now enforces manager roles for completion.
 - Verified with `npm run lint` (root) and `npm run typecheck` (backend).
 
 ## Sun Feb  1 12:20:33 WITA 2026
