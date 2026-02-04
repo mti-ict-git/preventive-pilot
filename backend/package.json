@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "create-local-superadmin": "tsx src/cli/createLocalSuperadmin.ts",
+    "reset-pm-pending-superadmin": "tsx src/cli/resetPendingSuperadminPmTasks.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"

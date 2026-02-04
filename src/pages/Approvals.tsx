@@ -17,6 +17,7 @@ import {
   apiApproveTaskBySupervisor,
   apiApproveTaskBySuperadmin,
   apiRejectTaskApproval,
+  apiReviseTaskApproval,
   type ListTasksResponse,
 } from "@/lib/api";
 
@@ -36,6 +37,9 @@ const Approvals = () => {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectTaskId, setRejectTaskId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [reviseDialogOpen, setReviseDialogOpen] = useState(false);
+  const [reviseTaskId, setReviseTaskId] = useState<string | null>(null);
+  const [reviseReason, setReviseReason] = useState("");
   const [bulkSelected, setBulkSelected] = useState<Record<string, boolean>>({});
 
   const canSupervisor = hasRole("Supervisor") || hasRole("Admin") || isSuperadmin();
@@ -108,6 +112,33 @@ const Approvals = () => {
     },
   });
 
+  const reviseMutation = useMutation({
+    mutationFn: async () => {
+      if (!reviseTaskId) {
+        throw new Error("No task selected");
+      }
+      return apiReviseTaskApproval({
+        taskId: reviseTaskId,
+        reason: reviseReason.trim() ? reviseReason.trim() : null,
+        reopenTask: false,
+      });
+    },
+    onSuccess: async () => {
+      setReviseDialogOpen(false);
+      setReviseTaskId(null);
+      setReviseReason("");
+      await queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      toast({ title: "Sent for revision" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Revise failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
   const allVisibleIds = useMemo(() => items.map((x) => x.id), [items]);
   const selectedCount = Object.keys(bulkSelected).filter((id) => bulkSelected[id]).length;
   const allSelectedOnPage = selectedCount > 0 && allVisibleIds.every((id) => bulkSelected[id]);
@@ -162,6 +193,7 @@ const Approvals = () => {
                         const checklistTotal = Number(t.checklistTotal ?? 0);
                         const checklistCompleted = Number(t.checklistCompleted ?? 0);
                         const canApprove = canSupervisor && (t.approvalStatus === "PendingSupervisor");
+                        const canRevise = canSupervisor && (t.approvalStatus === "PendingSupervisor");
                         return (
                           <div key={t.id} className="col-span-12 glass rounded-lg p-3">
                             <div className="flex items-start justify-between gap-3">
@@ -186,8 +218,21 @@ const Approvals = () => {
                                   Approve
                                 </Button>
                                 <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setReviseTaskId(t.id);
+                                    setReviseDialogOpen(true);
+                                  }}
+                                  disabled={!canRevise || reviseMutation.isPending}
+                                >
+                                  Revise
+                                </Button>
+                                <Button
                                   variant="destructive"
-                                  onClick={() => { setRejectTaskId(t.id); setRejectDialogOpen(true); }}
+                                  onClick={() => {
+                                    setRejectTaskId(t.id);
+                                    setRejectDialogOpen(true);
+                                  }}
                                   disabled={!canApprove || rejectMutation.isPending}
                                 >
                                   Reject
@@ -214,6 +259,7 @@ const Approvals = () => {
                         const checklistTotal = Number(t.checklistTotal ?? 0);
                         const checklistCompleted = Number(t.checklistCompleted ?? 0);
                         const canApprove = canSuperadmin && (t.approvalStatus === "PendingSuperadmin");
+                        const canRevise = canSuperadmin && (t.approvalStatus === "PendingSuperadmin");
                         return (
                           <div key={t.id} className="col-span-12 glass rounded-lg p-3">
                             <div className="flex items-start justify-between gap-3">
@@ -231,8 +277,21 @@ const Approvals = () => {
                                   Approve
                                 </Button>
                                 <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setReviseTaskId(t.id);
+                                    setReviseDialogOpen(true);
+                                  }}
+                                  disabled={!canRevise || reviseMutation.isPending}
+                                >
+                                  Revise
+                                </Button>
+                                <Button
                                   variant="destructive"
-                                  onClick={() => { setRejectTaskId(t.id); setRejectDialogOpen(true); }}
+                                  onClick={() => {
+                                    setRejectTaskId(t.id);
+                                    setRejectDialogOpen(true);
+                                  }}
                                   disabled={!canApprove || rejectMutation.isPending}
                                 >
                                   Reject
@@ -277,6 +336,31 @@ const Approvals = () => {
             <div className="flex items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
               <Button variant="destructive" onClick={() => rejectMutation.mutate()} disabled={rejectMutation.isPending}>Confirm Reject</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reviseDialogOpen} onOpenChange={setReviseDialogOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Send for revision</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Label>Instructions to previous approver or technician</Label>
+            <Textarea
+              value={reviseReason}
+              onChange={(e) => setReviseReason(e.target.value)}
+              rows={3}
+              className="bg-muted/50"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => setReviseDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => reviseMutation.mutate()} disabled={reviseMutation.isPending}>
+                Confirm Revise
+              </Button>
             </div>
           </div>
         </DialogContent>

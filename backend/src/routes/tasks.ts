@@ -3468,6 +3468,11 @@ const RejectApprovalSchema = z.object({
   reopenTask: z.boolean().optional(),
 });
 
+const ReviseApprovalSchema = z.object({
+  reason: z.string().max(1024).optional(),
+  reopenTask: z.boolean().optional(),
+});
+
 tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) {
@@ -3699,6 +3704,109 @@ tasksRouter.post(
       await tx.rollback().catch(() => undefined);
       throw err;
     }
+  },
+);
+
+tasksRouter.post(
+  "/:taskId/revise-approval",
+  requireAnyRole(["Supervisor", "Superadmin"]),
+  async (req, res) => {
+    const taskId = req.params.taskId;
+    if (!z.string().uuid().safeParse(taskId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const parsed = ReviseApprovalSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const db = await getDb();
+    const statusResult = await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.ApprovalStatus AS ApprovalStatus",
+          "FROM pm.PMTasks t",
+          "WHERE t.TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+    if (approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin") {
+      res.status(400).json({ message: "Invalid state" });
+      return;
+    }
+    const nextStatus = approvalStatus === "PendingSupervisor" ? "None" : "PendingSupervisor";
+
+    if (approvalStatus === "PendingSupervisor") {
+      await db
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .query(
+          [
+            "UPDATE pm.PMTasks",
+            "SET",
+            "  ApprovalStatus = N'None'",
+            "WHERE TaskId = @taskId",
+          ].join("\n"),
+        );
+    } else {
+      await db
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .query(
+          [
+            "UPDATE pm.PMTasks",
+            "SET",
+            "  ApprovalStatus = N'PendingSupervisor',",
+            "  SupervisorApprovedAt = NULL,",
+            "  SupervisorApprovedByUserId = NULL",
+            "WHERE TaskId = @taskId",
+          ].join("\n"),
+        );
+    }
+
+    if (parsed.data.reopenTask) {
+      await db
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .query(
+          [
+            "UPDATE pm.PMTasks",
+            "SET",
+            "  Status = CASE WHEN Status IN (N'completed', N'cancelled') THEN Status ELSE N'in_progress' END",
+            "WHERE TaskId = @taskId",
+          ].join("\n"),
+        );
+    }
+
+    const reason = parsed.data.reason ?? null;
+    await writeAuditLog({
+      actorUserId: req.user.sub,
+      action: "approval_revised",
+      entityType: "PMTask",
+      entityId: taskId,
+      metadata: {
+        fromStatus: approvalStatus,
+        toStatus: nextStatus,
+        reason: reason ?? null,
+      },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers["user-agent"] ?? null,
+    });
+
+    res.json({ ok: true });
   },
 );
 

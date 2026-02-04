@@ -54,6 +54,7 @@ import {
 	apiApproveTaskBySupervisor,
 	apiApproveTaskBySuperadmin,
 	apiRejectTaskApproval,
+	apiReviseTaskApproval,
 	apiUploadTaskChecklistEvidenceFile,
 	apiUploadTaskEvidenceFile,
 	type CompleteTaskChecklistResultInput,
@@ -77,7 +78,9 @@ const Tasks = () => {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const [filtersOpen, setFiltersOpen] = useState(false);
-	const [assignedFilter, setAssignedFilter] = useState<"any" | "me" | "unassigned">("any");
+	const [assignedFilter, setAssignedFilter] = useState<
+		"any" | "assigned" | "me" | "unassigned"
+	>("any");
 	const [approvedOnlyFilter, setApprovedOnlyFilter] = useState(false);
 	const [dueFromFilter, setDueFromFilter] = useState<string>("");
 	const [dueToFilter, setDueToFilter] = useState<string>("");
@@ -116,7 +119,7 @@ const Tasks = () => {
 			input = { ...input, status: "cancelled" };
 		}
 
-		if (assignedFilter !== "any") {
+		if (assignedFilter === "me" || assignedFilter === "unassigned") {
 			input = { ...input, assigned: assignedFilter };
 		}
 
@@ -325,6 +328,9 @@ const Tasks = () => {
 				if (statusFilter !== "all" && task.status !== statusFilter) {
 					return false;
 				}
+				if (assignedFilter === "assigned" && !task.isAssigned) {
+					return false;
+				}
 				if (!q) {
 					return true;
 				}
@@ -334,7 +340,7 @@ const Tasks = () => {
 					task.assetName.toLowerCase().includes(q)
 				);
 			});
-	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter]);
+	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter, assignedFilter]);
 
   return (
     <div className="min-h-screen">
@@ -520,7 +526,12 @@ const Tasks = () => {
                 <Select
                   value={assignedFilter}
                   onValueChange={(value) => {
-                    if (value === "any" || value === "me" || value === "unassigned") {
+						if (
+							value === "any" ||
+							value === "assigned" ||
+							value === "me" ||
+							value === "unassigned"
+						) {
                       setAssignedFilter(value);
                     }
                   }}
@@ -529,9 +540,10 @@ const Tasks = () => {
                     <SelectValue placeholder="Assigned" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="any">Any</SelectItem>
-                    <SelectItem value="me">Assigned to me</SelectItem>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
+						<SelectItem value="any">All (assigned + unassigned)</SelectItem>
+						<SelectItem value="assigned">Assigned (any assignee)</SelectItem>
+						<SelectItem value="me">Assigned to me</SelectItem>
+						<SelectItem value="unassigned">Unassigned</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -879,6 +891,8 @@ export const TaskDetailDialog = (props: {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectReopen, setRejectReopen] = useState(false);
+  const [reviseDialogOpen, setReviseDialogOpen] = useState(false);
+  const [reviseReason, setReviseReason] = useState("");
 
   const rejectApprovalMutation = useMutation({
     mutationFn: async () => {
@@ -895,6 +909,32 @@ export const TaskDetailDialog = (props: {
     onError: (err: unknown) => {
       toast({
         title: "Reject failed",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const reviseApprovalMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) {
+        throw new Error("No task selected");
+      }
+      return apiReviseTaskApproval({
+        taskId: props.taskId,
+        reason: reviseReason.trim() ? reviseReason.trim() : null,
+        reopenTask: false,
+      });
+    },
+    onSuccess: async () => {
+      setReviseDialogOpen(false);
+      setReviseReason("");
+      await taskQuery.refetch();
+      toast({ title: "Sent for revision" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Revise failed",
         description: err instanceof Error ? err.message : "Request failed",
         variant: "destructive",
       });
@@ -919,6 +959,12 @@ export const TaskDetailDialog = (props: {
     (hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()) && approvalStatus === "PendingSupervisor";
   const canApproveBySuperadmin = isSuperadmin() && approvalStatus === "PendingSuperadmin";
   const canRejectApproval =
+    approvalStatus === "PendingSupervisor"
+      ? hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()
+      : approvalStatus === "PendingSuperadmin"
+        ? isSuperadmin()
+        : false;
+  const canReviseApproval =
     approvalStatus === "PendingSupervisor"
       ? hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()
       : approvalStatus === "PendingSuperadmin"
@@ -2001,6 +2047,29 @@ export const TaskDetailDialog = (props: {
               onClick={() => rejectApprovalMutation.mutate()}
             >
               Confirm Reject
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={reviseDialogOpen} onOpenChange={setReviseDialogOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Send for revision</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Instructions (optional)</Label>
+            <Input value={reviseReason} onChange={(e) => setReviseReason(e.target.value)} className="mt-1" />
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={() => setReviseDialogOpen(false)}>Cancel</Button>
+            <Button
+              disabled={reviseApprovalMutation.isPending}
+              onClick={() => reviseApprovalMutation.mutate()}
+            >
+              Confirm Revise
             </Button>
           </div>
         </div>

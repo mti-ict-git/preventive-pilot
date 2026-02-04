@@ -545,6 +545,18 @@ export const apiRejectTaskApproval = async (input: {
   });
 };
 
+export const apiReviseTaskApproval = async (input: {
+  taskId: string;
+  reason?: string | null;
+  reopenTask?: boolean;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/revise-approval`, {
+    method: "POST",
+    body,
+  });
+};
+
 export const apiAssignTask = async (input: {
   taskId: string;
   assignedToUserId?: string | null;
