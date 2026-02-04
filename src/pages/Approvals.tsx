@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { hasRole, isSuperadmin } from "@/lib/auth";
+import { getJwtClaims, hasRole, isSuperadmin } from "@/lib/auth";
 import {
   apiListTasks,
   apiApproveTaskBySupervisor,
@@ -30,7 +30,7 @@ const stageLabel = (status: string): "supervisor" | "superadmin" | null => {
 const Approvals = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"supervisor" | "superadmin">("supervisor");
+  const [tab, setTab] = useState<"supervisor" | "superadmin" | "waiting">("supervisor");
   const [search, setSearch] = useState("");
   const [locationId, setLocationId] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -44,6 +44,8 @@ const Approvals = () => {
 
   const canSupervisor = hasRole("Supervisor") || hasRole("Admin") || isSuperadmin();
   const canSuperadmin = isSuperadmin();
+  const claims = getJwtClaims();
+  const currentUserId = claims?.sub ?? null;
 
   const tasksQuery = useQuery({
     queryKey: ["approvals", { tab, locationId, categoryId }],
@@ -56,18 +58,35 @@ const Approvals = () => {
 
   const items = useMemo(() => {
     const all = (tasksQuery.data?.items ?? []) as ListTasksResponse["items"];
-    const filtered = all.filter((t) => {
-      const stage = stageLabel(t.approvalStatus ?? "None");
-      if (tab === "supervisor") return stage === "supervisor";
-      return stage === "superadmin";
-    });
+    let filtered: ListTasksResponse["items"] = [];
+
+    if (tab === "supervisor" || tab === "superadmin") {
+      filtered = all.filter((t) => {
+        const stage = stageLabel(t.approvalStatus ?? "None");
+        if (tab === "supervisor") return stage === "supervisor";
+        return stage === "superadmin";
+      });
+    } else if (tab === "waiting") {
+      filtered = all.filter((t) => {
+        const stage = stageLabel(t.approvalStatus ?? "None");
+        const assignedUserId = t.assignedTo.userId;
+        const isAssignedToCurrentUser = currentUserId !== null && assignedUserId === currentUserId;
+        const hasNoApprovalStage = stage === null;
+        const isTechnicianCompleted = t.technicianCompletedAt !== null;
+        return isAssignedToCurrentUser && hasNoApprovalStage && isTechnicianCompleted;
+      });
+    }
+
     const q = search.trim().toLowerCase();
+    if (!q) {
+      return filtered;
+    }
+
     return filtered.filter((t) => {
-      if (!q) return true;
       const s = `${t.taskNumber} ${t.asset?.assetTag ?? ""} ${t.asset?.name ?? ""} ${t.template?.name ?? ""}`.toLowerCase();
       return s.includes(q);
     });
-  }, [tasksQuery.data?.items, tab, search]);
+  }, [tasksQuery.data?.items, tab, search, currentUserId]);
 
   useEffect(() => {
     setBulkSelected({});
@@ -163,6 +182,7 @@ const Approvals = () => {
             <TabsList>
               <TabsTrigger value="supervisor">Pending Supervisor</TabsTrigger>
               <TabsTrigger value="superadmin">Pending Superadmin</TabsTrigger>
+              <TabsTrigger value="waiting">Waiting Submit</TabsTrigger>
             </TabsList>
             <TabsContent value="supervisor">
               <div className="space-y-3">
@@ -295,6 +315,39 @@ const Approvals = () => {
                                   disabled={!canApprove || rejectMutation.isPending}
                                 >
                                   Reject
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+            <TabsContent value="waiting">
+              <div className="space-y-3">
+                {items.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tasks waiting to submit for approval</p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-2">
+                      {items.map((t) => {
+                        const dueDate = format(new Date(t.scheduledDueAt), "yyyy-MM-dd");
+                        const checklistTotal = Number(t.checklistTotal ?? 0);
+                        const checklistCompleted = Number(t.checklistCompleted ?? 0);
+                        return (
+                          <div key={t.id} className="col-span-12 glass rounded-lg p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-foreground">#{t.taskNumber} • {t.asset?.name ?? t.asset?.assetTag ?? ""}</p>
+                                <p className="text-xs text-muted-foreground">{t.template?.name ?? ""} • Due {dueDate}</p>
+                                <p className="text-xs text-muted-foreground">Checklist {checklistCompleted}/{checklistTotal}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button variant="outline" onClick={() => navigate(`/tasks?taskId=${t.id}`)}>
+                                  View Task
                                 </Button>
                               </div>
                             </div>
