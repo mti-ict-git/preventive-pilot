@@ -1,10 +1,10 @@
 # Journal
 
-## Wed Feb  4 14:17:34 WITA 2026
-- PM Tasks: updated Assigned filter to support "Assigned (any assignee)" option.
-- PM Tasks: restricted Complete button to supervisors and above in web UI.
-- Backend: /api/tasks/:taskId/complete now enforces manager roles for completion.
-- Verified with `npm run lint` (root) and `npm run typecheck` (backend).
+## Fri Feb  6 16:51:46 WITA 2026
+- Fix: preserved technician checklist results when submitting PM task for approval.
+- Backend: /api/tasks/{taskId}/submit-for-approval now accepts checklistResults payload.
+- Frontend: Tasks page reuses completion validation and sends checklistResults with submit.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
 
 ## Sun Feb  1 12:20:33 WITA 2026
 - Web: added Approvals Inbox page with role-based tabs and inline actions.
@@ -186,24 +186,6 @@
 - Filtering happens client-side based on the computed UI status so it can be combined with approval-stage tabs.
 - Ran `npm run lint` and `npx tsc --noEmit` after changes.
 
-## Sun Feb  1 13:20:09 WITA 2026
-- Permissions: added /api/system/users/for-assignment endpoint guarded by manager roles (Superadmin/Admin/Supervisor) and returning active users with roles for task assignment and backdated completion.
-- Web: PM Tasks assignment and backdate technician selectors now use the for-assignment API so Supervisors can assign/reassign tasks and choose technicians without full user admin access.
-- Ran `npm run lint` and `npx tsc --noEmit` after changes.
-
-## Sun Feb  1 17:47:49 WITA 2026
-- Asset Detail: hardened category and location rendering to tolerate null category/location rows from Snipe-IT sync.
-- UI now uses optional chaining so assets without a category or location (like MTI-PC-059) render with a fallback "—" instead of crashing with a null .name error.
-- Ran `npm run lint` and `npx tsc --noEmit` after changes.
-
-## 2026-02-03
-- Mobile: refactored NotificationsPage to derive notifications directly from React Query data.
-- Updated optimistic read/unread handling using queryClient.setQueryData instead of local state copy.
-- Verified navigating to Notifications no longer triggers maximum update depth warnings.
-
-- Mobile: updated WorkOrdersPage to support Mine/All/Unassigned filters for assigned work orders.
-- Work Orders list now passes the selected assigned filter to /api/work-orders instead of forcing assigned=me.
-
 ## 2026-01-22 12:57:50 PM
 - Fixed backdateMode scope ordering in Work Order detail to satisfy TypeScript.
 
@@ -211,18 +193,6 @@
 - Wired Work Orders list row click and View button to the detail route.
 - Updated README with Work Order detail route notes.
 - Ran `npm run lint` (ESLintIgnoreWarning about .eslintignore) and `npx tsc --noEmit`.
-
-## 2026-02-03 13:27:07 +08:00
-- Mobile: implemented ApprovalsPage with Pending Supervisor tab and Superadmin placeholder.
-- Mobile: added approvals API client functions (listApprovals, approveBySupervisor, rejectApproval).
-- Mobile: added /approvals route and BottomNav entry for quick access.
-- Verified with `npm run lint` and `npx tsc --noEmit`.
-
-## 2026-02-03 14:11:52 +08:00
-- Mobile nav: removed Approvals from BottomNav to keep a maximum of five items.
-- Header: bell icon now navigates to the Approvals page for quick supervisor access.
-- README updated: Approvals access documented via header bell icon.
-- Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-22 12:36:58 PM
 - Added PM Task Enhancement Plan document with phased roadmap and specs.
@@ -282,12 +252,6 @@
 
 ## 2026-01-01 14:14
 - Verified SQL Server `pm` schema presence, tables, foreign keys, and SchemaInfo version.
-
-## Tuesday, February 3, 2026 12:23:59 PM
-- Mobile: added CM Metrics API client and CmMetricsPage in Field-Ready app.
-- UI: CM Metrics screen with presets (7/30/90 days) and breakdown sections for category, location, failure category, impact level, monthly incidents, and MTTR highlights.
-- Navigation: added CM Metrics quick action on Home to route to /cm-metrics.
-- Ran `npm --prefix mobile/field-ready run lint` and `npx --prefix mobile/field-ready tsc --noEmit`.
 
 ## 2026-01-01 14:48
 - Applied SQL Server schema changes (SchemaInfo version 2) and verified successfully.
@@ -1120,29 +1084,3 @@
 - Web: updated Work Orders list to use a ticket-style Subject column combining asset/facility context with the reported symptom.
 - Web: updated Work Order detail header to show a ticket-style subject line with a separate ID badge and added a Resolution card summarizing status, timestamps, and resolution notes derived from checklist results.
 - Validation: ran `npm run lint` (ESLintIgnoreWarning about `.eslintignore`) and `npx tsc --noEmit` in the repo root; both exited successfully.
-
-## Monday, February 2, 2026 3:04:14 PM
-- Backend: extended OpenAPI `/api/scheduling` documentation to cover assignment rules, blackout windows, calendar, and day events, aligned with current schedulingRouter behavior.
-- Web: added sort controls to PM Tasks list allowing ordering by due date (soonest/latest) and created date (latest/oldest submitted) while preserving existing filters and tabs.
-- Validation: reran `npm run lint` (ESLintIgnoreWarning about `.eslintignore`) and `npx tsc --noEmit` in the repo root; both exited successfully.
-
-## 2026-02-03 12:12:21 +08:00
-- Added PM Approval Workflow — Mobile Implementation Plan document under `docs/PM-workflow-mobile-plan.md`, organized by phases.
-- Plan includes UX flow, component tree for mobile and web parity, responsive examples, sample code, backend endpoints, and schema notes.
-- Documentation-only change; no code updates in this step.
-
-## 2026-02-03 12:18:46 +08:00
-- Mobile: implemented Phase 1 — Submit for Approval on Task Detail.
-- Added Submit for Approval button for PM tasks with role/state gating based on `approvalStatus`.
-- Updated mobile API client with `submitTaskForApproval(taskId)`.
-- Preserved checklist-required gating in UI before allowing submission.
-- Validation: ran `npm run lint` and `npx tsc --noEmit`; both passed.
-
-## 2026-02-03 12:20:55 +08:00
-- Mobile: fixed checklist clearing after evidence upload due to detail refetch.
-- Merged server checklist updates into local state to preserve outcomes and notes across refetches.
-- Validation: ran `npm run lint` and `npx tsc --noEmit`; both passed.
-
-## Tuesday, February 3, 2026 2:18:09 PM
-- PM Tasks: prepared SQL maintenance queries to list and reset PM tasks with `ApprovalStatus = 'PendingSuperadmin'` back to the technician "Submit for approval" stage (`ApprovalStatus = 'PendingSupervisor'`) without changing other task fields.
-- Provided SELECT for review and UPDATE script for execution in production via SQL Server tools; no application code changes were required.

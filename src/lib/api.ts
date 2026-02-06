@@ -521,8 +521,19 @@ export const apiGetTask = async (taskId: string): Promise<TaskDetail> => {
   return apiFetchJson<TaskDetail>(`/api/tasks/${taskId}`);
 };
 
-export const apiSubmitTaskForApproval = async (taskId: string): Promise<{ ok: true }> => {
-  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/submit-for-approval`, { method: "POST" });
+export const apiSubmitTaskForApproval = async (
+	input: { taskId: string; checklistResults?: CompleteTaskChecklistResultInput[] } | string,
+): Promise<{ ok: true }> => {
+	const taskId = typeof input === "string" ? input : input.taskId;
+	const checklistResults = typeof input === "string" ? undefined : input.checklistResults;
+	const hasChecklistResults = Array.isArray(checklistResults) && checklistResults.length > 0;
+	if (hasChecklistResults) {
+		return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/submit-for-approval`, {
+			method: "POST",
+			body: { checklistResults },
+		});
+	}
+	return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/submit-for-approval`, { method: "POST" });
 };
 
 export const apiApproveTaskBySupervisor = async (taskId: string): Promise<{ ok: true }> => {

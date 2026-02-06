@@ -33,42 +33,39 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-	apiAddTaskEvidence,
-	apiCompleteTask,
-	apiDeleteChecklistEvidence,
-	apiDeleteEvidence,
-	apiDownloadChecklistEvidence,
-	apiDownloadEvidence,
-	apiAssignTask,
-	apiGetLookups,
-	apiListAssignableUsers,
-	ApiError,
-	apiGetTask,
-	apiListTasks,
-	apiStartTask,
-	apiPauseTask,
-	apiCancelTask,
-	apiResumeTask,
-	apiReopenTask,
-	apiSubmitTaskForApproval,
-	apiApproveTaskBySupervisor,
-	apiApproveTaskBySuperadmin,
-	apiRejectTaskApproval,
-	apiReviseTaskApproval,
-	apiUploadTaskChecklistEvidenceFile,
-	apiUploadTaskEvidenceFile,
-	type CompleteTaskChecklistResultInput,
-	type TaskListItem,
-	type LookupRole,
-	type UserSummary,
+  apiAddTaskEvidence,
+  apiCompleteTask,
+  apiDeleteChecklistEvidence,
+  apiDeleteEvidence,
+  apiDownloadChecklistEvidence,
+  apiDownloadEvidence,
+  apiAssignTask,
+  apiGetLookups,
+  apiListUsers,
+  ApiError,
+  apiGetTask,
+  apiListTasks,
+  apiStartTask,
+  apiPauseTask,
+  apiCancelTask,
+  apiResumeTask,
+  apiReopenTask,
+  apiSubmitTaskForApproval,
+  apiApproveTaskBySupervisor,
+  apiApproveTaskBySuperadmin,
+  apiRejectTaskApproval,
+  apiUploadTaskChecklistEvidenceFile,
+  apiUploadTaskEvidenceFile,
+  type CompleteTaskChecklistResultInput,
+  type TaskListItem,
+  type LookupRole,
+  type UserSummary,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { isManager, isSuperadmin, hasRole } from "@/lib/auth";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
-
-type SortMode = "due_asc" | "due_desc" | "created_desc" | "completed_desc";
 
 const Tasks = () => {
 	const [searchQuery, setSearchQuery] = useState("");
@@ -78,17 +75,14 @@ const Tasks = () => {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const [filtersOpen, setFiltersOpen] = useState(false);
-	const [assignedFilter, setAssignedFilter] = useState<
-		"any" | "assigned" | "me" | "unassigned"
-	>("any");
+	const [assignedFilter, setAssignedFilter] = useState<"any" | "me" | "unassigned">("any");
 	const [approvedOnlyFilter, setApprovedOnlyFilter] = useState(false);
 	const [dueFromFilter, setDueFromFilter] = useState<string>("");
 	const [dueToFilter, setDueToFilter] = useState<string>("");
 	const [statusFilter, setStatusFilter] = useState<
 		"all" | "upcoming" | "in_progress" | "due_today" | "overdue" | "completed" | "cancelled"
 	>("all");
-	const [sortMode, setSortMode] = useState<SortMode>("due_asc");
-
+	
 	const queryClient = useQueryClient();
 
 	useEffect(() => {
@@ -119,7 +113,7 @@ const Tasks = () => {
 			input = { ...input, status: "cancelled" };
 		}
 
-		if (assignedFilter === "me" || assignedFilter === "unassigned") {
+		if (assignedFilter !== "any") {
 			input = { ...input, assigned: assignedFilter };
 		}
 
@@ -157,9 +151,6 @@ const Tasks = () => {
   const [assignUserId, setAssignUserId] = useState<string>("");
   const [assignRoleId, setAssignRoleId] = useState<string>("");
 
-  type SortKey = "due_date_asc" | "due_date_desc" | "created_desc" | "created_asc";
-  const [sortKey, setSortKey] = useState<SortKey>("due_date_asc");
-
   const lookupsQuery = useQuery({
     queryKey: ["lookups"],
     queryFn: apiGetLookups,
@@ -167,8 +158,8 @@ const Tasks = () => {
   });
 
   const usersQuery = useQuery({
-		queryKey: ["users-for-assignment", { page: 1, pageSize: 500, isActive: true }],
-		queryFn: () => apiListAssignableUsers({ page: 1, pageSize: 500, isActive: true }),
+    queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
+    queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
     enabled: assignDialogOpen,
   });
 
@@ -328,9 +319,6 @@ const Tasks = () => {
 				if (statusFilter !== "all" && task.status !== statusFilter) {
 					return false;
 				}
-				if (assignedFilter === "assigned" && !task.isAssigned) {
-					return false;
-				}
 				if (!q) {
 					return true;
 				}
@@ -340,7 +328,7 @@ const Tasks = () => {
 					task.assetName.toLowerCase().includes(q)
 				);
 			});
-	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter, assignedFilter]);
+	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter]);
 
   return (
     <div className="min-h-screen">
@@ -526,12 +514,7 @@ const Tasks = () => {
                 <Select
                   value={assignedFilter}
                   onValueChange={(value) => {
-						if (
-							value === "any" ||
-							value === "assigned" ||
-							value === "me" ||
-							value === "unassigned"
-						) {
+                    if (value === "any" || value === "me" || value === "unassigned") {
                       setAssignedFilter(value);
                     }
                   }}
@@ -540,10 +523,9 @@ const Tasks = () => {
                     <SelectValue placeholder="Assigned" />
                   </SelectTrigger>
                   <SelectContent>
-						<SelectItem value="any">All (assigned + unassigned)</SelectItem>
-						<SelectItem value="assigned">Assigned (any assignee)</SelectItem>
-						<SelectItem value="me">Assigned to me</SelectItem>
-						<SelectItem value="unassigned">Unassigned</SelectItem>
+                    <SelectItem value="any">Any</SelectItem>
+                    <SelectItem value="me">Assigned to me</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -727,8 +709,8 @@ export const TaskDetailDialog = (props: {
 	const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
 
 	const usersQueryForBackdate = useQuery({
-		queryKey: ["users-for-backdate", { page: 1, pageSize: 500, isActive: true }],
-		queryFn: () => apiListAssignableUsers({ page: 1, pageSize: 500, isActive: true }),
+		queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
+		queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
 		enabled: backdateMode,
 	});
 
@@ -834,10 +816,57 @@ export const TaskDetailDialog = (props: {
 
 	const task = taskQuery.data;
 
+	const buildChecklistResults = (): CompleteTaskChecklistResultInput[] => {
+		const items = task?.checklistItems ?? [];
+		const results: CompleteTaskChecklistResultInput[] = [];
+		for (const item of items) {
+			if (!item.isActive) continue;
+			const draft = checklistDraft[item.id];
+			const outcome = draft?.outcome ?? null;
+			if (outcome === null) {
+				if (item.isMandatory) {
+					throw new Error("Missing outcome for a mandatory checklist item");
+				}
+				continue;
+			}
+
+			if (!item.requiresPassFail && outcome === 2) {
+				throw new Error("Invalid outcome for this checklist item");
+			}
+
+			if (item.isMandatory && outcome === 0) {
+				throw new Error("Mandatory checklist items cannot be skipped");
+			}
+
+			const notesValue = draft?.notes ?? "";
+			const notesRequired = item.requiresNotes || item.isMandatory;
+			if (notesRequired && outcome !== 0 && notesValue.trim().length === 0) {
+				throw new Error("Notes are required for this checklist item");
+			}
+
+			if (
+				item.enableAttachment &&
+				item.requiresAttachment &&
+				outcome !== 0 &&
+				item.evidence.length === 0
+			) {
+				throw new Error("Attachment is required for this checklist item");
+			}
+
+			results.push({
+				templateChecklistItemId: item.id,
+				outcome,
+				notes: notesValue.trim() ? notesValue.trim() : null,
+			});
+		}
+		return results;
+	};
+
   const submitForApprovalMutation = useMutation({
     mutationFn: async () => {
       if (!props.taskId) throw new Error("No task selected");
-      return apiSubmitTaskForApproval(props.taskId);
+			const results = buildChecklistResults();
+			return apiSubmitTaskForApproval({ taskId: props.taskId, checklistResults: results });
     },
     onSuccess: async () => {
       await taskQuery.refetch();
@@ -891,8 +920,6 @@ export const TaskDetailDialog = (props: {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectReopen, setRejectReopen] = useState(false);
-  const [reviseDialogOpen, setReviseDialogOpen] = useState(false);
-  const [reviseReason, setReviseReason] = useState("");
 
   const rejectApprovalMutation = useMutation({
     mutationFn: async () => {
@@ -915,44 +942,13 @@ export const TaskDetailDialog = (props: {
     },
   });
 
-  const reviseApprovalMutation = useMutation({
-    mutationFn: async () => {
-      if (!props.taskId) {
-        throw new Error("No task selected");
-      }
-      return apiReviseTaskApproval({
-        taskId: props.taskId,
-        reason: reviseReason.trim() ? reviseReason.trim() : null,
-        reopenTask: false,
-      });
-    },
-    onSuccess: async () => {
-      setReviseDialogOpen(false);
-      setReviseReason("");
-      await taskQuery.refetch();
-      toast({ title: "Sent for revision" });
-    },
-    onError: (err: unknown) => {
-      toast({
-        title: "Revise failed",
-        description: err instanceof Error ? err.message : "Request failed",
-        variant: "destructive",
-      });
-    },
-  });
-
 	const normalizedStatus = task?.status.toLowerCase() ?? null;
-	const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
-	const canPause = normalizedStatus === "in_progress";
-	const canResume = normalizedStatus === "paused";
-	const canCancel =
-		normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
-	const canComplete =
-		normalizedStatus !== null &&
-		normalizedStatus !== "completed" &&
-		normalizedStatus !== "cancelled" &&
-		isManager();
-	const canReopen = normalizedStatus === "cancelled" && isManager();
+  const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
+  const canPause = normalizedStatus === "in_progress";
+  const canResume = normalizedStatus === "paused";
+  const canCancel = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
+  const canComplete = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
+  const canReopen = normalizedStatus === "cancelled" && isManager();
 
   const approvalStatus = task?.approvalStatus ?? "None";
   const canSubmitForApproval =
@@ -964,12 +960,6 @@ export const TaskDetailDialog = (props: {
     (hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()) && approvalStatus === "PendingSupervisor";
   const canApproveBySuperadmin = isSuperadmin() && approvalStatus === "PendingSuperadmin";
   const canRejectApproval =
-    approvalStatus === "PendingSupervisor"
-      ? hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()
-      : approvalStatus === "PendingSuperadmin"
-        ? isSuperadmin()
-        : false;
-  const canReviseApproval =
     approvalStatus === "PendingSupervisor"
       ? hasRole("Supervisor") || hasRole("Admin") || isSuperadmin()
       : approvalStatus === "PendingSuperadmin"
@@ -1210,48 +1200,7 @@ export const TaskDetailDialog = (props: {
   const completeMutation = useMutation({
     mutationFn: async () => {
       if (!props.taskId) throw new Error("No task selected");
-      const items = task?.checklistItems ?? [];
-      const results: CompleteTaskChecklistResultInput[] = [];
-      for (const item of items) {
-        if (!item.isActive) continue;
-        const draft = checklistDraft[item.id];
-        const outcome = draft?.outcome ?? null;
-        if (outcome === null) {
-          if (item.isMandatory) {
-            throw new Error("Missing outcome for a mandatory checklist item");
-          }
-          continue;
-        }
-
-        if (!item.requiresPassFail && outcome === 2) {
-          throw new Error("Invalid outcome for this checklist item");
-        }
-
-        if (item.isMandatory && outcome === 0) {
-          throw new Error("Mandatory checklist items cannot be skipped");
-        }
-
-        const notesValue = draft?.notes ?? "";
-        const notesRequired = item.requiresNotes || item.isMandatory;
-        if (notesRequired && outcome !== 0 && notesValue.trim().length === 0) {
-          throw new Error("Notes are required for this checklist item");
-        }
-
-        if (
-          item.enableAttachment &&
-          item.requiresAttachment &&
-          outcome !== 0 &&
-          item.evidence.length === 0
-        ) {
-          throw new Error("Attachment is required for this checklist item");
-        }
-
-        results.push({
-          templateChecklistItemId: item.id,
-          outcome,
-          notes: notesValue.trim() ? notesValue.trim() : null,
-        });
-      }
+			const results = buildChecklistResults();
       const isManagerUser = isManager();
       const trimmedReason = backdateReason.trim();
       const completedAtValue = backdateCompletedAt.trim();
@@ -2052,29 +2001,6 @@ export const TaskDetailDialog = (props: {
               onClick={() => rejectApprovalMutation.mutate()}
             >
               Confirm Reject
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    <Dialog open={reviseDialogOpen} onOpenChange={setReviseDialogOpen}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Send for revision</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>Instructions (optional)</Label>
-            <Input value={reviseReason} onChange={(e) => setReviseReason(e.target.value)} className="mt-1" />
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={() => setReviseDialogOpen(false)}>Cancel</Button>
-            <Button
-              disabled={reviseApprovalMutation.isPending}
-              onClick={() => reviseApprovalMutation.mutate()}
-            >
-              Confirm Revise
             </Button>
           </div>
         </div>
