@@ -1,5 +1,10 @@
 # Journal
 
+## Fri Feb  6 17:20:50 WITA 2026
+- UX: hide PM "Complete" button once task enters approval workflow.
+- Web: Tasks detail disables Complete when maintenanceType=PM and approvalStatus is PendingSupervisor, PendingSuperadmin, or Approved.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
 ## Fri Feb  6 16:51:46 WITA 2026
 - Fix: preserved technician checklist results when submitting PM task for approval.
 - Backend: /api/tasks/{taskId}/submit-for-approval now accepts checklistResults payload.
