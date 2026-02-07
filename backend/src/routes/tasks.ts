@@ -94,6 +94,10 @@ const CompleteSchema = z.object({
   technicianName: z.string().max(256).optional(),
 });
 
+const SubmitForApprovalSchema = z.object({
+	checklistResults: z.array(ChecklistResultSchema).default([]),
+});
+
 const EvidenceSchema = z.object({
   uri: z.string().min(1).max(1024),
   fileName: z.string().max(256).nullable().optional(),
@@ -3489,6 +3493,12 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
     return;
   }
 
+	const parsed = SubmitForApprovalSchema.safeParse(req.body ?? {});
+	if (!parsed.success) {
+		res.status(400).json({ message: "Invalid request" });
+		return;
+	}
+
   const db = await getDb();
   const accessResult = await db
     .request()
@@ -3525,6 +3535,37 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
     res.status(400).json({ message: "Invalid state" });
     return;
   }
+
+	const checklistResults = parsed.data.checklistResults;
+	if (checklistResults.length > 0) {
+		const completedAtDate = new Date();
+		for (const item of checklistResults) {
+			await db
+				.request()
+				.input("taskId", sql.UniqueIdentifier, taskId)
+				.input("templateChecklistItemId", sql.UniqueIdentifier, item.templateChecklistItemId)
+				.input("outcome", sql.TinyInt, item.outcome)
+				.input("notes", sql.NVarChar(1024), item.notes ?? null)
+				.input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
+				.input("completedAt", sql.DateTime2(0), completedAtDate)
+				.query(
+					[
+						"MERGE pm.PMTaskChecklistResults WITH (HOLDLOCK) AS target",
+						"USING (SELECT @taskId AS TaskId, @templateChecklistItemId AS TemplateChecklistItemId) AS source",
+						"ON target.TaskId = source.TaskId AND target.TemplateChecklistItemId = source.TemplateChecklistItemId",
+						"WHEN MATCHED THEN",
+						"  UPDATE SET",
+						"    Outcome = @outcome,",
+						"    Notes = @notes,",
+						"    CompletedAt = @completedAt,",
+						"    CompletedByUserId = @completedByUserId",
+						"WHEN NOT MATCHED THEN",
+						"  INSERT (TaskId, TemplateChecklistItemId, Outcome, Notes, CompletedAt, CompletedByUserId)",
+						"  VALUES (@taskId, @templateChecklistItemId, @outcome, @notes, @completedAt, @completedByUserId);",
+					].join("\n"),
+				);
+		}
+	}
 
   await db
     .request()
