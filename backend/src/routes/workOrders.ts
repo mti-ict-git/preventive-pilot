@@ -25,10 +25,11 @@ const resolveStoredFileAbs = (storageRootAbs: string, storagePath: string): stri
 };
 
 const canModifyTask = (userId: string, userRoles: readonly string[], task: TaskAccessRow): boolean => {
-  if (userRoles.some((r) => (managerRoles as readonly string[]).includes(r))) return true;
-  if (task.AssignedToUserId && task.AssignedToUserId === userId) return true;
-  if (task.AssignedToRoleName && userRoles.includes(task.AssignedToRoleName)) return true;
-  return false;
+	if (userRoles.some((r) => (managerRoles as readonly string[]).includes(r))) return true;
+	if (task.AssignedToUserId && task.AssignedToUserId === userId) return true;
+	if (task.AssignedToRoleName && userRoles.includes(task.AssignedToRoleName)) return true;
+	if (!task.AssignedToUserId && !task.AssignedToRoleName && userRoles.some((r) => r !== "Viewer")) return true;
+	return false;
 };
 
 const writeAuditLog = async (input: {
