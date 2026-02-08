@@ -1,5 +1,13 @@
 # Journal
 
+## Sun Feb  8 21:21:06 WITA 2026
+- Mobile (pm-tech): updated login header/subtitle copy.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 21:19:03 WITA 2026
+- Mobile (pm-tech): updated login title to “MTI Mobile PM System”.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 20:22:14 WITA 2026
 - Mobile (pm-tech): replaced login icon with app logo image.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
@@ -1411,3 +1419,10 @@
 ## Sun Feb  8 20:24:59 WITA 2026
 - Mobile (pm-tech): read push title/body from notification data fallback on tap.
 - Backend: include fallback dataTitle/dataBody fields in push payload data.
+
+## Sun Feb  8 20:28:53 WITA 2026
+- Mobile (pm-tech): replace login header logo image with banner.png.
+
+## Sun Feb  8 20:30:47 WITA 2026
+- Mobile (pm-tech): set login header background image to banner.png.
+- Mobile (pm-tech): keep logo tile unchanged.
