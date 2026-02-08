@@ -1987,6 +1987,62 @@ export const apiPushTest = async (input?: { title?: string; body?: string }): Pr
   return apiFetchJson<PushTestResponse>("/api/devices/push-test", input ? { method: "POST", body: input } : { method: "POST" });
 };
 
+export type PushBroadcastAudience = "all" | "technician" | "supervisor" | "superadmin";
+
+export type PushBroadcastRequest = {
+  title: string;
+  body: string;
+  audience: PushBroadcastAudience;
+};
+
+export type PushBroadcastResponse = {
+  ok: true;
+  attempted: number;
+  sent: number;
+  failed: number;
+  configUsed: "firebase-admin" | "fcm-legacy";
+  errors: Array<{ token: string; message: string; code: string | null }>;
+};
+
+export const apiPushBroadcast = async (input: PushBroadcastRequest): Promise<PushBroadcastResponse> => {
+  const res = await fetch(`${API_BASE_URL}/api/devices/push-broadcast`, {
+    method: "POST",
+    headers: {
+      ...buildAuthHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const data = (await res.json()) as unknown;
+      const message =
+        typeof data === "object" && data !== null && "message" in data && typeof (data as { message?: unknown }).message === "string"
+          ? (data as { message: string }).message
+          : "Request failed";
+      const code =
+        typeof data === "object" && data !== null && "code" in data && typeof (data as { code?: unknown }).code === "string"
+          ? (data as { code: string }).code
+          : null;
+
+      if (res.status === 400 && code === "no_tokens") {
+        throw new ApiError("No device tokens registered", 400);
+      }
+      if (res.status === 400 && code === "invalid_request") {
+        throw new ApiError("Invalid request", 400);
+      }
+
+      throw new ApiError(message, res.status);
+    }
+    throw new ApiError("Request failed", res.status);
+  }
+
+  const data = (await res.json()) as unknown;
+  return data as PushBroadcastResponse;
+};
+
 export type SystemLogEntry = {
   id: string;
   level: string;

@@ -1,5 +1,9 @@
 # Journal
 
+## Sun Feb  8 19:56:50 WITA 2026
+- Web: added Push Broadcast dialog (title/message/audience) on Notifications page.
+- Web: added apiPushBroadcast client helper and documented Broadcast dialog in README.
+
 ## Sun Feb  8 19:45:09 WITA 2026
 - Mobile (pm-tech): show app version in Profile > Account > About Version.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

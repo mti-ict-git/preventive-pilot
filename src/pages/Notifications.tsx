@@ -36,6 +36,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { hasRole, isSuperadmin } from "@/lib/auth";
 import {
   apiListNotificationChannels,
   apiListNotificationLog,
@@ -46,6 +47,7 @@ import {
   apiTestMicrosoftGraphSettings,
   apiTestWhatsAppSettings,
   apiPushTest,
+  apiPushBroadcast,
   apiCreateNotificationRule,
   apiCreateNotificationChannel,
   apiDeleteNotificationChannel,
@@ -55,6 +57,7 @@ import {
   type NotificationLogEntry,
   type TestMicrosoftGraphSettingsResponse,
   type TestWhatsAppSettingsResponse,
+  type PushBroadcastAudience,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
@@ -113,6 +116,16 @@ const Notifications = () => {
   const [waMentionText, setWaMentionText] = useState<string>("");
   const [waBaseUrlOverride, setWaBaseUrlOverride] = useState<string>("");
 
+  const canBroadcast = hasRole("Admin") || isSuperadmin();
+
+  const [broadcastOpen, setBroadcastOpen] = useState<boolean>(false);
+  const [broadcastTitle, setBroadcastTitle] = useState<string>("");
+  const [broadcastBody, setBroadcastBody] = useState<string>("");
+  const [broadcastAudience, setBroadcastAudience] = useState<PushBroadcastAudience>("all");
+  const [broadcastTitleTouched, setBroadcastTitleTouched] = useState<boolean>(false);
+  const [broadcastBodyTouched, setBroadcastBodyTouched] = useState<boolean>(false);
+  const [broadcastSubmitted, setBroadcastSubmitted] = useState<boolean>(false);
+
   const channelsQuery = useQuery({
     queryKey: ["notification-channels"],
     queryFn: apiListNotificationChannels,
@@ -156,6 +169,59 @@ const Notifications = () => {
     onError: (err: unknown) => {
       const message = err instanceof ApiError ? err.message : "Failed to send push test";
       toast({ title: "Test failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const isPushBroadcastAudience = (value: string): value is PushBroadcastAudience =>
+    value === "all" || value === "technician" || value === "supervisor" || value === "superadmin";
+
+  const broadcastTitleTrimmed = broadcastTitle.trim();
+  const broadcastBodyTrimmed = broadcastBody.trim();
+  const titleError =
+    broadcastTitleTrimmed.length === 0
+      ? "Title is required"
+      : broadcastTitleTrimmed.length > 120
+        ? "Title must be 120 characters or less"
+        : null;
+  const bodyError =
+    broadcastBodyTrimmed.length === 0
+      ? "Message is required"
+      : broadcastBodyTrimmed.length > 2000
+        ? "Message must be 2000 characters or less"
+        : null;
+  const broadcastFormValid = titleError === null && bodyError === null;
+
+  const openBroadcastDialog = (): void => {
+    setBroadcastTitle("");
+    setBroadcastBody("");
+    setBroadcastAudience("all");
+    setBroadcastTitleTouched(false);
+    setBroadcastBodyTouched(false);
+    setBroadcastSubmitted(false);
+    setBroadcastOpen(true);
+  };
+
+  const broadcastMutation = useMutation({
+    mutationFn: async (input: { title: string; body: string; audience: PushBroadcastAudience }) =>
+      apiPushBroadcast(input),
+    onSuccess: async (result) => {
+      toast({
+        title: "Broadcast sent",
+        description: `Sent ${result.sent}/${result.attempted}${result.failed ? `, failed ${result.failed}` : ""} (${result.configUsed})`,
+      });
+      setBroadcastOpen(false);
+      setBroadcastTitle("");
+      setBroadcastBody("");
+      setBroadcastAudience("all");
+      setBroadcastSubmitted(false);
+      setBroadcastTitleTouched(false);
+      setBroadcastBodyTouched(false);
+      setPage(1);
+      await queryClient.invalidateQueries({ queryKey: ["notification-log"] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to send broadcast";
+      toast({ title: "Broadcast failed", description: message, variant: "destructive" });
     },
   });
 
@@ -479,6 +545,98 @@ const Notifications = () => {
     <div className="min-h-screen">
       <Header title="Notifications" subtitle="Configure reminders and escalation rules" />
 
+      <Dialog
+        open={broadcastOpen}
+        onOpenChange={(open) => {
+          setBroadcastOpen(open);
+          if (!open) setBroadcastSubmitted(false);
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Broadcast Push</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="broadcast-title">Title</Label>
+              <Input
+                id="broadcast-title"
+                value={broadcastTitle}
+                onChange={(e) => {
+                  setBroadcastTitle(e.target.value);
+                  setBroadcastTitleTouched(true);
+                }}
+              />
+              {(broadcastSubmitted || broadcastTitleTouched) && titleError ? (
+                <p className="text-xs text-destructive">{titleError}</p>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="broadcast-message">Message</Label>
+              <Textarea
+                id="broadcast-message"
+                value={broadcastBody}
+                onChange={(e) => {
+                  setBroadcastBody(e.target.value);
+                  setBroadcastBodyTouched(true);
+                }}
+                className="min-h-[140px]"
+              />
+              <div className="flex items-center justify-between">
+                {(broadcastSubmitted || broadcastBodyTouched) && bodyError ? (
+                  <p className="text-xs text-destructive">{bodyError}</p>
+                ) : (
+                  <span />
+                )}
+                <p className="text-xs text-muted-foreground">{broadcastBodyTrimmed.length}/2000</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Audience</Label>
+              <Select
+                value={broadcastAudience}
+                onValueChange={(value) => {
+                  if (isPushBroadcastAudience(value)) setBroadcastAudience(value);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Audience" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="technician">Technician</SelectItem>
+                  <SelectItem value="supervisor">Supervisor</SelectItem>
+                  <SelectItem value="superadmin">Superadmin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setBroadcastOpen(false)}
+                disabled={broadcastMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setBroadcastSubmitted(true);
+                  if (!broadcastFormValid) return;
+                  broadcastMutation.mutate({
+                    title: broadcastTitleTrimmed,
+                    body: broadcastBodyTrimmed,
+                    audience: broadcastAudience,
+                  });
+                }}
+                disabled={!broadcastFormValid || broadcastMutation.isPending}
+              >
+                Send
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="p-6 space-y-6">
         <Card className="glass border-border">
           <CardHeader>
@@ -740,7 +898,6 @@ const Notifications = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Push Channel (Special Handling) */}
                 <div className="p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div
@@ -957,6 +1114,11 @@ const Notifications = () => {
                     <Button size="sm" variant="outline" onClick={() => pushTestMutation.mutate()} disabled={pushTestMutation.isPending}>
                       Push Test
                     </Button>
+                    {canBroadcast ? (
+                      <Button size="sm" variant="outline" onClick={openBroadcastDialog}>
+                        Broadcast
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm"
                       variant="outline"
