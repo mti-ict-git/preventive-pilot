@@ -141,6 +141,21 @@ const getErrorInfo = (err: unknown): { message: string; code: string | null } =>
   return { message, code };
 };
 
+const getRoleNamesForAudience = (
+  audience: (typeof allowedAudiences)[number],
+): string[] => {
+  if (audience === "technician") {
+    return ["technician", "pm tech", "pm_tech", "pm technician", "pm-technician"];
+  }
+  if (audience === "supervisor") {
+    return ["supervisor"];
+  }
+  if (audience === "superadmin") {
+    return ["superadmin", "super admin"];
+  }
+  return [];
+};
+
 devicesRouter.post("/register", async (req, res) => {
   const parsed = RegisterDeviceSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
@@ -242,6 +257,8 @@ devicesRouter.post("/push-test", async (req, res) => {
           kind: "push_test",
           sentAt,
           platform: row.Platform,
+          dataTitle: title.slice(0, 120),
+          dataBody: body.slice(0, 512),
         },
       });
       sent += 1;
@@ -281,7 +298,19 @@ devicesRouter.post("/push-broadcast", requireAnyRole(["Superadmin", "Admin"]), a
   const db = await getDb();
   const audience = parsed.data.audience ?? "all";
   const request = db.request();
-  if (audience !== "all") {
+  const roleNames = audience === "all" ? [] : getRoleNamesForAudience(audience);
+  if (audience !== "all" && roleNames.length > 0) {
+    roleNames.forEach((role, i) => {
+      request.input(`role${i}`, sql.NVarChar(64), role);
+    });
+  }
+
+  const roleClause =
+    roleNames.length > 0
+      ? `AND LOWER(r.Name) IN (${roleNames.map((_, i) => `@role${i}`).join(", ")})`
+      : "AND LOWER(r.Name) = @role";
+
+  if (audience !== "all" && roleNames.length === 0) {
     request.input("role", sql.NVarChar(64), audience);
   }
 
@@ -299,7 +328,7 @@ devicesRouter.post("/push-broadcast", requireAnyRole(["Superadmin", "Admin"]), a
           "INNER JOIN pm.UserRoles ur ON ur.UserId = u.UserId",
           "INNER JOIN pm.Roles r ON r.RoleId = ur.RoleId",
           "WHERE d.IsActive = 1",
-          "  AND LOWER(r.Name) = @role",
+          `  ${roleClause}`,
         ].join("\n"),
   );
 
@@ -319,7 +348,13 @@ devicesRouter.post("/push-broadcast", requireAnyRole(["Superadmin", "Admin"]), a
         token: row.Token,
         title: parsed.data.title,
         body: parsed.data.body,
-        data: { kind: "broadcast", audience, platform: row.Platform },
+        data: {
+          kind: "broadcast",
+          audience,
+          platform: row.Platform,
+          dataTitle: parsed.data.title.slice(0, 120),
+          dataBody: parsed.data.body.slice(0, 512),
+        },
       });
       sent += 1;
     } catch (err: unknown) {

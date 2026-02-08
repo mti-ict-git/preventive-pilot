@@ -1,5 +1,9 @@
 # Journal
 
+## Sun Feb  8 20:22:14 WITA 2026
+- Mobile (pm-tech): replaced login icon with app logo image.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 19:56:50 WITA 2026
 - Web: added Push Broadcast dialog (title/message/audience) on Notifications page.
 - Web: added apiPushBroadcast client helper and documented Broadcast dialog in README.
@@ -1397,3 +1401,13 @@
 
 ## Sun Feb  8 13:53:48 WITA 2026
 - Backend: allow production web origin in CORS allowlist via FRONTEND_ORIGIN.
+
+## Sun Feb  8 20:06:03 WITA 2026
+- Backend: include PM Tech role variants for technician push broadcasts.
+
+## Sun Feb  8 20:12:13 WITA 2026
+- Mobile (pm-tech): show in-app popup with push title/body when notification is tapped.
+
+## Sun Feb  8 20:24:59 WITA 2026
+- Mobile (pm-tech): read push title/body from notification data fallback on tap.
+- Backend: include fallback dataTitle/dataBody fields in push payload data.
