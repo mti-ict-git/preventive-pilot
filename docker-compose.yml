@@ -13,6 +13,7 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://pmit.merdekabattery.com,http://localhost,http://localhost:9102,http://localhost:8081,capacitor://localhost}
     volumes:
       - ./.env:/app/.env:ro
+      - ${FIREBASE_SERVICE_ACCOUNT_HOST_PATH:-./firebase-adminsdk.json}:/app/firebase-adminsdk.json:ro
       - ${EVIDENCE_STORAGE_HOST_PATH:-./shared-documents}:/app/shared-documents
 
   web:

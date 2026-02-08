@@ -1,5 +1,31 @@
 # Journal
 
+## Sun Feb  8 17:21:30 WITA 2026
+- Mobile (pm-tech): added local Save action for PM Task checklist draft.
+- Mobile (pm-tech): persist checklist drafts in localStorage for offline usage.
+- Mobile (pm-tech): enable offline reads by caching GET API responses.
+- Mobile (pm-tech): Offline page now syncs and lists cached tasks.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 17:16:46 WITA 2026
+- Docker: mount Firebase service account into api container and point FIREBASE_SERVICE_ACCOUNT_PATH to /app/firebase-adminsdk.json.
+
+## Sun Feb  8 17:20:30 WITA 2026
+- Docker: switch FIREBASE_SERVICE_ACCOUNT_HOST_PATH to repo-relative path for dev/prod parity.
+## Sun Feb  8 15:23:06 WITA 2026
+- Mobile (pm-tech): re-register push token when push notifications are enabled.
+- Mobile (pm-tech): export registerDeviceToken for reuse.
+## Sun Feb  8 14:59:55 WITA 2026
+- Mobile (pm-tech): fixed assets:android script to use @capacitor/assets generate.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 14:52:12 WITA 2026
+- Mobile (pm-tech): added assets:android script to regenerate Android icons/splash from assets/logo.png.
+
+## Sun Feb  8 14:34:06 WITA 2026
+- Mobile (pm-tech): replaced Android app icons and splash assets with new logo.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 12:04:41 WITA 2026
 - Mobile (pm-tech): made PM Now role gating case-insensitive.
 - Backend: /api/auth/me and /api/auth/refresh now reload roles from DB.
@@ -66,6 +92,17 @@
 ## Sun Feb  8 13:58:34 WITA 2026
 - Mobile (pm-tech): disable submit-for-approval while task is paused.
 - Mobile (pm-tech): disable pause/resume actions when approval is locked.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 14:04:37 WITA 2026
+- Mobile (pm-tech): persist checklist draft through evidence uploads.
+- Mobile (pm-tech): keep draft values when reloading task detail.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 15:28:03 WITA 2026
+- Mobile (pm-tech): add My Tasks filter view using assigned=me.
+- Mobile (pm-tech): add My Tasks shortcut icon in Tasks header.
+- Mobile (pm-tech): update Home My Tasks button to open assigned=me.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## Sun Feb  8 13:53:22 WITA 2026
