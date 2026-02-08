@@ -694,6 +694,24 @@ BEGIN
   ALTER TABLE pm.PMTasks ADD RejectionReason nvarchar(1024) NULL;
 END;
 
+IF COL_LENGTH(N'pm.PMTasks', N'RevisedAt') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD RevisedAt datetime2(0) NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'RevisedByUserId') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD RevisedByUserId uniqueidentifier NULL;
+
+  ALTER TABLE pm.PMTasks
+    ADD CONSTRAINT FK_pm_PMTasks_RevisedByUser FOREIGN KEY (RevisedByUserId) REFERENCES pm.Users(UserId);
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'RevisionNote') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD RevisionNote nvarchar(1024) NULL;
+END;
+
 IF OBJECT_ID(N'pm.PMTaskChecklistResults', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.PMTaskChecklistResults (

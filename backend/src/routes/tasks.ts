@@ -2383,6 +2383,11 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "  rb.Username AS RejectedByUsername,",
         "  rb.DisplayName AS RejectedByDisplayName,",
         "  t.RejectionReason AS RejectionReason,",
+        "  t.RevisedAt AS RevisedAt,",
+        "  t.RevisedByUserId AS RevisedByUserId,",
+        "  rv.Username AS RevisedByUsername,",
+        "  rv.DisplayName AS RevisedByDisplayName,",
+        "  t.RevisionNote AS RevisionNote,",
         "  t.CreatedAt AS CreatedAt,",
         "  t.StartedAt AS StartedAt,",
         "  t.CompletedAt AS CompletedAt,",
@@ -2405,6 +2410,7 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "LEFT JOIN pm.Users su ON su.UserId = t.SupervisorApprovedByUserId",
         "LEFT JOIN pm.Users sa ON sa.UserId = t.SuperadminApprovedByUserId",
         "LEFT JOIN pm.Users rb ON rb.UserId = t.RejectedByUserId",
+        "LEFT JOIN pm.Users rv ON rv.UserId = t.RevisedByUserId",
         "LEFT JOIN pm.Users xu ON xu.UserId = t.CancelledByUserId",
         "WHERE t.TaskId = @taskId",
       ].join("\n"),
@@ -2588,6 +2594,15 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         }
       : null,
     rejectionReason: (taskRow.RejectionReason as string | null) ?? null,
+    revisedAt: (taskRow.RevisedAt as Date | null) ?? null,
+    revisedBy: taskRow.RevisedByUserId
+      ? {
+          userId: taskRow.RevisedByUserId,
+          username: taskRow.RevisedByUsername,
+          displayName: taskRow.RevisedByDisplayName,
+        }
+      : null,
+    revisionNote: (taskRow.RevisionNote as string | null) ?? null,
     scheduledDueAt: taskRow.ScheduledDueAt,
     createdAt: taskRow.CreatedAt,
     startedAt: taskRow.StartedAt,
@@ -4194,6 +4209,24 @@ tasksRouter.post(
     }
 
     const reason = parsed.data.reason ?? null;
+    await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("userId", sql.UniqueIdentifier, req.user.sub)
+      .input("note", sql.NVarChar(1024), (reason ?? null) as string | null)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  RevisedAt = sysutcdatetime(),",
+          "  RevisedByUserId = @userId,",
+          "  RevisionNote = @note,",
+          "  RejectedAt = NULL,",
+          "  RejectedByUserId = NULL,",
+          "  RejectionReason = NULL",
+          "WHERE TaskId = @taskId",
+        ].join("\n"),
+      );
     await writeAuditLog({
       actorUserId: req.user.sub,
       action: "approval_revised",

@@ -1,9 +1,35 @@
 # Journal
 
+## Sun Feb  8 08:51:08 WITA 2026
+- Mobile (pm-tech): added submit-for-approval, revise/reject modals, and strict role-based edit locks.
+- Mobile (pm-tech): superadmin can edit only during PendingSuperadmin review (not after Approved).
+- Mobile (pm-tech): surfaced rejection reason and revision note on Task detail.
+- Backend: enforced approval-state edit locks on evidence upload/delete endpoints.
+- Backend/DB: added revised audit fields (RevisedAt, RevisedByUserId, RevisionNote) and returned them in task detail.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 08:57:53 WITA 2026
+- Mobile (pm-tech): made checklist and evidence editing read-only for Supervisor/Admin.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 08:43:43 WITA 2026
 - Mobile (pm-tech): added Capacitor Android scaffolding (appId com.merdekatsingshan.pmtech, appName MTI Mobile PM).
 - Mobile (pm-tech): added biometric login using native secure storage for refresh token (kept on logout).
 - Mobile (pm-tech): updated Vite base for Capacitor production builds.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 08:51:21 WITA 2026
+- Mobile (pm-tech): added build:android script (build + sync + open Android Studio).
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 09:30:39 WITA 2026
+- Mobile (pm-tech): enabled Scan QR on Home and Asset Detail to open scanned asset.
+- Mobile (pm-tech): added Capacitor MLKit barcode scanner and Android camera config.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 09:55:30 WITA 2026
+- Mobile (pm-tech): fixed Scan QR tap behavior by removing false-disabled state.
+- Mobile (pm-tech): centralized scanner logic and improved error handling.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## Sun Feb  8 03:50:19 WITA 2026
@@ -1160,3 +1186,10 @@
 
 ## Sun Feb  8 08:45:33 WITA 2026
 - Mobile: prioritize ngrok discovery API base with timeout fallback to direct backend.
+
+## Sun Feb  8 09:22:09 WITA 2026
+- Mobile: render asset image with img fallback on error.
+- Mobile: add attachment preview overlay with close control in Task Detail.
+
+## Sun Feb  8 09:53:41 WITA 2026
+- Backend: allow ngrok-free origins for CORS in development.

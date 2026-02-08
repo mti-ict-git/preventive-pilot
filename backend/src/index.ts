@@ -2502,7 +2502,27 @@ const allowedOriginsList = String(env.FRONTEND_ORIGIN ?? "")
   .map((v) => v.trim())
   .filter((v) => v.length > 0);
 
-const originConfig: CorsOptions["origin"] = allowedOriginsList.includes("*") ? true : allowedOriginsList;
+const allowAllOrigins = allowedOriginsList.includes("*");
+const ngrokOriginPattern = /^https:\/\/[a-z0-9-]+\.ngrok-free\.app$/i;
+
+const originConfig: CorsOptions["origin"] = (origin, callback) => {
+  if (allowAllOrigins) {
+    callback(null, true);
+    return;
+  }
+
+  if (!origin) {
+    callback(null, true);
+    return;
+  }
+
+  if (allowedOriginsList.includes(origin) || ngrokOriginPattern.test(origin)) {
+    callback(null, true);
+    return;
+  }
+
+  callback(new Error("Not allowed by CORS"));
+};
 
 app.use(
   cors({

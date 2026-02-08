@@ -122,6 +122,7 @@ Required environment variables:
 - Configure server-side file storage with `EVIDENCE_STORAGE_ROOT`.
 - Evidence uploads are stored under the existing `Qx YYYY` folder structure.
 - Max upload size is 50MB per file.
+- Evidence upload/delete is blocked during approval states for non-superadmins.
 - Attachments can be viewed, downloaded, deleted, and replaced from Task Detail.
 - File uploads occur immediately when a user selects a file to attach.
 
@@ -148,6 +149,7 @@ Required environment variables:
 
 - Technicians complete and submit PM tasks for approval; supervisors review; superadmins finalize approval.
 - Task Detail shows Approval Status with badges and an Approval Trail (technician, supervisor, superadmin).
+- Revise records a correction note and can optionally reopen the task for technician edits.
 - Rejection records reason, who rejected, and timestamp; Task Detail displays a Rejected block with this metadata.
 - PDF export for a PM task includes sign-off sections labeled "Submitted By (Technician)", "Reviewed By (Supervisor)", and "Approved By (Superadmin)", with names and dates.
  - Approvals Inbox at `/approvals` provides tabs for **Pending Supervisor** and **Pending Superadmin** with inline Approve/Reject actions; supervisors can perform bulk approve on the supervisor tab.
