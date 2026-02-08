@@ -12,6 +12,11 @@
 - Mobile (pm-tech): made checklist and evidence editing read-only for Supervisor/Admin.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sun Feb  8 11:01:34 WITA 2026
+- Mobile (pm-tech): Home Resolve Now now opens PM Tasks on the Overdue tab.
+- Mobile (pm-tech): PM Tasks page supports deep-linking via /tasks?tab=overdue.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 08:43:43 WITA 2026
 - Mobile (pm-tech): added Capacitor Android scaffolding (appId com.merdekatsingshan.pmtech, appName MTI Mobile PM).
 - Mobile (pm-tech): added biometric login using native secure storage for refresh token (kept on logout).
@@ -30,6 +35,17 @@
 ## Sun Feb  8 09:55:30 WITA 2026
 - Mobile (pm-tech): fixed Scan QR tap behavior by removing false-disabled state.
 - Mobile (pm-tech): centralized scanner logic and improved error handling.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 10:22:06 WITA 2026
+- Mobile (pm-tech): wired Scan QR / Barcode button in Asset Lookup.
+- Mobile (pm-tech): expanded scanner to accept barcodes in addition to QR.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 11:01:54 WITA 2026
+- Mobile (pm-tech): added page transition animation between routes.
+- Mobile (pm-tech): animated Assets/Facilities sidebar drawer open/close.
+- Mobile (pm-tech): added subtle active-state animation on bottom nav.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## Sun Feb  8 03:50:19 WITA 2026
@@ -1193,3 +1209,12 @@
 
 ## Sun Feb  8 09:53:41 WITA 2026
 - Backend: allow ngrok-free origins for CORS in development.
+
+## Sun Feb  8 10:22:26 WITA 2026
+- Mobile (pm-tech): increase bottom navigation size for easier tap targets.
+
+## Sun Feb  8 10:28:07 WITA 2026
+- Mobile (pm-tech): increase bottom navigation size slightly.
+
+## Sun Feb  8 11:01:32 WITA 2026
+- Mobile (pm-tech): explain PM Now requirements when disabled.
