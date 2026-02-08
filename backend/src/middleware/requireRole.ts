@@ -2,8 +2,9 @@ import type { NextFunction, Request, Response } from "express";
 
 export const requireAnyRole = (roles: readonly string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const userRoles = req.user.roles;
-    if (roles.some((r) => userRoles.includes(r))) {
+    const normalizeRole = (value: string): string => value.trim().toLowerCase();
+    const userRoleSet = new Set(req.user.roles.map(normalizeRole));
+    if (roles.some((r) => userRoleSet.has(normalizeRole(r)))) {
       next();
       return;
     }

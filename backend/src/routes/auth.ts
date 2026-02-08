@@ -22,6 +22,26 @@ const LoginSchema = z
 
 export const authRouter = Router();
 
+const loadUserRoles = async (userId: string): Promise<string[]> => {
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("userId", sql.UniqueIdentifier, userId)
+    .query(
+      [
+        "SELECT r.Name AS RoleName",
+        "FROM pm.UserRoles ur",
+        "INNER JOIN pm.Roles r ON r.RoleId = ur.RoleId",
+        "WHERE ur.UserId = @userId",
+      ].join("\n"),
+    );
+
+  const rows = result.recordset as Array<{ RoleName?: unknown }>;
+  return rows
+    .map((row) => (typeof row.RoleName === "string" ? row.RoleName : null))
+    .filter((value): value is string => Boolean(value));
+};
+
 authRouter.post("/login", async (req, res) => {
   const parsed = LoginSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -122,13 +142,20 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   const displayName = typeof row?.DisplayName === "string" ? row.DisplayName : null;
   const email = typeof row?.Email === "string" ? row.Email : null;
 
+  let roles = req.user.roles;
+  try {
+    roles = await loadUserRoles(req.user.sub);
+  } catch {
+    roles = req.user.roles;
+  }
+
   res.json({
     user: {
       id: req.user.sub,
       username,
       displayName,
       email,
-      roles: req.user.roles,
+      roles,
     },
   });
 });
@@ -144,8 +171,16 @@ authRouter.post("/refresh", async (req, res) => {
 
   try {
     const claims = verifyRefreshToken(parsed.data.refreshToken);
-    const accessToken = signAccessToken({ sub: claims.sub, username: claims.username, roles: claims.roles });
-    const refreshed = signRefreshToken({ sub: claims.sub, username: claims.username, roles: claims.roles });
+
+    let roles = claims.roles;
+    try {
+      roles = await loadUserRoles(claims.sub);
+    } catch {
+      roles = claims.roles;
+    }
+
+    const accessToken = signAccessToken({ sub: claims.sub, username: claims.username, roles });
+    const refreshed = signRefreshToken({ sub: claims.sub, username: claims.username, roles });
     res.json({ accessToken, refreshToken: refreshed });
   } catch {
     res.status(401).json({ message: "Unauthorized" });

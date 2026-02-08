@@ -45,6 +45,7 @@ import {
   apiUpdateNotificationRule,
   apiTestMicrosoftGraphSettings,
   apiTestWhatsAppSettings,
+  apiPushTest,
   apiCreateNotificationRule,
   apiCreateNotificationChannel,
   apiDeleteNotificationChannel,
@@ -137,6 +138,20 @@ const Notifications = () => {
     onError: (err: unknown) => {
       const message = err instanceof ApiError ? err.message : "Failed to start notifications job";
       toast({ title: "Job failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const pushTestMutation = useMutation({
+    mutationFn: async () => apiPushTest(),
+    onSuccess: (result) => {
+      toast({
+        title: "Push test sent",
+        description: `Sent ${result.sent}/${result.attempted}${result.failed ? `, failed ${result.failed}` : ""}`,
+      });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to send push test";
+      toast({ title: "Test failed", description: message, variant: "destructive" });
     },
   });
 
@@ -867,6 +882,9 @@ const Notifications = () => {
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" onClick={() => runNotificationsMutation.mutate()} disabled={runNotificationsMutation.isPending}>
                       Run Now
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => pushTestMutation.mutate()} disabled={pushTestMutation.isPending}>
+                      Push Test
                     </Button>
                     <Button
                       size="sm"

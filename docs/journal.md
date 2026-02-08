@@ -1,5 +1,11 @@
 # Journal
 
+## Sun Feb  8 12:04:41 WITA 2026
+- Mobile (pm-tech): made PM Now role gating case-insensitive.
+- Backend: /api/auth/me and /api/auth/refresh now reload roles from DB.
+- Backend: role middleware checks are now case-insensitive.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 08:51:08 WITA 2026
 - Mobile (pm-tech): added submit-for-approval, revise/reject modals, and strict role-based edit locks.
 - Mobile (pm-tech): superadmin can edit only during PendingSuperadmin review (not after Approved).
@@ -15,6 +21,12 @@
 ## Sun Feb  8 11:01:34 WITA 2026
 - Mobile (pm-tech): Home Resolve Now now opens PM Tasks on the Overdue tab.
 - Mobile (pm-tech): PM Tasks page supports deep-linking via /tasks?tab=overdue.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 12:04:28 WITA 2026
+- Backend: added /api/devices/push-test to send FCM test notification to registered tokens.
+- Web: added Notifications page “Push Test” button.
+- Mobile (pm-tech): registers push token and calls /api/devices/register after login.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## Sun Feb  8 08:43:43 WITA 2026
@@ -1218,3 +1230,6 @@
 
 ## Sun Feb  8 11:01:32 WITA 2026
 - Mobile (pm-tech): explain PM Now requirements when disabled.
+
+## Sun Feb  8 11:59:34 WITA 2026
+- Mobile (pm-tech): set Asset Detail image background to white.

@@ -1974,6 +1974,12 @@ export const apiTestWhatsAppSettings = async (input?: TestWhatsAppSettingsInput)
   );
 };
 
+export type PushTestResponse = { ok: true; attempted: number; sent: number; failed: number };
+
+export const apiPushTest = async (input?: { title?: string; body?: string }): Promise<PushTestResponse> => {
+  return apiFetchJson<PushTestResponse>("/api/devices/push-test", input ? { method: "POST", body: input } : { method: "POST" });
+};
+
 export type SystemLogEntry = {
   id: string;
   level: string;
