@@ -1627,7 +1627,16 @@ export type NotificationRule = {
   updatedAt: string;
 };
 
-export type NotificationRuleEventType = "task_due" | "task_overdue" | "task_assigned" | "task_approved" | "task_rejected";
+export type NotificationRuleEventType =
+  | "task_due"
+  | "task_due_today"
+  | "task_overdue"
+  | "task_assigned"
+  | "task_revised"
+  | "task_submitted_for_approval"
+  | "task_pending_superadmin"
+  | "task_approved"
+  | "task_rejected";
 
 export type NotificationRuleKind = "reminder" | "escalation";
 
@@ -1643,6 +1652,13 @@ export const DEFAULT_NOTIFICATION_RULE_TEMPLATES: Record<NotificationRuleEventTy
       body: "Task {{taskNumber}} ({{assetName}}) is due {{dueAt}}.",
     },
   },
+  task_due_today: {
+    message: "Task {{taskNumber}} for {{assetName}} is due today ({{templateName}}). @{{technicianNumber}}",
+    push: {
+      title: "Task Due Today",
+      body: "{{taskNumber}} is due today. Please complete by end of day.",
+    },
+  },
   task_overdue: {
     message: "Task {{taskNumber}} for {{assetName}} is overdue since {{dueAt}} ({{templateName}}). @{{technicianNumber}}",
     push: {
@@ -1655,6 +1671,27 @@ export const DEFAULT_NOTIFICATION_RULE_TEMPLATES: Record<NotificationRuleEventTy
     push: {
       title: "Task Assigned",
       body: "You have been assigned {{taskNumber}} ({{assetName}}). Due {{dueAt}}.",
+    },
+  },
+  task_revised: {
+    message: "Task {{taskNumber}} was revised. Please review the latest checklist and notes.",
+    push: {
+      title: "Task Revised",
+      body: "{{taskNumber}} was revised. Please review the latest checklist and notes.",
+    },
+  },
+  task_submitted_for_approval: {
+    message: "Task {{taskNumber}} is waiting for your review.",
+    push: {
+      title: "Approval Needed",
+      body: "{{taskNumber}} is waiting for your review.",
+    },
+  },
+  task_pending_superadmin: {
+    message: "Task {{taskNumber}} is ready for superadmin approval.",
+    push: {
+      title: "Final Approval Needed",
+      body: "{{taskNumber}} is ready for superadmin approval.",
     },
   },
   task_approved: {
@@ -1673,12 +1710,16 @@ export const DEFAULT_NOTIFICATION_RULE_TEMPLATES: Record<NotificationRuleEventTy
   },
 };
 
-export type PushRuleAudience = "assigned_technician";
+export type PushRuleAudience = "assigned_technician" | "supervisor" | "superadmin";
 
 export const PUSH_RULE_AUDIENCE_BY_EVENT: Record<NotificationRuleEventType, PushRuleAudience> = {
   task_due: "assigned_technician",
+  task_due_today: "assigned_technician",
   task_overdue: "assigned_technician",
   task_assigned: "assigned_technician",
+  task_revised: "assigned_technician",
+  task_submitted_for_approval: "supervisor",
+  task_pending_superadmin: "superadmin",
   task_approved: "assigned_technician",
   task_rejected: "assigned_technician",
 };
@@ -1686,8 +1727,12 @@ export const PUSH_RULE_AUDIENCE_BY_EVENT: Record<NotificationRuleEventType, Push
 export const isNotificationRuleEventType = (value: string): value is NotificationRuleEventType => {
   return (
     value === "task_due" ||
+    value === "task_due_today" ||
     value === "task_overdue" ||
     value === "task_assigned" ||
+    value === "task_revised" ||
+    value === "task_submitted_for_approval" ||
+    value === "task_pending_superadmin" ||
     value === "task_approved" ||
     value === "task_rejected"
   );

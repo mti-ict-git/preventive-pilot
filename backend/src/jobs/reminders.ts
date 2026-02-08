@@ -502,13 +502,21 @@ const sendWhatsAppMessage = async (settings: EffectiveWhatsAppSettings, payload:
   }
 };
 
-const processQueuedNotifications = async (): Promise<{ attempted: number; sent: number; failed: number }> => {
+const processQueuedNotifications = async (): Promise<{
+  attempted: number;
+  sent: number;
+  failed: number;
+  pushSent: number;
+  pushFailed: number;
+}> => {
   const settings = await loadEffectiveMicrosoftGraphSettings();
   const whatsAppSettings = await loadEffectiveWhatsAppSettings();
 
   const rows = await claimQueuedNotifications(100);
   let sent = 0;
   let failed = 0;
+  let pushSent = 0;
+  let pushFailed = 0;
 
   for (const row of rows) {
     const channelType = row.ChannelType.toLowerCase();
@@ -543,14 +551,16 @@ const processQueuedNotifications = async (): Promise<{ attempted: number; sent: 
       }
       await updateNotificationStatus(row.NotificationLogId, "sent", null);
       sent += 1;
+      if (isPushChannel) pushSent += 1;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       await updateNotificationStatus(row.NotificationLogId, "failed", message.slice(0, 1024));
       failed += 1;
+      if (isPushChannel) pushFailed += 1;
     }
   }
 
-  return { attempted: rows.length, sent, failed };
+  return { attempted: rows.length, sent, failed, pushSent, pushFailed };
 };
 
 type MailChannelConfig = {
@@ -690,6 +700,7 @@ type PushPayload = {
   asset: { id: string; assetTag: string | null; name: string };
   template: { id: string; name: string };
   user: { id: string | null; email: string | null; phone: string | null } | null;
+  audience?: { type: "role"; role: "supervisor" | "superadmin" };
   message: string;
 };
 
@@ -706,6 +717,29 @@ const loadUserDeviceTokens = async (userId: string): Promise<Array<{ token: stri
         "  AND IsActive = 1",
       ].join("\n"),
     );
+  const rows = result.recordset as Array<{ Token: string; Platform: string }>;
+  return rows.map((r) => ({ token: r.Token, platform: r.Platform }));
+};
+
+const loadRoleDeviceTokens = async (role: "supervisor" | "superadmin"): Promise<Array<{ token: string; platform: string }>> => {
+  const db = await getDb();
+  const roleNames = role === "supervisor" ? ["supervisor"] : ["superadmin", "super admin"];
+  const result = await db
+    .request()
+    .input("role1", sql.NVarChar(64), roleNames[0])
+    .input("role2", sql.NVarChar(64), roleNames.length > 1 ? roleNames[1] : roleNames[0])
+    .query(
+      [
+        "SELECT DISTINCT d.Token AS Token, d.Platform AS Platform",
+        "FROM pm.Devices d",
+        "INNER JOIN pm.Users u ON u.UserId = d.UserId",
+        "INNER JOIN pm.UserRoles ur ON ur.UserId = u.UserId",
+        "INNER JOIN pm.Roles r ON r.RoleId = ur.RoleId",
+        "WHERE d.IsActive = 1",
+        "  AND (LOWER(r.Name) = LOWER(@role1) OR LOWER(r.Name) = LOWER(@role2))",
+      ].join("\n"),
+    );
+
   const rows = result.recordset as Array<{ Token: string; Platform: string }>;
   return rows.map((r) => ({ token: r.Token, platform: r.Platform }));
 };
@@ -774,16 +808,25 @@ const sendPush = async (token: string, title: string, body: string, data: Record
 const sendPushNotification = async (payload: unknown): Promise<void> => {
   if (!isRecord(payload)) throw new Error("Invalid payload");
   const p = payload as PushPayload;
+
   const userId = p.user && typeof p.user.id === "string" ? p.user.id : null;
-  if (!userId) throw new Error("No user to notify");
-  const tokens = await loadUserDeviceTokens(userId);
+  const roleAudience =
+    p.audience && p.audience.type === "role" && (p.audience.role === "supervisor" || p.audience.role === "superadmin")
+      ? p.audience.role
+      : null;
+
+  const tokens = userId ? await loadUserDeviceTokens(userId) : roleAudience ? await loadRoleDeviceTokens(roleAudience) : [];
   if (tokens.length === 0) throw new Error("No device tokens");
 
   const defaultTitle = (() => {
     const eventType = typeof p.rule?.eventType === "string" ? p.rule.eventType : "";
     if (eventType === "task_assigned") return "Task Assigned";
     if (eventType === "task_due") return "Task Due";
+    if (eventType === "task_due_today") return "Task Due Today";
     if (eventType === "task_overdue") return "Task Overdue";
+    if (eventType === "task_revised") return "Task Revised";
+    if (eventType === "task_submitted_for_approval") return "Approval Needed";
+    if (eventType === "task_pending_superadmin") return "Final Approval Needed";
     if (eventType === "task_approved") return "Task Approved";
     if (eventType === "task_rejected") return "Task Rejected";
     return "Notification";
@@ -812,6 +855,7 @@ const sendPushNotification = async (payload: unknown): Promise<void> => {
     taskId: p.task?.id ?? "",
     taskNumber: p.task?.taskNumber ?? "",
     eventType: typeof p.rule?.eventType === "string" ? p.rule.eventType : "",
+    audienceRole: roleAudience ?? "",
   };
   for (const t of tokens) {
     await sendPush(t.token, title, body, data);
@@ -987,9 +1031,13 @@ export const runReminderEscalationJob = async (): Promise<void> => {
   let examined = 0;
 
   for (const rule of rules) {
-    const template =
-      rule.MessageTemplate ??
-      "Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}}).";
+    const fallbackTemplate =
+      rule.EventType === "task_overdue"
+        ? "Task {{taskNumber}} for {{assetName}} is overdue since {{dueAt}} ({{templateName}})."
+        : rule.EventType === "task_due_today"
+          ? "Task {{taskNumber}} for {{assetName}} is due today ({{templateName}})."
+          : "Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}}).";
+    const template = rule.MessageTemplate ?? fallbackTemplate;
 
     const tasksForOffset = await loadTasksForOffsetRule(rule);
     const tasksForEscalation = await loadTasksForEscalationRule(rule);
@@ -1025,6 +1073,8 @@ export const runReminderEscalationJob = async (): Promise<void> => {
       deliveryAttempted: delivery.attempted,
       deliverySent: delivery.sent,
       deliveryFailed: delivery.failed,
+      push_sent_total: delivery.pushSent,
+      push_failed_total: delivery.pushFailed,
       durationMs,
     },
   });

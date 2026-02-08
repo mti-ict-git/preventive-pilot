@@ -1110,6 +1110,169 @@ const enqueueTaskApprovalNotifications = async (
   }
 };
 
+type NotificationRuleForLifecycle = {
+  NotificationRuleId: string;
+  RuleName: string;
+  EventType: string;
+  ChannelId: string;
+  ChannelType: string;
+  MessageTemplate: string | null;
+};
+
+type TaskRowForLifecycle = {
+  TaskId: string;
+  TaskNumber: string;
+  ScheduledDueAt: Date;
+  Status: string;
+  Priority: string;
+  AssetId: string;
+  AssetTag: string | null;
+  AssetName: string;
+  TemplateId: string;
+  TemplateName: string;
+  AssignedUserId: string | null;
+  AssignedUserEmail: string | null;
+  AssignedUserPhone: string | null;
+  RevisionNote: string | null;
+};
+
+const enqueueTaskLifecycleNotifications = async (
+  taskId: string,
+  eventType: "task_revised" | "task_submitted_for_approval" | "task_pending_superadmin",
+  audience: "assigned_technician" | "role_supervisor" | "role_superadmin",
+): Promise<void> => {
+  const db = await getDb();
+
+  const rulesResult = await db
+    .request()
+    .input("eventType", sql.NVarChar(64), eventType)
+    .query(
+      [
+        "SELECT",
+        "  r.NotificationRuleId AS NotificationRuleId,",
+        "  r.RuleName AS RuleName,",
+        "  r.EventType AS EventType,",
+        "  r.ChannelId AS ChannelId,",
+        "  c.ChannelType AS ChannelType,",
+        "  r.MessageTemplate AS MessageTemplate",
+        "FROM pm.NotificationRules r",
+        "INNER JOIN pm.NotificationChannels c ON c.ChannelId = r.ChannelId",
+        "WHERE r.IsActive = 1",
+        "  AND c.IsActive = 1",
+        "  AND r.EventType = @eventType",
+      ].join("\n"),
+    );
+
+  const rules = rulesResult.recordset as NotificationRuleForLifecycle[];
+  if (rules.length === 0) {
+    return;
+  }
+
+  const taskResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.TaskId AS TaskId,",
+        "  t.TaskNumber AS TaskNumber,",
+        "  t.ScheduledDueAt AS ScheduledDueAt,",
+        "  t.Status AS Status,",
+        "  t.Priority AS Priority,",
+        "  a.AssetId AS AssetId,",
+        "  a.AssetTag AS AssetTag,",
+        "  a.Name AS AssetName,",
+        "  tpl.TemplateId AS TemplateId,",
+        "  tpl.Name AS TemplateName,",
+        "  u.UserId AS AssignedUserId,",
+        "  u.Email AS AssignedUserEmail,",
+        "  u.Phone AS AssignedUserPhone,",
+        "  t.RevisionNote AS RevisionNote",
+        "FROM pm.PMTasks t",
+        "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+        "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+        "LEFT JOIN pm.Users u ON u.UserId = t.AssignedToUserId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const taskRow = taskResult.recordset[0] as TaskRowForLifecycle | undefined;
+  if (!taskRow) {
+    return;
+  }
+
+  const taskNumber = taskRow.TaskNumber;
+  const dueAtIso = taskRow.ScheduledDueAt.toISOString();
+  const assetName = taskRow.AssetName;
+  const assetTag = taskRow.AssetTag ?? "";
+  const templateName = taskRow.TemplateName;
+  const technicianNumber = (taskRow.AssignedUserPhone ?? "").trim();
+  const revisionNote = taskRow.RevisionNote ?? "";
+
+  for (const rule of rules) {
+    const fallbackTemplate =
+      eventType === "task_revised"
+        ? "Task {{taskNumber}} was revised. Please review the latest checklist and notes."
+        : eventType === "task_submitted_for_approval"
+          ? "Task {{taskNumber}} is waiting for your review."
+          : "Task {{taskNumber}} is ready for superadmin approval.";
+
+    const template = rule.MessageTemplate ?? fallbackTemplate;
+    const message = renderNotificationTemplate(template, {
+      taskNumber,
+      assetTag,
+      assetName,
+      templateName,
+      dueAt: dueAtIso,
+      technicianNumber,
+      revisionNote,
+    });
+
+    const payload = JSON.stringify({
+      rule: { id: rule.NotificationRuleId, name: rule.RuleName, eventType: rule.EventType },
+      channel: { id: rule.ChannelId, type: rule.ChannelType },
+      task: {
+        id: taskRow.TaskId,
+        taskNumber: taskRow.TaskNumber,
+        scheduledDueAt: taskRow.ScheduledDueAt,
+        status: taskRow.Status,
+        priority: taskRow.Priority,
+      },
+      asset: { id: taskRow.AssetId, assetTag: taskRow.AssetTag, name: taskRow.AssetName },
+      template: { id: taskRow.TemplateId, name: taskRow.TemplateName },
+      user:
+        audience === "assigned_technician" && (taskRow.AssignedUserId || taskRow.AssignedUserEmail || taskRow.AssignedUserPhone)
+          ? {
+              id: taskRow.AssignedUserId,
+              email: taskRow.AssignedUserEmail,
+              phone: taskRow.AssignedUserPhone,
+            }
+          : null,
+      audience:
+        audience === "role_supervisor"
+          ? { type: "role", role: "supervisor" }
+          : audience === "role_superadmin"
+            ? { type: "role", role: "superadmin" }
+            : undefined,
+      message,
+    });
+
+    await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskRow.TaskId)
+      .input("ruleId", sql.UniqueIdentifier, rule.NotificationRuleId)
+      .input("channelId", sql.UniqueIdentifier, rule.ChannelId)
+      .input("status", sql.NVarChar(32), "queued")
+      .input("payload", sql.NVarChar(sql.MAX), payload)
+      .query(
+        [
+          "INSERT INTO pm.NotificationLog (TaskId, NotificationRuleId, ChannelId, Status, Payload)",
+          "VALUES (@taskId, @ruleId, @channelId, @status, @payload)",
+        ].join("\n"),
+      );
+  }
+};
+
 export const tasksRouter = Router();
 
 tasksRouter.use(requireAuth);
@@ -3896,6 +4059,11 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
       ].join("\n"),
     );
 
+  await enqueueTaskLifecycleNotifications(taskId, "task_submitted_for_approval", "role_supervisor");
+  try {
+    await runJobNow("notifications");
+  } catch {}
+
   res.json({ ok: true });
 });
 
@@ -4044,6 +4212,7 @@ tasksRouter.post(
         ].join("\n"),
       );
     await enqueueTaskApprovalNotifications(taskId, "task_approved", "supervisor");
+    await enqueueTaskLifecycleNotifications(taskId, "task_pending_superadmin", "role_superadmin");
     try {
       await runJobNow("notifications");
     } catch {}
@@ -4282,6 +4451,11 @@ tasksRouter.post(
       ipAddress: req.ip ?? null,
       userAgent: req.headers["user-agent"] ?? null,
     });
+
+    await enqueueTaskLifecycleNotifications(taskId, "task_revised", "assigned_technician");
+    try {
+      await runJobNow("notifications");
+    } catch {}
 
     res.json({ ok: true });
   },

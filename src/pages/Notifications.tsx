@@ -516,7 +516,6 @@ const Notifications = () => {
   }, [channelItems]);
 
   const pushActive = Boolean(pushChannel?.isActive);
-  const focusRingClass = "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
   const ruleChannelTypeItems = useMemo((): string[] => {
     const types = new Set<string>();
@@ -587,6 +586,14 @@ const Notifications = () => {
       setEventType("task_overdue");
     }
   }, [ruleModalType]);
+
+  useEffect(() => {
+    if (!ruleModalOpen) return;
+    if (ruleModalMode !== "create") return;
+    if (eventType === "task_due_today") {
+      setOffsetDays("0");
+    }
+  }, [ruleModalOpen, ruleModalMode, eventType]);
 
   useEffect(() => {
     if (!ruleModalOpen) return;
@@ -1384,9 +1391,13 @@ const Notifications = () => {
                 <SelectContent>
                   {ruleModalType === "reminder" ? (
                     <>
+                      <SelectItem value="task_due_today">Task Due Today</SelectItem>
                       <SelectItem value="task_due">Task Due</SelectItem>
                       <SelectItem value="task_overdue">Task Overdue</SelectItem>
                       <SelectItem value="task_assigned">Task Assigned</SelectItem>
+                      <SelectItem value="task_revised">Task Revised</SelectItem>
+                      <SelectItem value="task_submitted_for_approval">Submitted For Approval</SelectItem>
+                      <SelectItem value="task_pending_superadmin">Pending Superadmin</SelectItem>
                       <SelectItem value="task_approved">Task Approved</SelectItem>
                       <SelectItem value="task_rejected">Task Rejected</SelectItem>
                     </>
@@ -1491,8 +1502,10 @@ const Notifications = () => {
                 <p className="text-xs text-muted-foreground">
                   Available placeholders: {"{{taskNumber}}"}, {"{{assetName}}"}, {"{{dueAt}}"}, {"{{rejectionReason}}"}.
                 </p>
-                {isNotificationRuleEventType(eventType) && PUSH_RULE_AUDIENCE_BY_EVENT[eventType as NotificationRuleEventType] === "assigned_technician" ? (
-                  <p className="text-xs text-muted-foreground">Audience: Assigned technician devices.</p>
+                {isNotificationRuleEventType(eventType) ? (
+                  <p className="text-xs text-muted-foreground">
+                    Audience: {PUSH_RULE_AUDIENCE_BY_EVENT[eventType as NotificationRuleEventType] === "assigned_technician" ? "Assigned technician devices" : PUSH_RULE_AUDIENCE_BY_EVENT[eventType as NotificationRuleEventType] === "supervisor" ? "All supervisor devices" : "All superadmin devices"}.
+                  </p>
                 ) : null}
               </div>
             ) : (
