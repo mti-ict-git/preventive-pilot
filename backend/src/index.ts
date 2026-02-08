@@ -2504,6 +2504,7 @@ const allowedOriginsList = String(env.FRONTEND_ORIGIN ?? "")
 
 const allowAllOrigins = allowedOriginsList.includes("*");
 const ngrokOriginPattern = /^https:\/\/[a-z0-9-]+\.ngrok-free\.app$/i;
+const alwaysAllowedOrigins = new Set<string>(["http://localhost", "https://localhost", "capacitor://localhost"]);
 
 type OriginMatcher = {
   raw: string;
@@ -2530,6 +2531,11 @@ const originConfig: CorsOptions["origin"] = (origin, callback) => {
   }
 
   if (!origin) {
+    callback(null, true);
+    return;
+  }
+
+  if (alwaysAllowedOrigins.has(origin)) {
     callback(null, true);
     return;
   }
