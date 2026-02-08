@@ -90,6 +90,7 @@ const openApiSpec: OpenApiSchema = {
           assetStatus: { type: ["string", "null"] },
           assetOperationalStatus: { type: "string", enum: ["operational", "broken", "archived"] },
           assignedToText: { type: ["string", "null"] },
+          imageUrl: { type: ["string", "null"], format: "uri" },
           category: { $ref: "#/components/schemas/EntityRefNullable" },
           location: { $ref: "#/components/schemas/EntityRefNullable" },
           pm: { $ref: "#/components/schemas/AssetPmInfo" },
@@ -155,6 +156,7 @@ const openApiSpec: OpenApiSchema = {
           assetOperationalStatus: { type: "string", enum: ["operational", "broken", "archived"] },
           assignedToText: { type: ["string", "null"] },
           snipeNotes: { type: ["string", "null"] },
+          imageUrl: { type: ["string", "null"], format: "uri" },
           category: { oneOf: [{ $ref: "#/components/schemas/EntityRef" }, { type: "null" }] },
           location: { oneOf: [{ $ref: "#/components/schemas/EntityRef" }, { type: "null" }] },
           pm: { $ref: "#/components/schemas/AssetPmInfo" },
@@ -1064,6 +1066,35 @@ const openApiSpec: OpenApiSchema = {
         ],
         responses: {
           "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/AssetDetail" } } } },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/assets/{assetId}/image": {
+      get: {
+        tags: ["Assets"],
+        summary: "Get asset image as binary",
+        parameters: [{ name: "assetId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/octet-stream": {
+                schema: { type: "string", format: "binary" },
+              },
+            },
+          },
           "400": {
             description: "Invalid request",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },

@@ -113,14 +113,47 @@ dashboardRouter.get("/overview", async (_req, res) => {
     count: Number(r.OverdueCount ?? 0),
   }));
 
+  const overdueAssetsResult = await db.request().query(
+    [
+      "WITH overdue AS (",
+      "  SELECT",
+      "    a.AssetId AS AssetId,",
+      "    a.AssetTag AS AssetTag,",
+      "    a.Name AS AssetName,",
+      "    MIN(t.ScheduledDueAt) AS EarliestDueAt",
+      "  FROM pm.PMTasks t",
+      "  INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
+      "  WHERE t.CompletedAt IS NULL",
+      "    AND t.CancelledAt IS NULL",
+      "    AND t.ScheduledDueAt < sysutcdatetime()",
+      "  GROUP BY a.AssetId, a.AssetTag, a.Name",
+      ")",
+      "SELECT TOP (2)",
+      "  AssetId,",
+      "  AssetTag,",
+      "  AssetName",
+      "FROM overdue",
+      "ORDER BY EarliestDueAt ASC",
+    ].join("\n"),
+  );
+
+  const overdueAssetsRows = overdueAssetsResult.recordset as Array<Record<string, unknown>>;
+  const overdueAssets = overdueAssetsRows.map((r) => ({
+    id: r.AssetId,
+    assetTag: (r.AssetTag as string | null) ?? null,
+    name: (r.AssetName as string | null) ?? null,
+  }));
+
   const recentTasksResult = await db.request().query(
     [
       "SELECT TOP (8)",
       "  t.TaskId AS TaskId,",
       "  t.TaskNumber AS TaskNumber,",
       "  t.Status AS Status,",
+      "  a.AssetId AS AssetId,",
       "  a.AssetTag AS AssetTag,",
       "  a.Name AS AssetName,",
+      "  a.ImageUrl AS ImageUrl,",
       "  tpl.Name AS TemplateName,",
       "  u.DisplayName AS AssignedToDisplayName,",
       "  r.Name AS AssignedToRoleName,",
@@ -141,7 +174,12 @@ dashboardRouter.get("/overview", async (_req, res) => {
     taskNumber: r.TaskNumber,
     status: r.Status,
     scheduledDueAt: r.ScheduledDueAt,
-    asset: { assetTag: r.AssetTag, name: r.AssetName },
+    asset: {
+      id: r.AssetId,
+      assetTag: r.AssetTag,
+      name: r.AssetName,
+      imageUrl: typeof r.ImageUrl === "string" && r.ImageUrl.trim() ? r.ImageUrl : null,
+    },
     template: { name: r.TemplateName },
     assignedTo: {
       displayName: (r.AssignedToDisplayName as string | null) ?? null,
@@ -158,6 +196,7 @@ dashboardRouter.get("/overview", async (_req, res) => {
     },
     complianceTrend,
     overdueByCategory,
+    overdueAssets,
     recentTasks,
   });
 });

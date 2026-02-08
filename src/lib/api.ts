@@ -165,6 +165,7 @@ export type Asset = {
   assetOperationalStatus: AssetOperationalStatus;
   assignedToText: string | null;
   snipeNotes: string | null;
+  imageUrl: string | null;
   category: { id: string | null; name: string | null };
   location: { id: string | null; name: string | null };
   pm: {
@@ -416,6 +417,7 @@ export type DashboardOverviewResponse = {
     complianceRate: number | null;
   }>;
   overdueByCategory: Array<{ name: string; count: number }>;
+  overdueAssets: Array<{ id: string; assetTag: string | null; name: string | null }>;
   recentTasks: Array<{
     id: string;
     taskNumber: string;

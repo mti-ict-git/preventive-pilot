@@ -90,12 +90,32 @@ Required environment variables:
 - Backend base URL: `http://localhost:3001`
 - Configure frontend API base URL with `VITE_API_BASE_URL` (defaults to same-origin in production, `http://localhost:3001` in dev)
 
+### Mobile auth (pm-tech)
+
+- Mobile app at `mobile/pm-tech` uses an AuthProvider and calls `/api/auth/login` and `/api/auth/refresh`.
+- Set `VITE_API_BASE_URL` in `mobile/pm-tech/.env.local` (e.g., `http://localhost:3001`).
+- Login supports `provider: ldap|local`.
+- Run mobile dev with `npm run dev` inside `mobile/pm-tech`.
+
+### Mobile API client and models
+
+- Shared helpers: `apiGet(path)`, `apiPost(path, body)` with normalized `ApiError`.
+- Types aligned to backend: `Asset`, `TaskListItem`, `TaskDetail`, `WorkOrderListItem`, `WorkOrderDetail`.
+- 401 auto-refresh and retry are handled in the client.
+
+### Mobile PM Tasks
+
+- Tasks list loads `/api/tasks?assigned=me` with status filters.
+- Detail page loads `/api/tasks/{taskId}` and shows checklist.
+- Lifecycle actions wired: start, pause, resume, complete.
+
 ## Snipe-IT asset sync
 
 - Assets are synced from Snipe-IT hardware into `pm.Assets`.
 - `AssetStatus` stores the raw Snipe-IT status label name.
 - `AssetOperationalStatus` is normalized for PM decisions: `operational`, `broken`, `archived`.
 - If an asset disappears from Snipe-IT (deleted), the next sync archives it in PM (`IsArchived=1`, `AssetOperationalStatus=archived`) to preserve history.
+- When available, the Snipe-IT hardware image is synced into `pm.Assets.ImageUrl` and the binary is stored in `pm.Assets.ImageData` (with `ImageContentType` and `ImageFileName`) for durable storage, while `imageUrl` is exposed on the Assets APIs and Asset Detail page preview. The backend also exposes `GET /api/assets/{assetId}/image` to stream the stored image binary.
 
 ## Evidence attachments
 
@@ -154,6 +174,18 @@ Required environment variables:
 - Technicians can choose whether they are reporting against an asset or a facility, then search and select the specific context.
 - Asset Detail screen includes a **Corrective Maintenance** card whose Report button opens the same sheet with the current asset pre-selected.
 - Breakdown form collects symptom, impact level, optional failure category/code, optional downtime start, and reported channel, then creates a CM Work Order and navigates to its detail view.
+
+### PM Tech mobile
+
+- Work Orders tab lists CM work orders with status tabs and search.
+- Work Order detail supports checklist completion, evidence upload, and CM lifecycle actions.
+- Asset Detail Breakdown button opens a report form that creates CM work orders.
+- PM Tasks tabs show status count badges.
+- PM Tech mobile prefers ngrok discovery for API base and falls back to direct backend on timeout.
+- Home recent tasks show asset thumbnails when image URLs are available.
+- Home highlights overdue tasks with an attention banner and resolve action.
+- Asset Detail displays real asset images when available.
+- Profile & Settings shows authenticated user info and local preferences for theme and notifications.
 
 ### Backdated completion (supervisor+)
 

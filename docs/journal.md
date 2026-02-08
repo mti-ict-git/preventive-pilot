@@ -1,49 +1,101 @@
 # Journal
 
-## Fri Feb  6 17:20:50 WITA 2026
-- UX: hide PM "Complete" button once task enters approval workflow.
-- Web: Tasks detail disables Complete when maintenanceType=PM and approvalStatus is PendingSupervisor, PendingSuperadmin, or Approved.
-- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+## Sun Feb  8 08:43:43 WITA 2026
+- Mobile (pm-tech): added Capacitor Android scaffolding (appId com.merdekatsingshan.pmtech, appName MTI Mobile PM).
+- Mobile (pm-tech): added biometric login using native secure storage for refresh token (kept on logout).
+- Mobile (pm-tech): updated Vite base for Capacitor production builds.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 
-## Fri Feb  6 16:51:46 WITA 2026
-- Fix: preserved technician checklist results when submitting PM task for approval.
-- Backend: /api/tasks/{taskId}/submit-for-approval now accepts checklistResults payload.
-- Frontend: Tasks page reuses completion validation and sends checklistResults with submit.
-- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+## Sun Feb  8 03:50:19 WITA 2026
+- Mobile Login: added subtle enter animations (fade/slide) for hero and card.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 
-## Sun Feb  1 12:20:33 WITA 2026
-- Web: added Approvals Inbox page with role-based tabs and inline actions.
-- Routing: added /approvals route and sidebar navigation item.
-- UI: supervisor-only bulk approve for PendingSupervisor; reject dialog with reason.
-- Validation: ran `npx tsc --noEmit` and `npm run lint`; both passed.
+## Sun Feb  8 03:48:30 WITA 2026
+- Mobile Login: made login screen full-screen (no scrolling) by reducing hero height and spacing.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
 
-## Sun Feb  1 12:29:05 WITA 2026
-- Fix: resolved Radix Select crash by replacing empty SelectItem values with sentinel `all` in Approvals page.
-- Verified with `npx tsc --noEmit` and `npm run lint`.
+## Sun Feb  8 03:45:11 WITA 2026
+- Mobile Profile & Settings now shows authenticated user data and sync status.
+## Sun Feb  8 04:20:22 WITA 2026
+- Mobile Asset Detail now loads the real asset image from /api/assets/:id/image.
+- Added mobile API helper to download asset images with auth.
 
-## Sun Feb  1 12:32:42 WITA 2026
-- UX: clicking View Task in Approvals now opens PM Task Detail via `?taskId` deep-link routing.
-- Web: Tasks page reads `taskId` search param to open Task Detail dialog and clears it on close.
-- Verified with `npx tsc --noEmit` and `npm run lint`.
+## Sun Feb  8 04:26:21 WITA 2026
+- Mobile Asset Detail now prefers asset imageUrl when available, falling back to image endpoint.
 
-## Sun Feb  1 12:37:17 WITA 2026
-- Approvals: aligned Task Detail approve gating with Approvals page (Supervisor/Admin/Superadmin can approve at supervisor stage; Superadmin final approval).
-- Header: added pending approvals sections to notification bell dropdown with counts and View Task links.
-- Verified with `npx tsc --noEmit` and `npm run lint`.
+## Sun Feb  8 04:30:07 WITA 2026
+- Mobile Asset Detail image now uses contain to avoid cropping.
 
-## Sun Feb  1 12:58:52 WITA 2026
-- Task Detail: restricted Reject to stage-specific roles (Supervisor/Admin at PendingSupervisor; Superadmin at PendingSuperadmin).
-- Verified with `npx tsc --noEmit` and `npm run lint`.
+## Sun Feb  8 04:44:37 WITA 2026
+- Mobile Home Dashboard: removed duplicate Report Breakdown button.
 
-## Sun Feb  1 13:05:15 WITA 2026
-- Task Detail: added bottom workflow trail showing Submitted by → Reviewed by → Approved by with names.
-- Verified with `npx tsc --noEmit` and `npm run lint`.
+- Added theme mode, accent selection, and push toggle state persisted locally.
+- Profile sync now refreshes user from /api/auth/me and updates last sync timestamp.
 
-## 2026-02-01 03:23:26 UTC
-- Notifications: added approval transition events (task_approved, task_rejected) processing.
-- Backend: enqueueTaskApprovalNotifications implemented; triggered on supervisor/superadmin approve and reject.
-- Frontend: Notifications page includes Task Approved/Rejected event options and updated placeholders.
-- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+## Sun Feb  8 03:29:59 WITA 2026
+
+## Sun Feb  8 03:29:59 WITA 2026
+- Mobile PM History: display checklist evidence attachments on Task detail.
+- Added evidence download APIs for checklist evidence and task evidence.
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sun Feb  8 03:35:31 WITA 2026
+- Mobile PM History: made completed PM tasks read-only (disable checklist toggles).
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sun Feb  8 03:43:40 WITA 2026
+- Mobile Asset Detail: added PM Now action for Supervisor/Admin/Superadmin.
+- Added mobile API helper for POST /api/tasks/pm-now (handles duplicate by returning existing task id).
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sat Feb  7 22:44:55 WITA 2026
+- Mobile Work Orders: wired list to /api/work-orders with status tabs and search.
+- Added Work Order detail screen with CM metadata, checklist, evidence upload, and lifecycle actions.
+- Added Report Breakdown form with asset/facility targeting and navigation from Asset Detail.
+
+## Sat Feb  7 22:38:26 WITA 2026
+- Added mobile Facilities list with search and location filters and a new /facilities route.
+- Added Assets/Facilities sidebar switcher in mobile Assets and Facilities headers.
+- Added mobile facilities API client types and list call.
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sat Feb  7 20:56:00 WITA 2026
+- Mobile Home: replaced mock data with real API calls using apiListTasks.
+- Added state for user profile (getMe), stats (today, week, overdue, done), and task lists.
+- Implemented real-time stats calculation based on apiListTasks results.
+- Added loading states and empty state handling.
+- Verified with typecheck and lint.
+
+## Sat Feb  7 20:49:46 WITA 2026
+- Phase 3 PM Tasks: wired Tasks list and Task detail in mobile.
+- Implemented apiListTasks and lifecycle actions: start, pause, resume, complete.
+- Tasks page fetches assigned=me with filters; Task detail loads metadata and checklist, buttons call server.
+- Verified with typecheck and lint.
+
+## Sat Feb  7 20:45:24 WITA 2026
+- Phase 2 Models & API Client: added typed models (Asset, Task, WorkOrder) and shared helpers apiGet/apiPost with normalized ApiError.
+- Extended mobile lib/api.ts with TaskDetail, TaskListItem, WorkOrder list/detail shapes aligned to backend.
+- Centralized JSON serialization and bearer header handling; 401 auto-refresh remains in apiFetchJson.
+- Verified typecheck and lint for mobile.
+
+## Sat Feb  7 20:38:47 WITA 2026
+- Fixed runtime error "tailwind is not defined" by removing CDN Tailwind inline config from pm-tech/index.html; project now uses build-time Tailwind.
+- Removed importmap block referencing CDN React modules; Vite bundler handles all imports.
+- Added inline SVG favicon link to prevent /favicon.ico 404 in mobile dev.
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sat Feb  7 20:34:59 WITA 2026
+- Phase 1 Auth & Session for mobile: added lib/auth.ts with in-memory tokens and local storage fallback.
+- Implemented lib/api.ts with API_BASE_URL, apiFetchJson, login, refresh, and getMe.
+- Added providers/AuthProvider.tsx and wrapped App with AuthProvider; ProtectedRoute now checks context.
+- Refactored Login page to call backend /api/auth/login, provider selection, and error handling; offline routes moved to public.
+- Updated mobile tsconfig to include vite/client types; verified `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json` and repo `npm run lint`.
+
+## Sat Feb  7 20:30:17 WITA 2026
+- Phase 0 mobile hardening: configured VITE_API_BASE_URL and removed exposed GEMINI keys from Vite define.
+- Replaced Tailwind CDN with build-time Tailwind (added tailwind/postcss configs and index.css; imported in index.tsx).
+- Backend CORS: updated FRONTEND_ORIGIN to include http://localhost:3000 and http://127.0.0.1:3000.
+- Ran `npm run lint`, `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`, and `npx tsc --noEmit -p backend/tsconfig.json`; all passed.
 
 ## Sun Feb  1 02:31:52 UTC 2026
 - PM Task Approval Workflow 6.2: added backend approval endpoints.
@@ -113,12 +165,6 @@
 - Frontend: Delete button with AlertDialog confirm; shows errors if references exist.
 - Ran `npx tsc --noEmit` and `npm run lint`; both passed.
 
-## Sun Feb  1 12:53:43 WITA 2026
-- PM Tasks: implemented Filters dialog on PM Tasks list.
-- Filters support Assigned (any/me/unassigned), Approved only toggle, and Due date range.
-- Filters feed into the apiListTasks query so list results and stats respect the selected criteria.
-- Ran `npm run lint` and `npx tsc --noEmit`; both passed.
-
 ## 2026-02-01 10:21:53 WITA
 - Fix: added missing AlertDialogTrigger import to Notifications.tsx to resolve runtime error.
 - Verified with `npx tsc --noEmit` and `npm run lint`.
@@ -180,16 +226,6 @@
 - Added CM reported by/channel and downtime fields to Work Order detail response and UI.
 - Added Close Downtime action in Work Order detail.
 - Updated README with downtime detail note.
-
-## Sun Feb  1 10:50:35 WITA 2026
-- PM Tasks: wired Calendar View button to navigate directly to the PM Scheduling calendar.
-- Users can jump from the PM Tasks list to the calendar-based planning view in one click.
-- Ran `npm run lint` and `npx tsc --noEmit`; both passed.
-
-## Sun Feb  1 13:01:47 WITA 2026
-- PM Tasks: added Status filter to Filters dialog with options (All, Upcoming, In Progress, Due Today, Overdue, Completed, Cancelled).
-- Filtering happens client-side based on the computed UI status so it can be combined with approval-stage tabs.
-- Ran `npm run lint` and `npx tsc --noEmit` after changes.
 
 ## 2026-01-22 12:57:50 PM
 - Fixed backdateMode scope ordering in Work Order detail to satisfy TypeScript.
@@ -354,27 +390,7 @@
 - Extended mobile status badge to show Paused status
 - Standardized checklist outcomes (0=skip, 1=pass/done, 2=fail) and enforced in API.
 - Updated Tasks UI to use outcome dropdown instead of freeform numeric input.
- - Updated Tasks UI to use outcome dropdown instead of freeform numeric input.
-
-## 2026-02-01 10:51:42 WITA
-- Asset Detail: integrated approval status badges in PM history items.
-- Asset Detail: added Approval Trail section in expanded PM task detail.
-- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
-## 2026-02-01 10:55:35 WITA
-- API types: extended TaskListItem/TaskDetail with rejection metadata.
-- Web: added Approved-only filter toggle in Asset PM History.
-- Web: surfaced rejection reason and who rejected in Approval Trail.
-- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
 - Added DB check constraint to restrict checklist outcome values.
-
-## Sun Feb  1 11:09:49 WITA 2026
-- PM Task Approval Workflow 6.5: completed rejection metadata and PDF sign-offs.
-- DB: added pm.PMTasks.RejectedAt, RejectedByUserId (FK), and RejectionReason.
-- Backend: GET /api/tasks/{taskId} now returns rejection fields.
-- Backend: POST /api/tasks/{taskId}/reject-approval persists reason, who, and timestamp.
-- Backend: GET /api/tasks/{taskId}/export.pdf includes technician/supervisor/superadmin sign-off blocks with names and dates.
-- Web: Task Detail shows Rejected block with reason, who, and when.
-- Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-03 07:00
 - Normalized legacy checklist outcomes before adding DB constraint and clamped API output for older data.
@@ -522,6 +538,14 @@
 
 ## Wed Jan 21 06:30:09 WITA 2026
 - Fixed backend Work Orders list handler missing @assigned parameter input.
+
+## Sun Feb  8 03:54:42 WITA 2026
+- Extended pm.Assets schema with ImageUrl column and applied schema to SQL Server.
+- Updated Snipe-IT sync job to capture hardware image field into pm.Assets.ImageUrl.
+- Exposed imageUrl in assets list and detail APIs and OpenAPI schema.
+- Wired web API client types to include Asset.imageUrl.
+- Added responsive asset image preview on Asset Detail header card (web).
+- Ran `npm run db:apply-schema`, `npm run lint`, and `npx tsc --noEmit`; all succeeded.
 - Updated Task Detail dialog to avoid empty Select values (backdate technician, checklist outcomes).
 - Verified with `npx tsc --noEmit` and `npm run lint`.
 
@@ -580,6 +604,18 @@
 - Fixed evidence preview rendering by inferring Content-Type from file extension when missing.
 - Extended evidence preview modal to support PDF, images, video, and audio.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 04:01:11 WITA 2026
+- Extended pm.Assets schema with ImageData, ImageContentType, and ImageFileName columns for Snipe-IT images.
+- Updated Snipe-IT sync job to download hardware image binaries and store them in pm.Assets.
+- Kept ImageUrl string for compatibility while persisting full binary, content type, and file name.
+- Re-applied `npm run db:apply-schema` and verified database migration.
+- Ran `npm run lint` and `npx tsc --noEmit`; both completed successfully.
+
+## Sun Feb  8 04:11:58 WITA 2026
+- Added /api/assets/{assetId}/image endpoint to stream stored asset image binary.
+- Updated OpenAPI spec to document asset image download endpoint and binary response type.
+- Verified backend changes with `npm run lint` and `npx tsc --noEmit`.
 
 ## 2026-01-17 21:24
 - Added ngrok GitHub Gist watcher script and npm task
@@ -1089,3 +1125,38 @@
 - Web: updated Work Orders list to use a ticket-style Subject column combining asset/facility context with the reported symptom.
 - Web: updated Work Order detail header to show a ticket-style subject line with a separate ID badge and added a Resolution card summarizing status, timestamps, and resolution notes derived from checklist results.
 - Validation: ran `npm run lint` (ESLintIgnoreWarning about `.eslintignore`) and `npx tsc --noEmit` in the repo root; both exited successfully.
+
+## Sun Feb  8 04:28:29 WITA 2026
+- Mobile: made the Home notification panel larger for accessibility (bigger tap targets, larger text).
+- Mobile: added PM overview summary (overdue, due today, upcoming 7 days) inside the notification panel.
+
+## Sun Feb  8 08:05:34 WITA 2026
+- Mobile: PM Task Detail now loads and displays the real asset image via `/api/assets/:assetId/image`.
+
+## Sun Feb  8 08:15:08 WITA 2026
+- Mobile: fixed invalid nested button markup in Task Detail checklist rows.
+- Mobile: Task Detail now prefers `asset.imageUrl` (falls back to `/api/assets/:assetId/image`).
+
+## Sun Feb  8 08:20:48 WITA 2026
+- Mobile: Task Detail asset header image uses white background and `object-contain` (no cropping).
+
+## Sun Feb  8 04:51:56 WITA 2026
+- Backend: included asset image URL in dashboard overview recent tasks payload.
+- Mobile: show asset thumbnails for recent tasks on Home when image URLs are available.
+
+## Sun Feb  8 04:55:56 WITA 2026
+- Backend: added overdue asset context to dashboard overview for home alerts.
+- Mobile: added overdue attention card on Home with resolve action.
+
+## Sun Feb  8 04:58:40 WITA 2026
+- Backend: fixed overdue assets query to avoid DISTINCT ordering error.
+
+## Sun Feb  8 08:09:29 WITA 2026
+- Backend: added PM task status counts endpoint for mobile tab badges.
+- Mobile: added PM task status count badges in task tabs.
+
+## Sun Feb  8 08:30:20 WITA 2026
+- Mobile: set PM task tab badge colors by status.
+
+## Sun Feb  8 08:45:33 WITA 2026
+- Mobile: prioritize ngrok discovery API base with timeout fallback to direct backend.

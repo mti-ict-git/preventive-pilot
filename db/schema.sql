@@ -185,6 +185,31 @@ BEGIN
   );
 END;
 
+IF COL_LENGTH(N'pm.Assets', N'ImageUrl') IS NULL
+BEGIN
+  ALTER TABLE pm.Assets ADD ImageUrl nvarchar(512) NULL;
+END;
+
+IF COL_LENGTH(N'pm.Assets', N'ImageUrl') IS NULL
+BEGIN
+  ALTER TABLE pm.Assets ADD ImageUrl nvarchar(512) NULL;
+END;
+
+IF COL_LENGTH(N'pm.Assets', N'ImageData') IS NULL
+BEGIN
+  ALTER TABLE pm.Assets ADD ImageData varbinary(max) NULL;
+END;
+
+IF COL_LENGTH(N'pm.Assets', N'ImageContentType') IS NULL
+BEGIN
+  ALTER TABLE pm.Assets ADD ImageContentType nvarchar(128) NULL;
+END;
+
+IF COL_LENGTH(N'pm.Assets', N'ImageFileName') IS NULL
+BEGIN
+  ALTER TABLE pm.Assets ADD ImageFileName nvarchar(256) NULL;
+END;
+
 IF COL_LENGTH(N'pm.Assets', N'Notes') IS NULL
 BEGIN
   ALTER TABLE pm.Assets ADD Notes nvarchar(max) NULL;

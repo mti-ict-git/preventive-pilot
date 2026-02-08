@@ -109,6 +109,7 @@ assetsRouter.get("/", async (req, res) => {
       "  a.AssetOperationalStatus AS AssetOperationalStatus,",
       "  a.AssignedToText AS AssignedToText,",
       "  a.Notes AS SnipeNotes,",
+      "  a.ImageUrl AS ImageUrl,",
       "  a.CategoryId AS CategoryId,",
       "  c.Name AS CategoryName,",
       "  a.LocationId AS LocationId,",
@@ -192,6 +193,7 @@ assetsRouter.get("/", async (req, res) => {
           : "operational",
       assignedToText: r.AssignedToText,
       snipeNotes: r.SnipeNotes ?? null,
+      imageUrl: typeof r.ImageUrl === "string" && r.ImageUrl.trim() ? r.ImageUrl : null,
       category: r.CategoryId
         ? { id: r.CategoryId, name: r.CategoryName ?? null }
         : { id: null, name: null },
@@ -361,6 +363,58 @@ assetsRouter.post("/pm/bulk/template", requireManager, async (req, res) => {
   }
 });
 
+assetsRouter.get("/:assetId/image", async (req, res) => {
+  const assetId = req.params.assetId;
+  if (!z.string().uuid().safeParse(assetId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("assetId", sql.UniqueIdentifier, assetId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  a.ImageData AS ImageData,",
+        "  a.ImageContentType AS ImageContentType,",
+        "  a.ImageFileName AS ImageFileName",
+        "FROM pm.Assets a",
+        "WHERE a.AssetId = @assetId AND a.IsArchived = 0",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as {
+    ImageData?: Buffer | null;
+    ImageContentType?: string | null;
+    ImageFileName?: string | null;
+  } | undefined;
+
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+
+  const data = row.ImageData;
+  if (!(data instanceof Buffer) || data.length === 0) {
+    res.status(404).json({ message: "Image not available" });
+    return;
+  }
+
+  const contentType =
+    typeof row.ImageContentType === "string" && row.ImageContentType.trim()
+      ? row.ImageContentType
+      : "application/octet-stream";
+  const rawFileName = typeof row.ImageFileName === "string" && row.ImageFileName.trim() ? row.ImageFileName : null;
+  const safeFileName = rawFileName ? rawFileName.replace(/"/g, "") : "asset-image";
+
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Length", String(data.length));
+  res.setHeader("Content-Disposition", `inline; filename="${safeFileName}"`);
+  res.send(data);
+});
+
 assetsRouter.get("/:assetId", async (req, res) => {
   const assetId = req.params.assetId;
   if (!z.string().uuid().safeParse(assetId).success) {
@@ -386,6 +440,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
         "  a.AssetOperationalStatus AS AssetOperationalStatus,",
         "  a.AssignedToText AS AssignedToText,",
           "  a.Notes AS Notes,",
+          "  a.ImageUrl AS ImageUrl,",
         "  a.CategoryId AS CategoryId,",
         "  c.Name AS CategoryName,",
         "  a.LocationId AS LocationId,",
@@ -449,6 +504,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
         : "operational",
     assignedToText: row.AssignedToText,
     snipeNotes: row.Notes ?? null,
+    imageUrl: typeof row.ImageUrl === "string" && row.ImageUrl.trim() ? row.ImageUrl : null,
     category: row.CategoryId ? { id: row.CategoryId, name: row.CategoryName ?? null } : null,
     location: row.LocationId ? { id: row.LocationId, name: row.LocationName ?? null } : null,
     pm: {

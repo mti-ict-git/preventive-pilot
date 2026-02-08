@@ -53,6 +53,17 @@ const TaskListQuerySchema = z.object({
   pageSize: z.string().optional().default("50"),
 });
 
+const TaskStatusCountsQuerySchema = z.object({
+  assigned: z.enum(["me", "unassigned", "any"]).optional().default("any"),
+  maintenanceType: z.enum(["PM", "CM", "all"]).optional(),
+});
+
+const ApprovalsListQuerySchema = z.object({
+  stage: z.enum(["PendingSupervisor", "PendingSuperadmin"]),
+  page: z.string().optional().default("1"),
+  pageSize: z.string().optional().default("50"),
+});
+
 const AssignSchema = z
   .object({
     assignedToUserId: z.string().uuid().nullable().optional(),
@@ -721,6 +732,11 @@ const canModifyTask = (userId: string, userRoles: readonly string[], task: TaskA
 	return false;
 };
 
+const isSuperadmin = (roles: readonly string[]): boolean => roles.includes("Superadmin");
+
+const isApprovalLockedForEditing = (approvalStatus: string | null): boolean =>
+  approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin" || approvalStatus === "Approved";
+
 const bitToBoolean = (value: unknown): boolean => value === true || value === 1;
 
 type ChecklistOutcomeLabel = "skip" | "pass" | "fail" | "done";
@@ -1308,6 +1324,196 @@ tasksRouter.get("/", async (req, res) => {
   });
 });
 
+tasksRouter.get("/status-counts", async (req, res) => {
+  const parsed = TaskStatusCountsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const maintenanceType = parsed.data.maintenanceType === "all" ? null : parsed.data.maintenanceType ?? null;
+  const rolesCsv = req.user.roles.join(",");
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("assigned", sql.NVarChar(16), parsed.data.assigned)
+    .input("maintenanceType", sql.NVarChar(8), maintenanceType)
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .input("rolesCsv", sql.NVarChar(1024), rolesCsv)
+    .query(
+      [
+        "DECLARE @now datetime2(0) = sysutcdatetime();",
+        "DECLARE @todayStart datetime2(0) = dateadd(day, datediff(day, 0, @now), 0);",
+        "DECLARE @todayEnd datetime2(0) = dateadd(second, -1, dateadd(day, 1, @todayStart));",
+        "DECLARE @upcomingEnd datetime2(0) = dateadd(day, 7, @now);",
+        "SELECT",
+        "  COUNT(1) AS AllCount,",
+        "  SUM(CASE WHEN t.Status = N'in_progress' THEN 1 ELSE 0 END) AS InProgressCount,",
+        "  SUM(CASE WHEN t.Status = N'completed' THEN 1 ELSE 0 END) AS CompletedCount,",
+        "  SUM(CASE WHEN t.ScheduledDueAt >= @todayStart AND t.ScheduledDueAt <= @todayEnd THEN 1 ELSE 0 END) AS DueTodayCount,",
+        "  SUM(CASE WHEN t.ScheduledDueAt >= @now AND t.ScheduledDueAt <= @upcomingEnd THEN 1 ELSE 0 END) AS UpcomingCount,",
+        "  SUM(CASE WHEN t.CompletedAt IS NULL AND t.CancelledAt IS NULL AND t.ScheduledDueAt < @now THEN 1 ELSE 0 END) AS OverdueCount",
+        "FROM pm.PMTasks t",
+        "WHERE",
+        "  (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
+        "  AND (",
+        "    @assigned = N'any'",
+        "    OR (",
+        "      @assigned = N'unassigned'",
+        "      AND t.AssignedToUserId IS NULL",
+        "      AND t.AssignedToRoleId IS NULL",
+        "    )",
+        "    OR (",
+        "      @assigned = N'me'",
+        "      AND (",
+        "        t.AssignedToUserId = @userId",
+        "        OR (",
+        "          t.AssignedToRoleId IS NOT NULL",
+        "          AND EXISTS (",
+        "            SELECT 1",
+        "            FROM pm.Roles r",
+        "            WHERE r.RoleId = t.AssignedToRoleId",
+        "              AND r.Name IN (SELECT value FROM string_split(@rolesCsv, ','))",
+        "          )",
+        "        )",
+        "      )",
+        "    )",
+        "  )",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  res.json({
+    all: Number(row?.AllCount ?? 0),
+    inProgress: Number(row?.InProgressCount ?? 0),
+    completed: Number(row?.CompletedCount ?? 0),
+    dueToday: Number(row?.DueTodayCount ?? 0),
+    upcoming: Number(row?.UpcomingCount ?? 0),
+    overdue: Number(row?.OverdueCount ?? 0),
+  });
+});
+
+tasksRouter.get(
+  "/approvals",
+  requireAnyRole(["Supervisor", "Admin", "Superadmin"]),
+  async (req, res) => {
+    const parsed = ApprovalsListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    if (parsed.data.stage === "PendingSuperadmin" && !req.user.roles.includes("Superadmin")) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    const page = Math.max(1, Number(parsed.data.page) || 1);
+    const pageSize = Math.min(200, Math.max(1, Number(parsed.data.pageSize) || 50));
+    const offset = (page - 1) * pageSize;
+
+    const db = await getDb();
+    const result = await db
+      .request()
+      .input("offset", sql.Int, offset)
+      .input("limit", sql.Int, pageSize)
+      .input("stage", sql.NVarChar(32), parsed.data.stage)
+      .query(
+        [
+          "SELECT",
+          "  t.TaskId AS TaskId,",
+          "  t.TaskNumber AS TaskNumber,",
+          "  t.MaintenanceType AS MaintenanceType,",
+          "  t.Status AS Status,",
+          "  t.Priority AS Priority,",
+          "  t.ScheduledDueAt AS ScheduledDueAt,",
+          "  t.CreatedAt AS CreatedAt,",
+          "  t.StartedAt AS StartedAt,",
+          "  t.CompletedAt AS CompletedAt,",
+          "  t.ApprovalStatus AS ApprovalStatus,",
+          "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
+          "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,",
+          "  tc.Username AS TechnicianCompletedByUsername,",
+          "  tc.DisplayName AS TechnicianCompletedByDisplayName,",
+          "  t.AssignedToUserId AS AssignedToUserId,",
+          "  au.Username AS AssignedToUsername,",
+          "  au.DisplayName AS AssignedToDisplayName,",
+          "  t.AssignedToRoleId AS AssignedToRoleId,",
+          "  ar.Name AS AssignedToRoleName,",
+          "  t.AssetId AS AssetId,",
+          "  a.AssetTag AS AssetTag,",
+          "  a.Name AS AssetName,",
+          "  t.FacilityId AS FacilityId,",
+          "  fac.Name AS FacilityName,",
+          "  loc.Name AS LocationName,",
+          "  t.TemplateId AS TemplateId,",
+          "  tpl.Name AS TemplateName",
+          "FROM pm.PMTasks t",
+          "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
+          "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
+          "LEFT JOIN pm.Locations loc ON loc.LocationId = COALESCE(a.LocationId, fac.LocationId)",
+          "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
+          "LEFT JOIN pm.Users au ON au.UserId = t.AssignedToUserId",
+          "LEFT JOIN pm.Roles ar ON ar.RoleId = t.AssignedToRoleId",
+          "LEFT JOIN pm.Users tc ON tc.UserId = t.TechnicianCompletedByUserId",
+          "WHERE t.ApprovalStatus = @stage",
+          "ORDER BY t.TechnicianCompletedAt DESC, t.CreatedAt DESC",
+          "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY",
+        ].join("\n"),
+      );
+
+    const rows = result.recordset as Array<Record<string, unknown>>;
+    res.json({
+      page,
+      pageSize,
+      items: rows.map((r) => ({
+        id: r.TaskId,
+        taskNumber: r.TaskNumber,
+        maintenanceType: r.MaintenanceType,
+        status: r.Status,
+        priority: r.Priority,
+        scheduledDueAt: r.ScheduledDueAt,
+        createdAt: r.CreatedAt,
+        startedAt: r.StartedAt,
+        completedAt: r.CompletedAt,
+        approvalStatus: r.ApprovalStatus,
+        technicianCompletedAt: r.TechnicianCompletedAt,
+        technicianCompletedBy: r.TechnicianCompletedByUserId
+          ? {
+              userId: r.TechnicianCompletedByUserId,
+              username: r.TechnicianCompletedByUsername,
+              displayName: r.TechnicianCompletedByDisplayName,
+            }
+          : null,
+        asset: {
+          id: r.AssetId,
+          assetTag: r.AssetTag,
+          name: r.AssetName,
+        },
+        facility: r.FacilityId
+          ? {
+              id: r.FacilityId,
+              name: r.FacilityName,
+              locationName: r.LocationName ?? null,
+            }
+          : null,
+        template: {
+          id: r.TemplateId,
+          name: r.TemplateName,
+        },
+        assignedTo: {
+          userId: r.AssignedToUserId,
+          username: r.AssignedToUsername,
+          displayName: r.AssignedToDisplayName,
+          roleId: r.AssignedToRoleId,
+          roleName: r.AssignedToRoleName,
+        },
+      })),
+    });
+  },
+);
+
 tasksRouter.post("/pm-now", requireManager, async (req, res) => {
   const parsed = PmNowSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
@@ -1719,6 +1925,7 @@ tasksRouter.delete("/evidence/:evidenceId", async (req, res) => {
         "  e.TaskId AS TaskId,",
         "  e.StoragePath AS StoragePath,",
         "  t.AssignedToUserId AS AssignedToUserId,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
         "  r.Name AS AssignedToRoleName",
         "FROM pm.PMTaskEvidence e",
         "INNER JOIN pm.PMTasks t ON t.TaskId = e.TaskId",
@@ -1739,6 +1946,12 @@ tasksRouter.delete("/evidence/:evidenceId", async (req, res) => {
   };
   if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
     res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
+  const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+  if (isApprovalLockedForEditing(approvalStatus) && !isSuperadmin(req.user.roles)) {
+    res.status(400).json({ message: "Invalid state" });
     return;
   }
 
@@ -1776,6 +1989,7 @@ tasksRouter.delete("/checklist-evidence/:checklistEvidenceId", async (req, res) 
         "  e.TaskId AS TaskId,",
         "  e.StoragePath AS StoragePath,",
         "  t.AssignedToUserId AS AssignedToUserId,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
         "  r.Name AS AssignedToRoleName",
         "FROM pm.PMTaskChecklistEvidence e",
         "INNER JOIN pm.PMTasks t ON t.TaskId = e.TaskId",
@@ -1796,6 +2010,12 @@ tasksRouter.delete("/checklist-evidence/:checklistEvidenceId", async (req, res) 
   };
   if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
     res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
+  const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+  if (isApprovalLockedForEditing(approvalStatus) && !isSuperadmin(req.user.roles)) {
+    res.status(400).json({ message: "Invalid state" });
     return;
   }
 
@@ -1863,6 +2083,26 @@ tasksRouter.post(
       return;
     }
 
+    const db = await getDb();
+    const statusResult = await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.ApprovalStatus AS ApprovalStatus",
+          "FROM pm.PMTasks t",
+          "WHERE t.TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    const statusRow = statusResult.recordset[0] as Record<string, unknown> | undefined;
+    const approvalStatus = typeof statusRow?.ApprovalStatus === "string" ? statusRow.ApprovalStatus : null;
+    if (isApprovalLockedForEditing(approvalStatus) && !isSuperadmin(req.user.roles)) {
+      res.status(400).json({ message: "Invalid state" });
+      return;
+    }
+
     const originalName = path.basename(fileNameHeader);
     const safeName = sanitizeSegment(truncate(originalName, 200));
     if (!safeName) {
@@ -1893,7 +2133,6 @@ tasksRouter.post(
     await fs.promises.mkdir(path.dirname(destAbs), { recursive: true });
     await fs.promises.writeFile(destAbs, buf);
 
-    const db = await getDb();
     const inserted = await db
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
@@ -1979,6 +2218,24 @@ tasksRouter.post(
     }
 
     const db = await getDb();
+    const statusResult = await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.ApprovalStatus AS ApprovalStatus",
+          "FROM pm.PMTasks t",
+          "WHERE t.TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    const statusRow = statusResult.recordset[0] as Record<string, unknown> | undefined;
+    const approvalStatus = typeof statusRow?.ApprovalStatus === "string" ? statusRow.ApprovalStatus : null;
+    if (isApprovalLockedForEditing(approvalStatus) && !isSuperadmin(req.user.roles)) {
+      res.status(400).json({ message: "Invalid state" });
+      return;
+    }
     const itemResult = await db
       .request()
       .input("templateChecklistItemId", sql.UniqueIdentifier, templateChecklistItemId)
@@ -3584,6 +3841,101 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
 
   res.json({ ok: true });
 });
+
+tasksRouter.post(
+  "/:taskId/superadmin-update-checklist",
+  requireSuperadmin,
+  async (req, res) => {
+    const taskId = req.params.taskId;
+    if (!z.string().uuid().safeParse(taskId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+		const parsed = SubmitForApprovalSchema.safeParse(req.body ?? {});
+		if (!parsed.success) {
+			res.status(400).json({ message: "Invalid request" });
+			return;
+		}
+
+    const db = await getDb();
+    const statusResult = await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.ApprovalStatus AS ApprovalStatus,",
+          "  t.MaintenanceType AS MaintenanceType",
+          "FROM pm.PMTasks t",
+          "WHERE t.TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    const maintenanceType = typeof row.MaintenanceType === "string" ? row.MaintenanceType : null;
+    if (maintenanceType !== "PM") {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+    if (approvalStatus !== "PendingSuperadmin") {
+      res.status(400).json({ message: "Invalid state" });
+      return;
+    }
+
+		const checklistResults = parsed.data.checklistResults;
+		if (checklistResults.length > 0) {
+			const completedAtDate = new Date();
+			for (const item of checklistResults) {
+				await db
+					.request()
+					.input("taskId", sql.UniqueIdentifier, taskId)
+					.input("templateChecklistItemId", sql.UniqueIdentifier, item.templateChecklistItemId)
+					.input("outcome", sql.TinyInt, item.outcome)
+					.input("notes", sql.NVarChar(1024), item.notes ?? null)
+					.input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
+					.input("completedAt", sql.DateTime2(0), completedAtDate)
+					.query(
+						[
+							"MERGE pm.PMTaskChecklistResults WITH (HOLDLOCK) AS target",
+							"USING (SELECT @taskId AS TaskId, @templateChecklistItemId AS TemplateChecklistItemId) AS source",
+							"ON target.TaskId = source.TaskId AND target.TemplateChecklistItemId = source.TemplateChecklistItemId",
+							"WHEN MATCHED THEN",
+							"  UPDATE SET",
+							"    Outcome = @outcome,",
+							"    Notes = @notes,",
+							"    CompletedAt = @completedAt,",
+							"    CompletedByUserId = @completedByUserId",
+							"WHEN NOT MATCHED THEN",
+							"  INSERT (TaskId, TemplateChecklistItemId, Outcome, Notes, CompletedAt, CompletedByUserId)",
+							"  VALUES (@taskId, @templateChecklistItemId, @outcome, @notes, @completedAt, @completedByUserId);",
+						].join("\n"),
+					);
+			}
+		}
+
+    await writeAuditLog({
+      actorUserId: req.user.sub,
+      action: "superadmin_checklist_updated",
+      entityType: "PMTask",
+      entityId: taskId,
+      metadata: {
+        checklistResultsCount: parsed.data.checklistResults.length,
+      },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers["user-agent"] ?? null,
+    });
+
+    res.json({ ok: true });
+  },
+);
 
 tasksRouter.post(
   "/:taskId/approve-by-supervisor",

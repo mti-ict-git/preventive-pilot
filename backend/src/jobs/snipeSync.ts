@@ -30,6 +30,7 @@ type SnipeHardware = {
   location?: { id?: number | null; name?: string | null } | null;
   assigned_to?: { name?: string | null } | null;
   notes?: string | null;
+  image?: string | null;
 };
 
 type AssetOperationalStatus = "operational" | "broken" | "archived";
@@ -88,6 +89,49 @@ const fetchJson = async <T>(config: SnipeItRequestConfig, url: string): Promise<
     throw new Error(`Snipe-IT request failed (${response.status}) ${body}`.trim());
   }
   return (await response.json()) as T;
+};
+
+type DownloadedImage = {
+  data: Buffer | null;
+  contentType: string | null;
+  fileName: string | null;
+};
+
+const downloadAssetImage = async (imageBaseUrl: string | null, imagePath: string | null): Promise<DownloadedImage> => {
+  if (!imageBaseUrl || !imagePath) {
+    return { data: null, contentType: null, fileName: null };
+  }
+
+  const trimmedPath = imagePath.trim();
+  if (!trimmedPath) {
+    return { data: null, contentType: null, fileName: null };
+  }
+
+  const isAbsolute = /^https?:\/\//i.test(trimmedPath);
+  const base = imageBaseUrl.replace(/\/+$/, "");
+  const pathPart = trimmedPath.replace(/^\/+/, "");
+  const fullUrl = isAbsolute ? trimmedPath : `${base}/${pathPart}`;
+
+  try {
+    const response = await fetch(fullUrl);
+    if (!response.ok) {
+      return { data: null, contentType: null, fileName: null };
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength === 0) {
+      return { data: null, contentType: null, fileName: null };
+    }
+
+    const buffer = Buffer.from(arrayBuffer);
+    const headerContentType = response.headers.get("content-type");
+    const contentType = headerContentType && headerContentType.trim().length > 0 ? headerContentType : null;
+    const fileName = pathPart.split("/").pop() ?? null;
+
+    return { data: buffer, contentType, fileName };
+  } catch {
+    return { data: null, contentType: null, fileName: null };
+  }
 };
 
 const listAll = async <T>(config: SnipeItRequestConfig, endpoint: string): Promise<T[]> => {
@@ -299,6 +343,7 @@ const upsertAssets = async (
   assets: SnipeHardware[],
   categoryIdBySnipeCategoryId: Map<number, string>,
   locationIdBySnipeLocationId: Map<number, string>,
+  imageBaseUrl: string | null,
   runId?: string,
 ): Promise<number> => {
   let processed = 0;
@@ -318,6 +363,8 @@ const upsertAssets = async (
     const assignedToText = a.assigned_to?.name ?? null;
     const notes = a.notes ?? null;
     const assetTag = a.asset_tag ?? null;
+    const imagePath = typeof a.image === "string" && a.image.trim() ? a.image.trim() : null;
+    const downloadedImage = await downloadAssetImage(imageBaseUrl, imagePath);
 
     await db
       .request()
@@ -333,6 +380,10 @@ const upsertAssets = async (
       .input("assetOperationalStatus", sql.NVarChar(16), operationalStatus)
       .input("assignedToText", sql.NVarChar(256), assignedToText)
       .input("notes", sql.NVarChar(sql.MAX), notes)
+      .input("imageUrl", sql.NVarChar(512), imagePath)
+      .input("imageData", sql.VarBinary(sql.MAX), downloadedImage.data)
+      .input("imageContentType", sql.NVarChar(128), downloadedImage.contentType)
+      .input("imageFileName", sql.NVarChar(256), downloadedImage.fileName)
       .query(
         [
           "MERGE pm.Assets WITH (HOLDLOCK) AS target",
@@ -351,15 +402,19 @@ const upsertAssets = async (
           "    AssetOperationalStatus = @assetOperationalStatus,",
           "    AssignedToText = @assignedToText,",
           "    Notes = @notes,",
+          "    ImageUrl = @imageUrl,",
+          "    ImageData = @imageData,",
+          "    ImageContentType = @imageContentType,",
+          "    ImageFileName = @imageFileName,",
           "    IsArchived = 0,",
           "    LastSyncedAt = sysutcdatetime(),",
           "    UpdatedAt = sysutcdatetime()",
           "WHEN NOT MATCHED THEN",
           "  INSERT (",
-          "    SnipeAssetId, AssetTag, Name, Manufacturer, Model, SerialNumber, CategoryId, LocationId, AssetStatus, AssignedToText, AssetOperationalStatus, Notes, IsArchived, LastSyncedAt",
+          "    SnipeAssetId, AssetTag, Name, Manufacturer, Model, SerialNumber, CategoryId, LocationId, AssetStatus, AssignedToText, AssetOperationalStatus, Notes, ImageUrl, ImageData, ImageContentType, ImageFileName, IsArchived, LastSyncedAt",
           "  )",
           "  VALUES (",
-          "    @snipeAssetId, @assetTag, @name, @manufacturer, @model, @serialNumber, @categoryId, @locationId, @assetStatus, @assignedToText, @assetOperationalStatus, @notes, 0, sysutcdatetime()",
+          "    @snipeAssetId, @assetTag, @name, @manufacturer, @model, @serialNumber, @categoryId, @locationId, @assetStatus, @assignedToText, @assetOperationalStatus, @notes, @imageUrl, @imageData, @imageContentType, @imageFileName, 0, sysutcdatetime()",
           "  );",
         ].join("\n"),
       );
@@ -476,7 +531,8 @@ export const runSnipeSyncJob = async (options?: SnipeSyncRunOptions): Promise<vo
     await upsertLocations(locations);
     const categoryIdBySnipeCategoryId = await loadCategoryIdMap();
     const locationIdBySnipeLocationId = await loadLocationIdMap();
-    const assetsProcessed = await upsertAssets(assets, categoryIdBySnipeCategoryId, locationIdBySnipeLocationId, runId);
+    const imageBaseUrl = normalizeInstanceUrl(settings.baseUrl);
+    const assetsProcessed = await upsertAssets(assets, categoryIdBySnipeCategoryId, locationIdBySnipeLocationId, imageBaseUrl, runId);
     const archivedMissingCount = await archiveMissingAssets(syncStartedAt, assets.map((a) => a.id));
 
     finalAssetsProcessed = assetsProcessed;

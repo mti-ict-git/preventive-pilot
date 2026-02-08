@@ -1,168 +1,188 @@
-# Mobile Apps Development Plan — PM Tech
+# Mobile Apps Development Plan — PM Tech ↔ Backend API
 
 ## Overview
-- Target app: mobile/pm-tech (Vite + React + React Router)
-- Purpose: Technician-first PM and CM workflows with offline support and secure backend integration
-- Backend: Node.js + Express API with JWT auth; OpenAPI docs exposed at /api/docs
-- Web frontend reference: src/lib/api.ts centralizes API calls, models, and auth; reuse patterns
-
-## Current Mobile Architecture Snapshot
-- Entrypoint and routing: [index.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/index.tsx), [App.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/App.tsx)
-- Layout and navigation: [Layout.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/components/Layout.tsx), [BottomNav.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/components/BottomNav.tsx)
-- Screens: Home, Tasks, TaskDetail, Schedule, Assets, AssetDetail, WorkOrders, Offline, Profile under pages/
-- Styling: Tailwind via CDN configured in [index.html](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/index.html); Material Symbols icons
-- Types: Local mock types in [types.ts](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/types.ts)
-- Observations:
-  - Demo-only UI; no API calls yet
-  - HashRouter is used to simplify navigation in mobile contexts
-  - Vite config exposes GEMINI_API_KEY into client define (remove for security)
+- App: mobile/pm-tech (Vite + React + React Router, HashRouter)
+- Backend: Node.js + Express, JWT auth, MS SQL Server, OpenAPI docs at `/api/docs` and `/api/docs.json`
+- Goal: Integrate mobile UI with backend securely, support offline-first, and prepare Android packaging via Capacitor
 
 ## Backend Integration Reference
-- API base: API_BASE_URL configurable by VITE_API_BASE_URL; see web README and docker-compose
-- OpenAPI: Docs at /api/docs; generate or hand-write TS client models and fetchers
-- Web client patterns: [api.ts](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/src/lib/api.ts) centralizes request, token refresh, and models; mirror a minimal subset for mobile
+- API base: `http://localhost:3001` (configurable)
+- Auth endpoints:
+  - `POST /api/auth/login` → `{ accessToken, refreshToken, user }`
+  - `POST /api/auth/refresh` → `{ accessToken, refreshToken }`
+  - `GET /api/auth/me` → `{ user }` (Bearer required)
+- PM Tasks endpoints:
+  - `GET /api/tasks` (filters: assigned=me, status, date ranges)
+  - `GET /api/tasks/{taskId}`
+  - `POST /api/tasks/{taskId}/{start|pause|resume|complete}`
+  - `GET /api/tasks/{taskId}/export.pdf`
+- Work Orders (CM):
+  - `GET /api/work-orders` (filters, pagination)
+  - `GET /api/work-orders/{taskId}`
+  - `POST /api/work-orders` (create breakdown)
+  - `POST /api/work-orders/{taskId}/close-downtime`
+- Assets:
+  - `GET /api/assets` (search, category, location)
+  - `GET /api/assets/{assetId}`
+- System & Dashboard:
+  - `GET /api/system/lookups` (roles, categories, locations)
+  - `GET /api/dashboard/*` (overview cards, counts)
+- CORS: `FRONTEND_ORIGIN` must include mobile origins used during dev and release
 
-## Phase 0 — Project Setup
-- Objective: Ensure pm-tech runs reliably and can connect to backend in dev
-- Deliverables:
-  - Verify npm run dev, build, preview work on port 3000 (vite.config.ts)
-  - Add .env.local with VITE_API_BASE_URL pointing to backend (e.g., http://localhost:5056 or ngrok URL)
-  - Remove exposing GEMINI_API_KEY from vite.config.ts define
-  - Pin Tailwind usage to build-time in production or ensure CDN is locked to integrity and exact versions
+## Phase 0 — Setup & Hardening
+**Objective**: Make pm-tech ready for secure backend calls and mobile packaging.
+- Configure API base in mobile:
+  - Add `VITE_API_BASE_URL` in `.env.local` (e.g., `http://localhost:3001`)
+- Remove secret exposure:
+  - In `mobile/pm-tech/vite.config.ts`, remove `define` entries exposing `GEMINI_API_KEY`
+- Lock styling to build-time for release:
+  - Replace Tailwind CDN with build-time Tailwind in production to avoid runtime CDN dependency
+- CORS & dev origins:
+  - Set backend `FRONTEND_ORIGIN` to include web dev and mobile dev origins: `http://localhost:3000,http://<your-ip>:3000`
+  - For Capacitor dev live-reload: include the dev web URL; for packaged app, use TLS API domain
 - Acceptance:
-  - App boots on / with working navigation
-  - No secrets exposed to client build
+  - Mobile app boots, no secrets in client bundle, API base configurable
 
 ## Phase 1 — Auth & Session
-- Objective: Authenticate technician and manage JWT securely
-- Deliverables:
-  - Lightweight api client module under mobile/pm-tech/lib/api.ts mirroring web request patterns
-  - Implement login (POST /api/auth/login) with provider ldap/local
-  - Store tokens using secure storage strategy suitable for PWA/mobile web (in-memory + refresh or cookie-based when possible)
-  - Implement 401-triggered refresh (POST /api/auth/refresh) and automatic retry
-  - Logout clears tokens and app state
+**Objective**: Implement secure login and session management.
+- API client module `lib/api.ts` in mobile:
+  - `apiFetchJson(path, init)` → prepends `VITE_API_BASE_URL`, adds `Authorization` when available
+- Login flow:
+  - Call `POST /api/auth/login` with `{ identifier|username, password, provider: ldap|local }`
+  - Store tokens securely
+- Token storage:
+  - Use secure storage on mobile (e.g., Capacitor Secure Storage) for `accessToken` and `refreshToken`
+  - Keep in-memory copy for Authorization header; avoid localStorage
+- Refresh & retry:
+  - On 401, call `POST /api/auth/refresh`; retry original request on success; logout on failure
+- Route guard:
+  - Update ProtectedRoute to check real auth state; redirect to `/` when unauthenticated
 - Acceptance:
-  - Successful login redirects to Home; tokens refresh transparently; logout returns to Login
+  - Sign-in redirects to Home; refresh works transparently; logout clears secure storage and state
 
-## Phase 2 — API Client & Models
-- Objective: Define typed models and fetch helpers based on OpenAPI
-- Deliverables:
-  - Define minimal TS types for Asset, Task, WorkOrder aligned to backend schemas
-  - Implement apiFetchJson base with Authorization header and API_BASE_URL
-  - Endpoints implemented initially: system lookups, dashboard overview, assets list/detail, tasks list/detail
-  - Optional: generate types from OpenAPI and commit generated types under mobile/pm-tech/lib/generated/
+## Phase 2 — Models & API Client
+**Objective**: Define types and common fetch helpers.
+- Types: Asset, Task, WorkOrder aligned to backend schemas
+- Helpers:
+  - `getMe`, `login`, `refresh`
+  - `apiGet(path)`, `apiPost(path, body)` with JSON parsing, error normalization
+- Errors & loading:
+  - Centralize error handling; surface messages in UI; show loading states
+- Optional: Generate types from `/api/docs.json` with OpenAPI codegen and place under `mobile/pm-tech/lib/generated/`
 - Acceptance:
-  - Data flows render live lists in Tasks and Assets screens; error handling and loading states present
+  - Shared helpers used across screens; typed data flows and consistent errors
 
-## Phase 3 — Tasks (PM)
-- Objective: Wire Tasks list and Task detail to backend PM endpoints
-- Deliverables:
-  - Tasks list uses GET /api/tasks with filters for assigned=me, status, date ranges
-  - Task detail uses GET /api/tasks/{taskId} for core metadata, checklist items, evidence references
-  - Lifecycle actions: POST /api/tasks/{taskId}/start, pause, resume, complete
-  - Submit for approval action aligned with PM workflow rules
-  - UI updates in [Tasks.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/Tasks.tsx) and [TaskDetail.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/TaskDetail.tsx)
+## Phase 3 — PM Tasks
+**Objective**: Wire Tasks list and Task detail.
+- List:
+  - `GET /api/tasks?assigned=me&status=` and date filters
+- Detail:
+  - `GET /api/tasks/{taskId}` for core metadata, checklist items, evidence references
+- Lifecycle actions:
+  - `POST /api/tasks/{taskId}/{start|pause|resume|complete}` wired to UI buttons
 - Acceptance:
-  - My PM Tasks show server data; detail supports status transitions and checklist interactions
+  - Tasks screen shows server data; detail updates status and checklist interactions
 
 ## Phase 4 — Work Orders (CM)
-- Objective: Implement CM Work Orders list and detail; enable breakdown reporting
-- Deliverables:
-  - Work Orders list: GET /api/work-orders?assigned=me&status=open with pagination
-  - Work Order detail: GET /api/work-orders/{taskId}; reuse PM checklist/evidence UI where applicable
-  - Breakdown report: POST /api/work-orders with either assetId or facilityId, symptom, impactLevel, optional failure metadata and downtime
-  - Lifecycle actions: start, pause, resume, complete, cancel, close-downtime
-  - UI updates in [WorkOrders.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/WorkOrders.tsx) and quick actions in [AssetDetail.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/AssetDetail.tsx)
+**Objective**: Implement CM creation and management.
+- List & detail:
+  - `GET /api/work-orders` and `GET /api/work-orders/{taskId}`
+- Report Breakdown:
+  - `POST /api/work-orders` payload includes exactly one of `assetId` or `facilityId`, plus `symptom`, optional `impactLevel`, `failureCategory`, `failureCode`, `downtimeStartedAt`, `reportedChannel`
+- Lifecycle:
+  - Start, pause, resume, complete, cancel, `close-downtime`
 - Acceptance:
-  - Technicians can report breakdowns and manage CM work orders end-to-end; validations mirror web
+  - Technicians can create, view, and manage CM work orders end-to-end
 
 ## Phase 5 — Assets Search & Detail
-- Objective: Live asset search with category filters and detail view
-- Deliverables:
-  - Assets search: GET /api/assets with search, category, location filters
-  - Asset detail: GET /api/assets/{assetId} including PM/CM summary and next due
-  - Integrate quick actions: report breakdown, open upcoming PM
+**Objective**: Live asset search and detail.
+- Search:
+  - `GET /api/assets?search=&categoryId=&locationId=`
+- Detail:
+  - `GET /api/assets/{assetId}` with PM/CM summary and next due
+- Quick actions:
+  - Open upcoming PM; report breakdown from AssetDetail
 - Acceptance:
-  - Search and detail present authoritative backend data; quick actions navigate correctly
+  - Accurate search and detail views with navigation to PM/CM actions
 
-## Phase 6 — Scheduling
-- Objective: Read-only scheduling calendar and task list by day
-- Deliverables:
-  - Calendar view backed by GET /api/scheduling/calendar or /api/scheduling/day
-  - List view filters to assigned and date
-  - Link calendar cells to Task Detail routes
+## Phase 6 — Scheduling (Read-Only)
+**Objective**: Show calendar and tasks by day.
+- Source:
+  - Use dashboard/scheduling endpoints to populate calendar
 - Acceptance:
-  - Calendar and day list reflect server schedules and navigate to tasks
+  - Calendar reflects server schedule; links navigate to task detail
 
-## Phase 7 — Evidence & Attachments
-- Objective: Offline-capable photo capture and upload with checklist validation
-- Deliverables:
-  - Capture API: POST /api/tasks/{taskId}/checklist-items/{templateChecklistItemId}/evidence/upload
-  - File storage integration follows backend rules; evidence metadata saved with audit trail
-  - UI controls for photo, notes, pass/fail/skip with required validations
+## Phase 7 — Evidence Capture
+**Objective**: Photos and notes for tasks/work orders.
+- Mobile plugins:
+  - Use Capacitor Camera and Filesystem to capture/store media
+- Upload:
+  - Queue uploads while offline; submit evidence when online to task/work-order evidence endpoints
 - Acceptance:
-  - Evidence capture enforces validations; uploads succeed online; queued offline
+  - Evidence captured and synced reliably; UI shows upload status
 
-## Phase 8 — Offline Mode
-- Objective: Cache tasks and assets; queue actions for sync; conflict handling
-- Deliverables:
-  - IndexedDB or Cache API-based local store for tasks and evidence
-  - Background sync and retry logic; conflict detection when server state diverges
-  - Offline indicators and manual Sync Now control in [Offline.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/Offline.tsx)
+## Phase 8 — Offline & Sync
+**Objective**: Offline-first behaviors.
+- Service worker:
+  - Add PWA plugin or Workbox to cache static assets and selected API responses
+- Data store:
+  - Cache tasks, assets, and work orders; queue mutations with conflict resolution
+- Sync UI:
+  - Add manual sync and status indicators (Online/Offline, last sync)
 - Acceptance:
-  - Opening a task caches it; completing offline queues updates; sync resolves without data loss
+  - Core flows usable offline; data reconciled on reconnect
 
-## Phase 9 — Profile & Settings
-- Objective: Basic user profile and settings backed by API
-- Deliverables:
-  - Profile: GET /api/users/me for profile and preferences; PATCH for updates
-  - Settings: theme toggle, notifications toggle persisted to server when appropriate
+## Phase 9 — Security & Compliance
+**Objective**: Harden client-server interaction.
+- CORS:
+  - Add explicit mobile origins; avoid `*`; allow only required headers
+- TLS:
+  - Enforce HTTPS for production; disable cleartext on Android; pin backend domain
+- CSP:
+  - Use strict CSP once CDNs are removed; limit connect-src to API host
+- Tokens:
+  - Store in secure storage; short-lived access tokens; refresh rotation; purge on logout
+- Rate limiting:
+  - Enable backend rate limiting for `/api/auth/login` and sensitive endpoints
+- Logging:
+  - Server-side structured logs; avoid sensitive data
+- Monitoring:
+  - Integrate crash/error reporting for mobile; track auth failures and 401s
+- Standards:
+  - Align with OWASP MASVS, OWASP API Security Top 10, NIST guidance
 - Acceptance:
-  - Profile renders live data; toggles persist and survive reload
+  - Security checks pass; no secrets in bundle; API protected against common threats
 
-## Phase 10 — Security Hardening
-- Objective: Apply secure coding and deployment practices
-- Deliverables:
-  - Token handling avoids localStorage; prefer in-memory plus refresh and short-lived access tokens; consider cookie-based auth when feasible
-  - Remove any client-side exposure of secrets (remove GEMINI_API_KEY defines in vite.config)
-  - Strict CORS and allowed origins for mobile; docker-compose includes capacitor://localhost for mobile shells
-  - Disable eval and inspect CSP risks; avoid dynamic code from untrusted sources; pin CDN versions or eliminate CDN in production
-  - Dependency monitoring via npm audit, Snyk, or Dependabot; track React, Vite, react-router-dom advisories
-  - Validate input/output: sanitize user notes, encode outputs to prevent XSS; avoid rendering untrusted HTML
+## Phase 10 — QA & Release
+**Objective**: Verification and rollout.
+- Tests:
+  - Unit tests for API client; E2E flows for login, tasks, work orders
+- CI:
+  - Lint and typecheck must pass; OpenAPI drift detected via schema checks
+- Android:
+  - Package via Capacitor; release build uses TLS API; cleartext disabled
 - Acceptance:
-  - Security checks pass; no secrets in build; basic OWASP controls verified
+  - CI green; manual QA across offline/online transitions and role-gated actions
 
-## Phase 11 — Observability & QA
-- Objective: End-to-end reliability and testing coverage
-- Deliverables:
-  - Error and performance logging; network failure telemetry; audit significant actions
-  - Unit tests for api client and validators; integration tests for key flows; manual test scripts for offline
-  - Lint and typecheck scripts run clean; CI integration for build + tests
-- Acceptance:
-  - Tests cover critical paths; CI green; manual QA passes for offline/online transitions
+## Capacitor (Optional) — Android Packaging
+- Install: `@capacitor/core`, `@capacitor/android`, `@capacitor/cli`
+- Config: `capacitor.config.ts` with `appId`, `appName`, `webDir: 'dist'`
+- Dev live reload: set `server.url` to `http://<your-ip>:3000` and `server.cleartext: true` (dev only)
+- Build: `npm run build` → `npx cap sync android` → open in Android Studio
+- Routing: HashRouter works inside WebView; no deep-link setup required initially
 
 ## Dev & Ops Notes
-- Local run: npm run dev in mobile/pm-tech; backend via npm run dev:full at repo root
-- API base discovery for mobile: use ngrok + gist watcher per README; mobile fetches gist to set API base dynamically
-- Docker dev stack: docker-compose exposes web at 9102 and API at 5056; Nginx proxies /api to backend
+- Local run:
+  - Mobile: `npm run dev` in `mobile/pm-tech`
+  - Full stack: `npm run dev:full` at repo root
+- API base discovery:
+  - Use `.env.local` for `VITE_API_BASE_URL`; in mobile releases, point to production API domain
+- Docker:
+  - Backend container exposes port 5056 in Dockerfile; dev runs on 3001 via env
 
-## Implementation Order
-- Phase 0 → 1 → 2 to establish secure data access
-- Phase 3 and 4 for PM tasks and CM work orders
-- Phase 5 and 6 for assets and schedule
-- Phase 7 and 8 for evidence and offline
-- Phase 9–11 for polish, security, and QA
+## Acceptance Summary
+- Phases 0–2 establish secure data access and typed client
+- Phases 3–5 implement PM tasks, CM work orders, and assets
+- Phase 6 adds schedule; 7–8 add evidence and offline
+- Phase 9 hardens security; 10 verifies and releases
 
-## Links
-- Mobile app code: mobile/pm-tech
-  - [App.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/App.tsx)
-  - [BottomNav.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/components/BottomNav.tsx)
-  - [Tasks.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/Tasks.tsx)
-  - [TaskDetail.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/TaskDetail.tsx)
-  - [Assets.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/Assets.tsx)
-  - [AssetDetail.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/AssetDetail.tsx)
-  - [WorkOrders.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/WorkOrders.tsx)
-  - [Offline.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/Offline.tsx)
-  - [Schedule.tsx](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/mobile/pm-tech/pages/Schedule.tsx)
-- Web API reference: [api.ts](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/src/lib/api.ts)
-- Backend: [backend/src/index.ts](file:///Users/widjis/Documents/Projects/Preventive%20Maintenance/preventive-pilot/backend/src/index.ts)

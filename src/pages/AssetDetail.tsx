@@ -380,6 +380,8 @@ const AssetDetail = () => {
       ? `${snipeItBaseUrl.replace(/\/$/, "")}/hardware/${asset.snipeAssetId}`
       : snipeItBaseUrl;
 
+  const assetImageUrl = asset?.imageUrl ?? null;
+
   const categoryId = asset?.category.id ?? null;
   const allTemplates = templatesQuery.data?.items ?? EMPTY_TEMPLATES;
   const filteredTemplates = useMemo((): TemplateSummary[] => {
@@ -891,23 +893,23 @@ const AssetDetail = () => {
           animate={{ opacity: 1, y: 0 }}
           className="glass rounded-xl p-6"
         >
-          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-            <div className="flex items-start gap-4">
+          <div className="grid grid-cols-12 gap-6 items-start">
+            <div className="col-span-12 md:col-span-7 lg:col-span-8 flex items-start gap-4">
               <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0">
                 <Server className="w-8 h-8 text-primary" />
               </div>
-              <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <h2 className="text-2xl font-bold text-foreground">{asset.name}</h2>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-3 mb-1">
+                  <h2 className="text-2xl font-bold text-foreground truncate">{asset.name}</h2>
                   {getPMStatusBadge()}
                 </div>
-                <p className="text-muted-foreground font-mono">{asset.assetTag}</p>
-				<div className="flex flex-wrap items-center gap-4 mt-3">
-					<Badge variant="secondary">{asset.category?.name ?? "—"}</Badge>
-					<div className="flex items-center gap-1 text-sm text-muted-foreground">
-						<MapPin className="w-4 h-4" />
-						{asset.location?.name ?? "—"}
-					</div>
+                <p className="text-muted-foreground font-mono break-all">{asset.assetTag}</p>
+                <div className="flex flex-wrap items-center gap-4 mt-3">
+                  <Badge variant="secondary">{asset.category?.name ?? "—"}</Badge>
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <MapPin className="w-4 h-4" />
+                    {asset.location?.name ?? "—"}
+                  </div>
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <User className="w-4 h-4" />
                     {asset.assignedToText ?? "—"}
@@ -916,7 +918,19 @@ const AssetDetail = () => {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
+            {assetImageUrl ? (
+              <div className="col-span-12 md:col-span-5 lg:col-span-4 flex justify-start md:justify-end">
+                <div className="relative w-full max-w-xs aspect-video rounded-xl overflow-hidden bg-muted/40 border border-border">
+                  <img
+                    src={assetImageUrl}
+                    alt={asset.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="col-span-12 flex flex-col sm:flex-row gap-3 justify-end mt-4 md:mt-0">
               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
                 <span className="text-sm text-muted-foreground">PM Enabled</span>
                 <Switch
