@@ -6,6 +6,11 @@
 - Backend: role middleware checks are now case-insensitive.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sun Feb  8 13:27:51 WITA 2026
+- Mobile (pm-tech): PM Task Detail asset name now links to Asset Detail.
+- Mobile (pm-tech): PM Task Detail now shows asset notes from Asset Detail.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 08:51:08 WITA 2026
 - Mobile (pm-tech): added submit-for-approval, revise/reject modals, and strict role-based edit locks.
 - Mobile (pm-tech): superadmin can edit only during PendingSuperadmin review (not after Approved).
@@ -51,6 +56,21 @@
 
 ## Sun Feb  8 13:05:25 WITA 2026
 - Docker: included https://pmit.merdekabattery.com in default FRONTEND_ORIGIN for api service.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:13:05 WITA 2026
+- Backend: allow Capacitor Android origin http://localhost for CORS.
+- Docker: added http://localhost to default FRONTEND_ORIGIN for api service.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:35:30 WITA 2026
+- Docker: mounted evidence storage into api container for checklist evidence download.
+- Docker: added EVIDENCE_STORAGE_HOST_PATH volume mapping to /app/shared-documents.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:25:13 WITA 2026
+- Mobile (pm-tech): made attachment preview fullscreen.
+- Mobile (pm-tech): added pinch-to-zoom and pan for image attachments.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## Sun Feb  8 08:43:43 WITA 2026
