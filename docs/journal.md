@@ -29,6 +29,12 @@
 - Mobile (pm-tech): registers push token and calls /api/devices/register after login.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sun Feb  8 12:35:20 WITA 2026
+- Backend: added Firebase Admin SDK support for push (service account path/base64 env).
+- Backend: /api/devices/push-test and notifications job now prefer Admin SDK, fallback to legacy key.
+- Repo: ignored firebase-adminsdk JSON files to prevent committing secrets.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 08:43:43 WITA 2026
 - Mobile (pm-tech): added Capacitor Android scaffolding (appId com.merdekatsingshan.pmtech, appName MTI Mobile PM).
 - Mobile (pm-tech): added biometric login using native secure storage for refresh token (kept on logout).

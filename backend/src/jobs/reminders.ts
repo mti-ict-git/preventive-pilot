@@ -1,4 +1,8 @@
 import sql from "mssql";
+import { readFile } from "node:fs/promises";
+import { Buffer } from "node:buffer";
+import { cert, getApps, initializeApp, type ServiceAccount } from "firebase-admin/app";
+import { getMessaging, type Messaging } from "firebase-admin/messaging";
 import { getDb } from "../db/mssql.js";
 import { writeSystemLog } from "./systemLog.js";
 import { env } from "../config/env.js";
@@ -706,9 +710,44 @@ const loadUserDeviceTokens = async (userId: string): Promise<Array<{ token: stri
   return rows.map((r) => ({ token: r.Token, platform: r.Platform }));
 };
 
-const sendFcmLegacy = async (token: string, title: string, body: string, data: Record<string, string>): Promise<void> => {
+let messagingPromise: Promise<Messaging | null> | null = null;
+
+const getFirebaseMessaging = async (): Promise<Messaging | null> => {
+  if (messagingPromise) return messagingPromise;
+
+  messagingPromise = (async () => {
+    const jsonBase64 = (env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 ?? "").trim();
+    const path = (env.FIREBASE_SERVICE_ACCOUNT_PATH ?? "").trim();
+
+    let rawJson = "";
+    if (jsonBase64) {
+      rawJson = Buffer.from(jsonBase64, "base64").toString("utf8");
+    } else if (path) {
+      rawJson = await readFile(path, "utf8");
+    } else {
+      return null;
+    }
+
+    const serviceAccount = JSON.parse(rawJson) as ServiceAccount;
+    if (getApps().length === 0) {
+      initializeApp({ credential: cert(serviceAccount) });
+    }
+    return getMessaging();
+  })();
+
+  return messagingPromise;
+};
+
+const sendPush = async (token: string, title: string, body: string, data: Record<string, string>): Promise<void> => {
+  const messaging = await getFirebaseMessaging();
+  if (messaging) {
+    await messaging.send({ token, notification: { title, body }, data });
+    return;
+  }
+
   const key = env.FCM_SERVER_KEY?.trim();
   if (!key) throw new Error("FCM not configured");
+
   const res = await fetch("https://fcm.googleapis.com/fcm/send", {
     method: "POST",
     headers: {
@@ -721,9 +760,7 @@ const sendFcmLegacy = async (token: string, title: string, body: string, data: R
       data,
     }),
   });
-  if (!res.ok) {
-    throw new Error("FCM send failed: " + String(res.status));
-  }
+  if (!res.ok) throw new Error("FCM send failed: " + String(res.status));
 };
 
 const sendPushNotification = async (payload: unknown): Promise<void> => {
@@ -740,7 +777,7 @@ const sendPushNotification = async (payload: unknown): Promise<void> => {
     taskNumber: p.task?.taskNumber ?? "",
   };
   for (const t of tokens) {
-    await sendFcmLegacy(t.token, title, body, data);
+    await sendPush(t.token, title, body, data);
   }
 };
 

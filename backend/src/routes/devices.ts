@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
+import { readFile } from "node:fs/promises";
+import { Buffer } from "node:buffer";
+import { cert, getApps, initializeApp, type ServiceAccount } from "firebase-admin/app";
+import { getMessaging, type Messaging } from "firebase-admin/messaging";
 import { getDb } from "../db/mssql.js";
 import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
@@ -20,6 +24,68 @@ const PushTestSchema = z
 export const devicesRouter = Router();
 
 devicesRouter.use(requireAuth);
+
+let messagingPromise: Promise<Messaging | null> | null = null;
+
+const getFirebaseMessaging = async (): Promise<Messaging | null> => {
+  if (messagingPromise) return messagingPromise;
+
+  messagingPromise = (async () => {
+    const jsonBase64 = (env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 ?? "").trim();
+    const path = (env.FIREBASE_SERVICE_ACCOUNT_PATH ?? "").trim();
+
+    let rawJson = "";
+    if (jsonBase64) {
+      rawJson = Buffer.from(jsonBase64, "base64").toString("utf8");
+    } else if (path) {
+      rawJson = await readFile(path, "utf8");
+    } else {
+      return null;
+    }
+
+    const serviceAccount = JSON.parse(rawJson) as ServiceAccount;
+    if (getApps().length === 0) {
+      initializeApp({ credential: cert(serviceAccount) });
+    }
+    return getMessaging();
+  })();
+
+  return messagingPromise;
+};
+
+const sendPush = async (input: {
+  token: string;
+  title: string;
+  body: string;
+  data: Record<string, string>;
+}): Promise<void> => {
+  const messaging = await getFirebaseMessaging();
+  if (messaging) {
+    await messaging.send({
+      token: input.token,
+      notification: { title: input.title, body: input.body },
+      data: input.data,
+    });
+    return;
+  }
+
+  const key = (env.FCM_SERVER_KEY ?? "").trim();
+  if (!key) throw new Error("FCM not configured");
+
+  const res = await fetch("https://fcm.googleapis.com/fcm/send", {
+    method: "POST",
+    headers: {
+      Authorization: "key=" + key,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to: input.token,
+      notification: { title: input.title, body: input.body },
+      data: input.data,
+    }),
+  });
+  if (!res.ok) throw new Error("FCM send failed");
+};
 
 devicesRouter.post("/register", async (req, res) => {
   const parsed = RegisterDeviceSchema.safeParse(req.body ?? {});
@@ -74,12 +140,6 @@ devicesRouter.post("/push-test", async (req, res) => {
     return;
   }
 
-  const key = (env.FCM_SERVER_KEY ?? "").trim();
-  if (!key) {
-    res.status(400).json({ message: "FCM not configured" });
-    return;
-  }
-
   const userId = req.user.sub;
   const sentAt = new Date().toISOString();
   const title = parsed.data?.title ?? "Push Test";
@@ -110,23 +170,16 @@ devicesRouter.post("/push-test", async (req, res) => {
   for (const row of tokens) {
     try {
       const token = row.Token;
-      const sendRes = await fetch("https://fcm.googleapis.com/fcm/send", {
-        method: "POST",
-        headers: {
-          Authorization: "key=" + key,
-          "Content-Type": "application/json",
+      await sendPush({
+        token,
+        title,
+        body,
+        data: {
+          kind: "push_test",
+          sentAt,
+          platform: row.Platform,
         },
-        body: JSON.stringify({
-          to: token,
-          notification: { title, body },
-          data: {
-            kind: "push_test",
-            sentAt,
-            platform: row.Platform,
-          },
-        }),
       });
-      if (!sendRes.ok) throw new Error("FCM send failed");
       sent += 1;
     } catch {
       failed += 1;
