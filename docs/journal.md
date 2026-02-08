@@ -49,6 +49,10 @@
 - Backend: CORS error now logs the rejected Origin to simplify production setup.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sun Feb  8 13:05:25 WITA 2026
+- Docker: included https://pmit.merdekabattery.com in default FRONTEND_ORIGIN for api service.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 08:43:43 WITA 2026
 - Mobile (pm-tech): added Capacitor Android scaffolding (appId com.merdekatsingshan.pmtech, appName MTI Mobile PM).
 - Mobile (pm-tech): added biometric login using native secure storage for refresh token (kept on logout).

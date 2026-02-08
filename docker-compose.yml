@@ -10,7 +10,7 @@ services:
       - ./.env
     environment:
       BACKEND_PORT: "5056"
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:9102,http://localhost:8081,capacitor://localhost}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://pmit.merdekabattery.com,http://localhost:9102,http://localhost:8081,capacitor://localhost}
     volumes:
       - ./.env:/app/.env:ro
 
