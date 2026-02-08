@@ -1,5 +1,35 @@
 # Journal
 
+## Sun Feb  8 18:55:27 WITA 2026
+- Backend: validate device platform as ios/android/web and normalize broadcast audience.
+- Backend: add fallback Firebase service account path for local dev.
+- DB: add pm.Devices indexes for UserId and IsActive.
+- Docker: set FIREBASE_SERVICE_ACCOUNT_PATH for api container.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 18:40:53 WITA 2026
+- Backend: added /api/devices/push-broadcast for admin push announcements with role filtering.
+- Backend: documented push broadcast schema in OpenAPI spec.
+- Docs: updated README with push broadcast endpoint.
+
+## Sun Feb  8 18:35:29 WITA 2026
+- Git: stop tracking pm-tech Android google-services.json.
+
+## Sun Feb  8 17:46:22 WITA 2026
+- Mobile (pm-tech): Offline sync now flushes queued actions and attachments.
+- Mobile (pm-tech): auto-sync queued work when connection returns.
+- Mobile (pm-tech): show pending sync state and queued attachment counts on Task detail.
+- Mobile (pm-tech): record non-retryable sync failures as conflicts and allow clearing.
+
+## Sun Feb  8 17:52:37 WITA 2026
+- Mobile (pm-tech): Task Detail Save Draft now shows immediate “Saved” feedback and saved timestamp.
+
+## Sun Feb  8 18:13:45 WITA 2026
+- Mobile (pm-tech): Offline page now shows per-task pending actions/files and refresh progress during sync.
+
+## Sun Feb  8 18:21:24 WITA 2026
+- Mobile (pm-tech): Offline cached task cards now show explicit status (Synced/Pending/Conflict/Failed).
+
 ## Sun Feb  8 17:32:17 WITA 2026
 - Mobile (pm-tech): add outstanding badge count on Home > My Tasks.
 - Backend: add /api/tasks/my-outstanding-counts for technician badge.
@@ -21,6 +51,12 @@
 
 ## Sun Feb  8 17:20:30 WITA 2026
 - Docker: switch FIREBASE_SERVICE_ACCOUNT_HOST_PATH to repo-relative path for dev/prod parity.
+
+## Sun Feb  8 18:17:17 WITA 2026
+- Docs: added detailed push notifications phased plan and templates in docs/push_channel.md.
+
+## Sun Feb  8 18:21:41 WITA 2026
+- Docs: expanded push notification phase tasks with step-by-step instructions.
 ## Sun Feb  8 15:23:06 WITA 2026
 - Mobile (pm-tech): re-register push token when push notifications are enabled.
 - Mobile (pm-tech): export registerDeviceToken for reuse.

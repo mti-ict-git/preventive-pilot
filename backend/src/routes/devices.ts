@@ -8,9 +8,24 @@ import { getMessaging, type Messaging } from "firebase-admin/messaging";
 import { getDb } from "../db/mssql.js";
 import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { requireAnyRole } from "../middleware/requireRole.js";
+
+const allowedPlatforms = ["ios", "android", "web"] as const;
+
+const isAllowedPlatform = (value: string): value is (typeof allowedPlatforms)[number] =>
+  allowedPlatforms.includes(value as (typeof allowedPlatforms)[number]);
+
+const allowedAudiences = ["all", "technician", "supervisor", "superadmin"] as const;
+
+const isAllowedAudience = (value: string): value is (typeof allowedAudiences)[number] =>
+  allowedAudiences.includes(value as (typeof allowedAudiences)[number]);
 
 const RegisterDeviceSchema = z.object({
-  platform: z.string().min(2).max(32),
+  platform: z
+    .string()
+    .trim()
+    .transform((value) => value.toLowerCase())
+    .refine((value) => isAllowedPlatform(value), { message: "Invalid platform" }),
   token: z.string().min(10).max(512),
 });
 
@@ -20,6 +35,20 @@ const PushTestSchema = z
     body: z.string().trim().min(1).max(256).optional(),
   })
   .optional();
+
+const PushBroadcastSchema = z.object({
+  title: z.string().trim().min(1).max(120),
+  body: z.string().trim().min(1).max(2000),
+  audience: z
+    .string()
+    .trim()
+    .transform((value) => value.toLowerCase())
+    .refine((value) => isAllowedAudience(value), { message: "Invalid audience" })
+    .optional()
+    .default("all"),
+});
+
+export type PushBroadcastRequest = z.infer<typeof PushBroadcastSchema>;
 
 export const devicesRouter = Router();
 
@@ -41,7 +70,13 @@ const getFirebaseMessaging = async (): Promise<Messaging | null> => {
       } else if (path) {
         rawJson = await readFile(path, "utf8");
       } else {
-        return null;
+        const fallbackPath = "./firebase-adminsdk.json";
+        try {
+          rawJson = await readFile(fallbackPath, "utf8");
+        } catch {
+          console.warn("Firebase service account file not found at ./firebase-adminsdk.json");
+          return null;
+        }
       }
 
       const serviceAccount = JSON.parse(rawJson) as ServiceAccount;
@@ -50,6 +85,7 @@ const getFirebaseMessaging = async (): Promise<Messaging | null> => {
       }
       return getMessaging();
     } catch {
+      console.warn("Firebase service account failed to initialize");
       messagingPromise = null;
       return null;
     }
@@ -113,7 +149,7 @@ devicesRouter.post("/register", async (req, res) => {
   }
 
   const userId = req.user.sub;
-  const platform = parsed.data.platform.trim().toLowerCase();
+  const platform = parsed.data.platform;
   const token = parsed.data.token.trim();
 
   const db = await getDb();
@@ -223,5 +259,90 @@ devicesRouter.post("/push-test", async (req, res) => {
     failed,
     configUsed: messaging ? "firebase-admin" : "fcm-legacy",
     failures,
+  });
+});
+
+devicesRouter.post("/push-broadcast", requireAnyRole(["Superadmin", "Admin"]), async (req, res) => {
+  const parsed = PushBroadcastSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request", code: "invalid_request", issues: parsed.error.issues });
+    return;
+  }
+
+  const legacyKeyPresent = Boolean((env.FCM_SERVER_KEY ?? "").trim());
+  const messaging = await getFirebaseMessaging();
+  if (!messaging && !legacyKeyPresent) {
+    res.status(400).json({
+      message: "Push not configured. Set FIREBASE_SERVICE_ACCOUNT_PATH (recommended) or FCM_SERVER_KEY.",
+    });
+    return;
+  }
+
+  const db = await getDb();
+  const audience = parsed.data.audience ?? "all";
+  const request = db.request();
+  if (audience !== "all") {
+    request.input("role", sql.NVarChar(64), audience);
+  }
+
+  const tokensResult = await request.query(
+    audience === "all"
+      ? [
+          "SELECT Token AS Token, Platform AS Platform",
+          "FROM pm.Devices",
+          "WHERE IsActive = 1",
+        ].join("\n")
+      : [
+          "SELECT d.Token AS Token, d.Platform AS Platform",
+          "FROM pm.Devices d",
+          "INNER JOIN pm.Users u ON u.UserId = d.UserId",
+          "INNER JOIN pm.UserRoles ur ON ur.UserId = u.UserId",
+          "INNER JOIN pm.Roles r ON r.RoleId = ur.RoleId",
+          "WHERE d.IsActive = 1",
+          "  AND LOWER(r.Name) = @role",
+        ].join("\n"),
+  );
+
+  const tokens = tokensResult.recordset as Array<{ Token: string; Platform: string }>;
+  if (tokens.length === 0) {
+    res.status(400).json({ message: "No device tokens registered", code: "no_tokens" });
+    return;
+  }
+
+  let sent = 0;
+  let failed = 0;
+  const errors: Array<{ token: string; message: string; code: string | null }> = [];
+
+  for (const row of tokens) {
+    try {
+      await sendPush({
+        token: row.Token,
+        title: parsed.data.title,
+        body: parsed.data.body,
+        data: { kind: "broadcast", audience, platform: row.Platform },
+      });
+      sent += 1;
+    } catch (err: unknown) {
+      failed += 1;
+      const info = getErrorInfo(err);
+      errors.push({ token: row.Token, message: info.message, code: info.code });
+      console.warn("[push-broadcast] failed", { message: info.message, code: info.code });
+    }
+  }
+
+  console.info("[push-broadcast] completed", {
+    audience,
+    attempted: tokens.length,
+    sent,
+    failed,
+  });
+
+  res.json({
+    ok: true,
+    attempted: tokens.length,
+    sent,
+    failed,
+    configUsed: messaging ? "firebase-admin" : "fcm-legacy",
+    errors,
   });
 });

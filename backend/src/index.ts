@@ -419,6 +419,39 @@ const openApiSpec: OpenApiSchema = {
         },
         additionalProperties: false,
       },
+      PushBroadcastRequest: {
+        type: "object",
+        properties: {
+          title: { type: "string", maxLength: 120 },
+          body: { type: "string", maxLength: 2000 },
+          audience: { type: "string", enum: ["all", "technician", "supervisor", "superadmin"], default: "all" },
+        },
+        required: ["title", "body"],
+        additionalProperties: false,
+      },
+      PushBroadcastError: {
+        type: "object",
+        properties: {
+          token: { type: "string" },
+          message: { type: "string" },
+          code: { type: ["string", "null"] },
+        },
+        required: ["token", "message"],
+        additionalProperties: false,
+      },
+      PushBroadcastResponse: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+          attempted: { type: "integer" },
+          sent: { type: "integer" },
+          failed: { type: "integer" },
+          configUsed: { type: "string", enum: ["firebase-admin", "fcm-legacy"] },
+          errors: { type: "array", items: { $ref: "#/components/schemas/PushBroadcastError" } },
+        },
+        required: ["ok", "attempted", "sent", "failed", "configUsed", "errors"],
+        additionalProperties: false,
+      },
       TaskAssignRequest: {
         type: "object",
         properties: {
@@ -884,6 +917,38 @@ const openApiSpec: OpenApiSchema = {
           },
           "401": {
             description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/devices/push-broadcast": {
+      post: {
+        tags: ["Notifications"],
+        summary: "Send push broadcast",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/PushBroadcastRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/PushBroadcastResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },

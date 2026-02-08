@@ -958,6 +958,16 @@ BEGIN
   );
 END;
 
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_Devices_UserId' AND object_id = OBJECT_ID(N'pm.Devices'))
+BEGIN
+  CREATE INDEX IX_pm_Devices_UserId ON pm.Devices(UserId);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_Devices_IsActive' AND object_id = OBJECT_ID(N'pm.Devices'))
+BEGIN
+  CREATE INDEX IX_pm_Devices_IsActive ON pm.Devices(IsActive);
+END;
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_Assets_CategoryId' AND object_id = OBJECT_ID(N'pm.Assets'))
 BEGIN
   CREATE INDEX IX_pm_Assets_CategoryId ON pm.Assets(CategoryId);

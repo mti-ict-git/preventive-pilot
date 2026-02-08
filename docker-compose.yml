@@ -11,6 +11,7 @@ services:
     environment:
       BACKEND_PORT: "5056"
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://pmit.merdekabattery.com,http://localhost,http://localhost:9102,http://localhost:8081,capacitor://localhost}
+      FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-adminsdk.json
     volumes:
       - ./.env:/app/.env:ro
       - ${FIREBASE_SERVICE_ACCOUNT_HOST_PATH:-./firebase-adminsdk.json}:/app/firebase-adminsdk.json:ro
