@@ -1,5 +1,14 @@
 # Journal
 
+## Sun Feb  8 17:32:17 WITA 2026
+- Mobile (pm-tech): add outstanding badge count on Home > My Tasks.
+- Backend: add /api/tasks/my-outstanding-counts for technician badge.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 17:25:56 WITA 2026
+- Mobile (pm-tech): show success acknowledgement after Submit for approval.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 17:21:30 WITA 2026
 - Mobile (pm-tech): added local Save action for PM Task checklist draft.
 - Mobile (pm-tech): persist checklist drafts in localStorage for offline usage.

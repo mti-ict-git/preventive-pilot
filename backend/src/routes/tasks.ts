@@ -1394,6 +1394,48 @@ tasksRouter.get("/status-counts", async (req, res) => {
   });
 });
 
+tasksRouter.get("/my-outstanding-counts", async (req, res) => {
+  const rolesCsv = req.user.roles.join(",");
+
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .input("rolesCsv", sql.NVarChar(1024), rolesCsv)
+    .query(
+      [
+        "SELECT",
+        "  SUM(CASE WHEN t.MaintenanceType = N'PM' AND t.ApprovalStatus IN (N'PendingSupervisor', N'PendingSuperadmin') THEN 1 ELSE 0 END) AS WaitingForApprovalCount,",
+        "  SUM(CASE WHEN t.MaintenanceType = N'PM' AND (t.ApprovalStatus = N'Rejected' OR (t.ApprovalStatus = N'None' AND t.RevisionNote IS NOT NULL)) THEN 1 ELSE 0 END) AS NeedsRevisionCount",
+        "FROM pm.PMTasks t",
+        "WHERE",
+        "  t.CancelledAt IS NULL",
+        "  AND (",
+        "    t.AssignedToUserId = @userId",
+        "    OR (",
+        "      t.AssignedToRoleId IS NOT NULL",
+        "      AND EXISTS (",
+        "        SELECT 1",
+        "        FROM pm.Roles r",
+        "        WHERE r.RoleId = t.AssignedToRoleId",
+        "          AND r.Name IN (SELECT value FROM string_split(@rolesCsv, ','))",
+        "      )",
+        "    )",
+        "  )",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  const waitingForApproval = Number(row?.WaitingForApprovalCount ?? 0);
+  const needsRevision = Number(row?.NeedsRevisionCount ?? 0);
+
+  res.json({
+    waitingForApproval,
+    needsRevision,
+    total: waitingForApproval + needsRevision,
+  });
+});
+
 tasksRouter.get(
   "/approvals",
   requireAnyRole(["Supervisor", "Admin", "Superadmin"]),
