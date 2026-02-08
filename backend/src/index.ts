@@ -2539,7 +2539,7 @@ const originConfig: CorsOptions["origin"] = (origin, callback) => {
     return;
   }
 
-  callback(new Error("Not allowed by CORS"));
+  callback(new Error(`Not allowed by CORS: ${origin}`));
 };
 
 app.use(
