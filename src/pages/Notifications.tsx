@@ -144,9 +144,13 @@ const Notifications = () => {
   const pushTestMutation = useMutation({
     mutationFn: async () => apiPushTest(),
     onSuccess: (result) => {
+      const firstFailure = result.failures[0] ?? null;
+      const failurePrefix = firstFailure?.code ? `${firstFailure.code}: ` : "";
+      const failureMessage = firstFailure ? `${failurePrefix}${firstFailure.message}`.slice(0, 160) : "";
+
       toast({
         title: "Push test sent",
-        description: `Sent ${result.sent}/${result.attempted}${result.failed ? `, failed ${result.failed}` : ""}`,
+        description: `Sent ${result.sent}/${result.attempted}${result.failed ? `, failed ${result.failed}` : ""} (${result.configUsed})${failureMessage ? ` — ${failureMessage}` : ""}`,
       });
     },
     onError: (err: unknown) => {

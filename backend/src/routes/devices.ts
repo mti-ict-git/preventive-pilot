@@ -31,23 +31,28 @@ const getFirebaseMessaging = async (): Promise<Messaging | null> => {
   if (messagingPromise) return messagingPromise;
 
   messagingPromise = (async () => {
-    const jsonBase64 = (env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 ?? "").trim();
-    const path = (env.FIREBASE_SERVICE_ACCOUNT_PATH ?? "").trim();
+    try {
+      const jsonBase64 = (env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 ?? "").trim();
+      const path = (env.FIREBASE_SERVICE_ACCOUNT_PATH ?? "").trim();
 
-    let rawJson = "";
-    if (jsonBase64) {
-      rawJson = Buffer.from(jsonBase64, "base64").toString("utf8");
-    } else if (path) {
-      rawJson = await readFile(path, "utf8");
-    } else {
+      let rawJson = "";
+      if (jsonBase64) {
+        rawJson = Buffer.from(jsonBase64, "base64").toString("utf8");
+      } else if (path) {
+        rawJson = await readFile(path, "utf8");
+      } else {
+        return null;
+      }
+
+      const serviceAccount = JSON.parse(rawJson) as ServiceAccount;
+      if (getApps().length === 0) {
+        initializeApp({ credential: cert(serviceAccount) });
+      }
+      return getMessaging();
+    } catch {
+      messagingPromise = null;
       return null;
     }
-
-    const serviceAccount = JSON.parse(rawJson) as ServiceAccount;
-    if (getApps().length === 0) {
-      initializeApp({ credential: cert(serviceAccount) });
-    }
-    return getMessaging();
   })();
 
   return messagingPromise;
@@ -84,7 +89,20 @@ const sendPush = async (input: {
       data: input.data,
     }),
   });
-  if (!res.ok) throw new Error("FCM send failed");
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`FCM send failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+};
+
+const getErrorInfo = (err: unknown): { message: string; code: string | null } => {
+  const message = err instanceof Error ? err.message : "Unknown error";
+  const codeRaw =
+    typeof err === "object" && err !== null && "code" in err
+      ? (err as { code?: unknown }).code
+      : undefined;
+  const code = typeof codeRaw === "string" && codeRaw.trim() ? codeRaw.trim() : null;
+  return { message, code };
 };
 
 devicesRouter.post("/register", async (req, res) => {
@@ -145,6 +163,15 @@ devicesRouter.post("/push-test", async (req, res) => {
   const title = parsed.data?.title ?? "Push Test";
   const body = parsed.data?.body ?? `Preventive Pilot push test at ${sentAt}`;
 
+  const legacyKeyPresent = Boolean((env.FCM_SERVER_KEY ?? "").trim());
+  const messaging = await getFirebaseMessaging();
+  if (!messaging && !legacyKeyPresent) {
+    res.status(400).json({
+      message: "Push not configured. Set FIREBASE_SERVICE_ACCOUNT_PATH (recommended) or FCM_SERVER_KEY.",
+    });
+    return;
+  }
+
   const db = await getDb();
   const tokensResult = await db
     .request()
@@ -166,6 +193,7 @@ devicesRouter.post("/push-test", async (req, res) => {
 
   let sent = 0;
   let failed = 0;
+  const failures: Array<{ platform: string; message: string; code: string | null }> = [];
 
   for (const row of tokens) {
     try {
@@ -181,10 +209,19 @@ devicesRouter.post("/push-test", async (req, res) => {
         },
       });
       sent += 1;
-    } catch {
+    } catch (err: unknown) {
       failed += 1;
+      const info = getErrorInfo(err);
+      failures.push({ platform: row.Platform, message: info.message, code: info.code });
     }
   }
 
-  res.json({ ok: true, attempted: tokens.length, sent, failed });
+  res.json({
+    ok: true,
+    attempted: tokens.length,
+    sent,
+    failed,
+    configUsed: messaging ? "firebase-admin" : "fcm-legacy",
+    failures,
+  });
 });

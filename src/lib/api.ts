@@ -1974,7 +1974,14 @@ export const apiTestWhatsAppSettings = async (input?: TestWhatsAppSettingsInput)
   );
 };
 
-export type PushTestResponse = { ok: true; attempted: number; sent: number; failed: number };
+export type PushTestResponse = {
+  ok: true;
+  attempted: number;
+  sent: number;
+  failed: number;
+  configUsed: "firebase-admin" | "fcm-legacy";
+  failures: Array<{ platform: string; message: string; code: string | null }>;
+};
 
 export const apiPushTest = async (input?: { title?: string; body?: string }): Promise<PushTestResponse> => {
   return apiFetchJson<PushTestResponse>("/api/devices/push-test", input ? { method: "POST", body: input } : { method: "POST" });

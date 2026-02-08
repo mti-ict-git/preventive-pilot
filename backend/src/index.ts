@@ -2505,6 +2505,24 @@ const allowedOriginsList = String(env.FRONTEND_ORIGIN ?? "")
 const allowAllOrigins = allowedOriginsList.includes("*");
 const ngrokOriginPattern = /^https:\/\/[a-z0-9-]+\.ngrok-free\.app$/i;
 
+type OriginMatcher = {
+  raw: string;
+  test: (origin: string) => boolean;
+};
+
+const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const originMatchers: OriginMatcher[] = allowedOriginsList
+  .filter((v) => v !== "*")
+  .map((raw) => {
+    if (!raw.includes("*")) {
+      return { raw, test: (origin: string) => origin === raw };
+    }
+    const pattern = "^" + raw.split("*").map(escapeRegex).join(".*") + "$";
+    const re = new RegExp(pattern, "i");
+    return { raw, test: (origin: string) => re.test(origin) };
+  });
+
 const originConfig: CorsOptions["origin"] = (origin, callback) => {
   if (allowAllOrigins) {
     callback(null, true);
@@ -2516,7 +2534,7 @@ const originConfig: CorsOptions["origin"] = (origin, callback) => {
     return;
   }
 
-  if (allowedOriginsList.includes(origin) || ngrokOriginPattern.test(origin)) {
+  if (ngrokOriginPattern.test(origin) || originMatchers.some((m) => m.test(origin))) {
     callback(null, true);
     return;
   }

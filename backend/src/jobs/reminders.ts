@@ -716,23 +716,28 @@ const getFirebaseMessaging = async (): Promise<Messaging | null> => {
   if (messagingPromise) return messagingPromise;
 
   messagingPromise = (async () => {
-    const jsonBase64 = (env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 ?? "").trim();
-    const path = (env.FIREBASE_SERVICE_ACCOUNT_PATH ?? "").trim();
+    try {
+      const jsonBase64 = (env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 ?? "").trim();
+      const path = (env.FIREBASE_SERVICE_ACCOUNT_PATH ?? "").trim();
 
-    let rawJson = "";
-    if (jsonBase64) {
-      rawJson = Buffer.from(jsonBase64, "base64").toString("utf8");
-    } else if (path) {
-      rawJson = await readFile(path, "utf8");
-    } else {
+      let rawJson = "";
+      if (jsonBase64) {
+        rawJson = Buffer.from(jsonBase64, "base64").toString("utf8");
+      } else if (path) {
+        rawJson = await readFile(path, "utf8");
+      } else {
+        return null;
+      }
+
+      const serviceAccount = JSON.parse(rawJson) as ServiceAccount;
+      if (getApps().length === 0) {
+        initializeApp({ credential: cert(serviceAccount) });
+      }
+      return getMessaging();
+    } catch {
+      messagingPromise = null;
       return null;
     }
-
-    const serviceAccount = JSON.parse(rawJson) as ServiceAccount;
-    if (getApps().length === 0) {
-      initializeApp({ credential: cert(serviceAccount) });
-    }
-    return getMessaging();
   })();
 
   return messagingPromise;
@@ -760,7 +765,10 @@ const sendPush = async (token: string, title: string, body: string, data: Record
       data,
     }),
   });
-  if (!res.ok) throw new Error("FCM send failed: " + String(res.status));
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`FCM send failed (${res.status}): ${text.slice(0, 200)}`);
+  }
 };
 
 const sendPushNotification = async (payload: unknown): Promise<void> => {

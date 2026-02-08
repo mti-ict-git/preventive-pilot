@@ -187,6 +187,7 @@ Required environment variables:
 - Home recent tasks show asset thumbnails when image URLs are available.
 - Home highlights overdue tasks with an attention banner and resolve action.
 - Asset Detail displays real asset images when available.
+- Android back button navigates to the previous in-app screen before exiting.
 - Profile & Settings shows authenticated user info and local preferences for theme and notifications.
 
 ### Backdated completion (supervisor+)

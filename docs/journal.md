@@ -35,6 +35,16 @@
 - Repo: ignored firebase-adminsdk JSON files to prevent committing secrets.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sun Feb  8 12:43:52 WITA 2026
+- Backend: push-test returns detailed failure reasons and configUsed.
+- Backend: Firebase Admin init failures no longer block legacy FCM fallback.
+- Web: Push Test toast shows first failure reason for faster debugging.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 12:48:50 WITA 2026
+- Backend: improved CORS allowlist to support wildcard origins via FRONTEND_ORIGIN.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 08:43:43 WITA 2026
 - Mobile (pm-tech): added Capacitor Android scaffolding (appId com.merdekatsingshan.pmtech, appName MTI Mobile PM).
 - Mobile (pm-tech): added biometric login using native secure storage for refresh token (kept on logout).
@@ -1239,3 +1249,6 @@
 
 ## Sun Feb  8 11:59:34 WITA 2026
 - Mobile (pm-tech): set Asset Detail image background to white.
+
+## Sun Feb  8 12:36:54 WITA 2026
+- Mobile (pm-tech): handle Android back button to navigate app history.
