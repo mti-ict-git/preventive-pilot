@@ -171,6 +171,26 @@ const Notifications = () => {
     },
   });
 
+  const togglePushMutation = useMutation({
+    mutationFn: async (input: { enable: boolean; channel: NotificationChannel | null }) => {
+      if (input.channel) {
+        await apiUpdateNotificationChannel({ channelId: input.channel.id, isActive: input.enable });
+        return;
+      }
+      if (input.enable) {
+        await apiCreateNotificationChannel({ channelType: "Push", channelName: "Push", isActive: true });
+      }
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["notification-channels"] });
+      toast({ title: variables.enable ? "Push enabled" : "Push disabled" });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to update push channel";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    },
+  });
+
   const deleteChannelMutation = useMutation({
     mutationFn: async (input: { channelId: string }) => apiDeleteNotificationChannel({ channelId: input.channelId }),
     onSuccess: async () => {
@@ -382,6 +402,13 @@ const Notifications = () => {
     for (const c of channelItems) map.set(c.id, c);
     return map;
   }, [channelItems]);
+
+  const pushChannel = useMemo(() => {
+    return channelItems.find((channel) => channel.channelType.toLowerCase() === "push") ?? null;
+  }, [channelItems]);
+
+  const pushActive = Boolean(pushChannel?.isActive);
+  const focusRingClass = "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
   const reminderRules = useMemo(() => {
     return ruleItems.filter((r) => r.offsetDays !== null);
@@ -712,7 +739,45 @@ const Notifications = () => {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
+                {/* Push Channel (Special Handling) */}
+                <div className="p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        pushActive ? "bg-success/20" : "bg-warning/20"
+                      }`}
+                    >
+                      <Bell className={`w-5 h-5 ${pushActive ? "text-success" : "text-warning"}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">Push Notification</p>
+                      <p className="text-sm text-muted-foreground capitalize">
+                        {pushActive ? "active" : "inactive"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      checked={pushActive}
+                      onCheckedChange={(checked) =>
+                        togglePushMutation.mutate({ enable: checked, channel: pushChannel })
+                      }
+                      disabled={togglePushMutation.isPending}
+                    />
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      title="Test Push"
+                      onClick={() => pushTestMutation.mutate()}
+                      disabled={pushTestMutation.isPending}
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
                 {channelsQuery.isLoading ? (
                   <div className="text-sm text-muted-foreground">Loading channels…</div>
                 ) : channelsQuery.isError ? (
@@ -720,7 +785,9 @@ const Notifications = () => {
                 ) : channelItems.length === 0 ? (
                   <div className="text-sm text-muted-foreground">No channels configured.</div>
                 ) : (
-                  channelItems.map((channel) => {
+                  channelItems
+                    .filter((c) => c.channelType.toLowerCase() !== "push")
+                    .map((channel) => {
                     const Icon = getChannelIcon(channel.channelType);
                     const active = channel.isActive;
                     return (

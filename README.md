@@ -260,6 +260,7 @@ Required environment variables:
   - `task_approved` when a supervisor or superadmin approves a PM task
   - `task_rejected` when a supervisor or superadmin rejects a PM task
 - Push broadcast is available via `POST /api/devices/push-broadcast` for Admin/Superadmin announcements.
+- Notifications page includes a Push channel card to enable/disable push and run push tests.
 - Existing reminder and escalation rules can be edited from the Notifications page using the pencil icon next to each rule.
 - Reminder rules send Microsoft Graph emails (and optional WhatsApp messages) primarily to the task's assigned technician; if a task is unassigned or the technician has no email/phone, the system falls back to the rule's global recipients.
 - Message templates support the following placeholders, which are replaced per task when notifications are sent:

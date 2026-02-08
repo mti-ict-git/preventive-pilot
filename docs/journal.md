@@ -1,5 +1,20 @@
 # Journal
 
+## Sun Feb  8 19:45:09 WITA 2026
+- Mobile (pm-tech): show app version in Profile > Account > About Version.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 19:39:21 WITA 2026
+- Mobile (pm-tech): bump app version to 1.0.0.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 19:43:15 WITA 2026
+- Web: refactored Push channel card to match existing channel list UI/UX.
+
+## Sun Feb  8 19:39:15 WITA 2026
+- Web: added Push channel card with enable/disable toggle and push test.
+- README: documented Push channel card in Notifications section.
+
 ## Sun Feb  8 18:55:27 WITA 2026
 - Backend: validate device platform as ios/android/web and normalize broadcast audience.
 - Backend: add fallback Firebase service account path for local dev.
