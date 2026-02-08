@@ -52,6 +52,10 @@ import {
   apiCreateNotificationChannel,
   apiDeleteNotificationChannel,
   ApiError,
+  DEFAULT_NOTIFICATION_RULE_TEMPLATES,
+  PUSH_RULE_AUDIENCE_BY_EVENT,
+  isNotificationRuleEventType,
+  type NotificationRuleEventType,
   type NotificationChannel,
   type NotificationRule,
   type NotificationLogEntry,
@@ -80,7 +84,10 @@ const Notifications = () => {
   const [offsetDays, setOffsetDays] = useState<string>("0");
   const [escalateAfterDays, setEscalateAfterDays] = useState<string>("1");
   const [ruleChannelId, setRuleChannelId] = useState<string>("");
+  const [ruleChannelType, setRuleChannelType] = useState<string>("");
   const [messageTemplate, setMessageTemplate] = useState<string>("");
+  const [pushTitleTemplate, setPushTitleTemplate] = useState<string>("");
+  const [pushBodyTemplate, setPushBodyTemplate] = useState<string>("");
   const [ruleActive, setRuleActive] = useState<boolean>(true);
 
   const [channelModalOpen, setChannelModalOpen] = useState<boolean>(false);
@@ -100,6 +107,37 @@ const Notifications = () => {
   const joinList = (value: string[]): string => {
     return value.join(", ");
   };
+
+  const renderTemplatePreview = (template: string, values: Record<string, string>): string => {
+    return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
+      return values[key] ?? "";
+    });
+  };
+
+  const parsePushTemplate = (value: string): { title: string; body: string } => {
+    const text = value.trim();
+    if (!text) return { title: "", body: "" };
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (typeof parsed !== "object" || parsed === null) return { title: "", body: text };
+      const obj = parsed as Record<string, unknown>;
+      const title = typeof obj.title === "string" ? obj.title : "";
+      const body = typeof obj.body === "string" ? obj.body : "";
+      if (!title && !body) return { title: "", body: text };
+      return { title, body };
+    } catch {
+      return { title: "", body: text };
+    }
+  };
+
+  const buildPushTemplate = (title: string, body: string): string | null => {
+    const t = title.trim();
+    const b = body.trim();
+    if (!t && !b) return null;
+    return JSON.stringify({ title: t || undefined, body: b || undefined });
+  };
+
+  const isPushChannelType = (value: string): boolean => value.toLowerCase().includes("push");
 
   const [mailToText, setMailToText] = useState<string>("");
   const [mailCcText, setMailCcText] = useState<string>("");
@@ -361,11 +399,15 @@ const Notifications = () => {
 
   const saveRuleMutation = useMutation({
     mutationFn: async () => {
+      const ruleMessageTemplate = isPushChannelType(ruleChannelType)
+        ? buildPushTemplate(pushTitleTemplate, pushBodyTemplate)
+        : (messageTemplate.trim() ? messageTemplate : null);
+
       const base = {
         ruleName: ruleName.trim(),
         eventType: eventType.trim(),
         channelId: ruleChannelId,
-        messageTemplate: messageTemplate.trim() ? messageTemplate : null,
+        messageTemplate: ruleMessageTemplate,
         isActive: ruleActive,
       };
       if (ruleModalMode === "create") {
@@ -476,6 +518,39 @@ const Notifications = () => {
   const pushActive = Boolean(pushChannel?.isActive);
   const focusRingClass = "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
+  const ruleChannelTypeItems = useMemo((): string[] => {
+    const types = new Set<string>();
+    for (const c of channelItems) {
+      if (c.channelType.trim()) types.add(c.channelType);
+    }
+    types.add("Push");
+    return Array.from(types).sort((a, b) => a.localeCompare(b));
+  }, [channelItems]);
+
+  const ruleChannelsForSelectedType = useMemo((): NotificationChannel[] => {
+    const t = ruleChannelType.trim();
+    if (!t) return channelItems;
+    return channelItems.filter((c) => c.channelType === t);
+  }, [channelItems, ruleChannelType]);
+
+  const previewValues = useMemo<Record<string, string>>(() => {
+    const nowIso = new Date().toISOString();
+    return {
+      taskNumber: "PM-0001",
+      assetTag: "A-001",
+      assetName: "Main Pump",
+      templateName: "Monthly PM",
+      dueAt: nowIso,
+      technicianNumber: "6281234567890",
+      approvalStage: "supervisor",
+      approvedAt: nowIso,
+      approvedByName: "Supervisor",
+      rejectedAt: nowIso,
+      rejectionReason: "Checklist incomplete",
+      rejectedByName: "Supervisor",
+    };
+  }, []);
+
   const reminderRules = useMemo(() => {
     return ruleItems.filter((r) => r.offsetDays !== null);
   }, [ruleItems]);
@@ -512,6 +587,24 @@ const Notifications = () => {
       setEventType("task_overdue");
     }
   }, [ruleModalType]);
+
+  useEffect(() => {
+    if (!ruleModalOpen) return;
+    if (ruleModalMode !== "create") return;
+    if (!isNotificationRuleEventType(eventType)) return;
+    const key = eventType as NotificationRuleEventType;
+    const defaults = DEFAULT_NOTIFICATION_RULE_TEMPLATES[key];
+    if (isPushChannelType(ruleChannelType)) {
+      if (!pushTitleTemplate.trim() && !pushBodyTemplate.trim()) {
+        setPushTitleTemplate(defaults.push.title);
+        setPushBodyTemplate(defaults.push.body);
+      }
+      return;
+    }
+    if (!messageTemplate.trim()) {
+      setMessageTemplate(defaults.message);
+    }
+  }, [ruleModalOpen, ruleModalMode, ruleChannelType, eventType]);
 
   const isChannelTestable = (channelType: string): boolean => {
     const value = channelType.toLowerCase();
@@ -690,6 +783,7 @@ const Notifications = () => {
                     variant="outline"
                     className="gap-2"
                     onClick={() => {
+                      const defaultChannel = channelItems[0] ?? null;
                       setRuleModalMode("create");
                       setRuleModalType("reminder");
                       setRuleId(null);
@@ -697,8 +791,11 @@ const Notifications = () => {
                       setEventType("task_due");
                       setOffsetDays("0");
                       setEscalateAfterDays("1");
-                      setRuleChannelId(channelItems[0]?.id ?? "");
+                      setRuleChannelType(defaultChannel?.channelType ?? "");
+                      setRuleChannelId(defaultChannel?.id ?? "");
                       setMessageTemplate("");
+                      setPushTitleTemplate("");
+                      setPushBodyTemplate("");
                       setRuleActive(true);
                       setRuleModalOpen(true);
                     }}
@@ -737,6 +834,7 @@ const Notifications = () => {
                           <Pencil
                             className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground"
                             onClick={() => {
+                              const cType = channelById.get(rule.channel.id)?.channelType ?? rule.channel.channelType;
                               setRuleModalMode("edit");
                               const isEsc = rule.escalateAfterDays !== null;
                               setRuleModalType(isEsc ? "escalation" : "reminder");
@@ -746,7 +844,17 @@ const Notifications = () => {
                               setOffsetDays(String(rule.offsetDays ?? 0));
                               setEscalateAfterDays(String(rule.escalateAfterDays ?? 1));
                               setRuleChannelId(rule.channel.id);
-                              setMessageTemplate(rule.messageTemplate ?? "");
+                              setRuleChannelType(cType);
+                              if (isPushChannelType(cType)) {
+                                const parsed = parsePushTemplate(rule.messageTemplate ?? "");
+                                setPushTitleTemplate(parsed.title);
+                                setPushBodyTemplate(parsed.body);
+                                setMessageTemplate("");
+                              } else {
+                                setPushTitleTemplate("");
+                                setPushBodyTemplate("");
+                                setMessageTemplate(rule.messageTemplate ?? "");
+                              }
                               setRuleActive(rule.isActive);
                               setRuleModalOpen(true);
                             }}
@@ -783,6 +891,7 @@ const Notifications = () => {
                     variant="outline"
                     className="gap-2"
                     onClick={() => {
+                      const defaultChannel = channelItems[0] ?? null;
                       setRuleModalMode("create");
                       setRuleModalType("escalation");
                       setRuleId(null);
@@ -790,8 +899,11 @@ const Notifications = () => {
                       setEventType("task_overdue");
                       setOffsetDays("0");
                       setEscalateAfterDays("1");
-                      setRuleChannelId(channelItems[0]?.id ?? "");
+                      setRuleChannelType(defaultChannel?.channelType ?? "");
+                      setRuleChannelId(defaultChannel?.id ?? "");
                       setMessageTemplate("");
+                      setPushTitleTemplate("");
+                      setPushBodyTemplate("");
                       setRuleActive(true);
                       setRuleModalOpen(true);
                     }}
@@ -828,6 +940,7 @@ const Notifications = () => {
                         <Pencil
                           className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground"
                           onClick={() => {
+                            const cType = channelById.get(rule.channel.id)?.channelType ?? rule.channel.channelType;
                             setRuleModalMode("edit");
                             const isEsc = rule.escalateAfterDays !== null;
                             setRuleModalType(isEsc ? "escalation" : "reminder");
@@ -837,7 +950,17 @@ const Notifications = () => {
                             setOffsetDays(String(rule.offsetDays ?? 0));
                             setEscalateAfterDays(String(rule.escalateAfterDays ?? 1));
                             setRuleChannelId(rule.channel.id);
-                            setMessageTemplate(rule.messageTemplate ?? "");
+                            setRuleChannelType(cType);
+                            if (isPushChannelType(cType)) {
+                              const parsed = parsePushTemplate(rule.messageTemplate ?? "");
+                              setPushTitleTemplate(parsed.title);
+                              setPushBodyTemplate(parsed.body);
+                              setMessageTemplate("");
+                            } else {
+                              setPushTitleTemplate("");
+                              setPushBodyTemplate("");
+                              setMessageTemplate(rule.messageTemplate ?? "");
+                            }
                             setRuleActive(rule.isActive);
                             setRuleModalOpen(true);
                           }}
@@ -1300,40 +1423,102 @@ const Notifications = () => {
               </div>
             )}
             <div className="col-span-12 md:col-span-6 space-y-2">
+              <Label>Channel Type</Label>
+              <Select
+                value={ruleChannelType}
+                onValueChange={(nextType) => {
+                  setRuleChannelType(nextType);
+                  const first = channelItems.find((c) => c.channelType === nextType) ?? null;
+                  setRuleChannelId(first?.id ?? "");
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Channel Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ruleChannelTypeItems.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-12 md:col-span-6 space-y-2">
               <Label>Channel</Label>
-              <Select value={ruleChannelId} onValueChange={setRuleChannelId}>
+              <Select
+                value={ruleChannelId}
+                onValueChange={(id) => {
+                  setRuleChannelId(id);
+                  const c = channelById.get(id) ?? null;
+                  if (c) setRuleChannelType(c.channelType);
+                }}
+              >
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Channel" />
                 </SelectTrigger>
                 <SelectContent>
-                  {channelItems.map((c) => (
+                  {ruleChannelsForSelectedType.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.channelName ?? c.channelType}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-12 space-y-2">
-              <Label>Message Template</Label>
-              <Textarea
-                value={messageTemplate}
-                onChange={(e) => setMessageTemplate(e.target.value)}
-                className="bg-muted/50"
-                rows={4}
-              />
-              <p className="text-xs text-muted-foreground">
-                Available placeholders: {"{{taskNumber}}"}, {"{{assetTag}}"}, {"{{assetName}}"}, {"{{templateName}}"}, {"{{dueAt}}"}, {"{{technicianNumber}}"}, {"{{approvalStage}}"}, {"{{approvedAt}}"}, {"{{approvedByName}}"}, {"{{rejectedAt}}"}, {"{{rejectionReason}}"}, {"{{rejectedByName}}"}.
-                This template is rendered per task and used as the <code>{"{{message}}"}</code> value in email and WhatsApp notifications.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Example (Due): <code>{"Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}}). @{{technicianNumber}}"}</code>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Example (Approved): <code>{"Task {{taskNumber}} {{approvalStage}} approved at {{approvedAt}} by {{approvedByName}}"}</code>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Example (Rejected): <code>{"Task {{taskNumber}} rejected at {{rejectedAt}} by {{rejectedByName}}. Reason: {{rejectionReason}}"}</code>
-              </p>
-            </div>
+            {isPushChannelType(ruleChannelType) ? (
+              <div className="col-span-12 space-y-3">
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 md:col-span-6 space-y-2">
+                    <Label>Title Template</Label>
+                    <Input value={pushTitleTemplate} onChange={(e) => setPushTitleTemplate(e.target.value)} className="bg-muted/50" />
+                  </div>
+                  <div className="col-span-12 md:col-span-6 space-y-2">
+                    <Label>Body Template</Label>
+                    <Textarea value={pushBodyTemplate} onChange={(e) => setPushBodyTemplate(e.target.value)} className="bg-muted/50" rows={3} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 md:col-span-6">
+                    <p className="text-xs text-muted-foreground">Title Preview</p>
+                    <pre className="mt-1 text-xs bg-muted/30 p-2 rounded overflow-x-auto">
+                      {renderTemplatePreview(pushTitleTemplate || (isNotificationRuleEventType(eventType) ? DEFAULT_NOTIFICATION_RULE_TEMPLATES[eventType as NotificationRuleEventType].push.title : ""), previewValues)}
+                    </pre>
+                  </div>
+                  <div className="col-span-12 md:col-span-6">
+                    <p className="text-xs text-muted-foreground">Body Preview</p>
+                    <pre className="mt-1 text-xs bg-muted/30 p-2 rounded overflow-x-auto">
+                      {renderTemplatePreview(pushBodyTemplate || (isNotificationRuleEventType(eventType) ? DEFAULT_NOTIFICATION_RULE_TEMPLATES[eventType as NotificationRuleEventType].push.body : ""), previewValues)}
+                    </pre>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Available placeholders: {"{{taskNumber}}"}, {"{{assetName}}"}, {"{{dueAt}}"}, {"{{rejectionReason}}"}.
+                </p>
+                {isNotificationRuleEventType(eventType) && PUSH_RULE_AUDIENCE_BY_EVENT[eventType as NotificationRuleEventType] === "assigned_technician" ? (
+                  <p className="text-xs text-muted-foreground">Audience: Assigned technician devices.</p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="col-span-12 space-y-2">
+                <Label>Message Template</Label>
+                <Textarea
+                  value={messageTemplate}
+                  onChange={(e) => setMessageTemplate(e.target.value)}
+                  className="bg-muted/50"
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Available placeholders: {"{{taskNumber}}"}, {"{{assetTag}}"}, {"{{assetName}}"}, {"{{templateName}}"}, {"{{dueAt}}"}, {"{{technicianNumber}}"}, {"{{approvalStage}}"}, {"{{approvedAt}}"}, {"{{approvedByName}}"}, {"{{rejectedAt}}"}, {"{{rejectionReason}}"}, {"{{rejectedByName}}"}.
+                  This template is rendered per task and used as the <code>{"{{message}}"}</code> value in email and WhatsApp notifications.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Example (Due): <code>{"Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}}). @{{technicianNumber}}"}</code>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Example (Approved): <code>{"Task {{taskNumber}} {{approvalStage}} approved at {{approvedAt}} by {{approvedByName}}"}</code>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Example (Rejected): <code>{"Task {{taskNumber}} rejected at {{rejectedAt}} by {{rejectedByName}}. Reason: {{rejectionReason}}"}</code>
+                </p>
+              </div>
+            )}
             <div className="col-span-12">
               <div className="flex items-center justify-between rounded-lg border border-border p-3">
                 <div>
@@ -1368,6 +1553,7 @@ const Notifications = () => {
                   <SelectItem value="Mail">Mail</SelectItem>
                   <SelectItem value="Teams">Teams</SelectItem>
                   <SelectItem value="WhatsApp">WhatsApp</SelectItem>
+                  <SelectItem value="Push">Push</SelectItem>
                 </SelectContent>
               </Select>
             </div>

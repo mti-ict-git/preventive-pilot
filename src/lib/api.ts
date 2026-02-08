@@ -1627,6 +1627,72 @@ export type NotificationRule = {
   updatedAt: string;
 };
 
+export type NotificationRuleEventType = "task_due" | "task_overdue" | "task_assigned" | "task_approved" | "task_rejected";
+
+export type NotificationRuleKind = "reminder" | "escalation";
+
+export type KnownNotificationChannelType = "Mail" | "Teams" | "WhatsApp" | "Push";
+
+export type PushTemplate = { title: string; body: string };
+
+export const DEFAULT_NOTIFICATION_RULE_TEMPLATES: Record<NotificationRuleEventType, { message: string; push: PushTemplate }> = {
+  task_due: {
+    message: "Task {{taskNumber}} for {{assetName}} is due at {{dueAt}} ({{templateName}}). @{{technicianNumber}}",
+    push: {
+      title: "Task Due",
+      body: "Task {{taskNumber}} ({{assetName}}) is due {{dueAt}}.",
+    },
+  },
+  task_overdue: {
+    message: "Task {{taskNumber}} for {{assetName}} is overdue since {{dueAt}} ({{templateName}}). @{{technicianNumber}}",
+    push: {
+      title: "Task Overdue",
+      body: "Task {{taskNumber}} ({{assetName}}) is overdue since {{dueAt}}.",
+    },
+  },
+  task_assigned: {
+    message: "You have been assigned PM task {{taskNumber}} for {{assetName}} ({{templateName}}), due at {{dueAt}}.",
+    push: {
+      title: "Task Assigned",
+      body: "You have been assigned {{taskNumber}} ({{assetName}}). Due {{dueAt}}.",
+    },
+  },
+  task_approved: {
+    message: "Task {{taskNumber}} {{approvalStage}} approved at {{approvedAt}} by {{approvedByName}}",
+    push: {
+      title: "Task Approved",
+      body: "Task {{taskNumber}} was {{approvalStage}} approved at {{approvedAt}} by {{approvedByName}}.",
+    },
+  },
+  task_rejected: {
+    message: "Task {{taskNumber}} rejected at {{rejectedAt}} by {{rejectedByName}}. Reason: {{rejectionReason}}",
+    push: {
+      title: "Task Rejected",
+      body: "Task {{taskNumber}} was rejected at {{rejectedAt}}. Reason: {{rejectionReason}}.",
+    },
+  },
+};
+
+export type PushRuleAudience = "assigned_technician";
+
+export const PUSH_RULE_AUDIENCE_BY_EVENT: Record<NotificationRuleEventType, PushRuleAudience> = {
+  task_due: "assigned_technician",
+  task_overdue: "assigned_technician",
+  task_assigned: "assigned_technician",
+  task_approved: "assigned_technician",
+  task_rejected: "assigned_technician",
+};
+
+export const isNotificationRuleEventType = (value: string): value is NotificationRuleEventType => {
+  return (
+    value === "task_due" ||
+    value === "task_overdue" ||
+    value === "task_assigned" ||
+    value === "task_approved" ||
+    value === "task_rejected"
+  );
+};
+
 export type NotificationLogEntry = {
   id: string;
   taskId: string | null;

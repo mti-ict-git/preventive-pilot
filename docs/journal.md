@@ -1,5 +1,14 @@
 # Journal
 
+## Sun Feb  8 22:27:34 WITA 2026
+- Web: added Push rule template support (channel type select + title/body templates + preview).
+- Backend: parse rendered Push JSON template into notification title/body on send.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 21:38:22 WITA 2026
+- Mobile (pm-tech): updated Home header title to “OPTIMA Mobile”.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 21:21:06 WITA 2026
 - Mobile (pm-tech): updated login header/subtitle copy.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

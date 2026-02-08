@@ -778,11 +778,40 @@ const sendPushNotification = async (payload: unknown): Promise<void> => {
   if (!userId) throw new Error("No user to notify");
   const tokens = await loadUserDeviceTokens(userId);
   if (tokens.length === 0) throw new Error("No device tokens");
-  const title = p.rule?.eventType === "task_assigned" ? "Task Assigned" : "Notification";
-  const body = p.message;
+
+  const defaultTitle = (() => {
+    const eventType = typeof p.rule?.eventType === "string" ? p.rule.eventType : "";
+    if (eventType === "task_assigned") return "Task Assigned";
+    if (eventType === "task_due") return "Task Due";
+    if (eventType === "task_overdue") return "Task Overdue";
+    if (eventType === "task_approved") return "Task Approved";
+    if (eventType === "task_rejected") return "Task Rejected";
+    return "Notification";
+  })();
+
+  const rendered = typeof p.message === "string" ? p.message : "";
+  const parsed: { title: string; body: string } = (() => {
+    const text = rendered.trim();
+    if (!text) return { title: defaultTitle, body: "" };
+    try {
+      const json: unknown = JSON.parse(text);
+      if (typeof json !== "object" || json === null) return { title: defaultTitle, body: text };
+      const obj = json as Record<string, unknown>;
+      const title = typeof obj.title === "string" && obj.title.trim() ? obj.title.trim() : defaultTitle;
+      const body = typeof obj.body === "string" ? obj.body : "";
+      if (!body.trim()) return { title, body: "" };
+      return { title, body };
+    } catch {
+      return { title: defaultTitle, body: text };
+    }
+  })();
+
+  const title = parsed.title;
+  const body = parsed.body;
   const data: Record<string, string> = {
     taskId: p.task?.id ?? "",
     taskNumber: p.task?.taskNumber ?? "",
+    eventType: typeof p.rule?.eventType === "string" ? p.rule.eventType : "",
   };
   for (const t of tokens) {
     await sendPush(t.token, title, body, data);
