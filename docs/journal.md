@@ -63,6 +63,15 @@
 - Docker: added http://localhost to default FRONTEND_ORIGIN for api service.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sun Feb  8 13:58:34 WITA 2026
+- Mobile (pm-tech): disable submit-for-approval while task is paused.
+- Mobile (pm-tech): disable pause/resume actions when approval is locked.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:53:22 WITA 2026
+- Mobile (pm-tech): allow any file type for task and checklist attachments.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 13:35:30 WITA 2026
 - Docker: mounted evidence storage into api container for checklist evidence download.
 - Docker: added EVIDENCE_STORAGE_HOST_PATH volume mapping to /app/shared-documents.
@@ -1280,3 +1289,10 @@
 
 ## Sun Feb  8 12:36:54 WITA 2026
 - Mobile (pm-tech): handle Android back button to navigate app history.
+
+## Sun Feb  8 13:40:38 WITA 2026
+- Mobile (pm-tech): add supervisor assignment sheet for PM tasks and CM work orders.
+- Mobile (pm-tech): surface assignee badge and assign/reassign action in headers.
+
+## Sun Feb  8 13:53:48 WITA 2026
+- Backend: allow production web origin in CORS allowlist via FRONTEND_ORIGIN.

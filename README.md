@@ -182,6 +182,7 @@ Required environment variables:
 - Work Orders tab lists CM work orders with status tabs and search.
 - Work Order detail supports checklist completion, evidence upload, and CM lifecycle actions.
 - Asset Detail Breakdown button opens a report form that creates CM work orders.
+- Supervisors and above can assign or reassign PM tasks and work orders to technicians.
 - PM Tasks tabs show status count badges.
 - PM Tech mobile prefers ngrok discovery for API base and falls back to direct backend on timeout.
 - Home recent tasks show asset thumbnails when image URLs are available.
