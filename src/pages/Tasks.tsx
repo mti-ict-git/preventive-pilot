@@ -44,6 +44,8 @@ import {
   apiListUsers,
   ApiError,
   apiGetTask,
+  apiGetTaskDraft,
+  apiSaveTaskDraft,
   apiListTasks,
   apiStartTask,
   apiPauseTask,
@@ -62,7 +64,7 @@ import {
   type UserSummary,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { isManager, isSuperadmin, hasRole } from "@/lib/auth";
+import { isManager, isSuperadmin, hasRole, getJwtClaims } from "@/lib/auth";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
@@ -697,9 +699,41 @@ export const TaskDetailDialog = (props: {
   onStarted: () => Promise<void>;
   onCompleted?: () => Promise<void> | void;
 }) => {
+  const checklistDraftStorageKey = (id: string): string => `pm-web.checklistDraft.${id}`;
+  const checklistDraftSavedAtStorageKey = (id: string): string => `pm-web.checklistDraftSavedAt.${id}`;
+  const parseChecklistDraft = (
+    raw: string,
+  ): Record<string, { outcome: 0 | 1 | 2 | null; notes: string }> | null => {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      const record = parsed as Record<string, unknown>;
+      const next: Record<string, { outcome: 0 | 1 | 2 | null; notes: string }> = {};
+      for (const [key, value] of Object.entries(record)) {
+        if (typeof key !== "string" || !key.trim()) continue;
+        if (!value || typeof value !== "object") continue;
+        const v = value as Record<string, unknown>;
+        const outcome = v.outcome;
+        const notes = v.notes;
+        const validOutcome = outcome === null || outcome === 0 || outcome === 1 || outcome === 2;
+        if (!validOutcome) continue;
+        if (typeof notes !== "string") continue;
+        next[key] = { outcome: outcome as 0 | 1 | 2 | null, notes };
+      }
+      return next;
+    } catch {
+      return null;
+    }
+  };
   const taskQuery = useQuery({
     queryKey: ["task", props.taskId],
     queryFn: () => apiGetTask(props.taskId ?? ""),
+    enabled: props.open && !!props.taskId,
+  });
+
+  const draftQuery = useQuery({
+    queryKey: ["taskDraft", props.taskId],
+    queryFn: () => apiGetTaskDraft(props.taskId ?? ""),
     enabled: props.open && !!props.taskId,
   });
 
@@ -943,7 +977,13 @@ export const TaskDetailDialog = (props: {
   });
 
 	const normalizedStatus = task?.status.toLowerCase() ?? null;
-	const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
+  const claims = getJwtClaims();
+  const myUserId = claims?.sub ?? null;
+  const canModify =
+    isManager() ||
+    (!!task?.assignedTo.userId && task.assignedTo.userId === myUserId) ||
+    (!!task?.assignedTo.roleName && hasRole(task.assignedTo.roleName));
+  const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
 	const canPause = normalizedStatus === "in_progress";
 	const canResume = normalizedStatus === "paused";
 	const canCancel = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
@@ -957,6 +997,11 @@ export const TaskDetailDialog = (props: {
 		normalizedStatus !== "cancelled" &&
 		!isPmWithActiveApproval;
 	const canReopen = normalizedStatus === "cancelled" && isManager();
+  const canSaveDraft =
+    normalizedStatus !== null &&
+    normalizedStatus !== "completed" &&
+    normalizedStatus !== "cancelled" &&
+    canModify;
 
   const canSubmitForApproval =
     task?.maintenanceType === "PM" &&
@@ -1007,6 +1052,7 @@ export const TaskDetailDialog = (props: {
   const [checklistDraft, setChecklistDraft] = useState<
     Record<string, { outcome: 0 | 1 | 2 | null; notes: string }>
   >({});
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [evidenceUri, setEvidenceUri] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -1051,7 +1097,31 @@ export const TaskDetailDialog = (props: {
         notes: item.result?.notes ?? "",
       };
     }
-    setChecklistDraft(next);
+    if (task?.id) {
+      const stored = parseChecklistDraft(localStorage.getItem(checklistDraftStorageKey(task.id)) ?? "");
+      const serverDraftItems = draftQuery.data?.items ?? [];
+      const merged: Record<string, { outcome: 0 | 1 | 2 | null; notes: string }> = {};
+      for (const [id, serverValue] of Object.entries(next)) {
+        const localValue = stored?.[id];
+        const serverDraft = serverDraftItems.find((d) => d.templateChecklistItemId === id) ?? null;
+        if (serverValue.outcome !== null) {
+          merged[id] = serverValue;
+        } else if (serverDraft) {
+          merged[id] = { outcome: serverDraft.outcome, notes: serverDraft.notes ?? "" };
+        } else if (localValue) {
+          merged[id] = localValue;
+        } else {
+          merged[id] = serverValue;
+        }
+      }
+      setChecklistDraft(merged);
+      const localSavedAt = localStorage.getItem(checklistDraftSavedAtStorageKey(task.id)) ?? null;
+      const newestServerSavedAt = serverDraftItems.length > 0 ? serverDraftItems[0]?.savedAt ?? null : null;
+      setDraftSavedAt(newestServerSavedAt ?? localSavedAt);
+    } else {
+      setChecklistDraft(next);
+      setDraftSavedAt(null);
+    }
     setEvidenceUri("");
     closePreview();
     setPendingChecklistItemId(null);
@@ -1059,7 +1129,37 @@ export const TaskDetailDialog = (props: {
 		setBackdateCompletedAt("");
 		setBackdateReason("");
 		setBackdateTechnicianName("");
-  }, [props.open, task?.id]);
+  }, [props.open, task?.id, draftQuery.data?.items]);
+
+  const handleSaveDraft = useCallback(async () => {
+    if (!task?.id) return;
+    const items = Object.entries(checklistDraft).map(([id, v]) => ({
+      templateChecklistItemId: id,
+      outcome: v.outcome,
+      notes: v.notes.trim() ? v.notes.trim() : null,
+    }));
+    try {
+      await apiSaveTaskDraft({ taskId: task.id, items, replace: true });
+      const savedAt = new Date().toISOString();
+      setDraftSavedAt(savedAt);
+      localStorage.setItem(checklistDraftStorageKey(task.id), JSON.stringify(checklistDraft));
+      localStorage.setItem(checklistDraftSavedAtStorageKey(task.id), savedAt);
+      toast({ title: "Draft saved to server" });
+    } catch (err) {
+      try {
+        localStorage.setItem(checklistDraftStorageKey(task.id), JSON.stringify(checklistDraft));
+        const savedAt = new Date().toISOString();
+        localStorage.setItem(checklistDraftSavedAtStorageKey(task.id), savedAt);
+        setDraftSavedAt(savedAt);
+        toast({ title: "Draft saved locally (offline)" });
+      } catch {}
+      toast({
+        title: "Failed to save draft to server",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    }
+  }, [task?.id, checklistDraft]);
 
   const uploadTaskEvidenceMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -1326,6 +1426,13 @@ export const TaskDetailDialog = (props: {
                 onClick={() => resumeMutation.mutate()}
               >
                 Resume
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!task || !canSaveDraft}
+                onClick={() => handleSaveDraft()}
+              >
+                Save Draft
               </Button>
             <Button
               variant="outline"

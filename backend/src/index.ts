@@ -1548,6 +1548,51 @@ const openApiSpec: OpenApiSchema = {
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },
+        "/api/tasks/{taskId}/draft": {
+          get: {
+            tags: ["Tasks"],
+            summary: "Get my draft checklist entries for task",
+            parameters: [
+              { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            ],
+            responses: {
+              "200": { description: "OK" },
+              "400": { description: "Invalid request" },
+              "403": { description: "Forbidden" },
+              "404": { description: "Not found" },
+            },
+            security: [{ bearerAuth: [] }],
+          },
+          patch: {
+            tags: ["Tasks"],
+            summary: "Save my draft checklist entries for task",
+            parameters: [
+              { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            ],
+            requestBody: { required: true },
+            responses: {
+              "200": { description: "OK" },
+              "400": { description: "Invalid request" },
+              "403": { description: "Forbidden" },
+              "404": { description: "Not found" },
+            },
+            security: [{ bearerAuth: [] }],
+          },
+          delete: {
+            tags: ["Tasks"],
+            summary: "Clear my draft checklist entries for task",
+            parameters: [
+              { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            ],
+            responses: {
+              "200": { description: "OK" },
+              "400": { description: "Invalid request" },
+              "403": { description: "Forbidden" },
+              "404": { description: "Not found" },
+            },
+            security: [{ bearerAuth: [] }],
+          },
+        },
       },
     },
     "/api/tasks/{taskId}/pause": {

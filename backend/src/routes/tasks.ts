@@ -109,6 +109,17 @@ const SubmitForApprovalSchema = z.object({
 	checklistResults: z.array(ChecklistResultSchema).default([]),
 });
 
+const DraftOutcomeSchema = z.union([z.literal(0), z.literal(1), z.literal(2)]).nullable();
+const TaskDraftItemSchema = z.object({
+  templateChecklistItemId: z.string().uuid(),
+  outcome: DraftOutcomeSchema,
+  notes: z.string().max(1024).nullable().optional(),
+});
+const SaveTaskDraftSchema = z.object({
+  items: z.array(TaskDraftItemSchema).default([]),
+  replace: z.boolean().optional().default(true),
+});
+
 const EvidenceSchema = z.object({
   uri: z.string().min(1).max(1024),
   fileName: z.string().max(256).nullable().optional(),
@@ -3951,6 +3962,243 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
     await tx.rollback().catch(() => undefined);
     throw err;
   }
+});
+
+tasksRouter.get("/:taskId/draft", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+  const db = await getDb();
+  const access = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+  const row = access.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  const accessRow: TaskAccessRow = {
+    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
+    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
+  };
+  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
+  const drafts = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .query(
+      [
+        "SELECT",
+        "  TemplateChecklistItemId AS TemplateChecklistItemId,",
+        "  Outcome AS Outcome,",
+        "  Notes AS Notes,",
+        "  SavedAt AS SavedAt",
+        "FROM pm.TaskDrafts",
+        "WHERE TaskId = @taskId AND SavedByUserId = @userId",
+        "ORDER BY SavedAt DESC",
+      ].join("\n"),
+    );
+
+  const items = (drafts.recordset as Array<Record<string, unknown>>).map((r) => ({
+    templateChecklistItemId: String(r.TemplateChecklistItemId),
+    outcome:
+      r.Outcome === null || r.Outcome === undefined
+        ? null
+        : Number(r.Outcome) === 0
+        ? 0
+        : Number(r.Outcome) === 1
+        ? 1
+        : Number(r.Outcome) === 2
+        ? 2
+        : null,
+    notes: typeof r.Notes === "string" ? (r.Notes as string) : null,
+    savedAt: (r.SavedAt as Date)?.toISOString?.() ?? null,
+  }));
+
+  res.json({ items });
+});
+
+tasksRouter.patch("/:taskId/draft", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+  const parsed = SaveTaskDraftSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+  const db = await getDb();
+  const access = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.Status AS Status,",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+  const row = access.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  const accessRow: TaskAccessRow = {
+    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
+    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
+  };
+  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const status = typeof row.Status === "string" ? (row.Status as string) : null;
+  if (status === "completed" || status === "cancelled") {
+    res.status(400).json({ message: "Invalid state" });
+    return;
+  }
+
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const ids = new Set<string>();
+    for (const item of parsed.data.items) {
+      ids.add(item.templateChecklistItemId);
+      const outcomeVal = item.outcome === null || item.outcome === undefined ? null : Number(item.outcome);
+      const notesVal = item.notes === undefined ? null : item.notes ?? null;
+      await tx
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .input("userId", sql.UniqueIdentifier, req.user.sub)
+        .input("templateChecklistItemId", sql.UniqueIdentifier, item.templateChecklistItemId)
+        .input("outcome", sql.TinyInt, outcomeVal)
+        .input("notes", sql.NVarChar(1024), notesVal)
+        .query(
+          [
+            "MERGE pm.TaskDrafts WITH (HOLDLOCK) AS t",
+            "USING (VALUES (@taskId, @templateChecklistItemId, @userId)) AS s(TaskId, TemplateChecklistItemId, SavedByUserId)",
+            "ON (t.TaskId = s.TaskId AND t.TemplateChecklistItemId = s.TemplateChecklistItemId AND t.SavedByUserId = s.SavedByUserId)",
+            "WHEN MATCHED THEN",
+            "  UPDATE SET Outcome = @outcome, Notes = @notes, SavedAt = sysutcdatetime()",
+            "WHEN NOT MATCHED THEN",
+            "  INSERT (TaskId, TemplateChecklistItemId, Outcome, Notes, SavedByUserId, SavedAt)",
+            "  VALUES (@taskId, @templateChecklistItemId, @outcome, @notes, @userId, sysutcdatetime());",
+          ].join("\n"),
+        );
+    }
+
+    if (parsed.data.replace) {
+      const idsCsv = Array.from(ids).join(",");
+      await tx
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .input("userId", sql.UniqueIdentifier, req.user.sub)
+        .input("idsCsv", sql.NVarChar(4000), idsCsv)
+        .query(
+          [
+            "DELETE FROM pm.TaskDrafts",
+            "WHERE TaskId = @taskId",
+            "  AND SavedByUserId = @userId",
+            "  AND TemplateChecklistItemId NOT IN (SELECT TRY_CAST(value AS uniqueidentifier) FROM string_split(@idsCsv, ','))",
+          ].join("\n"),
+        );
+    }
+
+    await writeAuditLog({
+      actorUserId: req.user.sub,
+      action: "task_draft.save",
+      entityType: "PMTask",
+      entityId: taskId,
+      metadata: { items: parsed.data.items.length },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers["user-agent"] ?? null,
+    });
+
+    await tx.commit();
+    res.json({ ok: true, savedCount: parsed.data.items.length });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
+});
+
+tasksRouter.delete("/:taskId/draft", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+  const db = await getDb();
+  const access = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+  const row = access.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  const accessRow: TaskAccessRow = {
+    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
+    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
+  };
+  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+
+  await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .query(
+      [
+        "DELETE FROM pm.TaskDrafts",
+        "WHERE TaskId = @taskId AND SavedByUserId = @userId",
+      ].join("\n"),
+    );
+
+  await writeAuditLog({
+    actorUserId: req.user.sub,
+    action: "task_draft.clear",
+    entityType: "PMTask",
+    entityId: taskId,
+    metadata: {},
+    ipAddress: req.ip ?? null,
+    userAgent: req.headers["user-agent"] ?? null,
+  });
+
+  res.json({ ok: true });
 });
 
 const RejectApprovalSchema = z.object({

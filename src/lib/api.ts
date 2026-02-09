@@ -523,6 +523,31 @@ export const apiGetTask = async (taskId: string): Promise<TaskDetail> => {
   return apiFetchJson<TaskDetail>(`/api/tasks/${taskId}`);
 };
 
+export type TaskDraftItem = {
+  templateChecklistItemId: string;
+  outcome: 0 | 1 | 2 | null;
+  notes: string | null;
+  savedAt?: string | null;
+};
+
+export const apiGetTaskDraft = async (taskId: string): Promise<{ items: TaskDraftItem[] }> => {
+  return apiFetchJson<{ items: TaskDraftItem[] }>(`/api/tasks/${taskId}/draft`);
+};
+
+export const apiSaveTaskDraft = async (
+  input: { taskId: string; items: TaskDraftItem[]; replace?: boolean },
+): Promise<{ ok: true; savedCount?: number }> => {
+  const { taskId, items, replace = true } = input;
+  return apiFetchJson<{ ok: true; savedCount?: number }>(`/api/tasks/${taskId}/draft`, {
+    method: "PATCH",
+    body: { items, replace },
+  });
+};
+
+export const apiDeleteTaskDraft = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/draft`, { method: "DELETE" });
+};
+
 export const apiSubmitTaskForApproval = async (
 	input: { taskId: string; checklistResults?: CompleteTaskChecklistResultInput[] } | string,
 ): Promise<{ ok: true }> => {

@@ -997,3 +997,26 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_PMSchedules_AssetI
 BEGIN
   CREATE INDEX IX_pm_PMSchedules_AssetId ON pm.PMSchedules(AssetId);
 END;
+
+IF OBJECT_ID(N'pm.TaskDrafts', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.TaskDrafts (
+    TaskDraftId uniqueidentifier NOT NULL CONSTRAINT DF_pm_TaskDrafts_TaskDraftId DEFAULT (newsequentialid()),
+    TaskId uniqueidentifier NOT NULL,
+    TemplateChecklistItemId uniqueidentifier NOT NULL,
+    Outcome tinyint NULL,
+    Notes nvarchar(2000) NULL,
+    SavedByUserId uniqueidentifier NOT NULL,
+    SavedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_TaskDrafts_SavedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_TaskDrafts PRIMARY KEY CLUSTERED (TaskDraftId),
+    CONSTRAINT FK_pm_TaskDrafts_PMTasks FOREIGN KEY (TaskId) REFERENCES pm.PMTasks(TaskId),
+    CONSTRAINT FK_pm_TaskDrafts_Checklist FOREIGN KEY (TemplateChecklistItemId) REFERENCES pm.PMTemplateChecklistItems(TemplateChecklistItemId),
+    CONSTRAINT FK_pm_TaskDrafts_Users FOREIGN KEY (SavedByUserId) REFERENCES pm.Users(UserId)
+  );
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_pm_TaskDrafts_TaskItemUser' AND object_id = OBJECT_ID(N'pm.TaskDrafts'))
+BEGIN
+  CREATE UNIQUE INDEX UX_pm_TaskDrafts_TaskItemUser
+  ON pm.TaskDrafts (TaskId, TemplateChecklistItemId, SavedByUserId);
+END;
