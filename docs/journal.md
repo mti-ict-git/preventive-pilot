@@ -1,5 +1,13 @@
 # Journal
 
+## Mon Feb  9 21:46:36 WITA 2026
+- Mobile (pm-tech): show asset notes on Asset Detail and Assets list preview.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Mon Feb  9 21:39:20 WITA 2026
+- Mobile (pm-tech): added Tasks search and sort controls.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 22:52:07 WITA 2026
 - Web: added new notification rule event types (Due Today, Revised, Submitted for approval, Pending superadmin).
 - Backend: enqueue immediate push notifications for approval workflow transitions with role-based audiences.
