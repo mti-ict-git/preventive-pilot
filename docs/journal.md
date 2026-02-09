@@ -1,5 +1,11 @@
 # Journal
 
+## Sun Feb  8 22:52:07 WITA 2026
+- Web: added new notification rule event types (Due Today, Revised, Submitted for approval, Pending superadmin).
+- Backend: enqueue immediate push notifications for approval workflow transitions with role-based audiences.
+- Backend: improved reminder rule default templates per event type and expanded push title mapping.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 22:27:34 WITA 2026
 - Web: added Push rule template support (channel type select + title/body templates + preview).
 - Backend: parse rendered Push JSON template into notification title/body on send.

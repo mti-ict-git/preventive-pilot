@@ -255,8 +255,11 @@ Required environment variables:
 ### Notification rules and templates
 
 - Configure notification channels and rules from the Notifications page.
-- Reminder and escalation rules are time-based (due/overdue), while immediate rules fire on lifecycle transitions:
+- Reminder and escalation rules are time-based (due/due-today/overdue), while immediate rules fire on lifecycle transitions:
   - `task_assigned` when a task is assigned or reassigned to a technician
+  - `task_submitted_for_approval` when a technician submits a PM task for approval
+  - `task_pending_superadmin` when a supervisor approves and escalates to superadmin approval
+  - `task_revised` when an approval is revised back to the technician
   - `task_approved` when a supervisor or superadmin approves a PM task
   - `task_rejected` when a supervisor or superadmin rejects a PM task
 - Push broadcast is available via `POST /api/devices/push-broadcast` for Admin/Superadmin announcements.
@@ -273,6 +276,7 @@ Required environment variables:
   - `{{approvalStage}}` (`supervisor` or `superadmin` for approvals/rejections)
   - `{{approvedAt}}` and `{{approvedByName}}`
   - `{{rejectedAt}}`, `{{rejectionReason}}`, and `{{rejectedByName}}`
+  - `{{revisionNote}}` (when an approval is revised)
   - `{{message}}` (the rendered per-rule message body)
 - Notification Channel config is typed per channel and overrides global settings:
   - Mail: to, cc, bcc, senderEmail, subjectTemplate, bodyTemplate, mergeMode (override|append).
