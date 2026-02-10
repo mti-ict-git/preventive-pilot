@@ -1,5 +1,22 @@
 # Journal
 
+## Mon Feb  9 22:45:18 WITA 2026
+- Mobile (pm-tech): show approval status on PM task cards.
+- Mobile (pm-tech): add approval flow section at bottom of Task detail.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Mon Feb  9 23:25:27 WITA 2026
+- Mobile (pm-tech): add checklist evidence capture from camera (photo) and video.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Mon Feb  9 21:46:36 WITA 2026
+- Mobile (pm-tech): show asset notes on Asset Detail and Assets list preview.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Mon Feb  9 21:39:20 WITA 2026
+- Mobile (pm-tech): added Tasks search and sort controls.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 22:52:07 WITA 2026
 - Web: added new notification rule event types (Due Today, Revised, Submitted for approval, Pending superadmin).
 - Backend: enqueue immediate push notifications for approval workflow transitions with role-based audiences.
@@ -1441,3 +1458,9 @@
 ## Sun Feb  8 20:30:47 WITA 2026
 - Mobile (pm-tech): set login header background image to banner.png.
 - Mobile (pm-tech): keep logo tile unchanged.
+Mon Feb  9 22:55:57 WITA 2026
+- DB: inspected PM-20260116-16FE2091 task and checklist evidence via scripts/db/inspect-pm-task-evidence.mjs.
+- Verified with npm run lint (pending) and npx tsc --noEmit (pending).
+Mon Feb  9 22:56:22 WITA 2026
+- DB: lint + typecheck after adding scripts/db/inspect-pm-task-evidence.mjs.
+- Verified with npm run lint and npx tsc --noEmit.
