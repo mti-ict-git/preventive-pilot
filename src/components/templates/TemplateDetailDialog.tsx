@@ -53,7 +53,7 @@ const TemplateDetailDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden glass border-border">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden bg-card border border-border/60 shadow-xl">
         <DialogHeader className="pb-4 border-b border-border">
           <div className="flex items-start gap-4">
             <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">

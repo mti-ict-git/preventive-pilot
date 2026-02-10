@@ -148,7 +148,7 @@ const TemplateFormDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto glass border-border">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border border-border/60 shadow-xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-foreground">
             {initialData ? "Edit Template" : "Create PM Template"}

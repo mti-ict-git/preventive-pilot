@@ -1393,9 +1393,9 @@ export const TaskDetailDialog = (props: {
   return (
     <>
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-5xl h-[90vh] glass border-border flex flex-col">
+      <DialogContent className="w-[95vw] max-w-5xl h-[90vh] bg-card border border-border/60 shadow-xl flex flex-col">
         <DialogHeader className="pb-4 border-b border-border">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <DialogTitle className="text-xl font-bold text-foreground">
                 {task ? task.taskNumber : "Task"}
@@ -1405,8 +1405,9 @@ export const TaskDetailDialog = (props: {
               </p>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end w-full lg:w-auto">
               <Button
+                size="sm"
                 variant="outline"
                 disabled={!task || startMutation.isPending || !canStart}
                 onClick={() => startMutation.mutate()}
@@ -1414,6 +1415,7 @@ export const TaskDetailDialog = (props: {
                 Start
               </Button>
               <Button
+                size="sm"
                 variant="outline"
                 disabled={!task || pauseMutation.isPending || !canPause}
                 onClick={() => pauseMutation.mutate()}
@@ -1421,6 +1423,7 @@ export const TaskDetailDialog = (props: {
                 Pause
               </Button>
               <Button
+                size="sm"
                 variant="outline"
                 disabled={!task || resumeMutation.isPending || !canResume}
                 onClick={() => resumeMutation.mutate()}
@@ -1428,6 +1431,7 @@ export const TaskDetailDialog = (props: {
                 Resume
               </Button>
               <Button
+                size="sm"
                 variant="outline"
                 disabled={!task || !canSaveDraft}
                 onClick={() => handleSaveDraft()}
@@ -1435,6 +1439,7 @@ export const TaskDetailDialog = (props: {
                 Save Draft
               </Button>
             <Button
+              size="sm"
               variant="outline"
               disabled={!task}
               onClick={() => setReportBreakdownOpen(true)}
@@ -1445,6 +1450,7 @@ export const TaskDetailDialog = (props: {
             </Button>
               {canReopen ? (
                 <Button
+                  size="sm"
                   variant="outline"
                   disabled={!task || reopenMutation.isPending}
                   onClick={() => reopenMutation.mutate()}
@@ -1453,6 +1459,7 @@ export const TaskDetailDialog = (props: {
                 </Button>
               ) : null}
               <Button
+                size="sm"
                 variant="destructive"
                 disabled={!task || cancelMutation.isPending || !canCancel}
                 onClick={() => cancelMutation.mutate()}
@@ -1460,6 +1467,7 @@ export const TaskDetailDialog = (props: {
                 Cancel
               </Button>
               <Button
+                size="sm"
                 variant="outline"
                 disabled={!task || completeMutation.isPending || !canComplete}
                 onClick={() => completeMutation.mutate()}
@@ -1470,6 +1478,7 @@ export const TaskDetailDialog = (props: {
                 <>
                   {canSubmitForApproval ? (
                     <Button
+                      size="sm"
                       variant="outline"
                       disabled={submitForApprovalMutation.isPending}
                       onClick={() => submitForApprovalMutation.mutate()}
@@ -1479,6 +1488,7 @@ export const TaskDetailDialog = (props: {
                   ) : null}
                   {canApproveBySupervisor ? (
                     <Button
+                      size="sm"
                       variant="outline"
                       disabled={approveBySupervisorMutation.isPending}
                       onClick={() => approveBySupervisorMutation.mutate()}
@@ -1488,6 +1498,7 @@ export const TaskDetailDialog = (props: {
                   ) : null}
                   {canApproveBySuperadmin ? (
                     <Button
+                      size="sm"
                       variant="outline"
                       disabled={approveBySuperadminMutation.isPending}
                       onClick={() => approveBySuperadminMutation.mutate()}
@@ -1496,7 +1507,7 @@ export const TaskDetailDialog = (props: {
                     </Button>
                   ) : null}
                   {canRejectApproval ? (
-                    <Button variant="destructive" onClick={() => setRejectDialogOpen(true)}>
+                    <Button size="sm" variant="destructive" onClick={() => setRejectDialogOpen(true)}>
                       Reject
                     </Button>
                   ) : null}
@@ -1689,10 +1700,10 @@ export const TaskDetailDialog = (props: {
                       .filter((i) => i.isActive)
                       .map((item) => (
                         <div key={item.id} className="glass rounded-lg p-3">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
+                          <div className="grid grid-cols-12 gap-3 items-start">
+                            <div className="min-w-0 col-span-12 lg:col-span-8">
                               <p className="text-sm text-foreground">{item.itemText}</p>
-                              <div className="flex items-center gap-3 mt-1">
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
                                 {item.isMandatory ? (
                                   <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
                                     Mandatory
@@ -1720,7 +1731,7 @@ export const TaskDetailDialog = (props: {
                                 ) : null}
                               </div>
                             </div>
-                            <div className="w-48">
+                            <div className="col-span-12 lg:col-span-4 lg:justify-self-end w-full lg:w-56">
                               <p className="text-xs text-muted-foreground">Outcome</p>
                               <Select
                                 value={
@@ -1736,7 +1747,7 @@ export const TaskDetailDialog = (props: {
                                   }));
                                 }}
                               >
-                                <SelectTrigger className="mt-1 bg-muted/50">
+                                <SelectTrigger className="mt-1 bg-muted/50 w-full">
                                   <SelectValue placeholder="Select" />
                                 </SelectTrigger>
                                 <SelectContent>
