@@ -411,49 +411,42 @@ const Scheduling = () => {
   }, [dayEventsQuery.data]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <Header title="PM Scheduling" subtitle="Manage schedules and assignment rules" />
 
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
         <div className="grid grid-cols-12 gap-6">
-          {/* Calendar */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="col-span-12 lg:col-span-7 glass rounded-xl p-6"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-foreground">PM Calendar</h3>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => goToMonth(-1)}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <span className="font-medium text-foreground min-w-32 text-center">
-                  {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => goToMonth(1)}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
-                  {day}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="col-span-12 lg:col-span-7">
+            <Card className="border-border/60 bg-card/70 shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Calendar</div>
+                    <CardTitle className="text-lg text-foreground">PM Schedule</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => goToMonth(-1)}>
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm font-semibold text-foreground min-w-32 text-center">
+                      {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                    </span>
+                    <Button variant="ghost" size="icon" onClick={() => goToMonth(1)}>
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-              ))}
-            </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-7 gap-1">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                    <div key={day} className="text-center text-xs font-semibold text-muted-foreground py-2">
+                      {day}
+                    </div>
+                  ))}
+                </div>
 
-            <div className="grid grid-cols-7 gap-1">
+                <div className="grid grid-cols-7 gap-1">
               {Array.from({ length: getFirstDayOfMonth(currentMonth) }).map((_, i) => (
                 <div key={`empty-${i}`} className="aspect-square" />
               ))}
@@ -471,32 +464,32 @@ const Scheduling = () => {
                   day === selectedDate.getDate() &&
                   currentMonth.getMonth() === selectedDate.getMonth() &&
                   currentMonth.getFullYear() === selectedDate.getFullYear();
-                return (
-                  <motion.button
-                    key={day}
-                    type="button"
-                    whileHover={{ scale: 1.05 }}
-                    onClick={() => setSelectedDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day))}
-                    aria-label={`Select ${currentMonth.toLocaleDateString("en-US", {
-                      year: "numeric",
-                      month: "long",
-                    })} ${day}`}
-                    className={`aspect-square rounded-lg p-1 cursor-pointer transition-colors ${
-                      isSelected
-                        ? "bg-primary/20 border border-primary"
-                        : isToday
-                          ? "bg-accent/30 border border-accent"
-                          : "hover:bg-muted/50"
-                    }`}
-                  >
-                    <div className="h-full flex flex-col">
-                      <span
-                        className={`text-sm ${
-                          isSelected ? "text-primary font-bold" : isToday ? "text-accent-foreground font-semibold" : "text-foreground"
-                        }`}
-                      >
-                        {day}
-                      </span>
+                  return (
+                    <motion.button
+                      key={day}
+                      type="button"
+                      whileHover={{ scale: 1.05 }}
+                      onClick={() => setSelectedDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day))}
+                      aria-label={`Select ${currentMonth.toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                      })} ${day}`}
+                      className={`aspect-square rounded-md border p-1 cursor-pointer transition-colors ${
+                        isSelected
+                          ? "bg-primary/10 border-primary"
+                          : isToday
+                            ? "bg-accent/20 border-accent"
+                            : "border-transparent hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="h-full flex flex-col">
+                        <span
+                          className={`text-sm ${
+                            isSelected ? "text-primary font-semibold" : isToday ? "text-accent-foreground font-semibold" : "text-foreground"
+                          }`}
+                        >
+                          {day}
+                        </span>
                       {aggregate && aggregate.capacityMinutes > 0 && (
                         (() => {
                           const capacity = evaluateCapacity(aggregate.capacityMinutes, DAILY_CAPACITY_MINUTES);
@@ -521,16 +514,16 @@ const Scheduling = () => {
                         })()
                       )}
                       {tasks && (
-                        <div className="mt-auto">
+                        <div className="mt-auto space-y-0.5">
                           {tasks.map((task, idx) => (
                             <div
                               key={idx}
                               className={`text-[10px] px-1 rounded ${
                                 task.type === "overdue"
-                                  ? "bg-destructive/20 text-destructive"
+                                  ? "bg-destructive/15 text-destructive"
                                   : task.type === "due"
-                                    ? "bg-warning/20 text-warning"
-                                    : "bg-primary/20 text-primary"
+                                    ? "bg-warning/15 text-warning"
+                                    : "bg-primary/15 text-primary"
                               }`}
                             >
                               {task.count} PM
@@ -542,29 +535,27 @@ const Scheduling = () => {
                   </motion.button>
                 );
               })}
-            </div>
+                </div>
 
-            {calendarQuery.isLoading && (
-              <div className="mt-4 text-sm text-muted-foreground">Loading calendar…</div>
-            )}
-            {calendarQuery.isError && (
-              <div className="mt-4 text-sm text-destructive">Failed to load calendar.</div>
-            )}
+                {calendarQuery.isLoading && <div className="text-sm text-muted-foreground">Loading calendar…</div>}
+                {calendarQuery.isError && <div className="text-sm text-destructive">Failed to load calendar.</div>}
 
-            <div className="flex items-center gap-6 mt-4 pt-4 border-t border-border">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded bg-primary/40" />
-                <span className="text-sm text-muted-foreground">Scheduled</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded bg-warning/40" />
-                <span className="text-sm text-muted-foreground">Due Today</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded bg-destructive/40" />
-                <span className="text-sm text-muted-foreground">Overdue</span>
-              </div>
-            </div>
+                <div className="flex items-center gap-6 pt-4 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded bg-primary/40" />
+                    <span className="text-sm text-muted-foreground">Scheduled</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded bg-warning/40" />
+                    <span className="text-sm text-muted-foreground">Due Today</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded bg-destructive/40" />
+                    <span className="text-sm text-muted-foreground">Overdue</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </motion.div>
 
           {/* Right Panel */}
@@ -575,7 +566,7 @@ const Scheduling = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <Card className="glass border-border">
+              <Card className="border-border/60 bg-card/70 shadow-sm">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-foreground">Auto-Assignment Rules</CardTitle>
@@ -598,7 +589,7 @@ const Scheduling = () => {
                     (rulesQuery.data?.items ?? []).map((rule) => (
                       <div
                         key={rule.RuleId}
-                        className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                        className="p-3 rounded-lg border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors cursor-pointer"
                         onClick={() => {
                           if (!isSuperadmin()) return;
                           openEditRule(rule.RuleId);
@@ -639,7 +630,7 @@ const Scheduling = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
             >
-              <Card className="glass border-border">
+              <Card className="border-border/60 bg-card/70 shadow-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-foreground">Bulk Assign Unassigned</CardTitle>
                 </CardHeader>
@@ -743,7 +734,7 @@ const Scheduling = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <Card className="glass border-border">
+              <Card className="border-border/60 bg-card/70 shadow-sm">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-foreground">Blackout Windows</CardTitle>
@@ -759,10 +750,7 @@ const Scheduling = () => {
                     <div className="text-sm text-destructive">Failed to load blackout windows.</div>
                   ) : (
                     (blackoutQuery.data?.items ?? []).map((period) => (
-                      <div
-                        key={period.BlackoutWindowId}
-                        className="p-3 rounded-lg bg-warning/10 border border-warning/20"
-                      >
+                      <div key={period.BlackoutWindowId} className="p-3 rounded-lg bg-warning/10 border border-warning/30">
                         <div className="flex items-center gap-2 mb-1">
                           <AlertTriangle className="w-4 h-4 text-warning" />
                           <span className="font-medium text-foreground text-sm">{period.Name}</span>
@@ -783,28 +771,31 @@ const Scheduling = () => {
             </motion.div>
 
             {/* Quick Actions */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Button
-                className="w-full gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
-                onClick={() => recalcMutation.mutate()}
-                disabled={recalcMutation.isPending}
-              >
-                <Clock className="w-4 h-4" />
-                Recalculate All Schedules
-              </Button>
-              <Button
-                className="mt-2 w-full gap-2"
-                variant="outline"
-                onClick={() => recalcForceMutation.mutate()}
-                disabled={recalcForceMutation.isPending}
-              >
-                <AlertTriangle className="w-4 h-4" />
-                Recalculate (Force)
-              </Button>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+              <Card className="border-border/60 bg-card/70 shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-foreground">Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Button
+                    className="w-full gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                    onClick={() => recalcMutation.mutate()}
+                    disabled={recalcMutation.isPending}
+                  >
+                    <Clock className="w-4 h-4" />
+                    Recalculate All Schedules
+                  </Button>
+                  <Button
+                    className="w-full gap-2"
+                    variant="outline"
+                    onClick={() => recalcForceMutation.mutate()}
+                    disabled={recalcForceMutation.isPending}
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    Recalculate (Force)
+                  </Button>
+                </CardContent>
+              </Card>
             </motion.div>
 
             <motion.div
@@ -812,7 +803,7 @@ const Scheduling = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45 }}
             >
-              <Card className="glass border-border">
+              <Card className="border-border/60 bg-card/70 shadow-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-foreground">Capacity • {selectedDateLabel}</CardTitle>
                 </CardHeader>
@@ -861,7 +852,7 @@ const Scheduling = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
             >
-              <Card className="glass border-border">
+              <Card className="border-border/60 bg-card/70 shadow-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-foreground">Events • {selectedDateLabel}</CardTitle>
                 </CardHeader>
@@ -884,7 +875,7 @@ const Scheduling = () => {
                           return (
                             <div
                               key={item.id}
-                              className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                              className="p-3 rounded-lg border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors"
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
