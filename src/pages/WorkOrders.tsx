@@ -73,125 +73,157 @@ const WorkOrders = () => {
   });
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <Header title="Work Orders" subtitle="Corrective maintenance work orders" />
 
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 md:col-span-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by ID, asset, facility"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-muted/50"
-              />
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+        <Card className="border-border/60 bg-card/70 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <CardTitle className="text-base text-foreground flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-primary" />
+                  Filters
+                </CardTitle>
+                <div className="text-sm text-muted-foreground mt-1">Refine work orders by status, impact, category, and date</div>
+              </div>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  setStatus("");
+                  setImpactLevel("");
+                  setCategoryId("");
+                  setLocationId("");
+                  setAssigned("any");
+                  setReportedFrom("");
+                  setReportedTo("");
+                }}
+              >
+                <Filter className="w-4 h-4" />
+                Reset
+              </Button>
             </div>
-          </div>
-          <div className="col-span-12 md:col-span-2">
-            <Select value={status} onValueChange={(v) => setStatus(v === "__all__" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All</SelectItem>
-                <SelectItem value="open">Open</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-12 md:col-span-2">
-            <Select value={impactLevel} onValueChange={(v) => setImpactLevel(v === "__all__" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Impact" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All</SelectItem>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="critical">Critical</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-12 md:col-span-2">
-            <Select value={assigned} onValueChange={(v) => setAssigned(v as "any" | "unassigned" | "me")}>
-              <SelectTrigger>
-                <SelectValue placeholder="Assigned" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="any">Any</SelectItem>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                <SelectItem value="me">Assigned to Me</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-12 md:col-span-2">
-            <Select value={locationId} onValueChange={(v) => setLocationId(v === "__all__" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Location" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All</SelectItem>
-                {(lookupsQuery.data?.locations ?? [])
-                  .slice()
-                  .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
-                  .map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.name ?? "—"}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-12 md:col-span-2">
-            <Select value={categoryId} onValueChange={(v) => setCategoryId(v === "__all__" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All</SelectItem>
-                {(lookupsQuery.data?.assetCategories ?? [])
-                  .slice()
-                  .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
-                  .map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name ?? "—"}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-12 md:col-span-2">
-            <Input type="datetime-local" value={reportedFrom} onChange={(e) => setReportedFrom(e.target.value)} />
-          </div>
-          <div className="col-span-12 md:col-span-2">
-            <Input type="datetime-local" value={reportedTo} onChange={(e) => setReportedTo(e.target.value)} />
-          </div>
-          <div className="col-span-12 md:col-span-2">
-            <Button variant="outline" className="gap-2" onClick={() => {
-              setStatus("");
-              setImpactLevel("");
-              setCategoryId("");
-              setLocationId("");
-              setAssigned("any");
-              setReportedFrom("");
-              setReportedTo("");
-            }}>
-              <Filter className="w-4 h-4" />
-              Reset
-            </Button>
-          </div>
-        </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-12 gap-4">
+              <div className="col-span-12 md:col-span-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by ID, asset, facility"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-background"
+                  />
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-2">
+                <Select value={status} onValueChange={(v) => setStatus(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All</SelectItem>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-12 md:col-span-2">
+                <Select value={impactLevel} onValueChange={(v) => setImpactLevel(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Impact" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-12 md:col-span-2">
+                <Select value={assigned} onValueChange={(v) => setAssigned(v as "any" | "unassigned" | "me")}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Assigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    <SelectItem value="me">Assigned to Me</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-12 md:col-span-2">
+                <Select value={locationId} onValueChange={(v) => setLocationId(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All</SelectItem>
+                    {(lookupsQuery.data?.locations ?? [])
+                      .slice()
+                      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
+                      .map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.name ?? "—"}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-12 md:col-span-2">
+                <Select value={categoryId} onValueChange={(v) => setCategoryId(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All</SelectItem>
+                    {(lookupsQuery.data?.assetCategories ?? [])
+                      .slice()
+                      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
+                      .map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name ?? "—"}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-12 md:col-span-2">
+                <Input
+                  type="datetime-local"
+                  value={reportedFrom}
+                  onChange={(e) => setReportedFrom(e.target.value)}
+                  className="bg-background"
+                />
+              </div>
+              <div className="col-span-12 md:col-span-2">
+                <Input
+                  type="datetime-local"
+                  value={reportedTo}
+                  onChange={(e) => setReportedTo(e.target.value)}
+                  className="bg-background"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <Card className="glass border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-primary" />
-              Work Orders
-            </CardTitle>
+        <Card className="border-border/60 bg-card/70 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <CardTitle className="text-foreground flex items-center gap-2">
+                <Wrench className="w-5 h-5 text-primary" />
+                Work Orders
+              </CardTitle>
+              <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">
+                {items.length} records
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             {workOrdersQuery.isLoading ? (
@@ -199,9 +231,9 @@ const WorkOrders = () => {
             ) : workOrdersQuery.isError ? (
               <div className="text-sm text-destructive p-4">Failed to load work orders.</div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
+              <Table className="text-sm">
+                <TableHeader className="bg-muted/40">
+                  <TableRow className="hover:bg-transparent">
                     <TableHead className="w-[120px]">ID</TableHead>
                     <TableHead>Subject</TableHead>
                     <TableHead className="w-[120px]">Impact</TableHead>

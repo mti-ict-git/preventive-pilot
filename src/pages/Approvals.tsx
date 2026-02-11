@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { getJwtClaims, hasRole, isSuperadmin } from "@/lib/auth";
 import {
@@ -88,6 +90,27 @@ const Approvals = () => {
     });
   }, [tasksQuery.data?.items, tab, search, currentUserId]);
 
+  const summary = useMemo(() => {
+    const all = (tasksQuery.data?.items ?? []) as ListTasksResponse["items"];
+    let pendingSupervisor = 0;
+    let pendingSuperadmin = 0;
+    let waitingSubmit = 0;
+
+    for (const t of all) {
+      const stage = stageLabel(t.approvalStatus ?? "None");
+      if (stage === "supervisor") pendingSupervisor += 1;
+      if (stage === "superadmin") pendingSuperadmin += 1;
+
+      const assignedUserId = t.assignedTo.userId;
+      const isAssignedToCurrentUser = currentUserId !== null && assignedUserId === currentUserId;
+      const hasNoApprovalStage = stage === null;
+      const isTechnicianCompleted = t.technicianCompletedAt !== null;
+      if (isAssignedToCurrentUser && hasNoApprovalStage && isTechnicianCompleted) waitingSubmit += 1;
+    }
+
+    return { pendingSupervisor, pendingSuperadmin, waitingSubmit };
+  }, [tasksQuery.data?.items, currentUserId]);
+
   useEffect(() => {
     setBulkSelected({});
   }, [tab]);
@@ -165,49 +188,120 @@ const Approvals = () => {
   const canBulkApproveSupervisor = tab === "supervisor" && canSupervisor;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Approvals</h1>
-          <p className="text-sm text-muted-foreground">Review and sign-off pending PM approvals</p>
+    <div className="min-h-screen bg-white p-6 space-y-6">
+      <div className="rounded-2xl border border-border/60 bg-card/70 p-6 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">PM Approvals</p>
+            <h1 className="text-2xl font-semibold text-foreground">Approvals Inbox</h1>
+            <p className="text-sm text-muted-foreground">Review and sign-off pending PM approvals</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => tasksQuery.refetch()} disabled={tasksQuery.isFetching}>Refresh</Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => tasksQuery.refetch()} disabled={tasksQuery.isFetching}>Refresh</Button>
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Card className="border-border/60 bg-background/70 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Pending Supervisor</p>
+                  <p className="text-2xl font-semibold text-foreground">{summary.pendingSupervisor}</p>
+                </div>
+                <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30">Supervisor</Badge>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/60 bg-background/70 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Pending Superadmin</p>
+                  <p className="text-2xl font-semibold text-foreground">{summary.pendingSuperadmin}</p>
+                </div>
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">Superadmin</Badge>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/60 bg-background/70 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Waiting Submit</p>
+                  <p className="text-2xl font-semibold text-foreground">{summary.waitingSubmit}</p>
+                </div>
+                <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border">My Tasks</Badge>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 md:col-span-8">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-            <TabsList>
-              <TabsTrigger value="supervisor">Pending Supervisor</TabsTrigger>
-              <TabsTrigger value="superadmin">Pending Superadmin</TabsTrigger>
-              <TabsTrigger value="waiting">Waiting Submit</TabsTrigger>
-            </TabsList>
-            <TabsContent value="supervisor">
-              <div className="space-y-3">
-                {items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending supervisor approvals</p>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">{selectedCount} selected</div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          disabled={!canBulkApproveSupervisor || selectedCount === 0 || approveSupervisorMutation.isPending}
-                          onClick={async () => {
-                            const ids = Object.keys(bulkSelected).filter((id) => bulkSelected[id]);
-                            for (const id of ids) {
-                              await approveSupervisorMutation.mutateAsync(id);
-                            }
-                          }}
-                        >
-                          Bulk Approve
-                        </Button>
-                      </div>
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 lg:col-span-8 space-y-6">
+          <Card className="border-border/60 bg-card/70 shadow-sm">
+            <CardHeader className="border-b border-border/60 pb-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <CardTitle className="text-base text-foreground">Approval Queue</CardTitle>
+                  <CardDescription>Focus on what needs your attention right now.</CardDescription>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">{items.length} items</Badge>
+                  {tab === "supervisor" ? (
+                    <>
+                      <Badge
+                        variant="outline"
+                        className="rounded-md px-2.5 py-1 text-xs bg-muted/30 text-muted-foreground border-border"
+                      >
+                        {selectedCount} selected
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        disabled={!canBulkApproveSupervisor || selectedCount === 0 || approveSupervisorMutation.isPending}
+                        onClick={async () => {
+                          const ids = Object.keys(bulkSelected).filter((id) => bulkSelected[id]);
+                          for (const id of ids) {
+                            await approveSupervisorMutation.mutateAsync(id);
+                          }
+                        }}
+                      >
+                        Bulk Approve
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="w-full">
+                <TabsList className="bg-muted/40 p-1 rounded-lg">
+                  <TabsTrigger
+                    value="supervisor"
+                    className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
+                    Pending Supervisor
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="superadmin"
+                    className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
+                    Pending Superadmin
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="waiting"
+                    className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
+                    Waiting Submit
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="supervisor" className="mt-4">
+                  {items.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-background/40 p-8 text-center text-sm text-muted-foreground">
+                      No pending supervisor approvals
                     </div>
-                    <div className="grid grid-cols-12 gap-2">
+                  ) : (
+                    <div className="grid grid-cols-12 gap-3">
                       {items.map((t) => {
                         const dueDate = format(new Date(t.scheduledDueAt), "yyyy-MM-dd");
                         const checklistTotal = Number(t.checklistTotal ?? 0);
@@ -215,21 +309,29 @@ const Approvals = () => {
                         const canApprove = canSupervisor && (t.approvalStatus === "PendingSupervisor");
                         const canRevise = canSupervisor && (t.approvalStatus === "PendingSupervisor");
                         return (
-                          <div key={t.id} className="col-span-12 glass rounded-lg p-3">
-                            <div className="flex items-start justify-between gap-3">
+                          <div key={t.id} className="col-span-12 rounded-xl border border-border/60 bg-background/80 p-4 shadow-sm transition-shadow hover:shadow-md">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                               <div className="flex items-start gap-3">
                                 <Checkbox
                                   checked={bulkSelected[t.id] || false}
                                   onCheckedChange={(checked) => setBulkSelected((prev) => ({ ...prev, [t.id]: !!checked }))}
                                   disabled={!canBulkApproveSupervisor}
                                 />
-                                <div>
-                                  <p className="text-sm font-medium text-foreground">#{t.taskNumber} • {t.asset?.name ?? t.asset?.assetTag ?? ""}</p>
-                                  <p className="text-xs text-muted-foreground">{t.template?.name ?? ""} • Due {dueDate}</p>
-                                  <p className="text-xs text-muted-foreground">Checklist {checklistCompleted}/{checklistTotal}</p>
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-semibold text-foreground">#{t.taskNumber} • {t.asset?.name ?? t.asset?.assetTag ?? ""}</p>
+                                    <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30">Supervisor</Badge>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    <span>{t.template?.name ?? ""}</span>
+                                    <span>•</span>
+                                    <span>Due {dueDate}</span>
+                                    <span>•</span>
+                                    <span>Checklist {checklistCompleted}/{checklistTotal}</span>
+                                  </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <Button variant="outline" onClick={() => navigate(`/tasks?taskId=${t.id}`)}>View Task</Button>
                                 <Button
                                   onClick={() => approveSupervisorMutation.mutate(t.id)}
@@ -263,17 +365,15 @@ const Approvals = () => {
                         );
                       })}
                     </div>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-            <TabsContent value="superadmin">
-              <div className="space-y-3">
-                {items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending superadmin approvals</p>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-12 gap-2">
+                  )}
+                </TabsContent>
+                <TabsContent value="superadmin" className="mt-4">
+                  {items.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-background/40 p-8 text-center text-sm text-muted-foreground">
+                      No pending superadmin approvals
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-12 gap-3">
                       {items.map((t) => {
                         const dueDate = format(new Date(t.scheduledDueAt), "yyyy-MM-dd");
                         const checklistTotal = Number(t.checklistTotal ?? 0);
@@ -281,14 +381,22 @@ const Approvals = () => {
                         const canApprove = canSuperadmin && (t.approvalStatus === "PendingSuperadmin");
                         const canRevise = canSuperadmin && (t.approvalStatus === "PendingSuperadmin");
                         return (
-                          <div key={t.id} className="col-span-12 glass rounded-lg p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-medium text-foreground">#{t.taskNumber} • {t.asset?.name ?? t.asset?.assetTag ?? ""}</p>
-                                <p className="text-xs text-muted-foreground">{t.template?.name ?? ""} • Due {dueDate}</p>
-                                <p className="text-xs text-muted-foreground">Checklist {checklistCompleted}/{checklistTotal}</p>
+                          <div key={t.id} className="col-span-12 rounded-xl border border-border/60 bg-background/80 p-4 shadow-sm transition-shadow hover:shadow-md">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-semibold text-foreground">#{t.taskNumber} • {t.asset?.name ?? t.asset?.assetTag ?? ""}</p>
+                                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">Superadmin</Badge>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  <span>{t.template?.name ?? ""}</span>
+                                  <span>•</span>
+                                  <span>Due {dueDate}</span>
+                                  <span>•</span>
+                                  <span>Checklist {checklistCompleted}/{checklistTotal}</span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <Button variant="outline" onClick={() => navigate(`/tasks?taskId=${t.id}`)}>View Task</Button>
                                 <Button
                                   onClick={() => approveSuperadminMutation.mutate(t.id)}
@@ -322,30 +430,36 @@ const Approvals = () => {
                         );
                       })}
                     </div>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-            <TabsContent value="waiting">
-              <div className="space-y-3">
-                {items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No tasks waiting to submit for approval</p>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-12 gap-2">
+                  )}
+                </TabsContent>
+                <TabsContent value="waiting" className="mt-4">
+                  {items.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-background/40 p-8 text-center text-sm text-muted-foreground">
+                      No tasks waiting to submit for approval
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-12 gap-3">
                       {items.map((t) => {
                         const dueDate = format(new Date(t.scheduledDueAt), "yyyy-MM-dd");
                         const checklistTotal = Number(t.checklistTotal ?? 0);
                         const checklistCompleted = Number(t.checklistCompleted ?? 0);
                         return (
-                          <div key={t.id} className="col-span-12 glass rounded-lg p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-medium text-foreground">#{t.taskNumber} • {t.asset?.name ?? t.asset?.assetTag ?? ""}</p>
-                                <p className="text-xs text-muted-foreground">{t.template?.name ?? ""} • Due {dueDate}</p>
-                                <p className="text-xs text-muted-foreground">Checklist {checklistCompleted}/{checklistTotal}</p>
+                          <div key={t.id} className="col-span-12 rounded-xl border border-border/60 bg-background/80 p-4 shadow-sm transition-shadow hover:shadow-md">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-semibold text-foreground">#{t.taskNumber} • {t.asset?.name ?? t.asset?.assetTag ?? ""}</p>
+                                  <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border">Waiting</Badge>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  <span>{t.template?.name ?? ""}</span>
+                                  <span>•</span>
+                                  <span>Due {dueDate}</span>
+                                  <span>•</span>
+                                  <span>Checklist {checklistCompleted}/{checklistTotal}</span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <Button variant="outline" onClick={() => navigate(`/tasks?taskId=${t.id}`)}>
                                   View Task
                                 </Button>
@@ -355,26 +469,48 @@ const Approvals = () => {
                         );
                       })}
                     </div>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </div>
-        <div className="col-span-12 md:col-span-4 space-y-3">
-          <Input placeholder="Search approvals…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <Select value={locationId} onValueChange={setLocationId}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Location" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={categoryId} onValueChange={setCategoryId}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Category" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="col-span-12 lg:col-span-4">
+          <Card className="border-border/60 bg-card/70 shadow-sm">
+            <CardHeader className="border-b border-border/60 pb-3">
+              <CardTitle className="text-base text-foreground">Filters</CardTitle>
+              <CardDescription>Refine approvals list quickly.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Search</Label>
+                <Input
+                  placeholder="Search approvals…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-9 bg-background/80"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Location</Label>
+                <Select value={locationId} onValueChange={setLocationId}>
+                  <SelectTrigger className="h-9 bg-background/80"><SelectValue placeholder="Location" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Category</Label>
+                <Select value={categoryId} onValueChange={setCategoryId}>
+                  <SelectTrigger className="h-9 bg-background/80"><SelectValue placeholder="Category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 

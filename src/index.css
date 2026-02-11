@@ -162,6 +162,10 @@
     @apply glass glass-hover rounded-xl p-6 cursor-pointer;
     box-shadow: var(--shadow-card);
   }
+
+  .metronic-card {
+    @apply border border-border/60 bg-card/80 shadow-sm hover:shadow-md transition-shadow;
+  }
 }
 
 @keyframes float {

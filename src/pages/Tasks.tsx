@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ElementType } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { endOfDay, format, isAfter, isBefore, isSameDay, parseISO, startOfDay } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -244,7 +245,10 @@ const Tasks = () => {
     return config[status];
   };
 
-  const statItems = useMemo(() => {
+  type StatTone = "primary" | "warning" | "destructive" | "success";
+  type StatItem = { label: string; value: number; tone: StatTone; icon: ElementType };
+
+  const statItems = useMemo<StatItem[]>(() => {
     const now = new Date();
     const items = statsQuery.data?.items ?? [];
     const total = items.length;
@@ -260,12 +264,26 @@ const Tasks = () => {
     }).length;
     const completedCount = items.filter((t) => t.status.toLowerCase() === "completed").length;
     return [
-      { label: "Total Tasks", value: total, color: "primary" },
-      { label: "Due Today", value: dueTodayCount, color: "warning" },
-      { label: "Overdue", value: overdueCount, color: "destructive" },
-      { label: "Completed", value: completedCount, color: "success" },
+      { label: "Total Tasks", value: total, tone: "primary", icon: ClipboardList },
+      { label: "Due Today", value: dueTodayCount, tone: "warning", icon: Clock },
+      { label: "Overdue", value: overdueCount, tone: "destructive", icon: AlertTriangle },
+      { label: "Completed", value: completedCount, tone: "success", icon: CheckCircle },
     ];
   }, [statsQuery.data?.items]);
+
+  const statToneClass = (tone: "primary" | "warning" | "destructive" | "success") => {
+    if (tone === "warning") return "bg-warning/10 text-warning";
+    if (tone === "destructive") return "bg-destructive/10 text-destructive";
+    if (tone === "success") return "bg-success/10 text-success";
+    return "bg-primary/10 text-primary";
+  };
+
+  const statValueClass = (tone: "primary" | "warning" | "destructive" | "success") => {
+    if (tone === "warning") return "text-warning";
+    if (tone === "destructive") return "text-destructive";
+    if (tone === "success") return "text-success";
+    return "text-primary";
+  };
 
 	const filteredTasks = useMemo(() => {
 		const now = new Date();
@@ -333,156 +351,194 @@ const Tasks = () => {
 	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <Header title="PM Tasks" subtitle="Track and execute maintenance tasks" />
 
-      <div className="p-6 space-y-6">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {statItems.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="stat-card"
+              transition={{ delay: index * 0.08 }}
             >
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
-              <p className={`text-3xl font-bold text-${stat.color}`}>{stat.value}</p>
+              <Card className="border-border/60 bg-card/70 shadow-sm">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{stat.label}</p>
+                      <p className={`text-3xl font-semibold mt-2 tabular-nums ${statValueClass(stat.tone)}`}>
+                        {stat.value}
+                      </p>
+                    </div>
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${statToneClass(stat.tone)}`}>
+                      <stat.icon className="w-5 h-5" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </motion.div>
           ))}
         </div>
 
-        {/* Filters & Search */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by task ID, asset..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-muted/50"
-            />
-          </div>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setFiltersOpen(true)}
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => navigate("/scheduling")}
-          >
-            <Calendar className="w-4 h-4" />
-            Calendar View
-          </Button>
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-muted/50 p-1">
-            <TabsTrigger value="all">All Tasks</TabsTrigger>
-            <TabsTrigger value="due_today">Due Today</TabsTrigger>
-            <TabsTrigger value="overdue">Overdue</TabsTrigger>
-            <TabsTrigger value="in_progress">In Progress</TabsTrigger>
-            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-            <TabsTrigger value="pending_supervisor">Pending Supervisor</TabsTrigger>
-            <TabsTrigger value="pending_superadmin">Pending Superadmin</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value={activeTab} className="mt-4">
-            {tasksQuery.isLoading ? (
-              <div className="text-sm text-muted-foreground p-4">Loading tasks…</div>
-            ) : tasksQuery.isError ? (
-              <div className="text-sm text-destructive p-4">Failed to load tasks.</div>
-            ) : (
-              <div className="space-y-3">
-                {filteredTasks.map((task, index) => {
-                  const statusConfig = getStatusConfig(task.status);
-                  return (
-                    <motion.div
-                      key={task.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="glass rounded-xl p-5 hover:border-primary/50 transition-all duration-300 cursor-pointer group"
-                      onClick={() => {
-                        setSelectedTaskId(task.taskId);
-                        setTaskDetailOpen(true);
-                      }}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0">
-                            <Server className="w-6 h-6 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-mono text-sm text-muted-foreground">{task.displayId}</span>
-                              <Badge variant="outline" className={statusConfig.color}>
-                                <statusConfig.icon className="w-3 h-3 mr-1" />
-                                {statusConfig.label}
-                              </Badge>
-                              {task.priority === "high" && (
-                                <Badge
-                                  variant="outline"
-                                  className="bg-destructive/20 text-destructive border-destructive/30"
-                                >
-                                  High Priority
-                                </Badge>
-                              )}
-                            </div>
-                            <h3 className="font-semibold text-foreground">{task.asset}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {task.assetName} • {task.template}
-                            </p>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-                        <div className="flex items-center gap-6">
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">{task.pic}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">Due: {task.dueDate}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 min-w-48">
-                          <Progress value={task.progress} className="h-2" />
-                          <span className="text-sm text-muted-foreground whitespace-nowrap">
-                            {task.checklistComplete}/{task.checklistTotal}
-                          </span>
-                          {isManager() ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openAssignDialogFor(task.taskId);
-                              }}
-                            >
-                              {task.isAssigned ? "Reassign" : "Assign"}
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
+        <Card className="border-border/60 bg-card/70 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <CardTitle className="text-base text-foreground flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-primary" />
+                  Filters
+                </CardTitle>
+                <div className="text-sm text-muted-foreground mt-1">Search and refine tasks quickly</div>
               </div>
-            )}
-          </TabsContent>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" className="gap-2" onClick={() => setFiltersOpen(true)}>
+                  <Filter className="w-4 h-4" />
+                  Advanced
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={() => navigate("/scheduling")}>
+                  <Calendar className="w-4 h-4" />
+                  Calendar View
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-12 gap-4">
+              <div className="col-span-12 md:col-span-8">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by task ID, asset..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-background"
+                  />
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-4">
+                <div className="flex items-center gap-2 justify-end text-sm text-muted-foreground h-full">
+                  <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">
+                    {filteredTasks.length} records
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Card className="border-border/60 bg-card/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <CardTitle className="text-foreground flex items-center gap-2">
+                  <Wrench className="w-5 h-5 text-primary" />
+                  Tasks
+                </CardTitle>
+                <TabsList className="bg-muted/60 p-1 rounded-full w-full md:w-auto overflow-x-auto">
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="due_today">Due Today</TabsTrigger>
+                  <TabsTrigger value="overdue">Overdue</TabsTrigger>
+                  <TabsTrigger value="in_progress">In Progress</TabsTrigger>
+                  <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+                  <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+                  <TabsTrigger value="pending_supervisor">Pending Supervisor</TabsTrigger>
+                  <TabsTrigger value="pending_superadmin">Pending Superadmin</TabsTrigger>
+                </TabsList>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <TabsContent value={activeTab} className="mt-0">
+                {tasksQuery.isLoading ? (
+                  <div className="text-sm text-muted-foreground p-4">Loading tasks…</div>
+                ) : tasksQuery.isError ? (
+                  <div className="text-sm text-destructive p-4">Failed to load tasks.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredTasks.map((task, index) => {
+                      const statusConfig = getStatusConfig(task.status);
+                      return (
+                        <motion.div
+                          key={task.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.04 }}
+                          className="rounded-xl border border-border/60 bg-background/60 p-5 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer group"
+                          onClick={() => {
+                            setSelectedTaskId(task.taskId);
+                            setTaskDetailOpen(true);
+                          }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 rounded-xl bg-muted/60 flex items-center justify-center shrink-0">
+                                <Server className="w-6 h-6 text-muted-foreground" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-mono text-xs text-muted-foreground">{task.displayId}</span>
+                                  <Badge variant="outline" className={statusConfig.color}>
+                                    <statusConfig.icon className="w-3 h-3 mr-1" />
+                                    {statusConfig.label}
+                                  </Badge>
+                                  {task.priority === "high" && (
+                                    <Badge
+                                      variant="outline"
+                                      className="bg-destructive/20 text-destructive border-destructive/30"
+                                    >
+                                      High Priority
+                                    </Badge>
+                                  )}
+                                </div>
+                                <h3 className="font-semibold text-foreground">{task.asset}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {task.assetName} • {task.template}
+                                </p>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+
+                          <div className="mt-4 pt-4 border-t border-border/60 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-6">
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">{task.pic}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">Due: {task.dueDate}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 min-w-48">
+                              <Progress value={task.progress} className="h-2" />
+                              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                                {task.checklistComplete}/{task.checklistTotal}
+                              </span>
+                              {isManager() ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openAssignDialogFor(task.taskId);
+                                  }}
+                                >
+                                  {task.isAssigned ? "Reassign" : "Assign"}
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+            </CardContent>
+          </Card>
         </Tabs>
       </div>
 
