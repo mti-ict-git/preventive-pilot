@@ -282,7 +282,7 @@ const Templates = () => {
   const totalTemplates = templatesQuery.data?.items?.length ?? 0;
 
   return (
-    <div className="min-h-screen bg-muted/20">
+    <div className="min-h-screen bg-white">
       <Header title="PM Templates" subtitle="Standardize your maintenance workflows" />
 
       <div className="px-6 pb-8 pt-4 space-y-6">

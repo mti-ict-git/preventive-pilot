@@ -144,8 +144,8 @@ const Facilities = () => {
   return (
     <>
       <Header title="Facilities" subtitle="Manage non-asset areas and PM settings" />
-      <div className="p-6 space-y-6">
-        <Card className="border-border/60 bg-card/80 shadow-sm">
+      <div className="p-6 space-y-6 bg-white">
+        <Card className="border-border/60 bg-white shadow-sm">
           <CardHeader className="border-b border-border/60">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">

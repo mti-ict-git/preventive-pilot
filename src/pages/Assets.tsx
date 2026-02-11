@@ -338,7 +338,7 @@ const Assets = () => {
   const canManage = isManager();
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <Header title="Assets" subtitle="Synchronized from Snipe-IT" />
 
       <div className="p-6 space-y-6">
