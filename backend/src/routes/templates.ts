@@ -3,7 +3,7 @@ import { z } from "zod";
 import sql from "mssql";
 import { getDb } from "../db/mssql.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { requireSuperadmin } from "../middleware/requireRole.js";
+import { requireManager } from "../middleware/requireRole.js";
 
 const ChecklistItemSchema = z.object({
   id: z.string().uuid().optional(),
@@ -174,7 +174,7 @@ templatesRouter.get("/:templateId", async (req, res) => {
   });
 });
 
-templatesRouter.post("/", requireSuperadmin, async (req, res) => {
+templatesRouter.post("/", requireManager, async (req, res) => {
   const parsed = TemplateCreateSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: "Invalid request" });
@@ -245,7 +245,7 @@ templatesRouter.post("/", requireSuperadmin, async (req, res) => {
   }
 });
 
-templatesRouter.put("/:templateId", requireSuperadmin, async (req, res) => {
+templatesRouter.put(":templateId", requireManager, async (req, res) => {
   const templateId = req.params.templateId;
   if (!z.string().uuid().safeParse(templateId).success) {
     res.status(400).json({ message: "Invalid request" });
@@ -421,7 +421,7 @@ templatesRouter.put("/:templateId", requireSuperadmin, async (req, res) => {
   }
 });
 
-templatesRouter.delete("/:templateId", requireSuperadmin, async (req, res) => {
+templatesRouter.delete(":templateId", requireManager, async (req, res) => {
   const templateId = req.params.templateId;
   if (!z.string().uuid().safeParse(templateId).success) {
     res.status(400).json({ message: "Invalid request" });

@@ -663,50 +663,11 @@ const resolveUniqueDestPath = async (destAbs: string): Promise<string> => {
 
 const resolveStoredFileAbs = (storageRootAbs: string, storagePath: string): string | null => {
   const root = path.resolve(storageRootAbs);
-  const resolved = path.resolve(root, storagePath);
+  const normalizedPath = storagePath.replace(/[\\/]+/g, path.sep).replace(/^[/\\]+/, "");
+  const resolved = path.resolve(root, normalizedPath);
   const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
   if (!resolved.startsWith(prefix)) return null;
   return resolved;
-};
-
-const getEvidenceStorageRoots = (): string[] => {
-  const roots: string[] = [];
-  const primary = env.EVIDENCE_STORAGE_ROOT?.trim();
-  if (primary) roots.push(primary);
-  const fallbackRaw = env.EVIDENCE_STORAGE_FALLBACK_ROOTS?.trim();
-  if (fallbackRaw) {
-    for (const entry of fallbackRaw.split(",")) {
-      const value = entry.trim();
-      if (value && !roots.includes(value)) roots.push(value);
-    }
-  }
-  if (process.env.NODE_ENV === "development") {
-    const devRoot = path.resolve(process.cwd(), "..", "storage", "evidence");
-    if (!roots.includes(devRoot)) roots.push(devRoot);
-  }
-  return roots;
-};
-
-const resolveStoredFileFromRoots = async (
-  storagePath: string,
-  roots: string[],
-): Promise<{ resolved: string; stats: fs.Stats } | null> => {
-  for (const root of roots) {
-    const resolved = resolveStoredFileAbs(root, storagePath);
-    if (!resolved) continue;
-    try {
-      const stats = await fs.promises.stat(resolved);
-      if (stats.isFile()) return { resolved, stats };
-    } catch {
-      continue;
-    }
-  }
-  return null;
-};
-
-const getEvidenceStorageRootForWrite = (): string | null => {
-  const roots = getEvidenceStorageRoots();
-  return roots.length > 0 ? roots[0] : null;
 };
 
 type TaskStorageContext = {
@@ -2001,8 +1962,7 @@ tasksRouter.get("/evidence/:evidenceId", async (req, res) => {
     return;
   }
 
-  const storageRoots = getEvidenceStorageRoots();
-  if (storageRoots.length === 0) {
+  if (!env.EVIDENCE_STORAGE_ROOT) {
     res.status(500).json({ message: "Evidence storage not configured" });
     return;
   }
@@ -2038,8 +1998,21 @@ tasksRouter.get("/evidence/:evidenceId", async (req, res) => {
     return;
   }
 
-  const found = await resolveStoredFileFromRoots(storagePath, storageRoots);
-  if (!found) {
+  const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
+  if (!resolved) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  let st: fs.Stats;
+  try {
+    st = await fs.promises.stat(resolved);
+  } catch {
+    res.status(404).json({ message: "Evidence file not found" });
+    return;
+  }
+
+  if (!st.isFile()) {
     res.status(404).json({ message: "Evidence file not found" });
     return;
   }
@@ -2049,10 +2022,10 @@ tasksRouter.get("/evidence/:evidenceId", async (req, res) => {
   const contentType = contentTypeFromDb ?? inferMimeTypeFromFileName(fileName);
 
   if (contentType) res.setHeader("Content-Type", contentType);
-  res.setHeader("Content-Length", String(found.stats.size));
+  res.setHeader("Content-Length", String(st.size));
   res.setHeader("Content-Disposition", `${download ? "attachment" : "inline"}${fileName ? `; filename="${fileName.replace(/"/g, "")}"` : ""}`);
 
-  const stream = fs.createReadStream(found.resolved);
+  const stream = fs.createReadStream(resolved);
   stream.on("error", () => {
     if (!res.headersSent) {
       res.status(500).json({ message: "Failed to read evidence" });
@@ -2070,8 +2043,7 @@ tasksRouter.get("/checklist-evidence/:checklistEvidenceId", async (req, res) => 
     return;
   }
 
-  const storageRoots = getEvidenceStorageRoots();
-  if (storageRoots.length === 0) {
+  if (!env.EVIDENCE_STORAGE_ROOT) {
     res.status(500).json({ message: "Evidence storage not configured" });
     return;
   }
@@ -2107,8 +2079,21 @@ tasksRouter.get("/checklist-evidence/:checklistEvidenceId", async (req, res) => 
     return;
   }
 
-  const found = await resolveStoredFileFromRoots(storagePath, storageRoots);
-  if (!found) {
+  const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
+  if (!resolved) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  let st: fs.Stats;
+  try {
+    st = await fs.promises.stat(resolved);
+  } catch {
+    res.status(404).json({ message: "Evidence file not found" });
+    return;
+  }
+
+  if (!st.isFile()) {
     res.status(404).json({ message: "Evidence file not found" });
     return;
   }
@@ -2118,13 +2103,13 @@ tasksRouter.get("/checklist-evidence/:checklistEvidenceId", async (req, res) => 
   const contentType = contentTypeFromDb ?? inferMimeTypeFromFileName(fileName);
 
   if (contentType) res.setHeader("Content-Type", contentType);
-  res.setHeader("Content-Length", String(found.stats.size));
+  res.setHeader("Content-Length", String(st.size));
   res.setHeader(
     "Content-Disposition",
     `${download ? "attachment" : "inline"}${fileName ? `; filename="${fileName.replace(/"/g, "")}"` : ""}`,
   );
 
-  const stream = fs.createReadStream(found.resolved);
+  const stream = fs.createReadStream(resolved);
   stream.on("error", () => {
     if (!res.headersSent) {
       res.status(500).json({ message: "Failed to read evidence" });
@@ -2273,8 +2258,7 @@ tasksRouter.post(
       return;
     }
 
-    const storageRoot = getEvidenceStorageRootForWrite();
-    if (!storageRoot) {
+    if (!env.EVIDENCE_STORAGE_ROOT) {
       res.status(500).json({ message: "Evidence storage not configured" });
       return;
     }
@@ -2350,10 +2334,10 @@ tasksRouter.post(
     const assetFolder = sanitizeSegment(truncate(`${ctx.assetName} (${tag})`, 180));
     const taskFolder = sanitizeSegment(truncate(`Task ${ctx.taskNumber}`, 100));
 
-    const storageRootAbs = path.resolve(storageRoot);
-    const destAbsInitial = path.join(storageRootAbs, folder, categoryFolder, assetFolder, "Uploads", taskFolder, safeName);
+    const storageRoot = path.resolve(env.EVIDENCE_STORAGE_ROOT);
+    const destAbsInitial = path.join(storageRoot, folder, categoryFolder, assetFolder, "Uploads", taskFolder, safeName);
     const destAbs = await resolveUniqueDestPath(destAbsInitial);
-    const storageRel = path.relative(storageRootAbs, destAbs);
+    const storageRel = path.relative(storageRoot, destAbs);
     if (storageRel.startsWith("..")) {
       res.status(400).json({ message: "Invalid request" });
       return;
@@ -2408,8 +2392,7 @@ tasksRouter.post(
       return;
     }
 
-    const storageRoot = getEvidenceStorageRootForWrite();
-    if (!storageRoot) {
+    if (!env.EVIDENCE_STORAGE_ROOT) {
       res.status(500).json({ message: "Evidence storage not configured" });
       return;
     }
@@ -2509,9 +2492,9 @@ tasksRouter.post(
     const taskFolder = sanitizeSegment(truncate(`Task ${ctx.taskNumber}`, 100));
     const itemFolder = sanitizeSegment(truncate(`Checklist ${sortOrder + 1} ${itemText}`, 120));
 
-    const storageRootAbs = path.resolve(storageRoot);
+    const storageRoot = path.resolve(env.EVIDENCE_STORAGE_ROOT);
     const destAbsInitial = path.join(
-      storageRootAbs,
+      storageRoot,
       folder,
       categoryFolder,
       assetFolder,
@@ -2522,7 +2505,7 @@ tasksRouter.post(
       safeName,
     );
     const destAbs = await resolveUniqueDestPath(destAbsInitial);
-    const storageRel = path.relative(storageRootAbs, destAbs);
+    const storageRel = path.relative(storageRoot, destAbs);
     if (storageRel.startsWith("..")) {
       res.status(400).json({ message: "Invalid request" });
       return;

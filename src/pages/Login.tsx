@@ -87,7 +87,7 @@ const Login = () => {
                 <Wrench className="w-6 h-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">PM System</h1>
+                <h1 className="text-2xl font-bold text-foreground">OPTIMA</h1>
                 <p className="text-sm text-muted-foreground">Preventive Maintenance</p>
               </div>
             </div>
@@ -140,7 +140,7 @@ const Login = () => {
               <Wrench className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">PM System</h1>
+              <h1 className="text-2xl font-bold text-foreground">OPTIMA</h1>
               <p className="text-sm text-muted-foreground">Preventive Maintenance</p>
             </div>
           </div>
@@ -235,7 +235,7 @@ const Login = () => {
           </div>
 
           <p className="text-center text-xs text-muted-foreground mt-6">
-            © 2026 PM System. Integrated with Snipe-IT.
+            © 2026 OPTIMA. Integrated with Snipe-IT.
           </p>
         </motion.div>
       </div>
