@@ -859,9 +859,17 @@ export const TaskDetailDialog = (props: {
   const cancelMutation = useMutation({
     mutationFn: async () => {
       if (!props.taskId) throw new Error("No task selected");
-      return apiCancelTask(props.taskId);
+      const reason = cancelReason.trim();
+      if (!reason) {
+        setCancelTouched(true);
+        throw new Error("Reason is required");
+      }
+      return apiCancelTask({ taskId: props.taskId, reason });
     },
     onSuccess: async () => {
+      setCancelDialogOpen(false);
+      setCancelReason("");
+      setCancelTouched(false);
       await taskQuery.refetch();
       toast({ title: "Task cancelled" });
     },
@@ -1039,6 +1047,11 @@ export const TaskDetailDialog = (props: {
     },
   });
 
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelTouched, setCancelTouched] = useState(false);
+  const cancelReasonError = cancelTouched && cancelReason.trim().length === 0;
+
 	const normalizedStatus = task?.status.toLowerCase() ?? null;
   const claims = getJwtClaims();
   const myUserId = claims?.sub ?? null;
@@ -1096,6 +1109,54 @@ export const TaskDetailDialog = (props: {
     const name = u?.displayName ?? u?.username ?? null;
     return name;
   }, [task?.superadminApprovedBy]);
+
+  const remarksHistory = useMemo(() => {
+    const items: Array<{
+      label: string;
+      note: string;
+      at: string;
+      by: string;
+    }> = [];
+
+    if (task?.revisedAt || task?.revisedBy || task?.revisionNote) {
+      items.push({
+        label: "Revised",
+        note: task.revisionNote ?? "—",
+        at: task.revisedAt ? format(parseISO(task.revisedAt), "yyyy-MM-dd HH:mm") : "—",
+        by: task.revisedBy?.displayName ?? task.revisedBy?.username ?? "—",
+      });
+    }
+
+    if (task?.rejectedAt || task?.rejectedBy || task?.rejectionReason) {
+      items.push({
+        label: "Rejected",
+        note: task.rejectionReason ?? "—",
+        at: task.rejectedAt ? format(parseISO(task.rejectedAt), "yyyy-MM-dd HH:mm") : "—",
+        by: task.rejectedBy?.displayName ?? task.rejectedBy?.username ?? "—",
+      });
+    }
+
+    if (task?.cancelledAt || task?.cancelledBy || task?.cancelledReason) {
+      items.push({
+        label: "Cancelled",
+        note: task.cancelledReason ?? "—",
+        at: task.cancelledAt ? format(parseISO(task.cancelledAt), "yyyy-MM-dd HH:mm") : "—",
+        by: task.cancelledBy?.displayName ?? task.cancelledBy?.username ?? "—",
+      });
+    }
+
+    return items;
+  }, [
+    task?.revisedAt,
+    task?.revisedBy,
+    task?.revisionNote,
+    task?.rejectedAt,
+    task?.rejectedBy,
+    task?.rejectionReason,
+    task?.cancelledAt,
+    task?.cancelledBy,
+    task?.cancelledReason,
+  ]);
 
   const getOutcomeOptions = (requiresPassFail: boolean) => {
     if (requiresPassFail) {
@@ -1331,7 +1392,14 @@ export const TaskDetailDialog = (props: {
   );
 
   const downloadEvidence = useCallback(
-    async (input: { kind: "task" | "checklist"; id: string }) => {
+    async (input: { kind: "task" | "checklist"; id: string; uri?: string | null }) => {
+      const uriValue = input.uri?.trim() ?? "";
+      const isInternal = uriValue === "" || uriValue === "imported" || uriValue === "stored" || uriValue === "uploaded";
+      if (!isInternal) {
+        window.open(uriValue, "_blank", "noreferrer");
+        return;
+      }
+
       const downloaded =
         input.kind === "task"
           ? await apiDownloadEvidence({ evidenceId: input.id, download: true })
@@ -1525,7 +1593,7 @@ export const TaskDetailDialog = (props: {
                 size="sm"
                 variant="destructive"
                 disabled={!task || cancelMutation.isPending || !canCancel}
-                onClick={() => cancelMutation.mutate()}
+                onClick={() => setCancelDialogOpen(true)}
               >
                 Cancel
               </Button>
@@ -1756,6 +1824,26 @@ export const TaskDetailDialog = (props: {
                   </div>
                 </div>
 
+                <div className="glass rounded-lg p-4">
+                  <p className="text-sm font-semibold text-foreground">Remarks History</p>
+                  {remarksHistory.length === 0 ? (
+                    <p className="text-sm text-muted-foreground mt-2">No remarks yet</p>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {remarksHistory.map((item, index) => (
+                        <div key={`${item.label}-${index}`} className="rounded-lg border border-border/60 bg-muted/30 p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">{item.label}</p>
+                            <p className="text-xs text-muted-foreground">{item.at}</p>
+                          </div>
+                          <p className="text-sm text-foreground mt-1">{item.note}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{item.by}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-2">Checklist</h3>
                   <div className="space-y-2">
@@ -1890,7 +1978,7 @@ export const TaskDetailDialog = (props: {
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          onClick={() => downloadEvidence({ kind: "checklist", id: e.id })}
+                                          onClick={() => downloadEvidence({ kind: "checklist", id: e.id, uri: e.uri })}
                                         >
                                           Download
                                         </Button>
@@ -2001,7 +2089,7 @@ export const TaskDetailDialog = (props: {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => downloadEvidence({ kind: "task", id: e.id })}
+                              onClick={() => downloadEvidence({ kind: "task", id: e.id, uri: e.uri })}
                             >
                               Download
                             </Button>
@@ -2165,6 +2253,55 @@ export const TaskDetailDialog = (props: {
             ) : null}
           </div>
         </ScrollArea>
+      </DialogContent>
+    </Dialog>
+    <Dialog
+      open={cancelDialogOpen}
+      onOpenChange={(open) => {
+        setCancelDialogOpen(open);
+        if (!open) {
+          setCancelReason("");
+          setCancelTouched(false);
+        }
+      }}
+    >
+      <DialogContent className="max-w-lg p-0 overflow-hidden">
+        <div className="px-6 py-4 bg-muted/40 border-b border-border/60">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">Cancel Task</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground mt-1">
+            Provide a reason for cancellation.
+          </p>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="space-y-2">
+            <Label>Reason <span className="text-destructive">*</span></Label>
+            <Input
+              value={cancelReason}
+              onChange={(e) => {
+                setCancelReason(e.target.value);
+                if (!cancelTouched) setCancelTouched(true);
+              }}
+              onBlur={() => setCancelTouched(true)}
+              className={cancelReasonError ? "border-destructive focus-visible:ring-destructive" : "bg-muted/30"}
+            />
+            {cancelReasonError ? (
+              <p className="text-xs text-destructive">Reason is required.</p>
+            ) : null}
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>Close</Button>
+            <Button
+              variant="destructive"
+              disabled={cancelMutation.isPending || cancelReason.trim().length === 0}
+              onClick={() => cancelMutation.mutate()}
+              className="shadow-sm"
+            >
+              Confirm Cancel
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
     <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>

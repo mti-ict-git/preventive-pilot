@@ -476,6 +476,7 @@ BEGIN
     CompletedByUserId uniqueidentifier NULL,
     CancelledAt datetime2(0) NULL,
     CancelledByUserId uniqueidentifier NULL,
+    CancelledReason nvarchar(1024) NULL,
     ForceCompleted bit NOT NULL CONSTRAINT DF_pm_PMTasks_ForceCompleted DEFAULT (0),
     IsBackdated bit NOT NULL CONSTRAINT DF_pm_PMTasks_IsBackdated DEFAULT (0),
     BackdateReason nvarchar(1024) NULL,
@@ -508,6 +509,11 @@ END;
 IF COL_LENGTH(N'pm.PMTasks', N'FacilityId') IS NULL
 BEGIN
   ALTER TABLE pm.PMTasks ADD FacilityId uniqueidentifier NULL;
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'CancelledReason') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks ADD CancelledReason nvarchar(1024) NULL;
 END;
 
 IF NOT EXISTS (
