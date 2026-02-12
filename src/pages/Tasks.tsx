@@ -1375,18 +1375,25 @@ export const TaskDetailDialog = (props: {
         if (target) window.open(target, "_blank", "noreferrer");
         return;
       }
-
-      const downloaded =
-        input.kind === "task"
-          ? await apiDownloadEvidence({ evidenceId: input.id })
-          : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id });
-      const url = URL.createObjectURL(downloaded.blob);
-      setPreviewKind(input.kind);
-      setPreviewId(input.id);
-      setPreviewUrl(url);
-      setPreviewFileName(downloaded.fileName ?? input.fileName);
-      setPreviewContentType(downloaded.contentType ?? input.contentType);
-      setPreviewOpen(true);
+      try {
+        const downloaded =
+          input.kind === "task"
+            ? await apiDownloadEvidence({ evidenceId: input.id })
+            : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id });
+        const url = URL.createObjectURL(downloaded.blob);
+        setPreviewKind(input.kind);
+        setPreviewId(input.id);
+        setPreviewUrl(url);
+        setPreviewFileName(downloaded.fileName ?? input.fileName);
+        setPreviewContentType(downloaded.contentType ?? input.contentType);
+        setPreviewOpen(true);
+      } catch (err) {
+        toast({
+          title: "Preview failed",
+          description: err instanceof Error ? err.message : "Request failed",
+          variant: "destructive",
+        });
+      }
     },
     [],
   );
@@ -1399,19 +1406,26 @@ export const TaskDetailDialog = (props: {
         window.open(uriValue, "_blank", "noreferrer");
         return;
       }
-
-      const downloaded =
-        input.kind === "task"
-          ? await apiDownloadEvidence({ evidenceId: input.id, download: true })
-          : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id, download: true });
-      const url = URL.createObjectURL(downloaded.blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = downloaded.fileName ?? "download";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      try {
+        const downloaded =
+          input.kind === "task"
+            ? await apiDownloadEvidence({ evidenceId: input.id, download: true })
+            : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id, download: true });
+        const url = URL.createObjectURL(downloaded.blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = downloaded.fileName ?? "download";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        toast({
+          title: "Download failed",
+          description: err instanceof Error ? err.message : "Request failed",
+          variant: "destructive",
+        });
+      }
     },
     [],
   );

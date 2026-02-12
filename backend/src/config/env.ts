@@ -93,6 +93,7 @@ const EnvSchema = z.object({
 
   EVIDENCE_IMPORT_ROOT: z.string().optional(),
   EVIDENCE_STORAGE_ROOT: z.string().optional(),
+  EVIDENCE_STORAGE_FALLBACK_ROOTS: z.string().optional(),
   EVIDENCE_IMPORT_MAX_FILES: z.string().optional().default("2000").pipe(numberFromString).pipe(z.number().int().min(1)),
 
   MS_GRAPH_TENANT_ID: z.string().optional(),
