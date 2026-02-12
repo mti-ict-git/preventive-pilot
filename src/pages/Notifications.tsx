@@ -644,7 +644,7 @@ const Notifications = () => {
   }, [logItems, statusFilter, channelFilter]);
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-white dark:bg-background">
       <Header title="Notifications" subtitle="Configure reminders and escalation rules" />
 
       <Dialog
