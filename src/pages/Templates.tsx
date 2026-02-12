@@ -308,7 +308,7 @@ const Templates = () => {
   }, [meQuery.data?.user.roles]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <Header title="PM Templates" subtitle="Standardize your maintenance workflows" />
 
       <div className="px-6 pb-8 pt-4 space-y-6">

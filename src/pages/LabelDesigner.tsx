@@ -596,7 +596,7 @@ export default function LabelDesigner() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-[1400px] space-y-6 p-6">
         <div className="rounded-2xl border border-border/60 bg-card/70 shadow-sm p-6">
           <div className="flex flex-wrap items-center justify-between gap-6">

@@ -411,7 +411,7 @@ const Scheduling = () => {
   }, [dayEventsQuery.data]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <Header title="PM Scheduling" subtitle="Manage schedules and assignment rules" />
 
       <div className="p-6 space-y-6 max-w-[1400px] mx-auto">

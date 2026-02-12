@@ -359,7 +359,7 @@ const Tasks = () => {
 	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <Header title="PM Tasks" subtitle="Track and execute maintenance tasks" />
 
       <div className="p-6 space-y-6 max-w-[1400px] mx-auto">

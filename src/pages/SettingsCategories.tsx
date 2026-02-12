@@ -218,7 +218,7 @@ const SettingsCategories = () => {
   if (!superadmin) return <Navigate to="/settings" replace />;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <Header title="Categories" subtitle="Choose which categories appear in Assets" />
 
       <div className="p-6 space-y-6 max-w-[1400px] mx-auto">

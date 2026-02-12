@@ -246,7 +246,7 @@ const SettingsNotifications = () => {
   });
 
   return (
-    <div className="min-h-screen bg-white dark:bg-background">
+    <div className="min-h-screen bg-background">
       <Header title="Notification Settings" subtitle="Configure email and WhatsApp notifications" />
 
       <div className="p-6 space-y-6 max-w-[1400px] mx-auto">

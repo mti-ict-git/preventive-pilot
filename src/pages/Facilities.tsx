@@ -144,8 +144,8 @@ const Facilities = () => {
   return (
     <>
       <Header title="Facilities" subtitle="Manage non-asset areas and PM settings" />
-      <div className="p-6 space-y-6 bg-white">
-        <Card className="border-border/60 bg-white shadow-sm">
+      <div className="p-6 space-y-6 bg-background">
+        <Card className="border-border/60 bg-card shadow-sm">
           <CardHeader className="border-b border-border/60">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">
@@ -400,8 +400,8 @@ const Facilities = () => {
                           variant="outline"
                           className={
                             f.pm.enabled
-                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
-                              : "border-slate-500/30 bg-slate-500/10 text-slate-500"
+                              ? "border-success/30 bg-success/10 text-success"
+                              : "border-muted/60 bg-muted/40 text-muted-foreground"
                           }
                         >
                           {formatTitleCase(f.pm.enabled ? "Enabled" : "Disabled")}

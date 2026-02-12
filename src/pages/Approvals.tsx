@@ -188,7 +188,7 @@ const Approvals = () => {
   const canBulkApproveSupervisor = tab === "supervisor" && canSupervisor;
 
   return (
-    <div className="min-h-screen bg-white p-6 space-y-6">
+    <div className="min-h-screen bg-background p-6 space-y-6">
       <div className="rounded-2xl border border-border/60 bg-card/70 p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>

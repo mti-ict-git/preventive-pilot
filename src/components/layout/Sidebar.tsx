@@ -99,7 +99,7 @@ const Sidebar = () => {
             "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-200 group relative",
             isActive
               ? "bg-primary/10 text-primary shadow-[0_6px_16px_rgba(27,132,255,0.18)]"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
           )}
         >
           {isActive && (
@@ -111,8 +111,8 @@ const Sidebar = () => {
           )}
           <div
             className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-colors",
-              isActive ? "bg-primary/15 text-primary" : "group-hover:bg-slate-200/70 group-hover:text-slate-700"
+              "flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-foreground/70 transition-colors",
+              isActive ? "bg-primary/15 text-primary" : "group-hover:bg-sidebar-accent/80 group-hover:text-sidebar-foreground"
             )}
           >
             <item.icon className="h-4 w-4" />
@@ -148,10 +148,10 @@ const Sidebar = () => {
       initial={false}
       animate={{ width: collapsed ? 80 : 260 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="h-screen bg-white border-r border-slate-200/80 shadow-[0_0_20px_rgba(0,0,0,0.04)] flex flex-col fixed left-0 top-0 z-40"
+      className="h-screen bg-sidebar border-r border-sidebar-border shadow-[0_0_20px_rgba(0,0,0,0.04)] flex flex-col fixed left-0 top-0 z-40"
     >
       {/* Logo */}
-      <div className="h-14 px-5 flex items-center justify-between border-b border-slate-200/80 bg-white/80 backdrop-blur">
+      <div className="h-14 px-5 flex items-center justify-between border-b border-sidebar-border bg-sidebar/80 backdrop-blur">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15 flex items-center justify-center shrink-0">
             <Wrench className="w-5 h-5" />
@@ -163,15 +163,15 @@ const Sidebar = () => {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <h1 className="font-bold text-slate-900">PM System</h1>
-                <p className="text-xs text-slate-400">Snipe-IT Integration</p>
+                <h1 className="font-bold text-sidebar-foreground">PM System</h1>
+                <p className="text-xs text-sidebar-foreground/60">Snipe-IT Integration</p>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+          className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
           aria-label="Toggle sidebar"
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -187,14 +187,14 @@ const Sidebar = () => {
         </div>
 
         {adminNav.length > 0 && (
-          <div className="pt-3 mt-3 border-t border-slate-200/80">
+          <div className="pt-3 mt-3 border-t border-sidebar-border">
             <AnimatePresence>
               {!collapsed && (
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="px-3 mb-2 text-[11px] font-semibold text-slate-400 uppercase tracking-widest"
+                  className="px-3 mb-2 text-[11px] font-semibold text-sidebar-foreground/60 uppercase tracking-widest"
                 >
                   Administration
                 </motion.p>
@@ -208,13 +208,13 @@ const Sidebar = () => {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-slate-200/80">
+      <div className="p-4 border-t border-sidebar-border">
         <button
           onClick={() => {
             clearAccessToken();
             navigate("/login");
           }}
-          className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors"
+          className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
         >
           <LogOut className="w-5 h-5" />
           <AnimatePresence>
@@ -236,7 +236,7 @@ const Sidebar = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="mt-3 text-[11px] text-slate-400 text-center"
+              className="mt-3 text-[11px] text-sidebar-foreground/60 text-center"
             >
               Copyright © 2026, Develop by Merdeka Tsingshan Indonesia v1.0.0
             </motion.p>

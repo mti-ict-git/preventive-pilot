@@ -237,7 +237,7 @@ const SystemSettings = () => {
   const snipeItUrl = baseUrl.trim() ? baseUrl.trim() : systemStatusQuery.data?.snipeIt.baseUrl;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <Header title="System Settings" subtitle="Manage integrations and system configuration" />
 
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
