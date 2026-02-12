@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Navigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { Save, Search, Tags } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -218,19 +218,31 @@ const SettingsCategories = () => {
   if (!superadmin) return <Navigate to="/settings" replace />;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <Header title="Categories" subtitle="Choose which categories appear in Assets" />
 
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-12 gap-4">
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+        <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 md:col-span-8">
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <Card className="glass">
-                <CardHeader>
-                  <CardTitle>Visible Categories</CardTitle>
-                  <CardDescription>
-                    This setting is global and affects what everyone sees on the Assets page.
-                  </CardDescription>
+              <Card className="border-border/60 bg-card/70 shadow-sm">
+                <CardHeader className="border-b border-border/60 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base text-foreground flex items-center gap-2">
+                        <Tags className="h-4 w-4 text-primary" />
+                        Visible Categories
+                      </CardTitle>
+                      <CardDescription>
+                        This setting is global and affects what everyone sees on the Assets page.
+                      </CardDescription>
+                    </div>
+                    <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">
+                      {allCategoryIds.length === 0
+                        ? "No categories"
+                        : `${selectedCount} of ${allCategoryIds.length} selected`}
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-12 gap-4">
@@ -246,7 +258,7 @@ const SettingsCategories = () => {
                       </div>
                     </div>
                     <div className="col-span-12 md:col-span-5">
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <Tabs value={listFilter} onValueChange={(v) => setListFilter(v as ListFilter)}>
                           <TabsList className="w-full">
                             <TabsTrigger value="all" className="flex-1">
@@ -260,7 +272,7 @@ const SettingsCategories = () => {
                             </TabsTrigger>
                           </TabsList>
                         </Tabs>
-                        <label className="flex items-center gap-2 text-sm">
+                        <label className="flex items-center gap-2 text-sm rounded-md border border-border px-2.5 py-1.5 bg-muted/30">
                           <span>Exclude inactive</span>
                           <Switch checked={excludeInactive} onCheckedChange={(v) => setExcludeInactive(v)} />
                         </label>
@@ -284,15 +296,10 @@ const SettingsCategories = () => {
                     >
                       Reset
                     </Button>
-                    <div className="ml-auto text-sm text-muted-foreground">
-                      {allCategoryIds.length === 0
-                        ? "No categories loaded."
-                        : `${selectedCount} of ${allCategoryIds.length} selected`}
-                    </div>
                   </div>
 
-                  <div className="rounded-md border border-border">
-                    <div className="max-h-[420px] overflow-auto p-2">
+                  <div className="rounded-lg border border-border/60 bg-background/70">
+                    <div className="max-h-[420px] overflow-auto p-3">
                       {lookupsQuery.isLoading ? (
                         <div className="p-3 text-sm text-muted-foreground">Loading categories…</div>
                       ) : filteredCategories.length === 0 ? (
@@ -302,7 +309,7 @@ const SettingsCategories = () => {
                           {filteredCategories.map((c) => (
                             <div
                               key={c.id}
-                              className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-muted/30"
+                              className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 hover:bg-muted/30 transition-colors"
                             >
                               <div className="flex items-center gap-2 min-w-0">
                                 <Checkbox
@@ -334,9 +341,12 @@ const SettingsCategories = () => {
 
           <div className="col-span-12 md:col-span-4">
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <Card className="glass">
-                <CardHeader>
-                  <CardTitle>Save Changes</CardTitle>
+              <Card className="border-border/60 bg-card/70 shadow-sm">
+                <CardHeader className="border-b border-border/60 pb-3">
+                  <CardTitle className="text-base text-foreground flex items-center gap-2">
+                    <Save className="h-4 w-4 text-primary" />
+                    Save Changes
+                  </CardTitle>
                   <CardDescription>Apply the selection for all users.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">

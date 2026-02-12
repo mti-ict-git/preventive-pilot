@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,6 +91,7 @@ const UserManagement = () => {
 
   const roles: LookupRole[] = lookupsQuery.data?.roles ?? [];
   const users: UserSummary[] = usersQuery.data?.items ?? [];
+  const totalUsers = usersQuery.data?.total ?? users.length;
 
   const queryClient = useQueryClient();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -266,12 +268,21 @@ const UserManagement = () => {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <Header title="Users & Roles" subtitle="Manage system access and permissions" />
 
-      <div className="p-6 space-y-6">
-        {/* Roles Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Roles Overview</h2>
+              <p className="text-sm text-muted-foreground">User distribution across access levels</p>
+            </div>
+            <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">{roles.length} roles</Badge>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {lookupsQuery.isLoading
             ? Array.from({ length: 4 }).map((_, index) => (
                 <motion.div
@@ -279,16 +290,19 @@ const UserManagement = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="stat-card"
                 >
-                  <div className="flex items-center gap-3 mb-3">
-                    <Skeleton className="w-10 h-10 rounded-lg" />
-                    <div className="space-y-1">
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-3 w-16" />
-                    </div>
-                  </div>
-                  <Skeleton className="h-3 w-32" />
+                  <Card className="border-border/60 bg-card/70 shadow-sm">
+                    <CardContent className="p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-6 w-16" />
+                          <Skeleton className="h-3 w-32" />
+                        </div>
+                        <Skeleton className="w-10 h-10 rounded-lg" />
+                      </div>
+                    </CardContent>
+                  </Card>
                 </motion.div>
               ))
             : roles.map((role, index) => {
@@ -304,266 +318,293 @@ const UserManagement = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="stat-card"
                   >
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${meta.color}`}>
-                        <Shield className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-foreground">{role.name}</p>
-                        <p className="text-xs text-muted-foreground">{userCount} users</p>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{meta.description}</p>
+                    <Card className="border-border/60 bg-card/70 shadow-sm hover:shadow-md transition-shadow">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">{role.name}</p>
+                            <p className="text-2xl font-semibold text-foreground mt-2 tabular-nums">{userCount}</p>
+                            <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{meta.description}</p>
+                          </div>
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${meta.color}`}>
+                            <Shield className="w-5 h-5" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   </motion.div>
                 );
               })}
         </div>
 
-        {/* Users List */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="glass rounded-xl overflow-hidden"
         >
-          <div className="p-4 border-b border-border flex flex-col md:flex-row gap-4 justify-between">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search users..."
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(1);
-                }}
-                className="pl-10 bg-muted/50"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant={statusFilter === "all" ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setStatusFilter("all");
-                  setPage(1);
-                }}
-              >
-                All
-              </Button>
-              <Button
-                variant={statusFilter === "active" ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setStatusFilter("active");
-                  setPage(1);
-                }}
-              >
-                Active
-              </Button>
-              <Button
-                variant={statusFilter === "inactive" ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setStatusFilter("inactive");
-                  setPage(1);
-                }}
-              >
-                Inactive
-              </Button>
-            </div>
-            <Button
-              className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
-              onClick={() => {
-                setNewDialogOpen(true);
-                setNewMode("local");
-                setLocalUsername("");
-                setLocalDisplayName("");
-                setLocalEmail("");
-                setLocalPhone("");
-                setLocalPassword("");
-                setLocalRole("");
-                setLocalActive(true);
-                setLdapIdentifier("");
-                setLdapRole("");
-                setLdapActive(true);
-              }}
-            >
-              <Plus className="w-4 h-4" />
-              Add User
-            </Button>
-          </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="text-muted-foreground">User</TableHead>
-                <TableHead className="text-muted-foreground">Role</TableHead>
-                <TableHead className="text-muted-foreground">Tasks Completed</TableHead>
-                <TableHead className="text-muted-foreground">Status</TableHead>
-                <TableHead className="text-muted-foreground"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {usersQuery.isLoading
-                ? Array.from({ length: 5 }).map((_, index) => (
-                    <motion.tr
-                      key={`user-skeleton-${index}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 + index * 0.05 }}
-                      className="border-border hover:bg-muted/30 transition-colors"
+          <Card className="border-border/60 bg-card/70 shadow-sm">
+            <CardHeader className="border-b border-border/60 pb-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <CardTitle className="text-base text-foreground">Users</CardTitle>
+                  <CardDescription>Manage access, roles, and account status</CardDescription>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">{totalUsers} users</Badge>
+                  <Button
+                    className="gap-2"
+                    onClick={() => {
+                      setNewDialogOpen(true);
+                      setNewMode("local");
+                      setLocalUsername("");
+                      setLocalDisplayName("");
+                      setLocalEmail("");
+                      setLocalPhone("");
+                      setLocalPassword("");
+                      setLocalRole("");
+                      setLocalActive(true);
+                      setLdapIdentifier("");
+                      setLdapRole("");
+                      setLdapActive(true);
+                    }}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add User
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-12 gap-4 items-center">
+                <div className="col-span-12 lg:col-span-6">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search users..."
+                      value={search}
+                      onChange={(event) => {
+                        setSearch(event.target.value);
+                        setPage(1);
+                      }}
+                      className="pl-10 bg-background"
+                    />
+                  </div>
+                </div>
+                <div className="col-span-12 lg:col-span-6">
+                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                    <Button
+                      variant={statusFilter === "all" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setStatusFilter("all");
+                        setPage(1);
+                      }}
                     >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Skeleton className="w-10 h-10 rounded-full" />
-                          <div className="space-y-1">
-                            <Skeleton className="h-4 w-32" />
-                            <Skeleton className="h-3 w-40" />
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-24" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-24" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-16" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                      </TableCell>
-                    </motion.tr>
-                  ))
-                : users.map((user, index) => (
-                <motion.tr
-                  key={user.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 + index * 0.05 }}
-                  className="border-border hover:bg-muted/30 transition-colors"
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback className="bg-primary/20 text-primary">
-                          {(user.displayName ?? user.username)
-                            .split(" ")
-                            .filter((part) => part.length > 0)
-                            .slice(0, 2)
-                            .map((part) => {
-                              const first = part[0];
-                              return first ? first.toUpperCase() : "";
-                            })
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium text-foreground">{user.displayName ?? user.username}</p>
-                        {user.email ? <p className="text-sm text-muted-foreground">{user.email}</p> : null}
-                        {user.externalProvider === "ldap" ? (
-                          <p className="text-sm text-muted-foreground">Mobile: {user.phone ?? "—"}</p>
-                        ) : user.phone ? (
-                          <p className="text-sm text-muted-foreground">Mobile: {user.phone}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="space-x-1">
-                    {user.roles.map((role) => (
-                      <span key={role}>{getRoleBadge(role)}</span>
-                    ))}
-                  </TableCell>
-                  <TableCell className="text-foreground">{user.tasksCompleted}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={
-                      user.isActive
-                        ? "bg-success/20 text-success border-success/30"
-                        : "bg-muted text-muted-foreground"
-                    }>
-                      {user.isActive ? "active" : "inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="gap-2" onSelect={() => openEdit(user)}>
-                          <Edit2 className="w-4 h-4" /> Edit User
-                        </DropdownMenuItem>
-                        {user.externalProvider === "ldap" ? (
-                          <DropdownMenuItem
-                            className="gap-2"
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              refreshLdapMutation.mutate(user.id);
-                            }}
-                            disabled={refreshLdapMutation.isPending}
-                          >
-                            <RefreshCw className="w-4 h-4" /> Refresh AD Profile
-                          </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuItem className="gap-2">
-                          <Mail className="w-4 h-4" /> Send Email
-                        </DropdownMenuItem>
-                        {user.externalProvider === "local" && (
-                          <DropdownMenuItem
-                            className="gap-2 text-destructive"
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              setDeleteTarget(user);
-                              setDeleteDialogOpen(true);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" /> Delete Local User
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </motion.tr>
-                ))}
-            </TableBody>
-          </Table>
+                      All
+                    </Button>
+                    <Button
+                      variant={statusFilter === "active" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setStatusFilter("active");
+                        setPage(1);
+                      }}
+                    >
+                      Active
+                    </Button>
+                    <Button
+                      variant={statusFilter === "inactive" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setStatusFilter("inactive");
+                        setPage(1);
+                      }}
+                    >
+                      Inactive
+                    </Button>
+                  </div>
+                </div>
+              </div>
 
-          {usersQuery.isError && (
-            <div className="p-4 text-sm text-destructive border-t border-border">Failed to load users.</div>
-          )}
+              <div className="mt-4 rounded-lg border border-border/60">
+                <Table>
+                  <TableHeader className="bg-muted/30">
+                    <TableRow className="border-border hover:bg-transparent">
+                      <TableHead className="text-muted-foreground">User</TableHead>
+                      <TableHead className="text-muted-foreground">Role</TableHead>
+                      <TableHead className="text-muted-foreground">Tasks Completed</TableHead>
+                      <TableHead className="text-muted-foreground">Status</TableHead>
+                      <TableHead className="text-muted-foreground"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {usersQuery.isLoading
+                      ? Array.from({ length: 5 }).map((_, index) => (
+                          <motion.tr
+                            key={`user-skeleton-${index}`}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.5 + index * 0.05 }}
+                            className="border-border hover:bg-muted/30 transition-colors"
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Skeleton className="w-10 h-10 rounded-full" />
+                                <div className="space-y-1">
+                                  <Skeleton className="h-4 w-32" />
+                                  <Skeleton className="h-3 w-40" />
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-24" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-24" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-16" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-8 w-8 rounded-full" />
+                            </TableCell>
+                          </motion.tr>
+                        ))
+                      : users.map((user, index) => (
+                          <motion.tr
+                            key={user.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.5 + index * 0.05 }}
+                            className="border-border hover:bg-muted/30 transition-colors"
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="w-10 h-10">
+                                  <AvatarFallback className="bg-primary/20 text-primary">
+                                    {(user.displayName ?? user.username)
+                                      .split(" ")
+                                      .filter((part) => part.length > 0)
+                                      .slice(0, 2)
+                                      .map((part) => {
+                                        const first = part[0];
+                                        return first ? first.toUpperCase() : "";
+                                      })
+                                      .join("")}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-medium text-foreground">{user.displayName ?? user.username}</p>
+                                  {user.email ? <p className="text-sm text-muted-foreground">{user.email}</p> : null}
+                                  {user.externalProvider === "ldap" ? (
+                                    <p className="text-sm text-muted-foreground">Mobile: {user.phone ?? "—"}</p>
+                                  ) : user.phone ? (
+                                    <p className="text-sm text-muted-foreground">Mobile: {user.phone}</p>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="space-x-1">
+                              {user.roles.map((role) => (
+                                <span key={role}>{getRoleBadge(role)}</span>
+                              ))}
+                            </TableCell>
+                            <TableCell className="text-foreground">{user.tasksCompleted}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  user.isActive
+                                    ? "bg-success/20 text-success border-success/30"
+                                    : "bg-muted text-muted-foreground"
+                                }
+                              >
+                                {user.isActive ? "active" : "inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <MoreVertical className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem className="gap-2" onSelect={() => openEdit(user)}>
+                                    <Edit2 className="w-4 h-4" /> Edit User
+                                  </DropdownMenuItem>
+                                  {user.externalProvider === "ldap" ? (
+                                    <DropdownMenuItem
+                                      className="gap-2"
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        refreshLdapMutation.mutate(user.id);
+                                      }}
+                                      disabled={refreshLdapMutation.isPending}
+                                    >
+                                      <RefreshCw className="w-4 h-4" /> Refresh AD Profile
+                                    </DropdownMenuItem>
+                                  ) : null}
+                                  <DropdownMenuItem className="gap-2">
+                                    <Mail className="w-4 h-4" /> Send Email
+                                  </DropdownMenuItem>
+                                  {user.externalProvider === "local" && (
+                                    <DropdownMenuItem
+                                      className="gap-2 text-destructive"
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        setDeleteTarget(user);
+                                        setDeleteDialogOpen(true);
+                                      }}
+                                    >
+                                      <Trash2 className="w-4 h-4" /> Delete Local User
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </motion.tr>
+                        ))}
+                  </TableBody>
+                </Table>
+              </div>
 
-          <div className="p-4 border-t border-border flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Page {usersQuery.data?.page ?? page} of {usersQuery.data ? Math.max(1, Math.ceil(usersQuery.data.total / pageSize)) : 1}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={(usersQuery.data?.page ?? page) <= 1 || usersQuery.isLoading}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={
-                  usersQuery.isLoading ||
-                  !usersQuery.data ||
-                  (usersQuery.data.page ?? page) >= Math.max(1, Math.ceil(usersQuery.data.total / pageSize))
-                }
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+              {usersQuery.isError && (
+                <div className="mt-4 rounded-lg border border-border/60 bg-destructive/5 p-3 text-sm text-destructive">
+                  Failed to load users.
+                </div>
+              )}
+
+              <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-4">
+                <div className="text-sm text-muted-foreground">
+                  Page {usersQuery.data?.page ?? page} of {usersQuery.data ? Math.max(1, Math.ceil(usersQuery.data.total / pageSize)) : 1}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={(usersQuery.data?.page ?? page) <= 1 || usersQuery.isLoading}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      usersQuery.isLoading ||
+                      !usersQuery.data ||
+                      (usersQuery.data.page ?? page) >= Math.max(1, Math.ceil(usersQuery.data.total / pageSize))
+                    }
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
         <AlertDialog

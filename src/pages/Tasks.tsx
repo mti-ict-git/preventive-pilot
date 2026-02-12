@@ -271,18 +271,18 @@ const Tasks = () => {
     ];
   }, [statsQuery.data?.items]);
 
-  const statToneClass = (tone: "primary" | "warning" | "destructive" | "success") => {
+  const statBorder = (tone: "primary" | "warning" | "destructive" | "success") => {
+    if (tone === "primary") return "border-t-primary";
+    if (tone === "warning") return "border-t-warning";
+    if (tone === "success") return "border-t-success";
+    return "border-t-destructive";
+  };
+
+  const statIconClass = (tone: "primary" | "warning" | "destructive" | "success") => {
     if (tone === "warning") return "bg-warning/10 text-warning";
     if (tone === "destructive") return "bg-destructive/10 text-destructive";
     if (tone === "success") return "bg-success/10 text-success";
     return "bg-primary/10 text-primary";
-  };
-
-  const statValueClass = (tone: "primary" | "warning" | "destructive" | "success") => {
-    if (tone === "warning") return "text-warning";
-    if (tone === "destructive") return "text-destructive";
-    if (tone === "success") return "text-success";
-    return "text-primary";
   };
 
 	const filteredTasks = useMemo(() => {
@@ -363,17 +363,19 @@ const Tasks = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.08 }}
             >
-              <Card className="border-border/60 bg-card/70 shadow-sm">
+              <Card
+                className={`border-border/60 bg-card/70 shadow-sm hover:shadow-md transition-shadow border-t-2 ${statBorder(stat.tone)}`}
+              >
                 <CardContent className="p-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{stat.label}</p>
-                      <p className={`text-3xl font-semibold mt-2 tabular-nums ${statValueClass(stat.tone)}`}>
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground truncate">{stat.label}</p>
+                      <p className="text-3xl font-semibold text-foreground mt-2 tabular-nums leading-none">
                         {stat.value}
                       </p>
                     </div>
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${statToneClass(stat.tone)}`}>
-                      <stat.icon className="w-5 h-5" />
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${statIconClass(stat.tone)}`}>
+                      <stat.icon className="w-6 h-6" />
                     </div>
                   </div>
                 </CardContent>

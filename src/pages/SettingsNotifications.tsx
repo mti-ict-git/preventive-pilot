@@ -81,6 +81,8 @@ const SettingsNotifications = () => {
   const [whatsAppMentionNumbersText, setWhatsAppMentionNumbersText] = useState<string>("");
   const [sendTestWhatsApp, setSendTestWhatsApp] = useState<boolean>(false);
 
+  const cardClassName = "metronic-card";
+
   useEffect(() => {
     const data = settingsQuery.data;
     if (!data) return;
@@ -244,17 +246,23 @@ const SettingsNotifications = () => {
   });
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white dark:bg-background">
       <Header title="Notification Settings" subtitle="Configure email and WhatsApp notifications" />
 
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "email" | "whatsapp")} className="w-full">
-          <TabsList className="bg-muted/50 p-1">
-            <TabsTrigger value="email" className="gap-2">
+          <TabsList className="bg-muted/40 p-1 rounded-lg border border-border/60 shadow-sm">
+            <TabsTrigger
+              value="email"
+              className="gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground"
+            >
               <Mail className="h-4 w-4" />
               Email
             </TabsTrigger>
-            <TabsTrigger value="whatsapp" className="gap-2">
+            <TabsTrigger
+              value="whatsapp"
+              className="gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground"
+            >
               <MessageSquare className="h-4 w-4" />
               WhatsApp
             </TabsTrigger>
@@ -264,8 +272,8 @@ const SettingsNotifications = () => {
             <div className="grid grid-cols-12 gap-4">
               <div className="col-span-12 md:col-span-7">
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <Card className="glass border-border">
-                    <CardHeader>
+                  <Card className={cardClassName}>
+                    <CardHeader className="border-b border-border/60">
                       <CardTitle className="flex items-center gap-2">
                         <Mail className="w-5 h-5 text-primary" />
                         Microsoft Graph
@@ -273,7 +281,7 @@ const SettingsNotifications = () => {
                       <CardDescription>Used by notification jobs to send email</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 p-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">Enable email notifications</p>
                           <p className="text-xs text-muted-foreground">Applies to server-side jobs</p>
@@ -284,11 +292,11 @@ const SettingsNotifications = () => {
                       <div className="grid grid-cols-12 gap-4">
                         <div className="col-span-12 md:col-span-6 space-y-2">
                           <Label>Tenant ID</Label>
-                          <Input value={tenantId} onChange={(e) => setTenantId(e.target.value)} className="bg-muted/50" />
+                          <Input value={tenantId} onChange={(e) => setTenantId(e.target.value)} className="bg-muted/30" />
                         </div>
                         <div className="col-span-12 md:col-span-6 space-y-2">
                           <Label>Client ID</Label>
-                          <Input value={clientId} onChange={(e) => setClientId(e.target.value)} className="bg-muted/50" />
+                          <Input value={clientId} onChange={(e) => setClientId(e.target.value)} className="bg-muted/30" />
                         </div>
                       </div>
 
@@ -298,12 +306,12 @@ const SettingsNotifications = () => {
                           <Input
                             value={senderEmail}
                             onChange={(e) => setSenderEmail(e.target.value)}
-                            className="bg-muted/50"
+                            className="bg-muted/30"
                             placeholder="widji.santoso@company.com"
                           />
                         </div>
                         <div className="col-span-12 md:col-span-5 flex items-end">
-                          <div className="flex items-center gap-3 rounded-lg border border-border p-3 w-full">
+                          <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/30 p-3 w-full">
                             <Shield className="w-4 h-4 text-muted-foreground" />
                             <div className="flex-1">
                               <p className="text-sm font-medium text-foreground">Use logged-in sender</p>
@@ -322,12 +330,12 @@ const SettingsNotifications = () => {
                         <Textarea
                           value={scopeText}
                           onChange={(e) => setScopeText(e.target.value)}
-                          className="bg-muted/50"
+                          className="bg-muted/30"
                           rows={2}
                         />
                       </div>
 
-                      <div className="rounded-lg border border-border p-4 space-y-3">
+                      <div className="rounded-lg border border-border/60 bg-muted/30 p-4 space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Key className="w-4 h-4 text-muted-foreground" />
@@ -347,7 +355,7 @@ const SettingsNotifications = () => {
                           <Input
                             value={clientSecret}
                             onChange={(e) => setClientSecret(e.target.value)}
-                            className="bg-muted/50"
+                            className="bg-muted/30"
                             placeholder="Paste new secret"
                             type="password"
                           />
@@ -362,7 +370,7 @@ const SettingsNotifications = () => {
                           <Textarea
                             value={defaultToRecipientsText}
                             onChange={(e) => setDefaultToRecipientsText(e.target.value)}
-                            className="bg-muted/50"
+                            className="bg-muted/30"
                             rows={3}
                           />
                         </div>
@@ -371,7 +379,7 @@ const SettingsNotifications = () => {
                           <Textarea
                             value={defaultCcRecipientsText}
                             onChange={(e) => setDefaultCcRecipientsText(e.target.value)}
-                            className="bg-muted/50"
+                            className="bg-muted/30"
                             rows={3}
                           />
                         </div>
@@ -380,7 +388,7 @@ const SettingsNotifications = () => {
                           <Textarea
                             value={defaultBccRecipientsText}
                             onChange={(e) => setDefaultBccRecipientsText(e.target.value)}
-                            className="bg-muted/50"
+                            className="bg-muted/30"
                             rows={3}
                           />
                         </div>
@@ -392,13 +400,13 @@ const SettingsNotifications = () => {
                           <Input
                             value={emailSubjectTemplate}
                             onChange={(e) => setEmailSubjectTemplate(e.target.value)}
-                            className="bg-muted/50"
+                            className="bg-muted/30"
                             placeholder="PM Reminder: {{taskNumber}} due {{dueAt}}"
                           />
                         </div>
                         <div className="col-span-12 md:col-span-6 space-y-2">
                           <Label>Last Connection Test</Label>
-                          <div className="h-10 flex items-center rounded-md border border-border bg-muted/20 px-3 text-sm text-muted-foreground">
+                          <div className="h-10 flex items-center rounded-md border border-border/60 bg-muted/20 px-3 text-sm text-muted-foreground">
                             {lastTestText}
                           </div>
                         </div>
@@ -409,7 +417,7 @@ const SettingsNotifications = () => {
                         <Textarea
                           value={emailBodyTemplate}
                           onChange={(e) => setEmailBodyTemplate(e.target.value)}
-                          className="bg-muted/50"
+                          className="bg-muted/30"
                           rows={8}
                           placeholder="{{message}}"
                         />
@@ -447,7 +455,7 @@ const SettingsNotifications = () => {
                         </div>
 
                         <div className="col-span-12 md:col-span-5">
-                          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 p-3">
                             <div>
                               <p className="text-sm font-medium text-foreground">Send test email</p>
                               <p className="text-xs text-muted-foreground">Uses Default To/Cc/Bcc</p>
@@ -467,8 +475,8 @@ const SettingsNotifications = () => {
 
               <div className="col-span-12 md:col-span-5">
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                  <Card className="glass border-border">
-                    <CardHeader>
+                  <Card className={cardClassName}>
+                    <CardHeader className="border-b border-border/60">
                       <CardTitle>Notes</CardTitle>
                       <CardDescription>How this setting is used</CardDescription>
                     </CardHeader>
@@ -496,8 +504,8 @@ const SettingsNotifications = () => {
             <div className="grid grid-cols-12 gap-4">
               <div className="col-span-12 md:col-span-7">
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <Card className="glass border-border">
-                    <CardHeader>
+                  <Card className={cardClassName}>
+                    <CardHeader className="border-b border-border/60">
                       <CardTitle className="flex items-center gap-2">
                         <MessageSquare className="w-5 h-5 text-primary" />
                         WhatsApp
@@ -505,7 +513,7 @@ const SettingsNotifications = () => {
                       <CardDescription>Used by notification jobs to send WhatsApp messages</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 p-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">Enable WhatsApp notifications</p>
                           <p className="text-xs text-muted-foreground">Applies to server-side jobs</p>
@@ -519,14 +527,14 @@ const SettingsNotifications = () => {
                           <Input
                             value={whatsAppBaseUrl}
                             onChange={(e) => setWhatsAppBaseUrl(e.target.value)}
-                            className="bg-muted/50"
+                            className="bg-muted/30"
                             placeholder="http://localhost:3000"
                           />
                         </div>
                         <div className="col-span-12 md:col-span-5 space-y-2">
                           <Label>Send Target</Label>
                           <Select value={whatsAppTarget} onValueChange={(v) => setWhatsAppTarget(v as "single" | "group")}>
-                            <SelectTrigger className="bg-muted/50">
+                            <SelectTrigger className="bg-muted/30">
                               <SelectValue placeholder="Select target" />
                             </SelectTrigger>
                             <SelectContent>
@@ -544,7 +552,7 @@ const SettingsNotifications = () => {
                             <Input
                               value={whatsAppDefaultNumber}
                               onChange={(e) => setWhatsAppDefaultNumber(e.target.value)}
-                              className="bg-muted/50"
+                              className="bg-muted/30"
                               placeholder="6281234567890"
                             />
                           </div>
@@ -556,7 +564,7 @@ const SettingsNotifications = () => {
                             <Input
                               value={whatsAppGroupId}
                               onChange={(e) => setWhatsAppGroupId(e.target.value)}
-                              className="bg-muted/50"
+                              className="bg-muted/30"
                               placeholder="1203630xxxxxxxxx@g.us"
                             />
                           </div>
@@ -565,7 +573,7 @@ const SettingsNotifications = () => {
                             <Input
                               value={whatsAppGroupName}
                               onChange={(e) => setWhatsAppGroupName(e.target.value)}
-                              className="bg-muted/50"
+                              className="bg-muted/30"
                               placeholder="My Group Name"
                             />
                           </div>
@@ -577,7 +585,7 @@ const SettingsNotifications = () => {
                         <Textarea
                           value={whatsAppMentionNumbersText}
                           onChange={(e) => setWhatsAppMentionNumbersText(e.target.value)}
-                          className="bg-muted/50"
+                          className="bg-muted/30"
                           rows={2}
                           placeholder="6281234567890, 6289998887777"
                         />
@@ -611,7 +619,7 @@ const SettingsNotifications = () => {
                         </div>
 
                         <div className="col-span-12 md:col-span-5">
-                          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 p-3">
                             <div>
                               <p className="text-sm font-medium text-foreground">Send test message</p>
                               <p className="text-xs text-muted-foreground">Uses configured group/number</p>
@@ -631,8 +639,8 @@ const SettingsNotifications = () => {
 
               <div className="col-span-12 md:col-span-5">
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                  <Card className="glass border-border">
-                    <CardHeader>
+                  <Card className={cardClassName}>
+                    <CardHeader className="border-b border-border/60">
                       <CardTitle>Notes</CardTitle>
                       <CardDescription>How this setting is used</CardDescription>
                     </CardHeader>

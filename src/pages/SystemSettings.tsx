@@ -237,10 +237,10 @@ const SystemSettings = () => {
   const snipeItUrl = baseUrl.trim() ? baseUrl.trim() : systemStatusQuery.data?.snipeIt.baseUrl;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <Header title="System Settings" subtitle="Manage integrations and system configuration" />
 
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
         {/* System Status */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {systemStatus.map((item, index) => (
@@ -249,7 +249,7 @@ const SystemSettings = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="stat-card"
+              className="metronic-card rounded-xl p-4"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -279,8 +279,8 @@ const SystemSettings = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 }}
           >
-            <Card className="glass border-border">
-              <CardHeader>
+            <Card className="metronic-card">
+              <CardHeader className="border-b border-border/60 pb-4">
                 <CardTitle className="text-foreground flex items-center gap-2">
                   <Server className="w-5 h-5 text-primary" />
                   Connection Status
@@ -288,7 +288,7 @@ const SystemSettings = () => {
                 <CardDescription>Current API base and health</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/60">
                   <div>
                     <p className="font-medium text-foreground">API Base</p>
                     <p className="text-sm text-muted-foreground break-all">{API_BASE_URL || window.location.origin}</p>
@@ -298,7 +298,7 @@ const SystemSettings = () => {
                     Refresh
                   </Button>
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/60">
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${healthQuery.data?.status === "ok" ? "bg-success" : "bg-warning"}`} />
                     <p className="font-medium text-foreground">Health</p>
@@ -316,8 +316,8 @@ const SystemSettings = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <Card className="glass border-border">
-              <CardHeader>
+            <Card className="metronic-card">
+              <CardHeader className="border-b border-border/60 pb-4">
                 <CardTitle className="text-foreground flex items-center gap-2">
                   <Server className="w-5 h-5 text-primary" />
                   Snipe-IT Integration
@@ -331,7 +331,7 @@ const SystemSettings = () => {
                     <Input
                       value={baseUrl}
                       onChange={(e) => setBaseUrl(e.target.value)}
-                      className="bg-muted/50"
+                      className="bg-background/60"
                       placeholder="https://assets.company.com"
                     />
                     <Button
@@ -356,7 +356,7 @@ const SystemSettings = () => {
                       onChange={(e) => {
                         if (editToken) setApiToken(e.target.value);
                       }}
-                      className="bg-muted/50"
+                      className="bg-background/60"
                       placeholder={
                         editToken
                           ? apiTokenConfigured
@@ -380,7 +380,7 @@ const SystemSettings = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/60">
                   <div>
                     <p className="font-medium text-foreground">Auto Sync</p>
                     <p className="text-sm text-muted-foreground">Sync every {syncIntervalMinutes} minutes</p>
@@ -399,7 +399,7 @@ const SystemSettings = () => {
                       const next = Number(e.target.value);
                       setSyncIntervalMinutes(Number.isFinite(next) && next > 0 ? Math.floor(next) : 1);
                     }}
-                    className="bg-muted/50"
+                    className="bg-background/60"
                   />
                 </div>
 
@@ -439,8 +439,8 @@ const SystemSettings = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
           >
-            <Card className="glass border-border">
-              <CardHeader>
+            <Card className="metronic-card">
+              <CardHeader className="border-b border-border/60 pb-4">
                 <CardTitle className="text-foreground flex items-center gap-2">
                   <Clock className="w-5 h-5 text-accent" />
                   Job Scheduler
@@ -467,7 +467,7 @@ const SystemSettings = () => {
                 ].map((job, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/60 hover:bg-muted/40 transition-colors"
                   >
                     <div>
                       <p className="font-medium text-foreground">{job.name}</p>
@@ -493,8 +493,8 @@ const SystemSettings = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.55 }}
           >
-            <Card className="glass border-border">
-              <CardHeader>
+            <Card className="metronic-card">
+              <CardHeader className="border-b border-border/60 pb-4">
                 <CardTitle className="text-foreground flex items-center gap-2">
                   <Upload className="w-5 h-5 text-primary" />
                   Evidence Import
@@ -505,7 +505,7 @@ const SystemSettings = () => {
                 <div className="space-y-2">
                   <Label>Template</Label>
                   <Select value={importTemplateId} onValueChange={setImportTemplateId}>
-                    <SelectTrigger className="bg-muted/50">
+                    <SelectTrigger className="bg-background/60">
                       <SelectValue placeholder="Select template" />
                     </SelectTrigger>
                     <SelectContent>
@@ -525,7 +525,7 @@ const SystemSettings = () => {
                     value={importDuplicateAction}
                     onValueChange={(v) => setImportDuplicateAction(v === "replace" ? "replace" : "skip")}
                   >
-                    <SelectTrigger className="bg-muted/50">
+                    <SelectTrigger className="bg-background/60">
                       <SelectValue placeholder="Duplicate handling" />
                     </SelectTrigger>
                     <SelectContent>
@@ -554,8 +554,8 @@ const SystemSettings = () => {
             transition={{ delay: 0.6 }}
             className="lg:col-span-2"
           >
-            <Card className="glass border-border">
-              <CardHeader>
+            <Card className="metronic-card">
+              <CardHeader className="border-b border-border/60 pb-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-foreground flex items-center gap-2">
@@ -574,7 +574,7 @@ const SystemSettings = () => {
                   {recentLogs.map((log, index) => (
                     <div
                       key={index}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
+                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border/60 hover:bg-muted/30 transition-colors"
                     >
                       <div className={`w-2 h-2 rounded-full ${
                         log.type === "warn" ? "bg-warning" :
