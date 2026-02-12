@@ -25,7 +25,7 @@ import WorkOrderDetail from "./pages/WorkOrderDetail";
 import Approvals from "./pages/Approvals";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
-import { getAccessToken, isSuperadmin } from "@/lib/auth";
+import { getAccessToken, hasRole, isSuperadmin } from "@/lib/auth";
 import { ThemeProvider } from "next-themes";
 
 const queryClient = new QueryClient();
@@ -38,6 +38,11 @@ const ProtectedLayout = () => {
 
 const SuperadminRoute = ({ element }: { element: ReactElement }) => {
   if (!isSuperadmin()) return <Navigate to="/settings" replace />;
+  return element;
+};
+
+const NotSupervisorRoute = ({ element }: { element: ReactElement }) => {
+  if (hasRole("Supervisor")) return <Navigate to="/dashboard" replace />;
   return element;
 };
 
@@ -66,7 +71,7 @@ const App = () => (
             <Route path="/work-orders/:taskId" element={<WorkOrderDetail />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/reports" element={<Reports />} />
-            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/notifications" element={<NotSupervisorRoute element={<Notifications />} />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/settings" element={<SystemSettings />} />
             <Route path="/settings/notifications" element={<SettingsNotifications />} />

@@ -22,7 +22,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { clearAccessToken, isSuperadmin } from "@/lib/auth";
+import { clearAccessToken, hasRole, isSuperadmin } from "@/lib/auth";
 import { apiGetDashboardOverview } from "@/lib/api";
 
 interface NavItem {
@@ -69,7 +69,11 @@ const Sidebar = () => {
       overviewQuery.data.stats.upcoming7DaysCount
     : null;
 
-  const mainNav: NavItem[] = mainNavBase.map((item) => {
+  const mainNavItems = hasRole("Supervisor")
+    ? mainNavBase.filter((item) => item.href !== "/notifications")
+    : mainNavBase;
+
+  const mainNav: NavItem[] = mainNavItems.map((item) => {
     if (item.href !== "/tasks") return item;
     return {
       ...item,
