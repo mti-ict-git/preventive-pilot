@@ -69,7 +69,9 @@ const Sidebar = () => {
       overviewQuery.data.stats.upcoming7DaysCount
     : null;
 
-  const mainNavItems = hasRole("Supervisor")
+  const isSupervisor = hasRole("Supervisor");
+
+  const mainNavItems = isSupervisor
     ? mainNavBase.filter((item) => item.href !== "/notifications")
     : mainNavBase;
 
@@ -81,9 +83,10 @@ const Sidebar = () => {
     };
   });
 
-  const adminNav: NavItem[] = isSuperadmin()
+  const adminNavBase: NavItem[] = isSuperadmin()
     ? [...settingsNav, { title: "Categories", icon: Tags, href: "/settings/categories" }]
     : settingsNav;
+  const adminNav: NavItem[] = isSupervisor ? [] : adminNavBase;
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = location.pathname === item.href;
@@ -183,23 +186,25 @@ const Sidebar = () => {
           ))}
         </div>
 
-        <div className="pt-3 mt-3 border-t border-slate-200/80">
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="px-3 mb-2 text-[11px] font-semibold text-slate-400 uppercase tracking-widest"
-              >
-                Administration
-              </motion.p>
-            )}
-          </AnimatePresence>
-          {adminNav.map((item) => (
-            <NavItemComponent key={item.href} item={item} />
-          ))}
-        </div>
+        {adminNav.length > 0 && (
+          <div className="pt-3 mt-3 border-t border-slate-200/80">
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="px-3 mb-2 text-[11px] font-semibold text-slate-400 uppercase tracking-widest"
+                >
+                  Administration
+                </motion.p>
+              )}
+            </AnimatePresence>
+            {adminNav.map((item) => (
+              <NavItemComponent key={item.href} item={item} />
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* Footer */}
@@ -225,6 +230,18 @@ const Sidebar = () => {
             )}
           </AnimatePresence>
         </button>
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="mt-3 text-[11px] text-slate-400 text-center"
+            >
+              Copyright © 2026, Develop by Merdeka Tsingshan Indonesia v1.0.0
+            </motion.p>
+          )}
+        </AnimatePresence>
       </div>
     </motion.aside>
   );

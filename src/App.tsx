@@ -72,9 +72,9 @@ const App = () => (
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/notifications" element={<NotSupervisorRoute element={<Notifications />} />} />
-            <Route path="/users" element={<UserManagement />} />
-            <Route path="/settings" element={<SystemSettings />} />
-            <Route path="/settings/notifications" element={<SettingsNotifications />} />
+            <Route path="/users" element={<NotSupervisorRoute element={<UserManagement />} />} />
+            <Route path="/settings" element={<NotSupervisorRoute element={<SystemSettings />} />} />
+            <Route path="/settings/notifications" element={<NotSupervisorRoute element={<SettingsNotifications />} />} />
             <Route path="/settings/categories" element={<SuperadminRoute element={<SettingsCategories />} />} />
             <Route path="/label-designer" element={<LabelDesigner />} />
           </Route>

@@ -42,7 +42,7 @@ import {
   apiDownloadEvidence,
   apiAssignTask,
   apiGetLookups,
-  apiListUsers,
+  apiListAssignableUsers,
   ApiError,
   apiGetTask,
   apiGetTaskDraft,
@@ -161,10 +161,18 @@ const Tasks = () => {
   });
 
   const usersQuery = useQuery({
-    queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
-    queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
+    queryKey: ["assignable-users", { page: 1, pageSize: 500, isActive: true }],
+    queryFn: () => apiListAssignableUsers({ page: 1, pageSize: 500, isActive: true }),
     enabled: assignDialogOpen,
   });
+
+  const technicianOptions = useMemo(() => {
+    const users = usersQuery.data?.items ?? [];
+    return users
+      .filter((u) => u.roles.some((role) => role.trim().toLowerCase() === "technician"))
+      .slice()
+      .sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username));
+  }, [usersQuery.data?.items]);
 
   const openAssignDialogFor = (taskId: string) => {
     setAssignTaskId(taskId);
@@ -702,10 +710,7 @@ const Tasks = () => {
                     <SelectValue placeholder="Select user" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(usersQuery.data?.items ?? [])
-                      .slice()
-                      .sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username))
-                      .map((u) => (
+                    {technicianOptions.map((u) => (
                         <SelectItem key={u.id} value={u.id}>
                           {(u.displayName ?? u.username) ?? u.username}
                         </SelectItem>
@@ -801,15 +806,15 @@ export const TaskDetailDialog = (props: {
 	const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
 
 	const usersQueryForBackdate = useQuery({
-		queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
-		queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
+		queryKey: ["assignable-users", { page: 1, pageSize: 500, isActive: true }],
+		queryFn: () => apiListAssignableUsers({ page: 1, pageSize: 500, isActive: true }),
 		enabled: backdateMode,
 	});
 
 	const technicianOptionsForBackdate = useMemo(() => {
 		const users = usersQueryForBackdate.data?.items ?? [];
 		return users
-			.filter((u) => u.roles.includes("Technician"))
+			.filter((u) => u.roles.some((role) => role.trim().toLowerCase() === "technician"))
 			.slice()
 			.sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username));
 	}, [usersQueryForBackdate.data?.items]);
