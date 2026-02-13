@@ -1,5 +1,10 @@
 # Journal
 
+## Thu Feb 12 2026
+- Initialized planning and tracking documents
+- Prepared scope focusing on Login page improvements
+- Next: review current Login.tsx implementation
+
 ## Mon Feb  9 22:45:18 WITA 2026
 - Mobile (pm-tech): show approval status on PM task cards.
 - Mobile (pm-tech): add approval flow section at bottom of Task detail.

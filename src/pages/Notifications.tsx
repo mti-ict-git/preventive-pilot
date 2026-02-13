@@ -74,6 +74,7 @@ const Notifications = () => {
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(5);
   const [logItems, setLogItems] = useState<NotificationLogEntry[]>([]);
+  const [expandedPayloads, setExpandedPayloads] = useState<Record<string, boolean>>({});
 
   const [ruleModalOpen, setRuleModalOpen] = useState<boolean>(false);
   const [ruleModalMode, setRuleModalMode] = useState<"create" | "edit">("create");
@@ -155,6 +156,7 @@ const Notifications = () => {
   const [waBaseUrlOverride, setWaBaseUrlOverride] = useState<string>("");
 
   const canBroadcast = hasRole("Admin") || isSuperadmin();
+  const cardClassName = "metronic-card";
 
   const [broadcastOpen, setBroadcastOpen] = useState<boolean>(false);
   const [broadcastTitle, setBroadcastTitle] = useState<string>("");
@@ -642,7 +644,7 @@ const Notifications = () => {
   }, [logItems, statusFilter, channelFilter]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Header title="Notifications" subtitle="Configure reminders and escalation rules" />
 
       <Dialog
@@ -737,9 +739,9 @@ const Notifications = () => {
         </DialogContent>
       </Dialog>
 
-      <div className="p-6 space-y-6">
-        <Card className="glass border-border">
-          <CardHeader>
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+        <Card className={cardClassName}>
+          <CardHeader className="border-b border-border/60">
             <CardTitle className="text-foreground flex items-center gap-2">
               <Bell className="w-5 h-5 text-primary" />
               How notifications work
@@ -778,8 +780,8 @@ const Notifications = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <Card className="glass border-border">
-              <CardHeader>
+            <Card className={cardClassName}>
+              <CardHeader className="border-b border-border/60">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-foreground flex items-center gap-2">
                     <Clock className="w-5 h-5 text-primary" />
@@ -823,7 +825,7 @@ const Notifications = () => {
                   reminderRules.map((rule) => (
                     <div
                       key={rule.id}
-                      className="p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                      className="p-4 rounded-lg border border-border/60 bg-background/70 hover:bg-muted/30 shadow-sm transition-colors"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
@@ -886,8 +888,8 @@ const Notifications = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card className="glass border-border">
-              <CardHeader>
+            <Card className={cardClassName}>
+              <CardHeader className="border-b border-border/60">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-foreground flex items-center gap-2">
                     <AlertTriangle className="w-5 h-5 text-warning" />
@@ -931,7 +933,7 @@ const Notifications = () => {
                   escalationRules.map((rule) => (
                     <div
                       key={rule.id}
-                      className="p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                      className="p-4 rounded-lg border border-border/60 bg-background/70 hover:bg-muted/30 shadow-sm transition-colors"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
@@ -982,341 +984,344 @@ const Notifications = () => {
               </CardContent>
             </Card>
           </motion.div>
+        </div>
 
-          {/* Notification Channels */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card className="glass border-border">
-              <CardHeader>
+        {/* Notification Channels */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card className={cardClassName}>
+            <CardHeader className="border-b border-border/60">
+              <CardTitle className="text-foreground flex items-center gap-2">
+                <Settings className="w-5 h-5 text-accent" />
+                Notification Channels
+              </CardTitle>
+              <div className="mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    setChannelModalMode("create");
+                    setChannelId(null);
+                    setChannelType("Mail");
+                    setChannelName("Mail");
+                    setChannelConfig("");
+                    setChannelActive(true);
+                    setMailToText("");
+                    setMailCcText("");
+                    setMailBccText("");
+                    setMailSenderEmail("");
+                    setMailSubjectTemplate("");
+                    setMailBodyTemplate("");
+                    setMailMergeMode("override");
+                    setWaTarget("group");
+                    setWaNumber("");
+                    setWaGroupId("");
+                    setWaGroupName("");
+                    setWaMentionText("");
+                    setWaBaseUrlOverride("");
+                    setChannelModalOpen(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4" /> Add Channel
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 rounded-lg border border-border/60 bg-background/70 hover:bg-muted/30 shadow-sm transition-colors flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      pushActive ? "bg-success/20" : "bg-warning/20"
+                    }`}
+                  >
+                    <Bell className={`w-5 h-5 ${pushActive ? "text-success" : "text-warning"}`} />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">Push Notification</p>
+                    <p className="text-sm text-muted-foreground capitalize">
+                      {pushActive ? "active" : "inactive"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={pushActive}
+                    onCheckedChange={(checked) =>
+                      togglePushMutation.mutate({ enable: checked, channel: pushChannel })
+                    }
+                    disabled={togglePushMutation.isPending}
+                  />
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8"
+                    title="Test Push"
+                    onClick={() => pushTestMutation.mutate()}
+                    disabled={pushTestMutation.isPending}
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {channelsQuery.isLoading ? (
+                <div className="text-sm text-muted-foreground">Loading channels…</div>
+              ) : channelsQuery.isError ? (
+                <div className="text-sm text-destructive">Failed to load channels.</div>
+              ) : channelItems.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No channels configured.</div>
+              ) : (
+                channelItems
+                  .filter((c) => c.channelType.toLowerCase() !== "push")
+                  .map((channel) => {
+                  const Icon = getChannelIcon(channel.channelType);
+                  const active = channel.isActive;
+                  return (
+                    <div
+                      key={channel.id}
+                      className="p-4 rounded-lg border border-border/60 bg-background/70 hover:bg-muted/30 shadow-sm transition-colors cursor-pointer group flex items-center justify-between"
+                      onClick={() => {
+                        setChannelModalMode("edit");
+                        setChannelId(channel.id);
+                        setChannelType(channel.channelType);
+                        setChannelName(channel.channelName ?? channel.channelType);
+                        setChannelConfig(channel.config ?? "");
+                        setChannelActive(channel.isActive);
+                        const raw = channel.config ?? "";
+                        let parsed: unknown = null;
+                        try {
+                          parsed = raw.trim() ? JSON.parse(raw) : null;
+                        } catch {
+                          parsed = null;
+                        }
+                        if (channel.channelType === "Mail") {
+                          const obj = (parsed ?? {}) as Record<string, unknown>;
+                          const to = Array.isArray(obj.to) ? (obj.to as unknown[]).filter((v) => typeof v === "string") as string[] : [];
+                          const cc = Array.isArray(obj.cc) ? (obj.cc as unknown[]).filter((v) => typeof v === "string") as string[] : [];
+                          const bcc = Array.isArray(obj.bcc) ? (obj.bcc as unknown[]).filter((v) => typeof v === "string") as string[] : [];
+                          const senderEmail = typeof obj.senderEmail === "string" ? obj.senderEmail : "";
+                          const subjectTemplate = typeof obj.subjectTemplate === "string" ? obj.subjectTemplate : "";
+                          const bodyTemplate = typeof obj.bodyTemplate === "string" ? obj.bodyTemplate : "";
+                          const mergeModeRaw = obj.mergeMode;
+                          const mergeMode = mergeModeRaw === "append" ? "append" : "override";
+                          setMailToText(joinList(to));
+                          setMailCcText(joinList(cc));
+                          setMailBccText(joinList(bcc));
+                          setMailSenderEmail(senderEmail);
+                          setMailSubjectTemplate(subjectTemplate);
+                          setMailBodyTemplate(bodyTemplate);
+                          setMailMergeMode(mergeMode);
+                          setWaTarget("group");
+                          setWaNumber("");
+                          setWaGroupId("");
+                          setWaGroupName("");
+                          setWaMentionText("");
+                          setWaBaseUrlOverride("");
+                        } else if (channel.channelType === "WhatsApp") {
+                          const obj = (parsed ?? {}) as Record<string, unknown>;
+                          const targetRaw = obj.target;
+                          const target: "single" | "group" = targetRaw === "single" || targetRaw === "group" ? (targetRaw as "single" | "group") : "group";
+                          const number = typeof obj.number === "string" ? obj.number : "";
+                          const groupId = typeof obj.groupId === "string" ? obj.groupId : "";
+                          const groupName = typeof obj.groupName === "string" ? obj.groupName : "";
+                          const mentionRaw = Array.isArray(obj.mentionNumbers) ? (obj.mentionNumbers as unknown[]).filter((v) => typeof v === "string") as string[] : [];
+                          const baseUrlOverride = typeof obj.baseUrlOverride === "string" ? obj.baseUrlOverride : "";
+                          setWaTarget(target);
+                          setWaNumber(number);
+                          setWaGroupId(groupId);
+                          setWaGroupName(groupName);
+                          setWaMentionText(joinList(mentionRaw));
+                          setWaBaseUrlOverride(baseUrlOverride);
+                          setMailToText("");
+                          setMailCcText("");
+                          setMailBccText("");
+                          setMailSenderEmail("");
+                          setMailSubjectTemplate("");
+                          setMailBodyTemplate("");
+                          setMailMergeMode("override");
+                        } else {
+                          setMailToText("");
+                          setMailCcText("");
+                          setMailBccText("");
+                          setMailSenderEmail("");
+                          setMailSubjectTemplate("");
+                          setMailBodyTemplate("");
+                          setMailMergeMode("override");
+                          setWaTarget("group");
+                          setWaNumber("");
+                          setWaGroupId("");
+                          setWaGroupName("");
+                          setWaMentionText("");
+                          setWaBaseUrlOverride("");
+                        }
+                        setChannelModalOpen(true);
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                            active ? "bg-success/20" : "bg-warning/20"
+                          }`}
+                        >
+                          <Icon className={`w-5 h-5 ${active ? "text-success" : "text-warning"}`} />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{channel.channelName ?? channel.channelType}</p>
+                          <p className="text-sm text-muted-foreground capitalize">
+                            {active ? "active" : "inactive"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={active}
+                          onCheckedChange={(checked) =>
+                            updateChannelMutation.mutate({ channelId: channel.id, isActive: checked })
+                          }
+                          disabled={updateChannelMutation.isPending}
+                        />
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          title={isChannelTestable(channel.channelType) ? "Test" : "Unsupported"}
+                          onClick={(e) => { e.stopPropagation(); testChannelMutation.mutate({ channel }); }}
+                          disabled={testChannelMutation.isPending || !isChannelTestable(channel.channelType)}
+                        >
+                          <Send className="w-4 h-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="icon" variant="outline" className="h-8 w-8" title="Delete">
+                              <Trash className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete channel?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. The channel will be removed if no rules/logs reference it.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteChannelMutation.mutate({ channelId: channel.id })}
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Recent Notifications */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card className={cardClassName}>
+            <CardHeader className="border-b border-border/60">
+              <div className="flex items-center justify-between">
                 <CardTitle className="text-foreground flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-accent" />
-                  Notification Channels
+                  <Bell className="w-5 h-5 text-primary" />
+                  Recent Activity
                 </CardTitle>
-                <div className="mt-2">
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => runNotificationsMutation.mutate()} disabled={runNotificationsMutation.isPending}>
+                    Run Now
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => pushTestMutation.mutate()} disabled={pushTestMutation.isPending}>
+                    Push Test
+                  </Button>
+                  {canBroadcast ? (
+                    <Button size="sm" variant="outline" onClick={openBroadcastDialog}>
+                      Broadcast
+                    </Button>
+                  ) : null}
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-2"
-                    onClick={() => {
-                      setChannelModalMode("create");
-                      setChannelId(null);
-                      setChannelType("Mail");
-                      setChannelName("Mail");
-                      setChannelConfig("");
-                      setChannelActive(true);
-                      setMailToText("");
-                      setMailCcText("");
-                      setMailBccText("");
-                      setMailSenderEmail("");
-                      setMailSubjectTemplate("");
-                      setMailBodyTemplate("");
-                      setMailMergeMode("override");
-                      setWaTarget("group");
-                      setWaNumber("");
-                      setWaGroupId("");
-                      setWaGroupName("");
-                      setWaMentionText("");
-                      setWaBaseUrlOverride("");
-                      setChannelModalOpen(true);
+                    onClick={async () => {
+                      try {
+                        await apiTestMicrosoftGraphSettings({ sendTestEmail: true });
+                        toast({ title: "Test email sent", description: "Check your inbox." });
+                      } catch (err) {
+                        const message = err instanceof ApiError ? err.message : "Failed to send test email";
+                        toast({ title: "Test failed", description: message, variant: "destructive" });
+                      }
                     }}
                   >
-                    <Plus className="w-4 h-4" /> Add Channel
+                    Send Test Email
                   </Button>
+                  <Button size="sm" variant="outline" onClick={() => navigate("/settings/notifications")}>Settings</Button>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        pushActive ? "bg-success/20" : "bg-warning/20"
-                      }`}
-                    >
-                      <Bell className={`w-5 h-5 ${pushActive ? "text-success" : "text-warning"}`} />
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">Push Notification</p>
-                      <p className="text-sm text-muted-foreground capitalize">
-                        {pushActive ? "active" : "inactive"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      checked={pushActive}
-                      onCheckedChange={(checked) =>
-                        togglePushMutation.mutate({ enable: checked, channel: pushChannel })
-                      }
-                      disabled={togglePushMutation.isPending}
-                    />
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      title="Test Push"
-                      onClick={() => pushTestMutation.mutate()}
-                      disabled={pushTestMutation.isPending}
-                    >
-                      <Send className="w-4 h-4" />
-                    </Button>
-                  </div>
+              </div>
+              <div className="mt-3 grid grid-cols-12 gap-4">
+                <div className="col-span-12 md:col-span-4">
+                  <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as typeof statusFilter); setPage(1); }}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="queued">Queued</SelectItem>
+                      <SelectItem value="sent">Sent</SelectItem>
+                      <SelectItem value="failed">Failed</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-
-                {channelsQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading channels…</div>
-                ) : channelsQuery.isError ? (
-                  <div className="text-sm text-destructive">Failed to load channels.</div>
-                ) : channelItems.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No channels configured.</div>
-                ) : (
-                  channelItems
-                    .filter((c) => c.channelType.toLowerCase() !== "push")
-                    .map((channel) => {
-                    const Icon = getChannelIcon(channel.channelType);
-                    const active = channel.isActive;
-                    return (
-                      <div
-                        key={channel.id}
-                        className="p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer group flex items-center justify-between"
-                        onClick={() => {
-                          setChannelModalMode("edit");
-                          setChannelId(channel.id);
-                          setChannelType(channel.channelType);
-                          setChannelName(channel.channelName ?? channel.channelType);
-                          setChannelConfig(channel.config ?? "");
-                          setChannelActive(channel.isActive);
-                          const raw = channel.config ?? "";
-                          let parsed: unknown = null;
-                          try {
-                            parsed = raw.trim() ? JSON.parse(raw) : null;
-                          } catch {
-                            parsed = null;
-                          }
-                          if (channel.channelType === "Mail") {
-                            const obj = (parsed ?? {}) as Record<string, unknown>;
-                            const to = Array.isArray(obj.to) ? (obj.to as unknown[]).filter((v) => typeof v === "string") as string[] : [];
-                            const cc = Array.isArray(obj.cc) ? (obj.cc as unknown[]).filter((v) => typeof v === "string") as string[] : [];
-                            const bcc = Array.isArray(obj.bcc) ? (obj.bcc as unknown[]).filter((v) => typeof v === "string") as string[] : [];
-                            const senderEmail = typeof obj.senderEmail === "string" ? obj.senderEmail : "";
-                            const subjectTemplate = typeof obj.subjectTemplate === "string" ? obj.subjectTemplate : "";
-                            const bodyTemplate = typeof obj.bodyTemplate === "string" ? obj.bodyTemplate : "";
-                            const mergeModeRaw = obj.mergeMode;
-                            const mergeMode = mergeModeRaw === "append" ? "append" : "override";
-                            setMailToText(joinList(to));
-                            setMailCcText(joinList(cc));
-                            setMailBccText(joinList(bcc));
-                            setMailSenderEmail(senderEmail);
-                            setMailSubjectTemplate(subjectTemplate);
-                            setMailBodyTemplate(bodyTemplate);
-                            setMailMergeMode(mergeMode);
-                            setWaTarget("group");
-                            setWaNumber("");
-                            setWaGroupId("");
-                            setWaGroupName("");
-                            setWaMentionText("");
-                            setWaBaseUrlOverride("");
-                          } else if (channel.channelType === "WhatsApp") {
-                            const obj = (parsed ?? {}) as Record<string, unknown>;
-                            const targetRaw = obj.target;
-                            const target: "single" | "group" = targetRaw === "single" || targetRaw === "group" ? (targetRaw as "single" | "group") : "group";
-                            const number = typeof obj.number === "string" ? obj.number : "";
-                            const groupId = typeof obj.groupId === "string" ? obj.groupId : "";
-                            const groupName = typeof obj.groupName === "string" ? obj.groupName : "";
-                            const mentionRaw = Array.isArray(obj.mentionNumbers) ? (obj.mentionNumbers as unknown[]).filter((v) => typeof v === "string") as string[] : [];
-                            const baseUrlOverride = typeof obj.baseUrlOverride === "string" ? obj.baseUrlOverride : "";
-                            setWaTarget(target);
-                            setWaNumber(number);
-                            setWaGroupId(groupId);
-                            setWaGroupName(groupName);
-                            setWaMentionText(joinList(mentionRaw));
-                            setWaBaseUrlOverride(baseUrlOverride);
-                            setMailToText("");
-                            setMailCcText("");
-                            setMailBccText("");
-                            setMailSenderEmail("");
-                            setMailSubjectTemplate("");
-                            setMailBodyTemplate("");
-                            setMailMergeMode("override");
-                          } else {
-                            setMailToText("");
-                            setMailCcText("");
-                            setMailBccText("");
-                            setMailSenderEmail("");
-                            setMailSubjectTemplate("");
-                            setMailBodyTemplate("");
-                            setMailMergeMode("override");
-                            setWaTarget("group");
-                            setWaNumber("");
-                            setWaGroupId("");
-                            setWaGroupName("");
-                            setWaMentionText("");
-                            setWaBaseUrlOverride("");
-                          }
-                          setChannelModalOpen(true);
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                              active ? "bg-success/20" : "bg-warning/20"
-                            }`}
-                          >
-                            <Icon className={`w-5 h-5 ${active ? "text-success" : "text-warning"}`} />
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">{channel.channelName ?? channel.channelType}</p>
-                            <p className="text-sm text-muted-foreground capitalize">
-                              {active ? "active" : "inactive"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            checked={active}
-                            onCheckedChange={(checked) =>
-                              updateChannelMutation.mutate({ channelId: channel.id, isActive: checked })
-                            }
-                            disabled={updateChannelMutation.isPending}
-                          />
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-8 w-8"
-                            title={isChannelTestable(channel.channelType) ? "Test" : "Unsupported"}
-                            onClick={(e) => { e.stopPropagation(); testChannelMutation.mutate({ channel }); }}
-                            disabled={testChannelMutation.isPending || !isChannelTestable(channel.channelType)}
-                          >
-                            <Send className="w-4 h-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="outline" className="h-8 w-8" title="Delete">
-                                <Trash className="w-4 h-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete channel?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. The channel will be removed if no rules/logs reference it.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteChannelMutation.mutate({ channelId: channel.id })}
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Recent Notifications */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card className="glass border-border">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-foreground flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-primary" />
-                    Recent Activity
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => runNotificationsMutation.mutate()} disabled={runNotificationsMutation.isPending}>
-                      Run Now
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => pushTestMutation.mutate()} disabled={pushTestMutation.isPending}>
-                      Push Test
-                    </Button>
-                    {canBroadcast ? (
-                      <Button size="sm" variant="outline" onClick={openBroadcastDialog}>
-                        Broadcast
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={async () => {
-                        try {
-                          await apiTestMicrosoftGraphSettings({ sendTestEmail: true });
-                          toast({ title: "Test email sent", description: "Check your inbox." });
-                        } catch (err) {
-                          const message = err instanceof ApiError ? err.message : "Failed to send test email";
-                          toast({ title: "Test failed", description: message, variant: "destructive" });
-                        }
-                      }}
-                    >
-                      Send Test Email
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => navigate("/settings/notifications")}>Settings</Button>
-                  </div>
+                <div className="col-span-12 md:col-span-4">
+                  <Select value={channelFilter} onValueChange={(v) => { setChannelFilter(v); setPage(1); }}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="Channel" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {channelFilterItems.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="mt-3 grid grid-cols-12 gap-4">
-                  <div className="col-span-12 md:col-span-4">
-                    <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as typeof statusFilter); setPage(1); }}>
-                      <SelectTrigger className="h-8">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="queued">Queued</SelectItem>
-                        <SelectItem value="sent">Sent</SelectItem>
-                        <SelectItem value="failed">Failed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-12 md:col-span-4">
-                    <Select value={channelFilter} onValueChange={(v) => { setChannelFilter(v); setPage(1); }}>
-                      <SelectTrigger className="h-8">
-                        <SelectValue placeholder="Channel" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {channelFilterItems.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-12 md:col-span-4">
-                    <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
-                      <SelectTrigger className="h-8">
-                        <SelectValue placeholder="Page Size" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="5">5</SelectItem>
-                        <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="20">20</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="col-span-12 md:col-span-4">
+                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="Page Size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {logQuery.isLoading && page === 1 ? (
-                  <div className="text-sm text-muted-foreground">Loading activity…</div>
-                ) : logQuery.isError ? (
-                  <div className="text-sm text-destructive">Failed to load activity.</div>
-                ) : filteredLogItems.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No recent activity.</div>
-                ) : (
-                  filteredLogItems.map((entry) => (
-                    <div key={entry.id} className="p-3 rounded-lg transition-colors bg-muted/20">
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {logQuery.isLoading && page === 1 ? (
+                <div className="text-sm text-muted-foreground">Loading activity…</div>
+              ) : logQuery.isError ? (
+                <div className="text-sm text-destructive">Failed to load activity.</div>
+              ) : filteredLogItems.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No recent activity.</div>
+              ) : (
+                filteredLogItems.map((entry) => {
+                  const isExpanded = Boolean(expandedPayloads[entry.id]);
+                  return (
+                    <div key={entry.id} className="p-3 rounded-lg border border-border/60 bg-background/70 hover:bg-muted/30 transition-colors">
                       <div className="flex items-start gap-3">
                         <div
                           className={`w-2 h-2 rounded-full mt-2 ${
@@ -1335,33 +1340,55 @@ const Notifications = () => {
                             <p className="text-xs text-destructive mt-1 break-words">{entry.errorMessage}</p>
                           ) : null}
                           {entry.payload ? (
-                            <pre className="mt-2 text-xs bg-muted/30 p-2 rounded overflow-x-auto">
-                              {(() => {
-                                try {
-                                  const obj = JSON.parse(entry.payload);
-                                  return JSON.stringify(obj, null, 2);
-                                } catch {
-                                  return entry.payload;
-                                }
-                              })()}
-                            </pre>
+                            <div className="mt-2 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs text-muted-foreground">Payload</p>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() =>
+                                    setExpandedPayloads((prev) => ({
+                                      ...prev,
+                                      [entry.id]: !prev[entry.id],
+                                    }))
+                                  }
+                                >
+                                  {isExpanded ? "Collapse" : "Expand"}
+                                </Button>
+                              </div>
+                              <pre
+                                className={`text-xs bg-muted/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden ${
+                                  isExpanded ? "" : "max-h-32"
+                                }`}
+                              >
+                                {(() => {
+                                  try {
+                                    const obj = JSON.parse(entry.payload);
+                                    return JSON.stringify(obj, null, 2);
+                                  } catch {
+                                    return entry.payload;
+                                  }
+                                })()}
+                              </pre>
+                            </div>
                           ) : null}
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
-                <div className="flex items-center justify-between pt-2">
-                  <p className="text-xs text-muted-foreground">Showing {filteredLogItems.length} items</p>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setPage((p) => p + 1)} disabled={logQuery.isLoading}>Load More</Button>
-                    <Button size="sm" variant="outline" onClick={() => { setPage(1); setLogItems([]); }}>Refresh</Button>
-                  </div>
+                  );
+                })
+              )}
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-xs text-muted-foreground">Showing {filteredLogItems.length} items</p>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setPage((p) => p + 1)} disabled={logQuery.isLoading}>Load More</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setPage(1); setLogItems([]); }}>Refresh</Button>
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
       {/* Rule Modal */}
       <Dialog open={ruleModalOpen} onOpenChange={setRuleModalOpen}>

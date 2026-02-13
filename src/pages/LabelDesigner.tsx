@@ -131,6 +131,7 @@ export default function LabelDesigner() {
   const [config, setConfig] = useState<LabelDesignerConfig>(defaultDesignerConfig);
   const [gridColumns, setGridColumns] = useState<number>(3);
   const [qrPayloadMode, setQrPayloadMode] = useState<LabelDesignerQrPayloadMode>("assetId");
+  const [tabValue, setTabValue] = useState("layout");
 
   useEffect(() => {
     const data = settingsQuery.data;
@@ -398,6 +399,12 @@ export default function LabelDesigner() {
     }
   };
 
+  const getPreviewScale = (widthMm: number, heightMm: number): number => {
+    const maxWidth = 260;
+    const maxHeight = 100;
+    return Math.min(4, Math.max(2, Math.min(maxWidth / widthMm, maxHeight / heightMm)));
+  };
+
   const PdfLabelPreview = ({ asset }: { asset: Asset }) => {
     const [url, setUrl] = useState<string | null>(null);
     const [dimsMm, setDimsMm] = useState<{ w: number; h: number } | null>(null);
@@ -502,9 +509,9 @@ export default function LabelDesigner() {
       };
     }, [asset, config, qrPayloadMode, systemStatusQuery.data?.snipeIt.baseUrl]);
 
-    const scale = 4;
     const widthMm = dimsMm?.w ?? Math.min(config.width, config.height);
     const heightMm = dimsMm?.h ?? Math.max(config.width, config.height);
+    const scale = getPreviewScale(widthMm, heightMm);
 
     return (
       <div
@@ -528,10 +535,10 @@ export default function LabelDesigner() {
   };
 
   const LabelPreview = ({ asset }: { asset: Asset }) => {
-    const scale = 4;
     const isLandscape = config.orientation === "landscape";
     const displayWidth = isLandscape ? config.width : config.height;
     const displayHeight = isLandscape ? config.height : config.width;
+    const scale = getPreviewScale(displayWidth, displayHeight);
     const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
     const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
 
@@ -589,69 +596,93 @@ export default function LabelDesigner() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <QrCode className="h-8 w-8 text-primary" />
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-[1400px] space-y-6 p-6">
+        <div className="rounded-2xl border border-border/60 bg-card/70 shadow-sm p-6">
+          <div className="flex flex-wrap items-center justify-between gap-6">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold text-foreground flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-primary/10 shadow-sm">
+                  <QrCode className="h-8 w-8 text-primary" />
+                </div>
+                Label Print Designer
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Design and print QR code labels for your assets
+              </p>
             </div>
-            Label Print Designer
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Design and print QR code labels for your assets
-          </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {canEditDefaults ? (
+                <Button
+                  variant="outline"
+                  disabled={saveDefaultsMutation.isPending}
+                  onClick={() => saveDefaultsMutation.mutate()}
+                  className="bg-background/80 shadow-sm"
+                >
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Save Defaults
+                </Button>
+              ) : null}
+              <Button variant="outline" onClick={resetConfig} disabled={controlsLocked} className="bg-background/80 shadow-sm">
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reset
+              </Button>
+              <Button variant="outline" onClick={handleExport} className="bg-background/80 shadow-sm">
+                <Download className="h-4 w-4 mr-2" />
+                Export PDF
+              </Button>
+              <Button onClick={handlePrint} className="bg-primary hover:bg-primary/90 shadow-sm">
+                <Printer className="h-4 w-4 mr-2" />
+                Print Labels
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {canEditDefaults ? (
-            <Button
-              variant="outline"
-              disabled={saveDefaultsMutation.isPending}
-              onClick={() => saveDefaultsMutation.mutate()}
-            >
-              <Settings2 className="h-4 w-4 mr-2" />
-              Save Defaults
-            </Button>
-          ) : null}
-          <Button variant="outline" onClick={resetConfig} disabled={controlsLocked}>
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reset
-          </Button>
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export PDF
-          </Button>
-          <Button onClick={handlePrint} className="bg-primary hover:bg-primary/90">
-            <Printer className="h-4 w-4 mr-2" />
-            Print Labels
-          </Button>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Panel - Configuration */}
         <div className="lg:col-span-1 space-y-4">
-          <Tabs defaultValue="layout" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 bg-card/50">
-              <TabsTrigger value="layout">
+          <Tabs value={tabValue} onValueChange={setTabValue} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 rounded-xl bg-muted/50 p-1 border border-border/60">
+              <TabsTrigger value="layout" className="relative rounded-lg text-xs font-semibold transition-all duration-200 ease-out data-[state=active]:bg-background data-[state=active]:shadow-[0_8px_20px_rgba(59,130,246,0.25)] data-[state=active]:text-foreground active:scale-[0.98]">
+                {tabValue === "layout" && (
+                  <motion.span
+                    layoutId="label-designer-tab-indicator"
+                    className="absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-primary/80"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
                 <Layers className="h-4 w-4 mr-1" />
                 Layout
               </TabsTrigger>
-              <TabsTrigger value="content">
+              <TabsTrigger value="content" className="relative rounded-lg text-xs font-semibold transition-all duration-200 ease-out data-[state=active]:bg-background data-[state=active]:shadow-[0_8px_20px_rgba(59,130,246,0.25)] data-[state=active]:text-foreground active:scale-[0.98]">
+                {tabValue === "content" && (
+                  <motion.span
+                    layoutId="label-designer-tab-indicator"
+                    className="absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-primary/80"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
                 <Type className="h-4 w-4 mr-1" />
                 Content
               </TabsTrigger>
-              <TabsTrigger value="style">
+              <TabsTrigger value="style" className="relative rounded-lg text-xs font-semibold transition-all duration-200 ease-out data-[state=active]:bg-background data-[state=active]:shadow-[0_8px_20px_rgba(59,130,246,0.25)] data-[state=active]:text-foreground active:scale-[0.98]">
+                {tabValue === "style" && (
+                  <motion.span
+                    layoutId="label-designer-tab-indicator"
+                    className="absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-primary/80"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
                 <Palette className="h-4 w-4 mr-1" />
                 Style
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="layout" className="mt-4">
-              <Card className="border-border/50 bg-card/30 backdrop-blur">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
+              <Card className="border-border/60 bg-card/70 shadow-sm">
+                <CardHeader className="pb-4 border-b border-border/60">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Settings2 className="h-4 w-4" />
                     Label Size
                   </CardTitle>
@@ -687,7 +718,7 @@ export default function LabelDesigner() {
                         value={config.width}
                         onChange={(e) => updateConfig("width", parseInt(e.target.value) || 30)}
                         disabled={controlsLocked}
-                        className="h-8 bg-background/50"
+                        className="h-8 bg-background/80"
                       />
                     </div>
                     <div className="space-y-2">
@@ -697,7 +728,7 @@ export default function LabelDesigner() {
                         value={config.height}
                         onChange={(e) => updateConfig("height", parseInt(e.target.value) || 20)}
                         disabled={controlsLocked}
-                        className="h-8 bg-background/50"
+                        className="h-8 bg-background/80"
                       />
                     </div>
                   </div>
@@ -710,7 +741,7 @@ export default function LabelDesigner() {
                       onValueChange={(v) => updateConfig("orientation", v as LabelDesignerConfig["orientation"])}
                       disabled={controlsLocked}
                     >
-                      <SelectTrigger className="h-8 bg-background/50">
+                      <SelectTrigger className="h-8 bg-background/80">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -741,7 +772,7 @@ export default function LabelDesigner() {
                   <div className="space-y-2">
                     <Label className="text-xs">QR Payload</Label>
                     <Select value={qrPayloadMode} onValueChange={handleQrPayloadModeChange} disabled={controlsLocked}>
-                      <SelectTrigger className="h-8 bg-background/50">
+                      <SelectTrigger className="h-8 bg-background/80">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -796,9 +827,9 @@ export default function LabelDesigner() {
             </TabsContent>
 
             <TabsContent value="content" className="mt-4">
-              <Card className="border-border/50 bg-card/30 backdrop-blur">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
+              <Card className="border-border/60 bg-card/70 shadow-sm">
+                <CardHeader className="pb-4 border-b border-border/60">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Type className="h-4 w-4" />
                     Label Content
                   </CardTitle>
@@ -828,7 +859,7 @@ export default function LabelDesigner() {
                           onChange={(e) => updateConfig("customText", e.target.value)}
                           placeholder="Enter custom text..."
                           disabled={controlsLocked}
-                          className="h-8 bg-background/50"
+                          className="h-8 bg-background/80"
                         />
                       </div>
                     </>
@@ -838,9 +869,9 @@ export default function LabelDesigner() {
             </TabsContent>
 
             <TabsContent value="style" className="mt-4">
-              <Card className="border-border/50 bg-card/30 backdrop-blur">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
+              <Card className="border-border/60 bg-card/70 shadow-sm">
+                <CardHeader className="pb-4 border-b border-border/60">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Palette className="h-4 w-4" />
                     Appearance
                   </CardTitle>
@@ -911,9 +942,9 @@ export default function LabelDesigner() {
           </Tabs>
 
           {/* Asset Selection */}
-          <Card className="border-border/50 bg-card/30 backdrop-blur">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center justify-between">
+          <Card className="border-border/60 bg-card/70 shadow-sm">
+            <CardHeader className="pb-4 border-b border-border/60">
+              <CardTitle className="text-sm font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <Grid3X3 className="h-4 w-4" />
                   Select Assets
@@ -933,7 +964,7 @@ export default function LabelDesigner() {
                       setAssetPage(1);
                     }}
                     placeholder="Search assets…"
-                    className="h-8 bg-background/50"
+                    className="h-8 bg-background/80"
                   />
                   <Select
                     value={assetCategoryId}
@@ -942,7 +973,7 @@ export default function LabelDesigner() {
                       setAssetPage(1);
                     }}
                   >
-                    <SelectTrigger className="h-8 w-[200px] bg-background/50">
+                  <SelectTrigger className="h-8 w-[200px] bg-background/80">
                       <SelectValue placeholder="Category" />
                     </SelectTrigger>
                     <SelectContent>
@@ -970,10 +1001,10 @@ export default function LabelDesigner() {
                       key={asset.id}
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors shadow-sm ${
                         isSelected
                           ? "border-primary bg-primary/10"
-                          : "border-border/50 bg-background/30 hover:border-border"
+                          : "border-border/60 bg-background/80 hover:border-border"
                       }`}
                       onClick={() => toggleAsset(asset)}
                     >
@@ -1028,9 +1059,9 @@ export default function LabelDesigner() {
 
         {/* Right Panel - Preview */}
         <div className="lg:col-span-2">
-          <Card className="border-border/50 bg-card/30 backdrop-blur h-full">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
+          <Card className="border-border/60 bg-card/70 shadow-sm h-full">
+            <CardHeader className="pb-4 border-b border-border/60">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <Eye className="h-4 w-4" />
                 Label Preview
                 <span className="text-xs text-muted-foreground font-normal ml-auto">
@@ -1046,7 +1077,7 @@ export default function LabelDesigner() {
                 </div>
               ) : (
                 <div
-                  className="grid gap-4 p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg min-h-[400px]"
+                  className="grid gap-4 p-4 rounded-xl min-h-[400px] border border-dashed border-border/60 bg-muted/30"
                   style={{ gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }}
                 >
                   {selectedAssets.map((asset) => (
@@ -1066,23 +1097,23 @@ export default function LabelDesigner() {
         </div>
       </div>
 
-      {/* Print Styles - Hidden on screen */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden;
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            .print\\:break-inside-avoid,
+            .print\\:break-inside-avoid * {
+              visibility: visible;
+            }
+            .print\\:break-inside-avoid {
+              position: absolute;
+              left: 0;
+              top: 0;
+            }
           }
-          .print\\:break-inside-avoid,
-          .print\\:break-inside-avoid * {
-            visibility: visible;
-          }
-          .print\\:break-inside-avoid {
-            position: absolute;
-            left: 0;
-            top: 0;
-          }
-        }
-      `}</style>
+        `}</style>
+      </div>
     </div>
   );
 }

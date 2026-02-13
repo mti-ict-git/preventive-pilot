@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ElementType } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { endOfDay, format, isAfter, isBefore, isSameDay, parseISO, startOfDay } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -41,7 +42,7 @@ import {
   apiDownloadEvidence,
   apiAssignTask,
   apiGetLookups,
-  apiListUsers,
+  apiListAssignableUsers,
   ApiError,
   apiGetTask,
   apiGetTaskDraft,
@@ -160,10 +161,18 @@ const Tasks = () => {
   });
 
   const usersQuery = useQuery({
-    queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
-    queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
+    queryKey: ["assignable-users", { page: 1, pageSize: 500, isActive: true }],
+    queryFn: () => apiListAssignableUsers({ page: 1, pageSize: 500, isActive: true }),
     enabled: assignDialogOpen,
   });
+
+  const technicianOptions = useMemo(() => {
+    const users = usersQuery.data?.items ?? [];
+    return users
+      .filter((u) => u.roles.some((role) => role.trim().toLowerCase() === "technician"))
+      .slice()
+      .sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username));
+  }, [usersQuery.data?.items]);
 
   const openAssignDialogFor = (taskId: string) => {
     setAssignTaskId(taskId);
@@ -244,7 +253,10 @@ const Tasks = () => {
     return config[status];
   };
 
-  const statItems = useMemo(() => {
+  type StatTone = "primary" | "warning" | "destructive" | "success";
+  type StatItem = { label: string; value: number; tone: StatTone; icon: ElementType };
+
+  const statItems = useMemo<StatItem[]>(() => {
     const now = new Date();
     const items = statsQuery.data?.items ?? [];
     const total = items.length;
@@ -260,12 +272,26 @@ const Tasks = () => {
     }).length;
     const completedCount = items.filter((t) => t.status.toLowerCase() === "completed").length;
     return [
-      { label: "Total Tasks", value: total, color: "primary" },
-      { label: "Due Today", value: dueTodayCount, color: "warning" },
-      { label: "Overdue", value: overdueCount, color: "destructive" },
-      { label: "Completed", value: completedCount, color: "success" },
+      { label: "Total Tasks", value: total, tone: "primary", icon: ClipboardList },
+      { label: "Due Today", value: dueTodayCount, tone: "warning", icon: Clock },
+      { label: "Overdue", value: overdueCount, tone: "destructive", icon: AlertTriangle },
+      { label: "Completed", value: completedCount, tone: "success", icon: CheckCircle },
     ];
   }, [statsQuery.data?.items]);
+
+  const statBorder = (tone: "primary" | "warning" | "destructive" | "success") => {
+    if (tone === "primary") return "border-t-primary";
+    if (tone === "warning") return "border-t-warning";
+    if (tone === "success") return "border-t-success";
+    return "border-t-destructive";
+  };
+
+  const statIconClass = (tone: "primary" | "warning" | "destructive" | "success") => {
+    if (tone === "warning") return "bg-warning/10 text-warning";
+    if (tone === "destructive") return "bg-destructive/10 text-destructive";
+    if (tone === "success") return "bg-success/10 text-success";
+    return "bg-primary/10 text-primary";
+  };
 
 	const filteredTasks = useMemo(() => {
 		const now = new Date();
@@ -333,156 +359,196 @@ const Tasks = () => {
 	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Header title="PM Tasks" subtitle="Track and execute maintenance tasks" />
 
-      <div className="p-6 space-y-6">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {statItems.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="stat-card"
+              transition={{ delay: index * 0.08 }}
             >
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
-              <p className={`text-3xl font-bold text-${stat.color}`}>{stat.value}</p>
+              <Card
+                className={`border-border/60 bg-card/70 shadow-sm hover:shadow-md transition-shadow border-t-2 ${statBorder(stat.tone)}`}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground truncate">{stat.label}</p>
+                      <p className="text-3xl font-semibold text-foreground mt-2 tabular-nums leading-none">
+                        {stat.value}
+                      </p>
+                    </div>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${statIconClass(stat.tone)}`}>
+                      <stat.icon className="w-6 h-6" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </motion.div>
           ))}
         </div>
 
-        {/* Filters & Search */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by task ID, asset..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-muted/50"
-            />
-          </div>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setFiltersOpen(true)}
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => navigate("/scheduling")}
-          >
-            <Calendar className="w-4 h-4" />
-            Calendar View
-          </Button>
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-muted/50 p-1">
-            <TabsTrigger value="all">All Tasks</TabsTrigger>
-            <TabsTrigger value="due_today">Due Today</TabsTrigger>
-            <TabsTrigger value="overdue">Overdue</TabsTrigger>
-            <TabsTrigger value="in_progress">In Progress</TabsTrigger>
-            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-            <TabsTrigger value="pending_supervisor">Pending Supervisor</TabsTrigger>
-            <TabsTrigger value="pending_superadmin">Pending Superadmin</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value={activeTab} className="mt-4">
-            {tasksQuery.isLoading ? (
-              <div className="text-sm text-muted-foreground p-4">Loading tasks…</div>
-            ) : tasksQuery.isError ? (
-              <div className="text-sm text-destructive p-4">Failed to load tasks.</div>
-            ) : (
-              <div className="space-y-3">
-                {filteredTasks.map((task, index) => {
-                  const statusConfig = getStatusConfig(task.status);
-                  return (
-                    <motion.div
-                      key={task.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="glass rounded-xl p-5 hover:border-primary/50 transition-all duration-300 cursor-pointer group"
-                      onClick={() => {
-                        setSelectedTaskId(task.taskId);
-                        setTaskDetailOpen(true);
-                      }}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0">
-                            <Server className="w-6 h-6 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-mono text-sm text-muted-foreground">{task.displayId}</span>
-                              <Badge variant="outline" className={statusConfig.color}>
-                                <statusConfig.icon className="w-3 h-3 mr-1" />
-                                {statusConfig.label}
-                              </Badge>
-                              {task.priority === "high" && (
-                                <Badge
-                                  variant="outline"
-                                  className="bg-destructive/20 text-destructive border-destructive/30"
-                                >
-                                  High Priority
-                                </Badge>
-                              )}
-                            </div>
-                            <h3 className="font-semibold text-foreground">{task.asset}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {task.assetName} • {task.template}
-                            </p>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-                        <div className="flex items-center gap-6">
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">{task.pic}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">Due: {task.dueDate}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 min-w-48">
-                          <Progress value={task.progress} className="h-2" />
-                          <span className="text-sm text-muted-foreground whitespace-nowrap">
-                            {task.checklistComplete}/{task.checklistTotal}
-                          </span>
-                          {isManager() ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openAssignDialogFor(task.taskId);
-                              }}
-                            >
-                              {task.isAssigned ? "Reassign" : "Assign"}
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
+        <Card className="border-border/60 bg-card/70 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <CardTitle className="text-base text-foreground flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-primary" />
+                  Filters
+                </CardTitle>
+                <div className="text-sm text-muted-foreground mt-1">Search and refine tasks quickly</div>
               </div>
-            )}
-          </TabsContent>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" className="gap-2" onClick={() => setFiltersOpen(true)}>
+                  <Filter className="w-4 h-4" />
+                  Advanced
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={() => navigate("/scheduling")}>
+                  <Calendar className="w-4 h-4" />
+                  Calendar View
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-12 gap-4">
+              <div className="col-span-12 md:col-span-8">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by task ID, asset..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-background"
+                  />
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-4">
+                <div className="flex items-center gap-2 justify-end text-sm text-muted-foreground h-full">
+                  <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">
+                    {filteredTasks.length} records
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Card className="border-border/60 bg-card/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <CardTitle className="text-foreground flex items-center gap-2">
+                  <Wrench className="w-5 h-5 text-primary" />
+                  Tasks
+                </CardTitle>
+                <TabsList className="bg-muted/60 p-1 rounded-full w-full md:w-auto overflow-x-auto">
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="due_today">Due Today</TabsTrigger>
+                  <TabsTrigger value="overdue">Overdue</TabsTrigger>
+                  <TabsTrigger value="in_progress">In Progress</TabsTrigger>
+                  <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+                  <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+                  <TabsTrigger value="pending_supervisor">Pending Supervisor</TabsTrigger>
+                  <TabsTrigger value="pending_superadmin">Pending Superadmin</TabsTrigger>
+                </TabsList>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <TabsContent value={activeTab} className="mt-0">
+                {tasksQuery.isLoading ? (
+                  <div className="text-sm text-muted-foreground p-4">Loading tasks…</div>
+                ) : tasksQuery.isError ? (
+                  <div className="text-sm text-destructive p-4">Failed to load tasks.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredTasks.map((task, index) => {
+                      const statusConfig = getStatusConfig(task.status);
+                      return (
+                        <motion.div
+                          key={task.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.04 }}
+                          className="rounded-xl border border-border/60 bg-background/60 p-5 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer group"
+                          onClick={() => {
+                            setSelectedTaskId(task.taskId);
+                            setTaskDetailOpen(true);
+                          }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 rounded-xl bg-muted/60 flex items-center justify-center shrink-0">
+                                <Server className="w-6 h-6 text-muted-foreground" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-mono text-xs text-muted-foreground">{task.displayId}</span>
+                                  <Badge variant="outline" className={statusConfig.color}>
+                                    <statusConfig.icon className="w-3 h-3 mr-1" />
+                                    {statusConfig.label}
+                                  </Badge>
+                                  {task.priority === "high" && (
+                                    <Badge
+                                      variant="outline"
+                                      className="bg-destructive/20 text-destructive border-destructive/30"
+                                    >
+                                      High Priority
+                                    </Badge>
+                                  )}
+                                </div>
+                                <h3 className="font-semibold text-foreground">{task.asset}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {task.assetName} • {task.template}
+                                </p>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+
+                          <div className="mt-4 pt-4 border-t border-border/60 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-6">
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">{task.pic}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">Due: {task.dueDate}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 min-w-48">
+                              <Progress value={task.progress} className="h-2" />
+                              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                                {task.checklistComplete}/{task.checklistTotal}
+                              </span>
+                              {isManager() ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openAssignDialogFor(task.taskId);
+                                  }}
+                                >
+                                  {task.isAssigned ? "Reassign" : "Assign"}
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+            </CardContent>
+          </Card>
         </Tabs>
       </div>
 
@@ -644,10 +710,7 @@ const Tasks = () => {
                     <SelectValue placeholder="Select user" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(usersQuery.data?.items ?? [])
-                      .slice()
-                      .sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username))
-                      .map((u) => (
+                    {technicianOptions.map((u) => (
                         <SelectItem key={u.id} value={u.id}>
                           {(u.displayName ?? u.username) ?? u.username}
                         </SelectItem>
@@ -743,15 +806,15 @@ export const TaskDetailDialog = (props: {
 	const [backdateTechnicianName, setBackdateTechnicianName] = useState("");
 
 	const usersQueryForBackdate = useQuery({
-		queryKey: ["users", { page: 1, pageSize: 500, isActive: true }],
-		queryFn: () => apiListUsers({ page: 1, pageSize: 500, isActive: true }),
+		queryKey: ["assignable-users", { page: 1, pageSize: 500, isActive: true }],
+		queryFn: () => apiListAssignableUsers({ page: 1, pageSize: 500, isActive: true }),
 		enabled: backdateMode,
 	});
 
 	const technicianOptionsForBackdate = useMemo(() => {
 		const users = usersQueryForBackdate.data?.items ?? [];
 		return users
-			.filter((u) => u.roles.includes("Technician"))
+			.filter((u) => u.roles.some((role) => role.trim().toLowerCase() === "technician"))
 			.slice()
 			.sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username));
 	}, [usersQueryForBackdate.data?.items]);
@@ -796,9 +859,17 @@ export const TaskDetailDialog = (props: {
   const cancelMutation = useMutation({
     mutationFn: async () => {
       if (!props.taskId) throw new Error("No task selected");
-      return apiCancelTask(props.taskId);
+      const reason = cancelReason.trim();
+      if (!reason) {
+        setCancelTouched(true);
+        throw new Error("Reason is required");
+      }
+      return apiCancelTask({ taskId: props.taskId, reason });
     },
     onSuccess: async () => {
+      setCancelDialogOpen(false);
+      setCancelReason("");
+      setCancelTouched(false);
       await taskQuery.refetch();
       toast({ title: "Task cancelled" });
     },
@@ -976,6 +1047,11 @@ export const TaskDetailDialog = (props: {
     },
   });
 
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelTouched, setCancelTouched] = useState(false);
+  const cancelReasonError = cancelTouched && cancelReason.trim().length === 0;
+
 	const normalizedStatus = task?.status.toLowerCase() ?? null;
   const claims = getJwtClaims();
   const myUserId = claims?.sub ?? null;
@@ -1033,6 +1109,54 @@ export const TaskDetailDialog = (props: {
     const name = u?.displayName ?? u?.username ?? null;
     return name;
   }, [task?.superadminApprovedBy]);
+
+  const remarksHistory = useMemo(() => {
+    const items: Array<{
+      label: string;
+      note: string;
+      at: string;
+      by: string;
+    }> = [];
+
+    if (task?.revisedAt || task?.revisedBy || task?.revisionNote) {
+      items.push({
+        label: "Revised",
+        note: task.revisionNote ?? "—",
+        at: task.revisedAt ? format(parseISO(task.revisedAt), "yyyy-MM-dd HH:mm") : "—",
+        by: task.revisedBy?.displayName ?? task.revisedBy?.username ?? "—",
+      });
+    }
+
+    if (task?.rejectedAt || task?.rejectedBy || task?.rejectionReason) {
+      items.push({
+        label: "Rejected",
+        note: task.rejectionReason ?? "—",
+        at: task.rejectedAt ? format(parseISO(task.rejectedAt), "yyyy-MM-dd HH:mm") : "—",
+        by: task.rejectedBy?.displayName ?? task.rejectedBy?.username ?? "—",
+      });
+    }
+
+    if (task?.cancelledAt || task?.cancelledBy || task?.cancelledReason) {
+      items.push({
+        label: "Cancelled",
+        note: task.cancelledReason ?? "—",
+        at: task.cancelledAt ? format(parseISO(task.cancelledAt), "yyyy-MM-dd HH:mm") : "—",
+        by: task.cancelledBy?.displayName ?? task.cancelledBy?.username ?? "—",
+      });
+    }
+
+    return items;
+  }, [
+    task?.revisedAt,
+    task?.revisedBy,
+    task?.revisionNote,
+    task?.rejectedAt,
+    task?.rejectedBy,
+    task?.rejectionReason,
+    task?.cancelledAt,
+    task?.cancelledBy,
+    task?.cancelledReason,
+  ]);
 
   const getOutcomeOptions = (requiresPassFail: boolean) => {
     if (requiresPassFail) {
@@ -1251,36 +1375,57 @@ export const TaskDetailDialog = (props: {
         if (target) window.open(target, "_blank", "noreferrer");
         return;
       }
-
-      const downloaded =
-        input.kind === "task"
-          ? await apiDownloadEvidence({ evidenceId: input.id })
-          : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id });
-      const url = URL.createObjectURL(downloaded.blob);
-      setPreviewKind(input.kind);
-      setPreviewId(input.id);
-      setPreviewUrl(url);
-      setPreviewFileName(downloaded.fileName ?? input.fileName);
-      setPreviewContentType(downloaded.contentType ?? input.contentType);
-      setPreviewOpen(true);
+      try {
+        const downloaded =
+          input.kind === "task"
+            ? await apiDownloadEvidence({ evidenceId: input.id })
+            : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id });
+        const url = URL.createObjectURL(downloaded.blob);
+        setPreviewKind(input.kind);
+        setPreviewId(input.id);
+        setPreviewUrl(url);
+        setPreviewFileName(downloaded.fileName ?? input.fileName);
+        setPreviewContentType(downloaded.contentType ?? input.contentType);
+        setPreviewOpen(true);
+      } catch (err) {
+        toast({
+          title: "Preview failed",
+          description: err instanceof Error ? err.message : "Request failed",
+          variant: "destructive",
+        });
+      }
     },
     [],
   );
 
   const downloadEvidence = useCallback(
-    async (input: { kind: "task" | "checklist"; id: string }) => {
-      const downloaded =
-        input.kind === "task"
-          ? await apiDownloadEvidence({ evidenceId: input.id, download: true })
-          : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id, download: true });
-      const url = URL.createObjectURL(downloaded.blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = downloaded.fileName ?? "download";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+    async (input: { kind: "task" | "checklist"; id: string; uri?: string | null }) => {
+      const uriValue = input.uri?.trim() ?? "";
+      const isInternal = uriValue === "" || uriValue === "imported" || uriValue === "stored" || uriValue === "uploaded";
+      if (!isInternal) {
+        window.open(uriValue, "_blank", "noreferrer");
+        return;
+      }
+      try {
+        const downloaded =
+          input.kind === "task"
+            ? await apiDownloadEvidence({ evidenceId: input.id, download: true })
+            : await apiDownloadChecklistEvidence({ checklistEvidenceId: input.id, download: true });
+        const url = URL.createObjectURL(downloaded.blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = downloaded.fileName ?? "download";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        toast({
+          title: "Download failed",
+          description: err instanceof Error ? err.message : "Request failed",
+          variant: "destructive",
+        });
+      }
     },
     [],
   );
@@ -1462,7 +1607,7 @@ export const TaskDetailDialog = (props: {
                 size="sm"
                 variant="destructive"
                 disabled={!task || cancelMutation.isPending || !canCancel}
-                onClick={() => cancelMutation.mutate()}
+                onClick={() => setCancelDialogOpen(true)}
               >
                 Cancel
               </Button>
@@ -1693,6 +1838,26 @@ export const TaskDetailDialog = (props: {
                   </div>
                 </div>
 
+                <div className="glass rounded-lg p-4">
+                  <p className="text-sm font-semibold text-foreground">Remarks History</p>
+                  {remarksHistory.length === 0 ? (
+                    <p className="text-sm text-muted-foreground mt-2">No remarks yet</p>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {remarksHistory.map((item, index) => (
+                        <div key={`${item.label}-${index}`} className="rounded-lg border border-border/60 bg-muted/30 p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">{item.label}</p>
+                            <p className="text-xs text-muted-foreground">{item.at}</p>
+                          </div>
+                          <p className="text-sm text-foreground mt-1">{item.note}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{item.by}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-2">Checklist</h3>
                   <div className="space-y-2">
@@ -1827,7 +1992,7 @@ export const TaskDetailDialog = (props: {
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          onClick={() => downloadEvidence({ kind: "checklist", id: e.id })}
+                                          onClick={() => downloadEvidence({ kind: "checklist", id: e.id, uri: e.uri })}
                                         >
                                           Download
                                         </Button>
@@ -1938,7 +2103,7 @@ export const TaskDetailDialog = (props: {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => downloadEvidence({ kind: "task", id: e.id })}
+                              onClick={() => downloadEvidence({ kind: "task", id: e.id, uri: e.uri })}
                             >
                               Download
                             </Button>
@@ -2102,6 +2267,55 @@ export const TaskDetailDialog = (props: {
             ) : null}
           </div>
         </ScrollArea>
+      </DialogContent>
+    </Dialog>
+    <Dialog
+      open={cancelDialogOpen}
+      onOpenChange={(open) => {
+        setCancelDialogOpen(open);
+        if (!open) {
+          setCancelReason("");
+          setCancelTouched(false);
+        }
+      }}
+    >
+      <DialogContent className="max-w-lg p-0 overflow-hidden">
+        <div className="px-6 py-4 bg-muted/40 border-b border-border/60">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">Cancel Task</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground mt-1">
+            Provide a reason for cancellation.
+          </p>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="space-y-2">
+            <Label>Reason <span className="text-destructive">*</span></Label>
+            <Input
+              value={cancelReason}
+              onChange={(e) => {
+                setCancelReason(e.target.value);
+                if (!cancelTouched) setCancelTouched(true);
+              }}
+              onBlur={() => setCancelTouched(true)}
+              className={cancelReasonError ? "border-destructive focus-visible:ring-destructive" : "bg-muted/30"}
+            />
+            {cancelReasonError ? (
+              <p className="text-xs text-destructive">Reason is required.</p>
+            ) : null}
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>Close</Button>
+            <Button
+              variant="destructive"
+              disabled={cancelMutation.isPending || cancelReason.trim().length === 0}
+              onClick={() => cancelMutation.mutate()}
+              className="shadow-sm"
+            >
+              Confirm Cancel
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
     <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>

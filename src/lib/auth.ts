@@ -84,16 +84,20 @@ export const getJwtClaims = (): JwtClaims | null => {
   }
 };
 
+const normalizeRole = (role: string): string => role.trim().toLowerCase();
+
 export const hasRole = (roleName: string): boolean => {
   const claims = getJwtClaims();
   if (!claims) return false;
-  return claims.roles.includes(roleName);
+  const roleSet = new Set(claims.roles.map(normalizeRole));
+  return roleSet.has(normalizeRole(roleName));
 };
 
 export const hasAnyRole = (roleNames: readonly string[]): boolean => {
   const claims = getJwtClaims();
   if (!claims) return false;
-  return roleNames.some((r) => claims.roles.includes(r));
+  const roleSet = new Set(claims.roles.map(normalizeRole));
+  return roleNames.some((r) => roleSet.has(normalizeRole(r)));
 };
 
 export const isSuperadmin = (): boolean => hasRole("Superadmin");

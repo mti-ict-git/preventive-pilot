@@ -26,6 +26,7 @@ interface TemplateDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   template: TemplateDetail | null;
   onEdit: () => void;
+  canEdit?: boolean;
 }
 
 const TemplateDetailDialog = ({
@@ -33,6 +34,7 @@ const TemplateDetailDialog = ({
   onOpenChange,
   template,
   onEdit,
+  canEdit = true,
 }: TemplateDetailDialogProps) => {
   if (!template) return null;
 
@@ -190,9 +192,11 @@ const TemplateDetailDialog = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button onClick={onEdit} className="bg-gradient-to-r from-primary to-accent">
-            Edit Template
-          </Button>
+          {canEdit && (
+            <Button onClick={onEdit} className="bg-gradient-to-r from-primary to-accent">
+              Edit Template
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

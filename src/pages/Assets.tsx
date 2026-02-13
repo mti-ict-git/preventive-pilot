@@ -65,7 +65,7 @@ import { isManager } from "@/lib/auth";
 
 const EMPTY_ASSETS: Asset[] = [];
 
-const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
+const PAGE_SIZE_OPTIONS = [10, 50, 100, 200, 500] as const;
 
 const EMPTY_TEMPLATES: TemplateSummary[] = [];
 
@@ -87,7 +87,7 @@ const Assets = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(50);
+  const [pageSize, setPageSize] = useState<number>(10);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Record<string, true>>({});
   const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
   const [bulkTemplateValue, setBulkTemplateValue] = useState<string>("none");
@@ -338,7 +338,7 @@ const Assets = () => {
   const canManage = isManager();
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Header title="Assets" subtitle="Synchronized from Snipe-IT" />
 
       <div className="p-6 space-y-6">
@@ -346,7 +346,7 @@ const Assets = () => {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass rounded-xl p-4 flex items-center justify-between"
+          className="glass rounded-xl p-4 border border-border/60 shadow-card flex items-center justify-between"
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-success/20 flex items-center justify-center">
@@ -364,7 +364,7 @@ const Assets = () => {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2"
+              className="gap-2 bg-background/80"
               onClick={() => syncNowMutation.mutate()}
               disabled={syncNowMutation.isPending}
             >
@@ -374,7 +374,7 @@ const Assets = () => {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2"
+              className="gap-2 bg-background/80"
               onClick={() => {
                 if (snipeItUrl) window.open(snipeItUrl, "_blank", "noreferrer");
               }}
@@ -387,108 +387,115 @@ const Assets = () => {
         </motion.div>
 
         {/* Filters */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by asset ID or name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-muted/50"
-            />
-          </div>
-          <Select
-            value={selectedCategoryId}
-            onValueChange={(value) => {
-              setSelectedCategoryId(value);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="w-full md:w-48 bg-muted/50">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categorySelectItems.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <Filter className="w-4 h-4" />
-                More Filters
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80">
-              <div className="space-y-3">
-                <div>
-                  <div className="text-sm font-medium">PM Enabled</div>
-                  <div className="mt-2">
-                    <Select
-                      value={pmEnabledFilter}
-                      onValueChange={(v) => {
-                        setPmEnabledFilter(v as "all" | "enabled" | "disabled");
-                        setPage(1);
-                      }}
-                    >
-                      <SelectTrigger className="bg-muted/50">
-                        <SelectValue placeholder="PM Enabled" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="enabled">Enabled</SelectItem>
-                        <SelectItem value="disabled">Disabled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+        <div className="glass rounded-xl p-4 border border-border/60 shadow-card">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-1 flex-col md:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by asset ID or name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 bg-background/80"
+                />
               </div>
-            </PopoverContent>
-          </Popover>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2" disabled={selectedIdsOnPage.length === 0}>
-                Bulk Actions
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem
-                onClick={() => bulkSetPmEnabledMutation.mutate({ assetIds: selectedIdsOnPage, pmEnabled: true })}
-                disabled={!canManage || bulkSetPmEnabledMutation.isPending}
-              >
-                Enable PM
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => bulkSetPmEnabledMutation.mutate({ assetIds: selectedIdsOnPage, pmEnabled: false })}
-                disabled={!canManage || bulkSetPmEnabledMutation.isPending}
-              >
-                Disable PM
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setBulkTemplateValue("none");
-                  setBulkTemplateOpen(true);
+              <Select
+                value={selectedCategoryId}
+                onValueChange={(value) => {
+                  setSelectedCategoryId(value);
+                  setPage(1);
                 }}
-                disabled={!canManage || selectedIdsOnPage.length === 0}
               >
-                Assign PM Template…
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setSelectedAssetIds({})}
-                disabled={selectedIdsOnPage.length === 0 || bulkSetPmEnabledMutation.isPending}
-              >
-                Clear selection
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button variant="outline" className="gap-2">
-            <Download className="w-4 h-4" />
-            Export
-          </Button>
+                <SelectTrigger className="w-full md:w-52 bg-background/80">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categorySelectItems.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="gap-2 bg-background/80">
+                    <Filter className="w-4 h-4" />
+                    More Filters
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-80">
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-sm font-medium">PM Enabled</div>
+                      <div className="mt-2">
+                        <Select
+                          value={pmEnabledFilter}
+                          onValueChange={(v) => {
+                            setPmEnabledFilter(v as "all" | "enabled" | "disabled");
+                            setPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="bg-muted/50">
+                            <SelectValue placeholder="PM Enabled" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All</SelectItem>
+                            <SelectItem value="enabled">Enabled</SelectItem>
+                            <SelectItem value="disabled">Disabled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 xl:pl-4 xl:border-l xl:border-border/60">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2 bg-background/80" disabled={selectedIdsOnPage.length === 0}>
+                    Bulk Actions
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuItem
+                    onClick={() => bulkSetPmEnabledMutation.mutate({ assetIds: selectedIdsOnPage, pmEnabled: true })}
+                    disabled={!canManage || bulkSetPmEnabledMutation.isPending}
+                  >
+                    Enable PM
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => bulkSetPmEnabledMutation.mutate({ assetIds: selectedIdsOnPage, pmEnabled: false })}
+                    disabled={!canManage || bulkSetPmEnabledMutation.isPending}
+                  >
+                    Disable PM
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setBulkTemplateValue("none");
+                      setBulkTemplateOpen(true);
+                    }}
+                    disabled={!canManage || selectedIdsOnPage.length === 0}
+                  >
+                    Assign PM Template…
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setSelectedAssetIds({})}
+                    disabled={selectedIdsOnPage.length === 0 || bulkSetPmEnabledMutation.isPending}
+                  >
+                    Clear selection
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" className="gap-2 bg-background/80">
+                <Download className="w-4 h-4" />
+                Export
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Assets Table */}
@@ -496,16 +503,17 @@ const Assets = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="glass rounded-xl overflow-hidden"
+          className="glass rounded-xl overflow-hidden border border-border/60 shadow-card"
         >
           {assetsQuery.isLoading ? (
             <div className="p-6 text-sm text-muted-foreground">Loading assets…</div>
           ) : assetsQuery.isError ? (
             <div className="p-6 text-sm text-destructive">Failed to load assets.</div>
           ) : (
-            <Table>
+            <>
+              <Table>
               <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
+                <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
                   <TableHead className="w-10">
                     <div
                       onClick={(e) => {
@@ -532,18 +540,18 @@ const Assets = () => {
                       />
                     </div>
                   </TableHead>
-                  <TableHead className="text-muted-foreground">Asset ID</TableHead>
-                  <TableHead className="text-muted-foreground">Name</TableHead>
-                  <TableHead className="text-muted-foreground">Category</TableHead>
-                  <TableHead className="text-muted-foreground">Notes</TableHead>
-                  <TableHead className="text-muted-foreground">Location</TableHead>
-                  <TableHead className="text-muted-foreground">Operational</TableHead>
-                  <TableHead className="text-muted-foreground">PM Status</TableHead>
-                  <TableHead className="text-muted-foreground">Next PM</TableHead>
-                  <TableHead className="text-muted-foreground">PM Enabled</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Asset ID</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Category</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Location</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operational</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PM Status</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next PM</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PM Enabled</TableHead>
                   <TableHead className="text-muted-foreground"></TableHead>
                 </TableRow>
-                <TableRow className="border-border bg-muted/30">
+                <TableRow className="border-border bg-muted/20">
                   <TableHead className="w-10"></TableHead>
                   <TableHead>
                     <Input
@@ -553,7 +561,7 @@ const Assets = () => {
                         setSearchQuery(e.target.value);
                         setPage(1);
                       }}
-                      className="h-8"
+                      className="h-8 bg-background/80"
                     />
                   </TableHead>
                   <TableHead>
@@ -567,7 +575,7 @@ const Assets = () => {
                         setPage(1);
                       }}
                     >
-                      <SelectTrigger className="h-8">
+                    <SelectTrigger className="h-8 bg-background/80">
                         <SelectValue placeholder="Category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -588,7 +596,7 @@ const Assets = () => {
                         setPage(1);
                       }}
                     >
-                      <SelectTrigger className="h-8">
+                    <SelectTrigger className="h-8 bg-background/80">
                         <SelectValue placeholder="Location" />
                       </SelectTrigger>
                       <SelectContent>
@@ -610,7 +618,7 @@ const Assets = () => {
                         setPage(1);
                       }}
                     >
-                      <SelectTrigger className="h-8">
+                    <SelectTrigger className="h-8 bg-background/80">
                         <SelectValue placeholder="Operational" />
                       </SelectTrigger>
                       <SelectContent>
@@ -629,7 +637,7 @@ const Assets = () => {
                         setPage(1);
                       }}
                     >
-                      <SelectTrigger className="h-8">
+                    <SelectTrigger className="h-8 bg-background/80">
                         <SelectValue placeholder="PM Status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -651,7 +659,7 @@ const Assets = () => {
                         setPage(1);
                       }}
                     >
-                      <SelectTrigger className="h-8">
+                    <SelectTrigger className="h-8 bg-background/80">
                         <SelectValue placeholder="PM Enabled" />
                       </SelectTrigger>
                       <SelectContent>
@@ -674,7 +682,7 @@ const Assets = () => {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      className="border-border hover:bg-muted/30 transition-colors cursor-pointer group"
+                      className="border-border hover:bg-muted/40 transition-colors cursor-pointer group"
                       onClick={() => navigate(`/assets/${asset.id}`)}
                     >
                       <TableCell
@@ -697,15 +705,17 @@ const Assets = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                            <Server className="w-4 h-4 text-muted-foreground" />
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                            <Server className="w-4 h-4 text-primary" />
                           </div>
                           <span className="font-mono text-sm text-foreground">{asset.assetTag}</span>
                         </div>
                       </TableCell>
                       <TableCell className="font-medium text-foreground">{asset.name}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{asset.category.name ?? "—"}</Badge>
+                        <Badge variant="secondary" className="bg-muted/60 text-foreground">
+                          {asset.category.name ?? "—"}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground max-w-xs">
                         <span className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-wrap">
@@ -756,54 +766,53 @@ const Assets = () => {
                 })}
               </TableBody>
             </Table>
+            <div className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <p className="text-sm text-muted-foreground">Showing {filteredAssets.length} assets</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Per page</span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-28 bg-background/80" aria-label="Assets per page">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt} value={String(opt)}>
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1 || assetsQuery.isLoading}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={(assetsQuery.data?.items.length ?? 0) < pageSize || assetsQuery.isLoading}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+            </>
           )}
         </motion.div>
-
-        {/* Pagination */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <p className="text-sm text-muted-foreground">Showing {filteredAssets.length} assets</p>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Per page</span>
-              <Select
-                value={String(pageSize)}
-                onValueChange={(value) => {
-                  setPageSize(Number(value));
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-28 bg-muted/50" aria-label="Assets per page">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt} value={String(opt)}>
-                      {opt}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1 || assetsQuery.isLoading}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={(assetsQuery.data?.items.length ?? 0) < pageSize || assetsQuery.isLoading}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
       </div>
 
       <Dialog open={bulkTemplateOpen} onOpenChange={setBulkTemplateOpen}>

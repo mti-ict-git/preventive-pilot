@@ -36,10 +36,12 @@ import {
 import TemplateFormDialog from "@/components/templates/TemplateFormDialog";
 import TemplateDetailDialog from "@/components/templates/TemplateDetailDialog";
 import { toast } from "@/hooks/use-toast";
+import { isManager } from "@/lib/auth";
 import {
   ApiError,
   apiCreateTemplate,
   apiDeleteTemplate,
+  apiGetMe,
   apiGetLookups,
   apiGetTemplate,
   apiListTemplates,
@@ -65,6 +67,12 @@ const Templates = () => {
     queryKey: ["lookups"],
     queryFn: apiGetLookups,
     staleTime: 5 * 60_000,
+  });
+
+  const meQuery = useQuery({
+    queryKey: ["me"],
+    queryFn: apiGetMe,
+    staleTime: 60_000,
   });
 
   const templatesQuery = useQuery({
@@ -206,6 +214,7 @@ const Templates = () => {
   };
 
   const handleEditFromDetail = () => {
+    if (!canManageTemplates) return;
     const detail = templateDetailQuery.data;
     if (!detail || selectedTemplateId === null) {
       toast({ title: "Template not loaded", description: "Please try again." });
@@ -217,20 +226,30 @@ const Templates = () => {
   };
 
   const handleEditTemplate = async (data: TemplateFormData) => {
-    if (!selectedTemplateId) {
+    const templateId = templateDetailQuery.data?.id ?? selectedTemplateId;
+    if (!templateId) {
       toast({ title: "Edit failed", description: "No template selected", variant: "destructive" });
       throw new Error("No template selected");
     }
 
     try {
       await updateMutation.mutateAsync({
-        templateId: selectedTemplateId,
+        templateId,
         data: toCreateInput(data, true),
       });
       toast({ title: "Template updated", description: `${data.name} has been saved.` });
     } catch (err: unknown) {
       const message = err instanceof ApiError ? err.message : "Failed to update template";
-      toast({ title: "Update failed", description: message, variant: "destructive" });
+      if (err instanceof ApiError && err.status === 404) {
+        toast({
+          title: "Template not found",
+          description: "This template is no longer available. Refresh the list and try again.",
+          variant: "destructive",
+        });
+        queryClient.invalidateQueries({ queryKey: ["templates"] });
+      } else {
+        toast({ title: "Update failed", description: message, variant: "destructive" });
+      }
       throw err;
     }
   };
@@ -279,30 +298,45 @@ const Templates = () => {
 
   const roles = lookupsQuery.data?.roles ?? [];
   const assetCategories = lookupsQuery.data?.assetCategories ?? [];
+  const totalTemplates = templatesQuery.data?.items?.length ?? 0;
+  const canManageTemplates = useMemo(() => {
+    if (isManager()) return true;
+    const roles = meQuery.data?.user.roles ?? [];
+    if (roles.length === 0) return false;
+    const roleSet = new Set(roles.map((r) => r.trim().toLowerCase()));
+    return ["superadmin", "admin", "supervisor"].some((role) => roleSet.has(role));
+  }, [meQuery.data?.user.roles]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Header title="PM Templates" subtitle="Standardize your maintenance workflows" />
 
-      <div className="p-6 space-y-6">
-        {/* Header Actions */}
-        <div className="flex flex-col md:flex-row gap-4 justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search templates..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-muted/50"
-            />
+      <div className="px-6 pb-8 pt-4 space-y-6">
+        <div className="rounded-xl border border-border/60 bg-card/70 shadow-sm">
+          <div className="flex flex-col md:flex-row gap-4 justify-between p-4 md:p-5">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search templates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-background"
+              />
+            </div>
+            {canManageTemplates && (
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              >
+                <Plus className="w-4 h-4" />
+                Create Template
+              </Button>
+            )}
           </div>
-          <Button
-            onClick={() => setCreateDialogOpen(true)}
-            className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
-          >
-            <Plus className="w-4 h-4" />
-            Create Template
-          </Button>
+          <div className="flex items-center justify-between border-t border-border/60 px-4 md:px-5 py-3 text-xs text-muted-foreground">
+            <span>Showing {filteredTemplates.length} of {totalTemplates} templates</span>
+            <span className="hidden sm:inline">Manage PM standards with structured checklists</span>
+          </div>
         </div>
 
         {/* Templates Grid */}
@@ -314,57 +348,61 @@ const Templates = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
               onClick={() => handleTemplateClick(template.id)}
-              className="glass rounded-xl p-5 hover:border-primary/50 transition-all duration-300 cursor-pointer group"
+              className="rounded-xl border border-border/60 bg-card/80 p-5 shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-300 cursor-pointer group"
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
                   <FileText className="w-6 h-6 text-primary" />
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      className="gap-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedTemplateId(template.id);
-                        setEditInitialData(undefined);
-                        setDetailDialogOpen(false);
-                        setEditDialogOpen(true);
-                      }}
-                    >
-                      <Edit2 className="w-4 h-4" /> Edit Template
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="gap-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleDuplicate(template.id);
-                      }}
-                    >
-                      <Copy className="w-4 h-4" /> Duplicate
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="gap-2 text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete({ id: template.id, name: template.name });
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {canManageTemplates && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        className="gap-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTemplateId(template.id);
+                          setEditInitialData(undefined);
+                          setDetailDialogOpen(false);
+                          setEditDialogOpen(true);
+                        }}
+                      >
+                        <Edit2 className="w-4 h-4" /> Edit Template
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="gap-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDuplicate(template.id);
+                        }}
+                      >
+                        <Copy className="w-4 h-4" /> Duplicate
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="gap-2 text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete({ id: template.id, name: template.name });
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
 
-              <h3 className="font-semibold text-lg text-foreground mb-1">{template.name}</h3>
+              <h3 className="font-semibold text-lg text-foreground mb-1 group-hover:text-primary transition-colors">
+                {template.name}
+              </h3>
               <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{template.description ?? ""}</p>
 
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex flex-wrap items-center gap-2 mb-4">
                 <Badge
                   variant="outline"
                   className={getCategoryColor(template.applicableCategory?.name ?? "Any")}
@@ -381,7 +419,7 @@ const Templates = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/60">
                 <div className="flex items-center gap-2">
                   <CheckSquare className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">v{template.version}</span>
@@ -394,7 +432,7 @@ const Templates = () => {
                 </div>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+              <div className="mt-4 pt-4 border-t border-border/60 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
                   Updated {new Date(template.updatedAt).toLocaleDateString()}
                 </span>
@@ -405,13 +443,13 @@ const Templates = () => {
         </div>
 
         {filteredTemplates.length === 0 && !templatesQuery.isLoading && (
-          <div className="text-center py-12">
+          <div className="rounded-xl border border-border/60 bg-card/70 p-10 text-center shadow-sm">
             <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">No templates found</h3>
             <p className="text-muted-foreground mb-4">
               {searchQuery ? "Try a different search term" : "Create your first PM template to get started"}
             </p>
-            {!searchQuery && (
+            {!searchQuery && canManageTemplates && (
               <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
                 <Plus className="w-4 h-4" />
                 Create Template
@@ -436,6 +474,7 @@ const Templates = () => {
         onOpenChange={setDetailDialogOpen}
         template={templateDetailQuery.data ?? null}
         onEdit={handleEditFromDetail}
+        canEdit={canManageTemplates}
       />
 
       <TemplateFormDialog

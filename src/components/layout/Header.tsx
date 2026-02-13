@@ -275,7 +275,7 @@ const Header = ({ title, subtitle }: HeaderProps) => {
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2">
+            <Button variant="ghost" className="flex items-center gap-2 rounded-full bg-primary/10 hover:bg-primary/20 text-foreground">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                 <User className="w-4 h-4 text-primary" />
               </div>

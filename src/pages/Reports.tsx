@@ -323,141 +323,149 @@ const Reports = () => {
   ];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Header title="Reports & Audit" subtitle="Generate compliance reports and audit trails" />
 
-      <div className="p-6 space-y-6">
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {quickStats.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="stat-card"
             >
-              <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
-              <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-              <p className="text-xs text-success mt-1">{stat.trend}</p>
+              <Card className="border-border/60 bg-card/70 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-5">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{stat.label}</p>
+                  <p className="text-3xl font-semibold text-foreground mt-2 tabular-nums leading-none">
+                    {stat.value}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2 min-h-[16px]">{stat.trend}</p>
+                </CardContent>
+              </Card>
             </motion.div>
           ))}
         </div>
 
-        {/* Report Period Selector */}
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 md:col-span-4">
-            <Select value={periodKey} onValueChange={setPeriod}>
-              <SelectTrigger className="w-full bg-muted/50">
-                <SelectValue placeholder="Select period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="last7">Last 7 days</SelectItem>
-                <SelectItem value="last30">Last 30 days</SelectItem>
-                <SelectItem value="last90">Last 90 days</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-12 md:col-span-4">
-            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-              <SelectTrigger className="w-full bg-muted/50">
-                <SelectValue placeholder="All locations" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All locations</SelectItem>
-                {(lookupsQuery.data?.locations ?? [])
-                  .filter((l) => l.isActive)
-                  .map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-12 md:col-span-4">
-            <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-              <SelectTrigger className="w-full bg-muted/50">
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {(lookupsQuery.data?.assetCategories ?? [])
-                  .filter((c) => c.isActive)
-                  .map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="rounded-xl border border-border/60 bg-card/70 shadow-sm p-4">
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-12 md:col-span-4">
+              <Select value={periodKey} onValueChange={setPeriod}>
+                <SelectTrigger className="w-full bg-background border-border/60">
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="last7">Last 7 days</SelectItem>
+                  <SelectItem value="last30">Last 30 days</SelectItem>
+                  <SelectItem value="last90">Last 90 days</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-12 md:col-span-4">
+              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                <SelectTrigger className="w-full bg-background border-border/60">
+                  <SelectValue placeholder="All locations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All locations</SelectItem>
+                  {(lookupsQuery.data?.locations ?? [])
+                    .filter((l) => l.isActive)
+                    .map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-12 md:col-span-4">
+              <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+                <SelectTrigger className="w-full bg-background border-border/60">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {(lookupsQuery.data?.assetCategories ?? [])
+                    .filter((c) => c.isActive)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="col-span-12 md:col-span-4">
-            <Select
-              value={maintenanceType}
-              onValueChange={(value) => setMaintenanceType(value as MaintenanceTypeFilter)}
-            >
-              <SelectTrigger className="w-full bg-muted/50">
-                <SelectValue placeholder="Maintenance type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PM">PM only</SelectItem>
-                <SelectItem value="CM">CM only</SelectItem>
-                <SelectItem value="all">PM + CM</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="col-span-12 md:col-span-4">
+              <Select
+                value={maintenanceType}
+                onValueChange={(value) => setMaintenanceType(value as MaintenanceTypeFilter)}
+              >
+                <SelectTrigger className="w-full bg-background border-border/60">
+                  <SelectValue placeholder="Maintenance type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PM">PM only</SelectItem>
+                  <SelectItem value="CM">CM only</SelectItem>
+                  <SelectItem value="all">PM + CM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="col-span-12 md:col-span-6">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2 w-full" onClick={() => setPeriod("custom")}>
-                  <CalendarIcon className="w-4 h-4" />
-                  Custom Range
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-auto p-0">
-                <Calendar
-                  mode="range"
-                  selected={customRange}
-                  onSelect={setCustomRange}
-                  numberOfMonths={2}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="col-span-12 md:col-span-6 flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => {
-                setSelectedLocationId("all");
-                setSelectedCategoryId("all");
-                setMaintenanceType("PM");
-              }}
-            >
-              Clear Filters
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() => {
-                void complianceQuery.refetch();
-                void overdueQuery.refetch();
-                void logsQuery.refetch();
-                toast({ title: "Reports refreshed" });
-              }}
-            >
-              Refresh
-            </Button>
+            <div className="col-span-12 md:col-span-6">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="gap-2 w-full bg-background border-border/60"
+                    onClick={() => setPeriod("custom")}
+                  >
+                    <CalendarIcon className="w-4 h-4" />
+                    Custom Range
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-0">
+                  <Calendar
+                    mode="range"
+                    selected={customRange}
+                    onSelect={setCustomRange}
+                    numberOfMonths={2}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="col-span-12 md:col-span-6 flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 bg-background border-border/60 shadow-sm"
+                onClick={() => {
+                  setSelectedLocationId("all");
+                  setSelectedCategoryId("all");
+                  setMaintenanceType("PM");
+                }}
+              >
+                Clear Filters
+              </Button>
+              <Button
+                className="flex-1 shadow-sm"
+                onClick={() => {
+                  void complianceQuery.refetch();
+                  void overdueQuery.refetch();
+                  void logsQuery.refetch();
+                  toast({ title: "Reports refreshed" });
+                }}
+              >
+                Refresh
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Report Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {reportTypes.map((report, index) => (
             <motion.div
               key={report.title}
@@ -465,8 +473,8 @@ const Reports = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + index * 0.1 }}
             >
-              <Card className="glass border-border hover:border-primary/50 transition-all duration-300 cursor-pointer group">
-                <CardHeader>
+              <Card className="border-border/60 bg-card/70 shadow-sm hover:shadow-md transition-shadow cursor-pointer group">
+                <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className={`w-12 h-12 rounded-xl bg-${report.color}/20 flex items-center justify-center`}>
                       <report.icon className={`w-6 h-6 text-${report.color}`} />
@@ -498,10 +506,10 @@ const Reports = () => {
                       </Button>
                     </div>
                   </div>
-                  <CardTitle className="text-foreground mt-4">{report.title}</CardTitle>
+                  <CardTitle className="text-foreground mt-4 text-base font-semibold">{report.title}</CardTitle>
                   <CardDescription>{report.description}</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-3 border-t border-border/60">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">
                       {report.key === "overdue"
@@ -510,7 +518,12 @@ const Reports = () => {
                           ? "Scope: all assets"
                           : `Period: ${label}`}
                     </span>
-                    <Button variant="ghost" size="sm" className="text-primary" onClick={report.action}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-primary hover:bg-primary/10"
+                      onClick={report.action}
+                    >
                       Generate New
                     </Button>
                   </div>
@@ -524,158 +537,164 @@ const Reports = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="glass rounded-xl p-6"
         >
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">CM Metrics Overview</h3>
-              <p className="text-sm text-muted-foreground">Breakdowns and MTTR for corrective maintenance</p>
-            </div>
-          </div>
+          <Card className="border-border/60 bg-card/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">CM Metrics Overview</CardTitle>
+              <CardDescription>Breakdowns and MTTR for corrective maintenance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {cmMetricsQuery.isLoading ? (
+                <div className="text-sm text-muted-foreground">Loading CM metrics…</div>
+              ) : cmMetricsQuery.isError ? (
+                <div className="text-sm text-destructive">Failed to load CM metrics.</div>
+              ) : !cmMetricsQuery.data ? (
+                <div className="text-sm text-muted-foreground">No CM metrics available for the selected filters.</div>
+              ) : (
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
+                    <p className="text-xs font-medium uppercase text-muted-foreground">By Category</p>
+                    <div className="space-y-1">
+                      {cmMetricsQuery.data.breakdownByCategory.map((row) => (
+                        <div key={`cat-${row.name}`} className="flex justify-between text-sm">
+                          <span className="text-foreground truncate max-w-[70%]">{row.name || "Uncategorized"}</span>
+                          <span className="text-muted-foreground">{row.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
+                    <p className="text-xs font-medium uppercase text-muted-foreground">By Location</p>
+                    <div className="space-y-1">
+                      {cmMetricsQuery.data.breakdownByLocation.map((row) => (
+                        <div key={`loc-${row.name}`} className="flex justify-between text-sm">
+                          <span className="text-foreground truncate max-w-[70%]">{row.name || "Unassigned"}</span>
+                          <span className="text-muted-foreground">{row.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
+                    <p className="text-xs font-medium uppercase text-muted-foreground">By Failure Category</p>
+                    <div className="space-y-1">
+                      {cmMetricsQuery.data.breakdownByFailureCategory.map((row) => (
+                        <div key={`fail-${row.name}`} className="flex justify-between text-sm">
+                          <span className="text-foreground truncate max-w-[70%]">{row.name || "Unspecified"}</span>
+                          <span className="text-muted-foreground">{row.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
+                    <p className="text-xs font-medium uppercase text-muted-foreground">By Impact Level</p>
+                    <div className="space-y-1">
+                      {cmMetricsQuery.data.breakdownByImpactLevel.map((row) => (
+                        <div key={`impact-${row.name}`} className="flex justify-between text-sm">
+                          <span className="text-foreground truncate max-w-[70%]">{row.name || "Unspecified"}</span>
+                          <span className="text-muted-foreground">{row.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-          {cmMetricsQuery.isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading CM metrics…</div>
-          ) : cmMetricsQuery.isError ? (
-            <div className="text-sm text-destructive">Failed to load CM metrics.</div>
-          ) : !cmMetricsQuery.data ? (
-            <div className="text-sm text-muted-foreground">No CM metrics available for the selected filters.</div>
-          ) : (
-            <div className="grid grid-cols-12 gap-4">
-              <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
-                <p className="text-xs font-medium uppercase text-muted-foreground">By Category</p>
-                <div className="space-y-1">
-                  {cmMetricsQuery.data.breakdownByCategory.map((row) => (
-                    <div key={`cat-${row.name}`} className="flex justify-between text-sm">
-                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Uncategorized"}</span>
-                      <span className="text-muted-foreground">{row.count}</span>
+                  <div className="col-span-12 md:col-span-6 lg:col-span-4 space-y-2">
+                    <p className="text-xs font-medium uppercase text-muted-foreground">MTTR by Category (hours)</p>
+                    <div className="space-y-1">
+                      {cmMetricsQuery.data.mttrByCategory.map((row) => (
+                        <div key={`mttr-cat-${row.name}`} className="flex justify-between text-sm">
+                          <span className="text-foreground truncate max-w-[70%]">{row.name || "Uncategorized"}</span>
+                          <span className="text-muted-foreground">
+                            {row.seconds > 0 ? (row.seconds / 3600).toFixed(1) : "0.0"}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
-                <p className="text-xs font-medium uppercase text-muted-foreground">By Location</p>
-                <div className="space-y-1">
-                  {cmMetricsQuery.data.breakdownByLocation.map((row) => (
-                    <div key={`loc-${row.name}`} className="flex justify-between text-sm">
-                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Unassigned"}</span>
-                      <span className="text-muted-foreground">{row.count}</span>
+                  </div>
+                  <div className="col-span-12 md:col-span-6 lg:col-span-4 space-y-2">
+                    <p className="text-xs font-medium uppercase text-muted-foreground">MTTR by Location (hours)</p>
+                    <div className="space-y-1">
+                      {cmMetricsQuery.data.mttrByLocation.map((row) => (
+                        <div key={`mttr-loc-${row.name}`} className="flex justify-between text-sm">
+                          <span className="text-foreground truncate max-w-[70%]">{row.name || "Unassigned"}</span>
+                          <span className="text-muted-foreground">
+                            {row.seconds > 0 ? (row.seconds / 3600).toFixed(1) : "0.0"}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
-                <p className="text-xs font-medium uppercase text-muted-foreground">By Failure Category</p>
-                <div className="space-y-1">
-                  {cmMetricsQuery.data.breakdownByFailureCategory.map((row) => (
-                    <div key={`fail-${row.name}`} className="flex justify-between text-sm">
-                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Unspecified"}</span>
-                      <span className="text-muted-foreground">{row.count}</span>
+                  </div>
+                  <div className="col-span-12 md:col-span-12 lg:col-span-4 space-y-2">
+                    <p className="text-xs font-medium uppercase text-muted-foreground">Monthly Incidents</p>
+                    <div className="space-y-1">
+                      {cmMetricsQuery.data.monthlyIncidents.map((row) => (
+                        <div key={`month-${row.monthStart}`} className="flex justify-between text-sm">
+                          <span className="text-foreground">
+                            {row.monthStart ? format(new Date(row.monthStart), "yyyy-MM") : "Unknown"}
+                          </span>
+                          <span className="text-muted-foreground">{row.incidentCount}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              </div>
-              <div className="col-span-12 md:col-span-6 lg:col-span-3 space-y-2">
-                <p className="text-xs font-medium uppercase text-muted-foreground">By Impact Level</p>
-                <div className="space-y-1">
-                  {cmMetricsQuery.data.breakdownByImpactLevel.map((row) => (
-                    <div key={`impact-${row.name}`} className="flex justify-between text-sm">
-                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Unspecified"}</span>
-                      <span className="text-muted-foreground">{row.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="col-span-12 md:col-span-6 lg:col-span-4 space-y-2">
-                <p className="text-xs font-medium uppercase text-muted-foreground">MTTR by Category (hours)</p>
-                <div className="space-y-1">
-                  {cmMetricsQuery.data.mttrByCategory.map((row) => (
-                    <div key={`mttr-cat-${row.name}`} className="flex justify-between text-sm">
-                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Uncategorized"}</span>
-                      <span className="text-muted-foreground">
-                        {row.seconds > 0 ? (row.seconds / 3600).toFixed(1) : "0.0"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="col-span-12 md:col-span-6 lg:col-span-4 space-y-2">
-                <p className="text-xs font-medium uppercase text-muted-foreground">MTTR by Location (hours)</p>
-                <div className="space-y-1">
-                  {cmMetricsQuery.data.mttrByLocation.map((row) => (
-                    <div key={`mttr-loc-${row.name}`} className="flex justify-between text-sm">
-                      <span className="text-foreground truncate max-w-[70%]">{row.name || "Unassigned"}</span>
-                      <span className="text-muted-foreground">
-                        {row.seconds > 0 ? (row.seconds / 3600).toFixed(1) : "0.0"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="col-span-12 md:col-span-12 lg:col-span-4 space-y-2">
-                <p className="text-xs font-medium uppercase text-muted-foreground">Monthly Incidents</p>
-                <div className="space-y-1">
-                  {cmMetricsQuery.data.monthlyIncidents.map((row) => (
-                    <div key={`month-${row.monthStart}`} className="flex justify-between text-sm">
-                      <span className="text-foreground">
-                        {row.monthStart ? format(new Date(row.monthStart), "yyyy-MM") : "Unknown"}
-                      </span>
-                      <span className="text-muted-foreground">{row.incidentCount}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+              )}
+            </CardContent>
+          </Card>
         </motion.div>
 
-        {/* Audit Trail Preview */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="glass rounded-xl p-6"
         >
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">Recent Audit Trail</h3>
-              <p className="text-sm text-muted-foreground">System activity log for compliance tracking</p>
-            </div>
-            <Button variant="outline">View Full Log</Button>
-          </div>
-
-          <div className="space-y-4">
-            {logsQuery.isLoading ? (
-              <div className="text-sm text-muted-foreground">Loading logs…</div>
-            ) : logsQuery.isError ? (
-              <div className="text-sm text-destructive">Failed to load logs.</div>
-            ) : (
-              (logsQuery.data?.items ?? []).map((log) => {
-                const level = log.level.toLowerCase();
-                const dotColor = level === "error" ? "bg-destructive" : level === "warn" ? "bg-warning" : "bg-primary";
-                return (
-                  <div
-                    key={log.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-2 h-2 rounded-full ${dotColor}`} />
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground truncate">{log.message}</p>
-                        <p className="text-sm text-muted-foreground truncate">{log.context ?? ""}</p>
+          <Card className="border-border/60 bg-card/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg">Recent Audit Trail</CardTitle>
+                  <CardDescription>System activity log for compliance tracking</CardDescription>
+                </div>
+                <Button variant="outline" className="bg-background border-border/60">
+                  View Full Log
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {logsQuery.isLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading logs…</div>
+                ) : logsQuery.isError ? (
+                  <div className="text-sm text-destructive">Failed to load logs.</div>
+                ) : (
+                  (logsQuery.data?.items ?? []).map((log) => {
+                    const level = log.level.toLowerCase();
+                    const dotColor =
+                      level === "error" ? "bg-destructive" : level === "warn" ? "bg-warning" : "bg-primary";
+                    return (
+                      <div
+                        key={log.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-2 h-2 rounded-full ${dotColor}`} />
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground truncate">{log.message}</p>
+                            <p className="text-sm text-muted-foreground truncate">{log.context ?? ""}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-foreground">{log.level}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(parseISO(log.createdAt), "yyyy-MM-dd HH:mm")}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-foreground">{log.level}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(parseISO(log.createdAt), "yyyy-MM-dd HH:mm")}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
       </div>
     </div>

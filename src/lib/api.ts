@@ -351,6 +351,9 @@ export type TaskListItem = {
   rejectedAt: string | null;
   rejectedBy: TaskUserRef | null;
   rejectionReason: string | null;
+  revisedAt: string | null;
+  revisedBy: TaskUserRef | null;
+  revisionNote: string | null;
   checklistTotal: number;
   checklistCompleted: number;
   asset: { id: string | null; assetTag: string | null; name: string | null };
@@ -494,6 +497,7 @@ export type TaskDetail = {
   completedBy: TaskUserRef | null;
   cancelledAt: string | null;
   cancelledBy: TaskUserRef | null;
+  cancelledReason: string | null;
   forceCompleted: boolean | null;
   approvalStatus: string | null;
   technicianCompletedAt: string | null;
@@ -505,6 +509,9 @@ export type TaskDetail = {
   rejectedAt: string | null;
   rejectedBy: TaskUserRef | null;
   rejectionReason: string | null;
+  revisedAt: string | null;
+  revisedBy: TaskUserRef | null;
+  revisionNote: string | null;
   asset: { id: string; assetTag: string; name: string };
   facility: { id: string; name: string | null } | null;
   template: { id: string; name: string };
@@ -629,8 +636,11 @@ export const apiPauseTask = async (taskId: string): Promise<{ ok: true }> => {
   return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/pause`, { method: "POST" });
 };
 
-export const apiCancelTask = async (taskId: string): Promise<{ ok: true }> => {
-  return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/cancel`, { method: "POST" });
+export const apiCancelTask = async (input: { taskId: string; reason: string }): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/tasks/${input.taskId}/cancel`, {
+    method: "POST",
+    body: { reason: input.reason },
+  });
 };
 
 export const apiResumeTask = async (taskId: string): Promise<{ ok: true }> => {
