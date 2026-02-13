@@ -663,8 +663,7 @@ const resolveUniqueDestPath = async (destAbs: string): Promise<string> => {
 
 const resolveStoredFileAbs = (storageRootAbs: string, storagePath: string): string | null => {
   const root = path.resolve(storageRootAbs);
-  const normalizedPath = storagePath.replace(/[\\/]+/g, path.sep).replace(/^[/\\]+/, "");
-  const resolved = path.resolve(root, normalizedPath);
+  const resolved = path.resolve(root, storagePath);
   const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
   if (!resolved.startsWith(prefix)) return null;
   return resolved;
@@ -1998,8 +1997,10 @@ tasksRouter.get("/evidence/:evidenceId", async (req, res) => {
     return;
   }
 
-  const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
-  if (!resolved) {
+  const root = path.resolve(env.EVIDENCE_STORAGE_ROOT);
+  const resolved = path.resolve(root, storagePath);
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (!resolved.startsWith(prefix)) {
     res.status(400).json({ message: "Invalid request" });
     return;
   }
@@ -2079,8 +2080,10 @@ tasksRouter.get("/checklist-evidence/:checklistEvidenceId", async (req, res) => 
     return;
   }
 
-  const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
-  if (!resolved) {
+  const root = path.resolve(env.EVIDENCE_STORAGE_ROOT);
+  const resolved = path.resolve(root, storagePath);
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (!resolved.startsWith(prefix)) {
     res.status(400).json({ message: "Invalid request" });
     return;
   }
@@ -2609,7 +2612,6 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "  cu.DisplayName AS CompletedByDisplayName,",
         "  t.CancelledAt AS CancelledAt,",
         "  t.CancelledByUserId AS CancelledByUserId,",
-        "  t.CancelledReason AS CancelledReason,",
         "  xu.Username AS CancelledByUsername,",
         "  xu.DisplayName AS CancelledByDisplayName,",
         "  t.ForceCompleted AS ForceCompleted",
@@ -2836,7 +2838,6 @@ tasksRouter.get( "/:taskId", async (req, res) => {
           displayName: taskRow.CancelledByDisplayName,
         }
       : null,
-    cancelledReason: (taskRow.CancelledReason as string | null) ?? null,
     forceCompleted: taskRow.ForceCompleted,
     asset: {
       id: assetId,
@@ -3522,19 +3523,9 @@ tasksRouter.post("/:taskId/start", async (req, res) => {
   res.json({ ok: true });
 });
 
-const CancelTaskSchema = z.object({
-  reason: z.string().trim().min(1).max(1024),
-});
-
 tasksRouter.post("/:taskId/cancel", async (req, res) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) {
-    res.status(400).json({ message: "Invalid request" });
-    return;
-  }
-
-  const parsed = CancelTaskSchema.safeParse(req.body ?? {});
-  if (!parsed.success) {
     res.status(400).json({ message: "Invalid request" });
     return;
   }
@@ -3573,29 +3564,16 @@ tasksRouter.post("/:taskId/cancel", async (req, res) => {
     .request()
     .input("taskId", sql.UniqueIdentifier, taskId)
     .input("cancelledByUserId", sql.UniqueIdentifier, req.user.sub)
-    .input("cancelledReason", sql.NVarChar(1024), parsed.data.reason)
     .query(
       [
         "UPDATE pm.PMTasks",
         "SET",
         "  Status = N'cancelled',",
         "  CancelledAt = sysutcdatetime(),",
-        "  CancelledByUserId = @cancelledByUserId,",
-        "  CancelledReason = @cancelledReason",
+        "  CancelledByUserId = @cancelledByUserId",
         "WHERE TaskId = @taskId",
       ].join("\n"),
     );
-
-  const reasonValue = parsed.data.reason?.trim() ?? "";
-  await writeAuditLog({
-    actorUserId: req.user.sub,
-    action: "task_cancelled",
-    entityType: "PMTask",
-    entityId: taskId,
-    metadata: { reason: reasonValue.length > 0 ? reasonValue : null },
-    ipAddress: req.ip ?? null,
-    userAgent: req.headers["user-agent"] ?? null,
-  });
 
   res.json({ ok: true });
 });
@@ -3641,8 +3619,7 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
         "SET",
         "  Status = N'open',",
         "  CancelledAt = NULL,",
-        "  CancelledByUserId = NULL,",
-        "  CancelledReason = NULL",
+        "  CancelledByUserId = NULL",
         "WHERE TaskId = @taskId",
       ].join("\n"),
     );

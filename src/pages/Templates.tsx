@@ -51,6 +51,20 @@ import {
 } from "@/lib/api";
 import type { TemplateFormData } from "@/components/templates/TemplateFormDialog";
 
+const makeUniqueCopyName = (sourceName: string, existingNames: string[]): string => {
+  const source = sourceName.trim();
+  const base = `${source} (Copy)`;
+  const existing = new Set(existingNames.map((n) => n.trim().toLowerCase()).filter(Boolean));
+  if (!existing.has(base.toLowerCase())) return base;
+
+  for (let suffix = 2; suffix <= 50; suffix += 1) {
+    const candidate = `${source} (Copy ${suffix})`;
+    if (!existing.has(candidate.toLowerCase())) return candidate;
+  }
+
+  return `${source} (Copy ${Date.now()})`;
+};
+
 const Templates = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -257,7 +271,8 @@ const Templates = () => {
   const handleDuplicate = async (templateId: string) => {
     try {
       const detail = await apiGetTemplate(templateId);
-      const copiedName = `${detail.name} (Copy)`;
+      const existingNames = (templatesQuery.data?.items ?? []).map((t) => t.name);
+      const copiedName = makeUniqueCopyName(detail.name, existingNames);
       const formLike = toEditInitialData(detail);
       await createMutation.mutateAsync({
         ...toCreateInput(formLike, false),

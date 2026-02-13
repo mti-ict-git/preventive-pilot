@@ -447,14 +447,54 @@ const Tasks = () => {
                   Tasks
                 </CardTitle>
                 <TabsList className="bg-muted/60 p-1 rounded-full w-full md:w-auto overflow-x-auto">
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="due_today">Due Today</TabsTrigger>
-                  <TabsTrigger value="overdue">Overdue</TabsTrigger>
-                  <TabsTrigger value="in_progress">In Progress</TabsTrigger>
-                  <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-                  <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-                  <TabsTrigger value="pending_supervisor">Pending Supervisor</TabsTrigger>
-                  <TabsTrigger value="pending_superadmin">Pending Superadmin</TabsTrigger>
+                  <TabsTrigger
+                    value="all"
+                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  >
+                    All
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="due_today"
+                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  >
+                    Due Today
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="overdue"
+                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  >
+                    Overdue
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="in_progress"
+                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  >
+                    In Progress
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="upcoming"
+                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  >
+                    Upcoming
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="cancelled"
+                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  >
+                    Cancelled
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="pending_supervisor"
+                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  >
+                    Pending Supervisor
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="pending_superadmin"
+                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  >
+                    Pending Superadmin
+                  </TabsTrigger>
                 </TabsList>
               </div>
             </CardHeader>

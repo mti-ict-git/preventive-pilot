@@ -5,6 +5,28 @@ import { getDb } from "../db/mssql.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireManager } from "../middleware/requireRole.js";
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
+const getSqlErrorNumber = (err: unknown): number | null => {
+  if (!isRecord(err)) return null;
+  const num = err.number;
+  if (typeof num === "number") return num;
+
+  const originalError = err.originalError;
+  if (!isRecord(originalError)) return null;
+  const info = originalError.info;
+  if (!isRecord(info)) return null;
+  const infoNum = info.number;
+  return typeof infoNum === "number" ? infoNum : null;
+};
+
+const isDuplicateTemplateNameError = (err: unknown): boolean => {
+  const num = getSqlErrorNumber(err);
+  if (num !== 2627) return false;
+  const message = err instanceof Error ? err.message : isRecord(err) && typeof err.message === "string" ? err.message : "";
+  return message.includes("UQ_pm_PMTemplates_Name");
+};
+
 const ChecklistItemSchema = z.object({
   id: z.string().uuid().optional(),
   sortOrder: z.number().int().min(0),
@@ -239,8 +261,12 @@ templatesRouter.post("/", requireManager, async (req, res) => {
 
     await tx.commit();
     res.status(201).json({ id: templateId });
-  } catch (err) {
+  } catch (err: unknown) {
     await tx.rollback().catch(() => undefined);
+    if (isDuplicateTemplateNameError(err)) {
+      res.status(409).json({ message: "Template name already exists" });
+      return;
+    }
     throw err;
   }
 });
@@ -415,8 +441,12 @@ templatesRouter.put(":templateId", requireManager, async (req, res) => {
 
     await tx.commit();
     res.json({ ok: true });
-  } catch (err) {
+  } catch (err: unknown) {
     await tx.rollback().catch(() => undefined);
+    if (isDuplicateTemplateNameError(err)) {
+      res.status(409).json({ message: "Template name already exists" });
+      return;
+    }
     throw err;
   }
 });

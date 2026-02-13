@@ -1,27 +1,12 @@
 # Journal
 
-## Thu Feb 12 22:15:00 WITA 2026
-- Mobile (pm-tech): added Capacitor iOS platform project under mobile/pm-tech/ios.
-- Mobile (pm-tech): added iOS Capacitor scripts (cap:add:ios, cap:sync:ios, cap:open:ios, build:ios).
-- Note: `cap sync ios` requires Xcode + CocoaPods installed on the machine.
+## Fri Feb 13 20:38:36 WITA 2026
+- Web: make PM Template duplicate action generate a unique name.
+- Backend: return 409 for duplicate PM Template names (no crash).
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
-## Thu Feb 12 2026
-- Initialized planning and tracking documents
-- Prepared scope focusing on Login page improvements
-- Next: review current Login.tsx implementation
-
-## Mon Feb  9 22:45:18 WITA 2026
-- Mobile (pm-tech): show approval status on PM task cards.
-- Mobile (pm-tech): add approval flow section at bottom of Task detail.
-- Verified with `npm run lint` and `npx tsc --noEmit`.
-
-## Mon Feb  9 23:25:27 WITA 2026
-- Mobile (pm-tech): add checklist evidence capture from camera (photo) and video.
-- Verified with `npm run lint` and `npx tsc --noEmit`.
-
-## Mon Feb  9 21:46:36 WITA 2026
-- Mobile (pm-tech): show asset notes on Asset Detail and Assets list preview.
+## Fri Feb 13 20:45:17 WITA 2026
+- Web: PM Tasks tabs now highlight the active tab more strongly.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## Mon Feb  9 21:39:20 WITA 2026
@@ -1469,9 +1454,3 @@
 ## Sun Feb  8 20:30:47 WITA 2026
 - Mobile (pm-tech): set login header background image to banner.png.
 - Mobile (pm-tech): keep logo tile unchanged.
-Mon Feb  9 22:55:57 WITA 2026
-- DB: inspected PM-20260116-16FE2091 task and checklist evidence via scripts/db/inspect-pm-task-evidence.mjs.
-- Verified with npm run lint (pending) and npx tsc --noEmit (pending).
-Mon Feb  9 22:56:22 WITA 2026
-- DB: lint + typecheck after adding scripts/db/inspect-pm-task-evidence.mjs.
-- Verified with npm run lint and npx tsc --noEmit.
