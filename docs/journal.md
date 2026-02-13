@@ -6,6 +6,11 @@
 - Mobile (pm-tech Android): added native downloader/installer plugin for in-app APK updates.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Fri Feb 13 23:41:33 WITA 2026
+- Docker: added secure-apk nginx service with CIFS-mounted APK share.
+- Docker: wired APP_UPDATE_* env vars for api when using docker-compose.cifs.yml.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Fri Feb 13 21:38:30 WITA 2026
 - Web: improved Tabs active state highlight across the app.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

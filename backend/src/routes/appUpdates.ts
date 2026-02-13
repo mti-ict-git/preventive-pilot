@@ -240,6 +240,12 @@ appUpdatesRouter.get("/latest", async (req, res) => {
     return;
   }
 
+  const signingSecret = (env.APP_UPDATE_SIGNING_SECRET ?? "").trim();
+  if (!signingSecret) {
+    res.status(400).json({ message: "App updates signing not configured" });
+    return;
+  }
+
   const rootAbs = resolveUpdateRoot();
   if (!rootAbs) {
     res.status(400).json({ message: "App updates not configured" });
