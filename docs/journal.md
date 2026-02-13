@@ -20,6 +20,14 @@
 - Docker: removed secure-apk service from root docker-compose.cifs.yml.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Fri Feb 13 23:59:19 WITA 2026
+- Docker: secure-apk now mounts Windows share root with CIFS prefixpath for subfolder.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 00:04:31 WITA 2026
+- Docs: added mobile/secure_apk README with CIFS prefixpath and volume recreate notes.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Fri Feb 13 21:38:30 WITA 2026
 - Web: improved Tabs active state highlight across the app.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
@@ -1475,4 +1483,9 @@
 - Docker: removed ngrok and gist-watcher services from docker-compose.
 - Backend: removed ngrok origin allowance; allow localhost with ports for dev.
 - Backend: let CORS reflect requested headers (fewer preflight failures).
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 00:04:19 WITA 2026
+- Mobile (pm-tech): default production API base to https://preventivepm.justanapi.my.id.
+- Mobile (pm-tech): removed default ngrok discovery URL.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
