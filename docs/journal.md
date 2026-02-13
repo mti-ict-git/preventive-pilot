@@ -1,5 +1,11 @@
 # Journal
 
+## Thu Feb 12 22:15:00 WITA 2026
+- Mobile (pm-tech): added Capacitor iOS platform project under mobile/pm-tech/ios.
+- Mobile (pm-tech): added iOS Capacitor scripts (cap:add:ios, cap:sync:ios, cap:open:ios, build:ios).
+- Note: `cap sync ios` requires Xcode + CocoaPods installed on the machine.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Thu Feb 12 2026
 - Initialized planning and tracking documents
 - Prepared scope focusing on Login page improvements

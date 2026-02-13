@@ -25,8 +25,10 @@ export default [
   {
     ignores: [
       "mobile/field-ready/android/**",
+      "mobile/field-ready/ios/**",
       "mobile/field-ready/dist/**",
       "mobile/pm-tech/android/**",
+      "mobile/pm-tech/ios/**",
       "mobile/pm-tech/dist/**",
       "backend/dist/**",
       "dist/**",
