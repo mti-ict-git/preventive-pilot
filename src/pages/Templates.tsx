@@ -295,7 +295,7 @@ const Templates = () => {
 
     try {
       await deleteMutation.mutateAsync(deleteTarget.id);
-      toast({ title: "Template deleted", description: `${deleteTarget.name} has been deactivated.` });
+      toast({ title: "Template deleted", description: `${deleteTarget.name} has been permanently deleted.` });
 
       if (selectedTemplateId === deleteTarget.id) {
         setDetailDialogOpen(false);
@@ -304,7 +304,11 @@ const Templates = () => {
       }
     } catch (err: unknown) {
       const message = err instanceof ApiError ? err.message : "Failed to delete template";
-      toast({ title: "Delete failed", description: message, variant: "destructive" });
+      if (err instanceof ApiError && err.status === 409) {
+        toast({ title: "Template in use", description: message, variant: "destructive" });
+      } else {
+        toast({ title: "Delete failed", description: message, variant: "destructive" });
+      }
     } finally {
       setDeleteDialogOpen(false);
       setDeleteTarget(null);
@@ -515,7 +519,9 @@ const Templates = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete template</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget ? `Deactivate “${deleteTarget.name}”? Scheduled tasks will not be created from it.` : ""}
+              {deleteTarget
+                ? `Permanently delete “${deleteTarget.name}”? This cannot be undone. If the template is still used by assets, facilities, schedules, or tasks, deletion will be blocked.`
+                : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

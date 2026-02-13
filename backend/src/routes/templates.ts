@@ -271,7 +271,7 @@ templatesRouter.post("/", requireManager, async (req, res) => {
   }
 });
 
-templatesRouter.put(":templateId", requireManager, async (req, res) => {
+templatesRouter.put("/:templateId", requireManager, async (req, res) => {
   const templateId = req.params.templateId;
   if (!z.string().uuid().safeParse(templateId).success) {
     res.status(400).json({ message: "Invalid request" });
@@ -451,7 +451,7 @@ templatesRouter.put(":templateId", requireManager, async (req, res) => {
   }
 });
 
-templatesRouter.delete(":templateId", requireManager, async (req, res) => {
+templatesRouter.delete("/:templateId", requireManager, async (req, res) => {
   const templateId = req.params.templateId;
   if (!z.string().uuid().safeParse(templateId).success) {
     res.status(400).json({ message: "Invalid request" });
@@ -459,24 +459,82 @@ templatesRouter.delete(":templateId", requireManager, async (req, res) => {
   }
 
   const db = await getDb();
-  const updated = await db
-    .request()
-    .input("templateId", sql.UniqueIdentifier, templateId)
-    .query(
-      [
-        "UPDATE pm.PMTemplates",
-        "SET",
-        "  IsActive = 0,",
-        "  Version = Version + 1,",
-        "  UpdatedAt = sysutcdatetime()",
-        "WHERE TemplateId = @templateId",
-      ].join("\n"),
-    );
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const exists = await tx
+      .request()
+      .input("templateId", sql.UniqueIdentifier, templateId)
+      .query("SELECT TOP (1) TemplateId FROM pm.PMTemplates WHERE TemplateId = @templateId");
 
-  if (updated.rowsAffected[0] === 0) {
-    res.status(404).json({ message: "Not found" });
-    return;
+    if (!exists.recordset[0]) {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+
+    const usage = await tx
+      .request()
+      .input("templateId", sql.UniqueIdentifier, templateId)
+      .query(
+        [
+          "SELECT",
+          "  (SELECT COUNT(1) FROM pm.AssetPMSettings WHERE DefaultTemplateId = @templateId AND PMEnabled = 1) AS AssetCount,",
+          "  (SELECT COUNT(1) FROM pm.FacilityPMSettings WHERE DefaultTemplateId = @templateId AND PMEnabled = 1) AS FacilityCount,",
+          "  (SELECT COUNT(1) FROM pm.PMSchedules WHERE TemplateId = @templateId) AS ScheduleCount,",
+          "  (SELECT COUNT(1) FROM pm.FacilityPMSchedules WHERE TemplateId = @templateId) AS FacilityScheduleCount,",
+          "  (SELECT COUNT(1) FROM pm.PMTasks WHERE TemplateId = @templateId) AS TaskCount",
+        ].join("\n"),
+      );
+
+    const usageRow = usage.recordset[0] as
+      | {
+          AssetCount: number;
+          FacilityCount: number;
+          ScheduleCount: number;
+          FacilityScheduleCount: number;
+          TaskCount: number;
+        }
+      | undefined;
+
+    const assetCount = usageRow?.AssetCount ?? 0;
+    const facilityCount = usageRow?.FacilityCount ?? 0;
+    const scheduleCount = usageRow?.ScheduleCount ?? 0;
+    const facilityScheduleCount = usageRow?.FacilityScheduleCount ?? 0;
+    const taskCount = usageRow?.TaskCount ?? 0;
+
+    const totalUsage = assetCount + facilityCount + scheduleCount + facilityScheduleCount + taskCount;
+    if (totalUsage > 0) {
+      res.status(409).json({
+        message:
+          "Template is still in use and cannot be deleted (" +
+          `assets: ${assetCount}, facilities: ${facilityCount}, schedules: ${scheduleCount}, facility schedules: ${facilityScheduleCount}, tasks: ${taskCount}` +
+          ")",
+      });
+      await tx.rollback();
+      return;
+    }
+
+    await tx
+      .request()
+      .input("templateId", sql.UniqueIdentifier, templateId)
+      .query("DELETE FROM pm.PMTemplateChecklistItems WHERE TemplateId = @templateId");
+
+    const deleted = await tx
+      .request()
+      .input("templateId", sql.UniqueIdentifier, templateId)
+      .query("DELETE FROM pm.PMTemplates WHERE TemplateId = @templateId");
+
+    if (deleted.rowsAffected[0] === 0) {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
   }
-
-  res.json({ ok: true });
 });

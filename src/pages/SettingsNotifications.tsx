@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Key, Mail, MessageSquare, Save, Send, Shield } from "lucide-react";
+import { Bell, Key, Mail, MessageSquare, Save, Send, Shield } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ApiError,
+  apiCreateNotificationChannel,
   apiGetMicrosoftGraphSettings,
   apiGetWhatsAppSettings,
+  apiListNotificationChannels,
   apiTestMicrosoftGraphSettings,
   apiTestWhatsAppSettings,
   apiUpdateMicrosoftGraphSettings,
+  apiUpdateNotificationChannel,
   apiUpdateWhatsAppSettings,
+  type NotificationChannel,
   type TestMicrosoftGraphSettingsResponse,
   type TestWhatsAppSettingsResponse,
   type UpdateMicrosoftGraphSettingsInput,
@@ -42,7 +46,7 @@ const SettingsNotifications = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<"email" | "whatsapp">("email");
+  const [activeTab, setActiveTab] = useState<"email" | "whatsapp" | "push">("email");
 
   const settingsQuery = useQuery({
     queryKey: ["settings", "notifications", "ms-graph"],
@@ -245,12 +249,49 @@ const SettingsNotifications = () => {
     },
   });
 
+  const channelsQuery = useQuery({
+    queryKey: ["notification-channels"],
+    queryFn: apiListNotificationChannels,
+  });
+
+  const channelItems = useMemo(() => channelsQuery.data?.items ?? [], [channelsQuery.data?.items]);
+
+  const pushChannel = useMemo(() => {
+    return channelItems.find((channel) => channel.channelType.toLowerCase() === "push") ?? null;
+  }, [channelItems]);
+
+  const pushActive = Boolean(pushChannel?.isActive);
+
+  const togglePushMutation = useMutation({
+    mutationFn: async (input: { enable: boolean; channel: NotificationChannel | null }) => {
+      if (input.channel) {
+        await apiUpdateNotificationChannel({ channelId: input.channel.id, isActive: input.enable });
+        return;
+      }
+      if (input.enable) {
+        await apiCreateNotificationChannel({ channelType: "Push", channelName: "Push", isActive: true });
+      }
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["notification-channels"] });
+      toast({ title: variables.enable ? "Push enabled" : "Push disabled" });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : "Failed to update push channel";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    },
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <Header title="Notification Settings" subtitle="Configure email and WhatsApp notifications" />
 
       <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "email" | "whatsapp")} className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as "email" | "whatsapp" | "push")}
+          className="w-full"
+        >
           <TabsList className="bg-muted/40 p-1 rounded-lg border border-border/60 shadow-sm">
             <TabsTrigger
               value="email"
@@ -265,6 +306,13 @@ const SettingsNotifications = () => {
             >
               <MessageSquare className="h-4 w-4" />
               WhatsApp
+            </TabsTrigger>
+            <TabsTrigger
+              value="push"
+              className="gap-2 rounded-md px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground"
+            >
+              <Bell className="h-4 w-4" />
+              Push Notification
             </TabsTrigger>
           </TabsList>
 
@@ -657,6 +705,47 @@ const SettingsNotifications = () => {
                         <span>Mentions</span>
                         <span className="text-foreground">Applied to group messages</span>
                       </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="push" className="mt-4">
+            <div className="grid grid-cols-12 gap-4">
+              <div className="col-span-12 md:col-span-7">
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  <Card className={cardClassName}>
+                    <CardHeader className="border-b border-border/60">
+                      <CardTitle className="flex items-center gap-2">
+                        <Bell className="w-5 h-5 text-primary" />
+                        Push Notification
+                      </CardTitle>
+                      <CardDescription>Control push notifications for all events</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {channelsQuery.isLoading ? (
+                        <div className="text-sm text-muted-foreground">Loading push settings…</div>
+                      ) : channelsQuery.isError ? (
+                        <div className="text-sm text-destructive">Failed to load push settings.</div>
+                      ) : (
+                        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 p-3">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Enable push notifications</p>
+                            <p className="text-xs text-muted-foreground">
+                              Applies to all events that use the Push channel.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={pushActive}
+                            onCheckedChange={(checked) =>
+                              togglePushMutation.mutate({ enable: checked, channel: pushChannel })
+                            }
+                            disabled={togglePushMutation.isPending || channelsQuery.isLoading}
+                          />
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>

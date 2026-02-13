@@ -1,18 +1,5 @@
 # Journal
 
-## Fri Feb 13 20:38:36 WITA 2026
-- Web: make PM Template duplicate action generate a unique name.
-- Backend: return 409 for duplicate PM Template names (no crash).
-- Verified with `npm run lint` and `npx tsc --noEmit`.
-
-## Fri Feb 13 20:45:17 WITA 2026
-- Web: PM Tasks tabs now highlight the active tab more strongly.
-- Verified with `npm run lint` and `npx tsc --noEmit`.
-
-## Mon Feb  9 21:39:20 WITA 2026
-- Mobile (pm-tech): added Tasks search and sort controls.
-- Verified with `npm run lint` and `npx tsc --noEmit`.
-
 ## Sun Feb  8 22:52:07 WITA 2026
 - Web: added new notification rule event types (Due Today, Revised, Submitted for approval, Pending superadmin).
 - Backend: enqueue immediate push notifications for approval workflow transitions with role-based audiences.
@@ -1454,3 +1441,8 @@
 ## Sun Feb  8 20:30:47 WITA 2026
 - Mobile (pm-tech): set login header background image to banner.png.
 - Mobile (pm-tech): keep logo tile unchanged.
+
+## Fri Feb 13 20:49:10 WITA 2026
+- Templates: switch delete action to permanent delete when unused.
+- Templates: block deletion with a clear 409 message when in use.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
