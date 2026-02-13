@@ -1,5 +1,15 @@
 # Journal
 
+## Fri Feb 13 23:32:50 WITA 2026
+- Backend: added signed APK update discovery and download endpoints (/api/app-updates).
+- Mobile (pm-tech): added update check UI and optional startup update prompt.
+- Mobile (pm-tech Android): added native downloader/installer plugin for in-app APK updates.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Fri Feb 13 21:38:30 WITA 2026
+- Web: improved Tabs active state highlight across the app.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sun Feb  8 22:52:07 WITA 2026
 - Web: added new notification rule event types (Due Today, Revised, Submitted for approval, Pending superadmin).
 - Backend: enqueue immediate push notifications for approval workflow transitions with role-based audiences.

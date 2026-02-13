@@ -190,6 +190,7 @@ Required environment variables:
 - Asset Detail displays real asset images when available.
 - Android back button navigates to the previous in-app screen before exiting.
 - Profile & Settings shows authenticated user info and local preferences for theme and notifications.
+- Android: optional in-app APK auto-update via `/api/app-updates` (signed download URLs).
 
 ### Backdated completion (supervisor+)
 

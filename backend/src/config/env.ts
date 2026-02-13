@@ -111,6 +111,11 @@ const EnvSchema = z.object({
 
   FIREBASE_SERVICE_ACCOUNT_PATH: z.string().optional(),
   FIREBASE_SERVICE_ACCOUNT_JSON_BASE64: z.string().optional(),
+
+  APP_UPDATE_STORAGE_ROOT: z.string().optional(),
+  APP_UPDATE_CONFIG_JSON: z.string().optional(),
+  APP_UPDATE_SIGNING_SECRET: z.string().optional(),
+  APP_UPDATE_TOKEN_TTL_SECONDS: z.string().optional().default("600").pipe(numberFromString).pipe(z.number().int().min(60).max(86400)),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

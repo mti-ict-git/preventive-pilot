@@ -14,6 +14,7 @@ import { systemRouter } from "./routes/system.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { workOrdersRouter } from "./routes/workOrders.js";
 import { devicesRouter } from "./routes/devices.js";
+import { appUpdatesRouter } from "./routes/appUpdates.js";
 import { startJobs } from "./jobs/index.js";
 
 const app = express();
@@ -818,6 +819,7 @@ const openApiSpec: OpenApiSchema = {
   tags: [
     { name: "Health" },
     { name: "Auth" },
+    { name: "App Updates" },
     { name: "Assets" },
     { name: "Facilities" },
     { name: "Scheduling" },
@@ -2698,6 +2700,7 @@ app.use("/api/tasks", tasksRouter);
 app.use("/api/work-orders", workOrdersRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/app-updates", appUpdatesRouter);
 app.use("/api/system", systemRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/devices", devicesRouter);
