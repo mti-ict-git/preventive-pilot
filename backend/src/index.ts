@@ -2615,8 +2615,8 @@ const allowedOriginsList = String(env.FRONTEND_ORIGIN ?? "")
   .filter((v) => v.length > 0);
 
 const allowAllOrigins = allowedOriginsList.includes("*");
-const ngrokOriginPattern = /^https:\/\/[a-z0-9-]+\.ngrok-free\.app$/i;
 const alwaysAllowedOrigins = new Set<string>(["http://localhost", "https://localhost", "capacitor://localhost"]);
+const localhostWithPortPattern = /^(https?:\/\/localhost:\d+)$/i;
 
 type OriginMatcher = {
   raw: string;
@@ -2652,7 +2652,7 @@ const originConfig: CorsOptions["origin"] = (origin, callback) => {
     return;
   }
 
-  if (ngrokOriginPattern.test(origin) || originMatchers.some((m) => m.test(origin))) {
+  if (localhostWithPortPattern.test(origin) || originMatchers.some((m) => m.test(origin))) {
     callback(null, true);
     return;
   }
@@ -2664,7 +2664,6 @@ app.use(
   cors({
     origin: originConfig,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-filename"],
     exposedHeaders: ["Content-Disposition"],
   }),
 );
@@ -2674,7 +2673,6 @@ app.options(
   cors({
     origin: originConfig,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-filename"],
     exposedHeaders: ["Content-Disposition"],
   }),
 );

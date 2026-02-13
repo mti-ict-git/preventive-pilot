@@ -47,7 +47,7 @@ const defaultConfig: AppUpdateConfigItem[] = [
   {
     appId: "pm-tech",
     prefix: "pm-tech_v",
-    directory: "Apps Standard/Android/Release",
+    directory: ".",
   },
 ];
 

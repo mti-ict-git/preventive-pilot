@@ -1,21 +1,7 @@
 services:
   api:
-    environment:
-      APP_UPDATE_STORAGE_ROOT: /app/shared-documents
-      APP_UPDATE_CONFIG_JSON: ${APP_UPDATE_CONFIG_JSON}
-      APP_UPDATE_SIGNING_SECRET: ${APP_UPDATE_SIGNING_SECRET}
-      APP_UPDATE_TOKEN_TTL_SECONDS: ${APP_UPDATE_TOKEN_TTL_SECONDS:-600}
     volumes:
       - pm_share:/app/shared-documents
-
-  secure-apk:
-    image: nginx:1.27-alpine
-    restart: unless-stopped
-    ports:
-      - "9103:80"
-    volumes:
-      - ./mobile/secure_apk/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - pm_share:/mnt/share:ro
 
 volumes:
   pm_share:
@@ -23,4 +9,4 @@ volumes:
     driver_opts:
       type: cifs
       o: username=${DOMAIN_USERNAME},domain=${CIFS_DOMAIN:-mbma},password=${DOMAIN_PASSWORD},sec=${CIFS_SEC:-ntlmssp},vers=${CIFS_VERS:-3.0},uid=${CIFS_UID:-1000},gid=${CIFS_GID:-1000},file_mode=${CIFS_FILE_MODE:-0777},dir_mode=${CIFS_DIR_MODE:-0777},noperm
-      device: ${CIFS_SHARE_PATH}
+      device: "${CIFS_SHARE_PATH}"

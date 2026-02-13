@@ -11,6 +11,15 @@
 - Docker: wired APP_UPDATE_* env vars for api when using docker-compose.cifs.yml.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Fri Feb 13 23:46:10 WITA 2026
+- Docker: adjusted CIFS mount and secure-apk nginx alias for release-folder share path.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Fri Feb 13 23:53:00 WITA 2026
+- Docker: moved secure-apk compose to mobile/secure_apk/docker-compose.yml.
+- Docker: removed secure-apk service from root docker-compose.cifs.yml.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Fri Feb 13 21:38:30 WITA 2026
 - Web: improved Tabs active state highlight across the app.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
@@ -1460,4 +1469,10 @@
 ## Fri Feb 13 20:49:10 WITA 2026
 - Templates: switch delete action to permanent delete when unused.
 - Templates: block deletion with a clear 409 message when in use.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Fri Feb 13 23:49:08 WITA 2026
+- Docker: removed ngrok and gist-watcher services from docker-compose.
+- Backend: removed ngrok origin allowance; allow localhost with ports for dev.
+- Backend: let CORS reflect requested headers (fewer preflight failures).
 - Verified with `npm run lint` and `npx tsc --noEmit`.
