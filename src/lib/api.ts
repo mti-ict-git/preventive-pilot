@@ -512,6 +512,12 @@ export type TaskDetail = {
   revisedAt: string | null;
   revisedBy: TaskUserRef | null;
   revisionNote: string | null;
+  remarksHistory?: Array<{
+    label: string;
+    note: string | null;
+    at: string | null;
+    by: TaskUserRef | null;
+  }>;
   asset: { id: string; assetTag: string; name: string };
   facility: { id: string; name: string | null } | null;
   template: { id: string; name: string };
