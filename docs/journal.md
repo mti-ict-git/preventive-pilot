@@ -199,6 +199,9 @@
 - Backend: improved CORS allowlist to support wildcard origins via FRONTEND_ORIGIN.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sat Feb 14 16:30:50 WITA 2026
+- Docker: fixed missing closing quote in mobile/secure-apk/docker-compose.yml CIFS options.
+
 ## Sun Feb  8 12:54:30 WITA 2026
 - Backend: CORS error now logs the rejected Origin to simplify production setup.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
