@@ -109,6 +109,10 @@ const SubmitForApprovalSchema = z.object({
 	checklistResults: z.array(ChecklistResultSchema).default([]),
 });
 
+const CancelTaskSchema = z.object({
+  reason: z.string().trim().min(1).max(1024),
+});
+
 const DraftOutcomeSchema = z.union([z.literal(0), z.literal(1), z.literal(2)]).nullable();
 const TaskDraftItemSchema = z.object({
   templateChecklistItemId: z.string().uuid(),
@@ -2614,6 +2618,7 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "  t.CancelledByUserId AS CancelledByUserId,",
         "  xu.Username AS CancelledByUsername,",
         "  xu.DisplayName AS CancelledByDisplayName,",
+        "  t.CancelledReason AS CancelledReason,",
         "  t.ForceCompleted AS ForceCompleted",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
@@ -2770,6 +2775,112 @@ tasksRouter.get( "/:taskId", async (req, res) => {
   const assetTag = assetTagValue ?? (facilityNameValue ?? "");
   const assetName = assetNameValue ?? (facilityNameValue ?? "");
 
+  const auditLogResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT",
+        "  a.Action AS Action,",
+        "  a.OccurredAt AS OccurredAt,",
+        "  a.Metadata AS Metadata,",
+        "  a.ActorUserId AS ActorUserId,",
+        "  u.Username AS ActorUsername,",
+        "  u.DisplayName AS ActorDisplayName",
+        "FROM pm.AuditLog a",
+        "LEFT JOIN pm.Users u ON u.UserId = a.ActorUserId",
+        "WHERE a.EntityId = @taskId",
+        "  AND a.EntityType IN (N'task', N'PMTask')",
+        "  AND a.Action IN (N'task.cancel', N'task.reopen')",
+        "ORDER BY a.OccurredAt ASC",
+      ].join("\n"),
+    );
+
+  const toIsoOrNull = (value: unknown): string | null => {
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === "string") return value;
+    return null;
+  };
+
+  const mapUser = (userId: unknown, username: unknown, displayName: unknown) => {
+    if (typeof userId !== "string") return null;
+    return {
+      userId,
+      username: typeof username === "string" ? username : null,
+      displayName: typeof displayName === "string" ? displayName : null,
+    };
+  };
+
+  const auditRows = auditLogResult.recordset as Array<Record<string, unknown>>;
+  const auditRemarks = auditRows
+    .map((row) => {
+      const action = typeof row.Action === "string" ? row.Action : null;
+      if (!action) return null;
+      const occurredAt = toIsoOrNull(row.OccurredAt);
+      const actorUserId = typeof row.ActorUserId === "string" ? row.ActorUserId : null;
+      const actor = actorUserId
+        ? {
+            userId: actorUserId,
+            username: typeof row.ActorUsername === "string" ? row.ActorUsername : null,
+            displayName: typeof row.ActorDisplayName === "string" ? row.ActorDisplayName : null,
+          }
+        : null;
+      let reason: string | null = null;
+      if (typeof row.Metadata === "string" && row.Metadata.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(row.Metadata) as { reason?: unknown };
+          reason = typeof parsed?.reason === "string" ? parsed.reason : null;
+        } catch {
+          reason = null;
+        }
+      }
+      if (action === "task.cancel") {
+        return { label: "Cancelled", note: reason, at: occurredAt, by: actor };
+      }
+      if (action === "task.reopen") {
+        return { label: "Reopened", note: null, at: occurredAt, by: actor };
+      }
+      return null;
+    })
+    .filter((v): v is { label: string; note: string | null; at: string | null; by: { userId: string; username: string | null; displayName: string | null } | null } => v !== null);
+
+  const remarksHistory: Array<{
+    label: string;
+    note: string | null;
+    at: string | null;
+    by: { userId: string; username: string | null; displayName: string | null } | null;
+  }> = [];
+
+  if (taskRow.RevisedAt || taskRow.RevisedByUserId || taskRow.RevisionNote) {
+    remarksHistory.push({
+      label: "Revised",
+      note: (taskRow.RevisionNote as string | null) ?? null,
+      at: toIsoOrNull(taskRow.RevisedAt),
+      by: mapUser(taskRow.RevisedByUserId, taskRow.RevisedByUsername, taskRow.RevisedByDisplayName),
+    });
+  }
+
+  if (taskRow.RejectedAt || taskRow.RejectedByUserId || taskRow.RejectionReason) {
+    remarksHistory.push({
+      label: "Rejected",
+      note: (taskRow.RejectionReason as string | null) ?? null,
+      at: toIsoOrNull(taskRow.RejectedAt),
+      by: mapUser(taskRow.RejectedByUserId, taskRow.RejectedByUsername, taskRow.RejectedByDisplayName),
+    });
+  }
+
+  const hasAuditCancel = auditRemarks.some((item) => item.label === "Cancelled");
+  if (!hasAuditCancel && (taskRow.CancelledAt || taskRow.CancelledByUserId || taskRow.CancelledReason)) {
+    remarksHistory.push({
+      label: "Cancelled",
+      note: (taskRow.CancelledReason as string | null) ?? null,
+      at: toIsoOrNull(taskRow.CancelledAt),
+      by: mapUser(taskRow.CancelledByUserId, taskRow.CancelledByUsername, taskRow.CancelledByDisplayName),
+    });
+  }
+
+  remarksHistory.push(...auditRemarks);
+
   res.json({
     id: taskRow.TaskId,
     taskNumber: taskRow.TaskNumber,
@@ -2838,6 +2949,8 @@ tasksRouter.get( "/:taskId", async (req, res) => {
           displayName: taskRow.CancelledByDisplayName,
         }
       : null,
+    cancelledReason: (taskRow.CancelledReason as string | null) ?? null,
+    remarksHistory,
     forceCompleted: taskRow.ForceCompleted,
     asset: {
       id: assetId,
@@ -3530,6 +3643,12 @@ tasksRouter.post("/:taskId/cancel", async (req, res) => {
     return;
   }
 
+  const parsed = CancelTaskSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
   const db = await getDb();
   const taskAccess = await db
     .request()
@@ -3564,16 +3683,30 @@ tasksRouter.post("/:taskId/cancel", async (req, res) => {
     .request()
     .input("taskId", sql.UniqueIdentifier, taskId)
     .input("cancelledByUserId", sql.UniqueIdentifier, req.user.sub)
+    .input("cancelledReason", sql.NVarChar(1024), parsed.data.reason)
     .query(
       [
         "UPDATE pm.PMTasks",
         "SET",
         "  Status = N'cancelled',",
         "  CancelledAt = sysutcdatetime(),",
-        "  CancelledByUserId = @cancelledByUserId",
+        "  CancelledByUserId = @cancelledByUserId,",
+        "  CancelledReason = @cancelledReason",
         "WHERE TaskId = @taskId",
       ].join("\n"),
     );
+
+  await writeAuditLog({
+    actorUserId: req.user.sub,
+    action: "task.cancel",
+    entityType: "task",
+    entityId: taskId,
+    metadata: {
+      reason: parsed.data.reason,
+    },
+    ipAddress: typeof req.ip === "string" ? req.ip : null,
+    userAgent: req.get("user-agent") ?? null,
+  });
 
   res.json({ ok: true });
 });
@@ -3623,6 +3756,16 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
         "WHERE TaskId = @taskId",
       ].join("\n"),
     );
+
+  await writeAuditLog({
+    actorUserId: req.user.sub,
+    action: "task.reopen",
+    entityType: "task",
+    entityId: taskId,
+    metadata: {},
+    ipAddress: typeof req.ip === "string" ? req.ip : null,
+    userAgent: req.get("user-agent") ?? null,
+  });
 
   res.json({ ok: true });
 });

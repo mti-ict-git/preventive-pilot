@@ -1153,15 +1153,24 @@ export const TaskDetailDialog = (props: {
   const remarksHistory = useMemo(() => {
     const items: Array<{
       label: string;
-      note: string;
+      note: string | null;
       at: string;
       by: string;
     }> = [];
 
+    if (task?.remarksHistory && task.remarksHistory.length > 0) {
+      return task.remarksHistory.map((item) => ({
+        label: item.label,
+        note: item.note && item.note.trim().length > 0 ? item.note : null,
+        at: item.at ? format(parseISO(item.at), "yyyy-MM-dd HH:mm") : "—",
+        by: item.by?.displayName ?? item.by?.username ?? "—",
+      }));
+    }
+
     if (task?.revisedAt || task?.revisedBy || task?.revisionNote) {
       items.push({
         label: "Revised",
-        note: task.revisionNote ?? "—",
+        note: task.revisionNote && task.revisionNote.trim().length > 0 ? task.revisionNote : null,
         at: task.revisedAt ? format(parseISO(task.revisedAt), "yyyy-MM-dd HH:mm") : "—",
         by: task.revisedBy?.displayName ?? task.revisedBy?.username ?? "—",
       });
@@ -1170,7 +1179,7 @@ export const TaskDetailDialog = (props: {
     if (task?.rejectedAt || task?.rejectedBy || task?.rejectionReason) {
       items.push({
         label: "Rejected",
-        note: task.rejectionReason ?? "—",
+        note: task.rejectionReason && task.rejectionReason.trim().length > 0 ? task.rejectionReason : null,
         at: task.rejectedAt ? format(parseISO(task.rejectedAt), "yyyy-MM-dd HH:mm") : "—",
         by: task.rejectedBy?.displayName ?? task.rejectedBy?.username ?? "—",
       });
@@ -1179,7 +1188,7 @@ export const TaskDetailDialog = (props: {
     if (task?.cancelledAt || task?.cancelledBy || task?.cancelledReason) {
       items.push({
         label: "Cancelled",
-        note: task.cancelledReason ?? "—",
+        note: task.cancelledReason && task.cancelledReason.trim().length > 0 ? task.cancelledReason : null,
         at: task.cancelledAt ? format(parseISO(task.cancelledAt), "yyyy-MM-dd HH:mm") : "—",
         by: task.cancelledBy?.displayName ?? task.cancelledBy?.username ?? "—",
       });
@@ -1190,6 +1199,7 @@ export const TaskDetailDialog = (props: {
     task?.revisedAt,
     task?.revisedBy,
     task?.revisionNote,
+    task?.remarksHistory,
     task?.rejectedAt,
     task?.rejectedBy,
     task?.rejectionReason,
@@ -1890,7 +1900,7 @@ export const TaskDetailDialog = (props: {
                             <p className="text-xs text-muted-foreground">{item.label}</p>
                             <p className="text-xs text-muted-foreground">{item.at}</p>
                           </div>
-                          <p className="text-sm text-foreground mt-1">{item.note}</p>
+                          {item.note ? <p className="text-sm text-foreground mt-1">{item.note}</p> : null}
                           <p className="text-xs text-muted-foreground mt-1">{item.by}</p>
                         </div>
                       ))}
