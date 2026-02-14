@@ -1492,3 +1492,16 @@
 - Mobile (pm-tech): default production API base to https://preventivepm.justanapi.my.id.
 - Mobile (pm-tech): removed default ngrok discovery URL.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 22:22:06 WITA 2026
+- Mobile (pm-tech): set .env.local to Cloudflare base and disabled discovery.
+- Mobile (pm-tech): documented backend URL in mobile README.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 22:30:43 WITA 2026
+- Mobile (pm-tech): notifications bell view now opens as full-screen overlay.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 22:35:39 WITA 2026
+- Mobile (pm-tech): bottom nav active icon is larger than inactive icons.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
