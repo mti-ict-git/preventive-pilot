@@ -1498,6 +1498,48 @@
 - Mobile (pm-tech): documented backend URL in mobile README.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sat Feb 14 22:58:27 WITA 2026
+- Backend: app-updates can use store manifest for latest and redirect downloads to store domain.
+- Backend: added APP_UPDATE_STORE_BASE_URL and APP_UPDATE_STORE_MANIFEST_URL envs.
+- Store (secure_apk): serve /apk/manifest.json with JSON content type.
+- Docs: documented store manifest format.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 23:09:16 WITA 2026
+- Mobile (pm-tech): made Profile update check button label always visible.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 23:17:55 WITA 2026
+- Mobile (pm-tech): show backend error message for update checks.
+- Env: added app update store/signing env keys to root .env.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 23:27:34 WITA 2026
+- Mobile (pm-tech): improve update install error messages and NOT_ANDROID handling.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 23:34:23 WITA 2026
+- Mobile (pm-tech Android): ensure AppUpdater plugin resolves and releases async calls.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 23:42:47 WITA 2026
+- Mobile (pm-tech Android): fix PluginCall.release signature for Capacitor v6.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 23:52:30 WITA 2026
+- Mobile (pm-tech Android): follow 3xx redirects when downloading APK from store.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 00:12:57 WITA 2026
+- Mobile (pm-tech): do not suppress startup update prompt when latest check fails.
+- Mobile (pm-tech Android): increase updater read timeout and surface download error details.
+- Mobile (pm-tech): fix Capacitor back button listener cleanup typing.
+
+## Sun Feb 15 00:19:37 WITA 2026
+- Mobile (pm-tech): replace startup update confirm with in-app modal prompt.
+- Mobile (pm-tech): add timeout for Android in-app update download/install.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sat Feb 14 22:30:43 WITA 2026
 - Mobile (pm-tech): notifications bell view now opens as full-screen overlay.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

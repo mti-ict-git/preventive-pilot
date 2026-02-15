@@ -184,13 +184,21 @@ Required environment variables:
 - Asset Detail Breakdown button opens a report form that creates CM work orders.
 - Supervisors and above can assign or reassign PM tasks and work orders to technicians.
 - PM Tasks tabs show status count badges.
-- PM Tech mobile prefers ngrok discovery for API base and falls back to direct backend on timeout.
+- PM Tech mobile uses the configured API base URL and falls back to a secondary base on network errors.
 - Home recent tasks show asset thumbnails when image URLs are available.
 - Home highlights overdue tasks with an attention banner and resolve action.
 - Asset Detail displays real asset images when available.
 - Android back button navigates to the previous in-app screen before exiting.
 - Profile & Settings shows authenticated user info and local preferences for theme and notifications.
-- Android: optional in-app APK auto-update via `/api/app-updates` (signed download URLs).
+- Android: optional in-app APK auto-update via `/api/app-updates` (signed token URLs).
+
+#### Android APK updates (store redirect)
+
+- Backend requires `APP_UPDATE_SIGNING_SECRET` to enable `/api/app-updates/latest`.
+- To host APK files on `store.justanapi.my.id` without mounting SMB on the backend:
+  - Set `APP_UPDATE_STORE_BASE_URL=https://store.justanapi.my.id`
+  - Publish `https://store.justanapi.my.id/apk/manifest.json` listing available APKs.
+- Filenames must start with `pm-tech_v` and include a semver suffix like `pm-tech_v1.3.0.apk`.
 
 ### Backdated completion (supervisor+)
 
