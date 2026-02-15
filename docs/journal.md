@@ -1540,6 +1540,19 @@
 - Mobile (pm-tech): add timeout for Android in-app update download/install.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sun Feb 15 10:06:31 WITA 2026
+- Mobile (pm-tech): bump version to 1.0.1.
+- Docker (secure_apk): add authenticated upload API and RW CIFS mount.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 10:16:01 WITA 2026
+- Docker (secure_apk): add rate limiting, env template, and update sample manifest.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 10:37:30 WITA 2026
+- Repo: add `npm run push:android` to upload versioned APK via secure_apk API.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sat Feb 14 22:30:43 WITA 2026
 - Mobile (pm-tech): notifications bell view now opens as full-screen overlay.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

@@ -23,6 +23,12 @@ export default [
     },
   },
   {
+    files: ["mobile/secure_apk/uploader/**/*.{js,mjs}"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
     ignores: [
       "mobile/field-ready/android/**",
       "mobile/field-ready/ios/**",

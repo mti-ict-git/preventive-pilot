@@ -199,6 +199,23 @@ Required environment variables:
   - Set `APP_UPDATE_STORE_BASE_URL=https://store.justanapi.my.id`
   - Publish `https://store.justanapi.my.id/apk/manifest.json` listing available APKs.
 - Filenames must start with `pm-tech_v` and include a semver suffix like `pm-tech_v1.3.0.apk`.
+- Optional: the `mobile/secure_apk` docker stack can host `/apk/*` and provide an authenticated `/api/upload` to publish new APKs and update `manifest.json`.
+
+#### Publish an Android APK (push:android)
+
+From repo root, upload the built APK to `secure_apk` (stores as `pm-tech_v<version>.apk` and updates the manifest):
+
+```bash
+export SECURE_APK_BASE_URL=http://<host>:9103
+export SECURE_APK_UPLOAD_TOKEN=...
+npm run push:android
+```
+
+By default it uses the debug APK at `mobile/pm-tech/android/app/build/outputs/apk/debug/app-debug.apk`. Override with:
+
+```bash
+APK_PATH=/absolute/path/to/app-release.apk npm run push:android
+```
 
 ### Backdated completion (supervisor+)
 
