@@ -196,8 +196,9 @@ Required environment variables:
 
 - Backend requires `APP_UPDATE_SIGNING_SECRET` to enable `/api/app-updates/latest`.
 - To host APK files on `store.justanapi.my.id` without mounting SMB on the backend:
-  - Set `APP_UPDATE_STORE_BASE_URL=https://store.justanapi.my.id`
+  - Set `APP_UPDATE_STORE_BASE_URL=https://store.justanapi.my.id` (recommended)
   - Publish `https://store.justanapi.my.id/apk/manifest.json` listing available APKs.
+  - If you must use plain HTTP (dev/LAN), set `APP_UPDATE_STORE_ALLOW_HTTP=true` and use `APP_UPDATE_STORE_BASE_URL=http://<host>:<port>`.
 - Filenames must start with `pm-tech_v` and include a semver suffix like `pm-tech_v1.3.0.apk`.
 - Optional: the `mobile/secure_apk` docker stack can host `/apk/*` and provide an authenticated `/api/upload` to publish new APKs and update `manifest.json`.
 
@@ -206,10 +207,12 @@ Required environment variables:
 From repo root, upload the built APK to `secure_apk` (stores as `pm-tech_v<version>.apk` and updates the manifest):
 
 ```bash
-export SECURE_APK_BASE_URL=http://<host>:9103
+export SECURE_APK_BASE_URL=https://store.justanapi.my.id
 export SECURE_APK_UPLOAD_TOKEN=...
 npm run push:android
 ```
+
+If you run `secure_apk` locally without HTTPS, use `http://<host>:9103` instead.
 
 By default it uses the debug APK at `mobile/pm-tech/android/app/build/outputs/apk/debug/app-debug.apk`. Override with:
 

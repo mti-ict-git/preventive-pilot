@@ -1553,6 +1553,43 @@
 - Repo: add `npm run push:android` to upload versioned APK via secure_apk API.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Sun Feb 15 11:14:20 WITA 2026
+- Ops (secure_apk): fix CIFS share root and prefixpath env template.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 11:39:10 WITA 2026
+- Ops (secure_apk): mount apk subfolder via CIFS prefixpath.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 12:34:13 WITA 2026
+- Docker (secure_apk): serve and upload from apk subfolder even when prefixpath is ignored.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 21:01:10 WITA 2026
+- Docker (secure_apk): quote fallback paths in nginx to handle spaces reliably.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 21:10:19 WITA 2026
+- Docker (secure_apk): serve apk subfolder via server-level root and try_files.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 21:29:08 WITA 2026
+- Docker (secure_apk): switch nginx to root / with absolute try_files paths.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 21:44:03 WITA 2026
+- Backend: allow HTTP store base URL when APP_UPDATE_STORE_ALLOW_HTTP=true.
+- Mobile (pm-tech Android): allow cleartext traffic in debug builds.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 21:48:25 WITA 2026
+- Docs: switch push:android SECURE_APK_BASE_URL example to HTTPS without port.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb 15 22:17:07 WITA 2026
+- Ops: make APP_UPDATE_STORE_ALLOW_HTTP explicit (false) in root .env.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sat Feb 14 22:30:43 WITA 2026
 - Mobile (pm-tech): notifications bell view now opens as full-screen overlay.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

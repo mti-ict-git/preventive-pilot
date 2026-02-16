@@ -114,8 +114,19 @@ const resolveStoreBaseUrl = (): string | null => {
   const raw = (env.APP_UPDATE_STORE_BASE_URL ?? "").trim();
   if (!raw) return null;
   const normalized = normalizeBaseUrl(raw);
-  if (!normalized.toLowerCase().startsWith("https://")) return null;
-  return normalized;
+  let u: URL;
+  try {
+    u = new URL(normalized);
+  } catch {
+    return null;
+  }
+  if (u.search || u.hash) return null;
+  if (u.pathname && u.pathname !== "/") return null;
+
+  const protocol = u.protocol.toLowerCase();
+  if (protocol === "https:") return normalized;
+  if (protocol === "http:" && env.APP_UPDATE_STORE_ALLOW_HTTP) return normalized;
+  return null;
 };
 
 type StoreManifestEntry = {
