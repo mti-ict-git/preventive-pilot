@@ -1,10 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
+import sql from "mssql";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { Buffer } from "node:buffer";
 import { env } from "../config/env.js";
+import { getDb } from "../db/mssql.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireSuperadmin } from "../middleware/requireRole.js";
 
 type AppUpdateConfigItem = {
   appId: string;
@@ -28,6 +32,33 @@ const LatestQuerySchema = z.object({
 
 const DownloadQuerySchema = z.object({
   token: z.string().trim().min(1).max(4096),
+});
+
+const PolicyQuerySchema = z.object({
+  appId: z.string().trim().min(1).max(64),
+  platform: z.enum(["android", "ios", "web"]),
+  versionCode: z
+    .string()
+    .trim()
+    .regex(/^\d+$/)
+    .transform((v) => Number(v))
+    .pipe(z.number().int().min(1)),
+});
+
+const PolicyUpdateSchema = z.object({
+  appId: z.string().trim().min(1).max(64),
+  platform: z.enum(["android", "ios", "web"]),
+  enabled: z.boolean(),
+  requiredVersionCode: z.number().int().min(1),
+  message: z.string().trim().min(1).max(256).optional(),
+});
+
+const InstallationReportSchema = z.object({
+  installationId: z.string().uuid(),
+  appId: z.string().trim().min(1).max(64),
+  platform: z.enum(["android", "ios", "web"]),
+  versionCode: z.number().int().min(1),
+  versionName: z.string().trim().min(1).max(64).optional(),
 });
 
 const ConfigJsonSchema = z.array(
@@ -348,6 +379,163 @@ const verifyToken = (token: string): { appId: string; fileName: string; exp: num
 };
 
 export const appUpdatesRouter = Router();
+
+const APP_UPDATE_POLICY_KEY_PREFIX = "appUpdates.force.";
+
+const PolicyValueSchema = z.object({
+  enabled: z.boolean(),
+  requiredVersionCode: z.number().int().min(1),
+  message: z.string().trim().min(1).max(256).optional(),
+});
+
+type PolicyValue = z.infer<typeof PolicyValueSchema>;
+
+const loadPolicyValue = async (input: { appId: string; platform: "android" | "ios" | "web" }): Promise<PolicyValue | null> => {
+  const settingKey = `${APP_UPDATE_POLICY_KEY_PREFIX}${input.appId}.${input.platform}`;
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("settingKey", sql.NVarChar(128), settingKey)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  SettingValueJson",
+        "FROM pm.SystemSettings",
+        "WHERE SettingKey = @settingKey",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
+  if (!valueJson) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(valueJson);
+  } catch {
+    return null;
+  }
+
+  const validated = PolicyValueSchema.safeParse(parsed);
+  if (!validated.success) return null;
+  return validated.data;
+};
+
+appUpdatesRouter.get("/policy", async (req, res) => {
+  const parsed = PolicyQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  try {
+    const policy = await loadPolicyValue({ appId: parsed.data.appId, platform: parsed.data.platform });
+    if (!policy || !policy.enabled) {
+      res.json({ enabled: false, requiredVersionCode: null, shouldDownload: false, message: null });
+      return;
+    }
+
+    const shouldDownload = parsed.data.versionCode < policy.requiredVersionCode;
+    res.json({
+      enabled: true,
+      requiredVersionCode: policy.requiredVersionCode,
+      shouldDownload,
+      message: policy.message ?? null,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+  }
+});
+
+appUpdatesRouter.put("/policy", requireAuth, requireSuperadmin, async (req, res) => {
+  const parsed = PolicyUpdateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const settingKey = `${APP_UPDATE_POLICY_KEY_PREFIX}${parsed.data.appId}.${parsed.data.platform}`;
+  const valueJson = JSON.stringify({
+    enabled: parsed.data.enabled,
+    requiredVersionCode: parsed.data.requiredVersionCode,
+    message: parsed.data.message,
+  });
+
+  try {
+    const db = await getDb();
+    await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), settingKey)
+      .input("settingValueJson", sql.NVarChar(sql.MAX), valueJson)
+      .input("updatedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "MERGE pm.SystemSettings WITH (HOLDLOCK) AS target",
+          "USING (SELECT @settingKey AS SettingKey) AS source",
+          "ON target.SettingKey = source.SettingKey",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    SettingValueJson = @settingValueJson,",
+          "    UpdatedAt = sysutcdatetime(),",
+          "    UpdatedByUserId = @updatedByUserId",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (SettingKey, SettingValueJson, UpdatedByUserId)",
+          "  VALUES (@settingKey, @settingValueJson, @updatedByUserId);",
+        ].join("\n"),
+      );
+
+    const updated = await loadPolicyValue({ appId: parsed.data.appId, platform: parsed.data.platform });
+    res.json({
+      enabled: updated?.enabled ?? false,
+      requiredVersionCode: updated?.requiredVersionCode ?? null,
+      message: updated?.message ?? null,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+  }
+});
+
+appUpdatesRouter.post("/report", requireAuth, async (req, res) => {
+  const parsed = InstallationReportSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  await db
+    .request()
+    .input("installationId", sql.UniqueIdentifier, parsed.data.installationId)
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .input("appId", sql.NVarChar(64), parsed.data.appId)
+    .input("platform", sql.NVarChar(32), parsed.data.platform)
+    .input("versionCode", sql.Int, parsed.data.versionCode)
+    .input("versionName", sql.NVarChar(64), parsed.data.versionName ?? null)
+    .query(
+      [
+        "DECLARE @now datetime2(0) = sysutcdatetime();",
+        "MERGE pm.AppInstallations WITH (HOLDLOCK) AS target",
+        "USING (SELECT @installationId AS InstallationId) AS source",
+        "ON target.InstallationId = source.InstallationId",
+        "WHEN MATCHED THEN",
+        "  UPDATE SET",
+        "    UserId = @userId,",
+        "    AppId = @appId,",
+        "    Platform = @platform,",
+        "    VersionCode = @versionCode,",
+        "    VersionName = @versionName,",
+        "    LastSeenAt = @now,",
+        "    UpdatedAt = @now",
+        "WHEN NOT MATCHED THEN",
+        "  INSERT (InstallationId, UserId, AppId, Platform, VersionCode, VersionName, LastSeenAt, CreatedAt, UpdatedAt)",
+        "  VALUES (@installationId, @userId, @appId, @platform, @versionCode, @versionName, @now, @now, @now);",
+      ].join("\n"),
+    );
+
+  res.json({ ok: true });
+});
 
 appUpdatesRouter.get("/latest", async (req, res) => {
   const parsed = LatestQuerySchema.safeParse(req.query);

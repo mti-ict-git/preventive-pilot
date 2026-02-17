@@ -1590,6 +1590,21 @@
 - Ops: make APP_UPDATE_STORE_ALLOW_HTTP explicit (false) in root .env.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Tue Feb 17 10:09:45 WITA 2026
+- Docs: add secure_apk APK publish steps and manifest update guide.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 10:45:25 WITA 2026
+- Backend: add forced update policy endpoints and app installation reporting.
+- DB: add pm.AppInstallations for version tracking by device installation.
+- Mobile (pm-tech): block app when backend policy requires update (versionCode-based).
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 10:51:10 WITA 2026
+- Mobile (pm-tech): align update UX to versionCode policy checks.
+- Mobile (pm-tech): remove semver-based startup update prompt to avoid conflicts.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sat Feb 14 22:30:43 WITA 2026
 - Mobile (pm-tech): notifications bell view now opens as full-screen overlay.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
