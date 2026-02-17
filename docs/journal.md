@@ -1605,6 +1605,10 @@
 - Mobile (pm-tech): remove semver-based startup update prompt to avoid conflicts.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Tue Feb 17 11:18:14 WITA 2026
+- Dev tooling: enhance `npm run push:android` to also set forced-update policy.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Sat Feb 14 22:30:43 WITA 2026
 - Mobile (pm-tech): notifications bell view now opens as full-screen overlay.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
