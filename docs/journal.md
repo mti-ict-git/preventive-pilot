@@ -18,6 +18,10 @@
 - Scripts: push:android supports `--inc` to bump Android versionCode and build debug APK.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Tue Feb 17 22:07:05 WITA 2026
+- iOS (pm-tech): add NSFaceIDUsageDescription for Face ID biometric unlock.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Tue Feb 17 14:11:27 WITA 2026
 - Backend: optional proxy for APK downloads to avoid device DNS/redirect issues.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
