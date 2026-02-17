@@ -4,6 +4,20 @@
 - Backend: optional proxy for APK downloads to avoid device DNS/redirect issues.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Tue Feb 17 14:20:04 WITA 2026
+- Mobile (pm-tech Android): ensure updater plugin always posts results on main thread.
+- Mobile (pm-tech): preflight HEAD request so download failures show immediately.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 14:40:14 WITA 2026
+- Scripts: push:android supports local publish mode to bypass store DNS issues.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 14:44:56 WITA 2026
+- Scripts: reverted push:android local publish changes (per request).
+- Mobile (pm-tech): preflight download check no longer depends on AbortController.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Tue Feb 17 11:55:15 WITA 2026
 - secure_apk: uploader accepts raw APK uploads via X-File-Name header.
 - Scripts: push:android now uses raw upload request body for reliability.

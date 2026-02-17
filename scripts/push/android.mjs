@@ -233,7 +233,7 @@ const main = async () => {
     requiredVersionCode: androidVersion.versionCode,
   });
 
-  if (result.json && typeof result.json === 'object') {
+  if (result && result.json && typeof result.json === 'object') {
     const versionName = typeof result.json.versionName === 'string' ? result.json.versionName : null;
     const manifestCount = typeof result.json.manifestCount === 'number' ? result.json.manifestCount : null;
     const stored = result.json.entry && typeof result.json.entry === 'object' && typeof result.json.entry.fileName === 'string' ? result.json.entry.fileName : null;
