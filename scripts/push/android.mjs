@@ -1,8 +1,6 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import { promises as fsp } from 'node:fs';
-import http from 'node:http';
-import https from 'node:https';
 import path from 'node:path';
 import sql from 'mssql';
 
@@ -173,67 +171,32 @@ const setForcedUpdatePolicy = async (input) => {
 };
 
 const postMultipartFile = async (input) => {
-  const url = new URL(input.uploadUrl);
-  const isHttps = url.protocol === 'https:';
-  if (!isHttps && url.protocol !== 'http:') throw new Error(`Unsupported protocol: ${url.protocol}`);
-
-  const boundary = `----pmtech-${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`;
-  const fileStat = await fsp.stat(input.filePath);
-  const preamble = Buffer.from(
-    `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="file"; filename="${input.fileName}"\r\n` +
-      'Content-Type: application/vnd.android.package-archive\r\n' +
-      '\r\n',
-    'utf-8'
-  );
-  const epilogue = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf-8');
-  const contentLength = preamble.length + fileStat.size + epilogue.length;
-
-  const client = isHttps ? https : http;
-
-  const options = {
+  const fileBuffer = await fsp.readFile(input.filePath);
+  const res = await fetch(input.uploadUrl, {
     method: 'POST',
-    hostname: url.hostname,
-    port: url.port ? Number(url.port) : isHttps ? 443 : 80,
-    path: `${url.pathname}${url.search}`,
     headers: {
       Authorization: `Bearer ${input.token}`,
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      'Content-Length': String(contentLength),
+      'Content-Type': 'application/vnd.android.package-archive',
+      'X-File-Name': input.fileName,
     },
-  };
-
-  return await new Promise((resolve, reject) => {
-    const req = client.request(options, (res) => {
-      const chunks = [];
-      res.on('data', (d) => chunks.push(d));
-      res.on('end', () => {
-        const body = Buffer.concat(chunks).toString('utf-8');
-        const status = res.statusCode ?? 0;
-        let json = null;
-        try {
-          json = JSON.parse(body);
-        } catch {
-          json = null;
-        }
-        if (status < 200 || status >= 300) {
-          const msg = json && typeof json === 'object' && typeof json.message === 'string' ? json.message : body.trim();
-          reject(new Error(`Upload failed: HTTP ${status}${msg ? ` - ${msg}` : ''}`));
-          return;
-        }
-        resolve({ status, body, json });
-      });
-    });
-    req.on('error', (err) => reject(err));
-
-    req.write(preamble);
-    const fileStream = fs.createReadStream(input.filePath);
-    fileStream.on('error', (err) => reject(err));
-    fileStream.on('end', () => {
-      req.end(epilogue);
-    });
-    fileStream.pipe(req, { end: false });
+    body: fileBuffer,
   });
+
+  const body = await res.text();
+  let json = null;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    json = null;
+  }
+
+  const status = res.status;
+  if (status < 200 || status >= 300) {
+    const msg = json && typeof json === 'object' && typeof json.message === 'string' ? json.message : body.trim();
+    throw new Error(`Upload failed: HTTP ${status}${msg ? ` - ${msg}` : ''}`);
+  }
+
+  return { status, body, json };
 };
 
 const main = async () => {

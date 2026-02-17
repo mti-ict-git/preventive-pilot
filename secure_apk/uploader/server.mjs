@@ -179,6 +179,90 @@ const handleUpload = (req, res) => {
   }
 
   const contentType = req.headers['content-type'];
+  const fileNameHeader = req.headers['x-file-name'];
+  const rawFileName = typeof fileNameHeader === 'string' ? fileNameHeader.trim() : '';
+
+  const canUseRawUpload =
+    rawFileName.length > 0 &&
+    typeof contentType === 'string' &&
+    ['application/octet-stream', 'application/vnd.android.package-archive'].includes(contentType.trim().toLowerCase());
+
+  if (canUseRawUpload) {
+    const base = path.basename(rawFileName);
+    const prefix = allowedPrefixes.find((p) => base.toLowerCase().startsWith(p.toLowerCase())) ?? null;
+    if (!prefix) {
+      sendJson(res, 400, { message: `Invalid file prefix. Allowed: ${allowedPrefixes.join(', ')}` });
+      return;
+    }
+    const versionName = parseVersionNameFromFileName(base, prefix);
+    if (!versionName) {
+      sendJson(res, 400, { message: 'Invalid APK file name. Expected <prefix><semver>.apk' });
+      return;
+    }
+
+    let failed = false;
+    void getEffectiveShareDir()
+      .then((dir) => {
+        const targetPath = path.join(dir, base);
+        const tmpPath = `${targetPath}.uploading`;
+        const sha256 = createHash('sha256');
+        let sizeBytes = 0;
+
+        const out = createWriteStream(tmpPath, { flags: 'w' });
+        req.on('data', (chunk) => {
+          sizeBytes += chunk.length;
+          if (sizeBytes > MAX_BYTES) {
+            failed = true;
+            try {
+              req.destroy();
+            } catch (e) {
+              void e;
+            }
+            try {
+              out.destroy();
+            } catch (e) {
+              void e;
+            }
+            sendJson(res, 413, { message: 'File too large' });
+            return;
+          }
+          sha256.update(chunk);
+        });
+        req.pipe(out);
+
+        out.on('error', () => {
+          if (failed) return;
+          failed = true;
+          sendJson(res, 500, { message: 'Failed to write file' });
+        });
+
+        out.on('close', async () => {
+          if (failed) return;
+          try {
+            await fs.rename(tmpPath, targetPath);
+            const sum = sha256.digest('hex');
+            const modifiedAt = new Date().toISOString();
+            const entry = { fileName: base, sizeBytes, sha256: sum, modifiedAt };
+            const manifest = await upsertManifestEntry(entry);
+            sendJson(res, 200, { ok: true, entry, manifestCount: manifest.length, versionName });
+          } catch (e) {
+            try {
+              await fs.rm(tmpPath, { force: true });
+            } catch (cleanupError) {
+              void cleanupError;
+            }
+            const message = e instanceof Error && e.message.trim() ? e.message : 'Upload failed';
+            sendJson(res, 500, { message });
+          }
+        });
+      })
+      .catch((e) => {
+        const message = e instanceof Error && e.message.trim() ? e.message : 'Upload failed';
+        sendJson(res, 500, { message });
+      });
+    return;
+  }
+
   if (typeof contentType !== 'string' || !contentType.toLowerCase().includes('multipart/form-data')) {
     sendJson(res, 400, { message: 'Expected multipart/form-data' });
     return;

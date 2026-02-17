@@ -1,5 +1,15 @@
 # Journal
 
+## Tue Feb 17 11:55:15 WITA 2026
+- secure_apk: uploader accepts raw APK uploads via X-File-Name header.
+- Scripts: push:android now uses raw upload request body for reliability.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 11:51:07 WITA 2026
+- Scripts: push:android upload now uses fetch FormData (multipart field "file").
+- Tooling: ESLint recognizes Node globals for secure_apk uploader and scripts fetch globals.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Fri Feb 13 23:32:50 WITA 2026
 - Backend: added signed APK update discovery and download endpoints (/api/app-updates).
 - Mobile (pm-tech): added update check UI and optional startup update prompt.
