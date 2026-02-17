@@ -5,6 +5,7 @@ import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { Buffer } from "node:buffer";
+import { Readable } from "node:stream";
 import { env } from "../config/env.js";
 import { getDb } from "../db/mssql.js";
 import { requireAuth } from "../middleware/requireAuth.js";
@@ -603,7 +604,47 @@ appUpdatesRouter.get("/download", async (req, res) => {
   const storeBaseUrl = resolveStoreBaseUrl();
   if (storeBaseUrl) {
     const target = `${storeBaseUrl}/apk/${encodeURIComponent(tokenInfo.fileName)}`;
-    res.redirect(302, target);
+    if (!env.APP_UPDATE_STORE_PROXY_DOWNLOAD) {
+      res.redirect(302, target);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+    try {
+      const upstream = await fetch(target, { method: "GET", signal: controller.signal });
+      if (!upstream.ok) {
+        res.status(502).json({ message: `Upstream download failed: HTTP ${upstream.status}` });
+        return;
+      }
+
+      const contentLength = upstream.headers.get("content-length");
+      res.setHeader("Content-Type", "application/vnd.android.package-archive");
+      if (contentLength) res.setHeader("Content-Length", contentLength);
+      res.setHeader("Content-Disposition", `attachment; filename=\"${tokenInfo.fileName.replace(/"/g, "")}\"`);
+
+      if (!upstream.body) {
+        res.status(502).json({ message: "Upstream response missing body" });
+        return;
+      }
+
+      const body = Readable.fromWeb(upstream.body as unknown as Parameters<typeof Readable.fromWeb>[0]);
+      body.on("error", () => {
+        if (!res.headersSent) {
+          res.status(502).end();
+          return;
+        }
+        res.end();
+      });
+      body.pipe(res);
+      return;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Upstream download failed";
+      res.status(502).json({ message });
+      return;
+    } finally {
+      clearTimeout(timeout);
+    }
     return;
   }
 

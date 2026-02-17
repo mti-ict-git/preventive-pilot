@@ -1,8 +1,20 @@
 # Journal
 
+## Tue Feb 17 14:11:27 WITA 2026
+- Backend: optional proxy for APK downloads to avoid device DNS/redirect issues.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Tue Feb 17 11:55:15 WITA 2026
 - secure_apk: uploader accepts raw APK uploads via X-File-Name header.
 - Scripts: push:android now uses raw upload request body for reliability.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 13:57:48 WITA 2026
+- Mobile (pm-tech Android): bumped versionCode to 4 for forced-update testing.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 14:03:51 WITA 2026
+- Scripts: push:android prints fetch failure cause details for easier troubleshooting.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## Tue Feb 17 11:51:07 WITA 2026

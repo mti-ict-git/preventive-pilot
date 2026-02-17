@@ -172,15 +172,25 @@ const setForcedUpdatePolicy = async (input) => {
 
 const postMultipartFile = async (input) => {
   const fileBuffer = await fsp.readFile(input.filePath);
-  const res = await fetch(input.uploadUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${input.token}`,
-      'Content-Type': 'application/vnd.android.package-archive',
-      'X-File-Name': input.fileName,
-    },
-    body: fileBuffer,
-  });
+  let res;
+  try {
+    res = await fetch(input.uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.token}`,
+        'Content-Type': 'application/vnd.android.package-archive',
+        'X-File-Name': input.fileName,
+      },
+      body: fileBuffer,
+    });
+  } catch (err) {
+    const causeMessage =
+      err && typeof err === 'object' && 'cause' in err && err.cause instanceof Error && err.cause.message.trim()
+        ? err.cause.message.trim()
+        : null;
+    const message = err instanceof Error && err.message.trim() ? err.message.trim() : 'fetch failed';
+    throw new Error(`Upload request failed: ${message}${causeMessage ? ` (${causeMessage})` : ''} url=${input.uploadUrl}`);
+  }
 
   const body = await res.text();
   let json = null;
@@ -250,7 +260,9 @@ const main = async () => {
 };
 
 void main().catch((err) => {
-  const message = err instanceof Error && err.message.trim().length > 0 ? err.message : 'push:android failed';
-  process.stderr.write(`${message}\n`);
+  const baseMessage = err instanceof Error && err.message.trim().length > 0 ? err.message.trim() : 'push:android failed';
+  const causeMessage =
+    err instanceof Error && err.cause instanceof Error && err.cause.message.trim().length > 0 ? err.cause.message.trim() : null;
+  process.stderr.write(`${baseMessage}${causeMessage ? ` (${causeMessage})` : ''}\n`);
   process.exitCode = 1;
 });
