@@ -10,6 +10,14 @@
 - Mobile (pm-tech): Assets “All” now lists all assets instead of recents.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Tue Feb 17 20:44:30 WITA 2026
+- Docs: add release notes file for Android push.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 20:50:42 WITA 2026
+- Scripts: push:android supports `--inc` to bump Android versionCode and build debug APK.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Tue Feb 17 14:11:27 WITA 2026
 - Backend: optional proxy for APK downloads to avoid device DNS/redirect issues.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

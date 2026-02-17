@@ -223,6 +223,12 @@ By default it uses the debug APK at `mobile/pm-tech/android/app/build/outputs/ap
 APK_PATH=/absolute/path/to/app-release.apk npm run push:android
 ```
 
+To increment Android `versionCode` and rebuild the debug APK before uploading:
+
+```bash
+npm run push:android -- --inc
+```
+
 ### Backdated completion (supervisor+)
 
 - Supervisors and above can optionally backdate task completion from the Task Detail dialog.

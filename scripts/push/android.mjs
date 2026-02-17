@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import { promises as fsp } from 'node:fs';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import sql from 'mssql';
 
@@ -41,6 +42,41 @@ const getAndroidAppVersion = async (repoRootAbs) => {
   }
 
   return { versionCode, versionName };
+};
+
+const parseArgs = () => {
+  const args = process.argv.slice(2).map((v) => String(v).trim()).filter(Boolean);
+  const inc = args.includes('--inc') || args.includes('-inc');
+  return { inc };
+};
+
+const bumpAndroidVersionCode = async (repoRootAbs) => {
+  const gradlePath = path.join(repoRootAbs, 'mobile', 'pm-tech', 'android', 'app', 'build.gradle');
+  const raw = await readTextFile(gradlePath);
+  const match = raw.match(/^(\s*versionCode\s+)(\d+)(\s*)$/m);
+  if (!match) throw new Error('Unable to find versionCode in mobile/pm-tech/android/app/build.gradle');
+  const current = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(current) || current < 1) throw new Error('Invalid versionCode in mobile/pm-tech/android/app/build.gradle');
+  const next = current + 1;
+  const nextRaw = raw.replace(/^(\s*versionCode\s+)(\d+)(\s*)$/m, `$1${next}$3`);
+  await fsp.writeFile(gradlePath, nextRaw, 'utf-8');
+  return { previousVersionCode: current, nextVersionCode: next };
+};
+
+const buildAndroidDebugApk = async (repoRootAbs) => {
+  const androidDir = path.join(repoRootAbs, 'mobile', 'pm-tech', 'android');
+  const gradlew = './gradlew';
+  await new Promise((resolve, reject) => {
+    const child = spawn(gradlew, ['assembleDebug'], { cwd: androidDir, env: process.env, stdio: 'inherit' });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`Android build failed: exit ${code === null ? 'unknown' : String(code)}`));
+    });
+  });
 };
 
 const fileExists = async (filePath) => {
@@ -223,8 +259,15 @@ const postMultipartFile = async (input) => {
 
 const main = async () => {
   const repoRootAbs = process.cwd();
+  const args = parseArgs();
 
   const pkgVersion = await getPmTechVersion(repoRootAbs);
+  if (args.inc) {
+    const bumped = await bumpAndroidVersionCode(repoRootAbs);
+    process.stdout.write(`Android versionCode bumped ${bumped.previousVersionCode} -> ${bumped.nextVersionCode}\n`);
+    await buildAndroidDebugApk(repoRootAbs);
+  }
+
   const androidVersion = await getAndroidAppVersion(repoRootAbs);
   const apkPath = await resolveApkPath(repoRootAbs);
   const uploadUrl = resolveUploadUrl();
