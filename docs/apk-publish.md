@@ -109,3 +109,60 @@ Make sure backend env is configured:
 
 - Treat `SECURE_APK_UPLOAD_TOKEN` as a secret (do not commit it, do not paste to logs).
 - Rotate the token if it is exposed.
+
+## Lessons learned (for future mobile apps)
+
+### End-to-end update flow (what must work)
+
+1. Store hosts APK + manifest:
+   - `GET /apk/manifest.json` lists available APKs.
+   - `GET /apk/<file>.apk` downloads the APK.
+2. Backend generates a signed download URL:
+   - `GET /api/app-updates/latest?appId=pm-tech` returns `latest.downloadUrl`.
+3. App downloads via backend (not directly store redirect):
+   - App calls `GET /api/app-updates/download?token=...` and the backend either redirects or proxies to the store.
+
+### Store/DNS + redirect issues (Android “Downloading…” forever)
+
+If Android can’t resolve the store domain or gets stuck on redirects, proxy the download through the backend:
+
+- Enable proxy behavior (backend):
+  - `APP_UPDATE_STORE_PROXY_DOWNLOAD=true`
+- Ensure the backend container can reach the store:
+  - If the store is another container, prefer using the Docker network service name (or a stable gateway/host mapping).
+- Confirm from the device perspective:
+  - The app should download from the backend host (your API) instead of a store redirect.
+
+### Capacitor native plugin gotchas (why “plugin not implemented” happened)
+
+If you implement a custom Android plugin:
+
+- Prefer packaging it as a real Capacitor plugin dependency (even if local):
+  - So `cap sync android` will include it automatically.
+  - Verify it appears in `android/app/src/main/assets/capacitor.plugins.json`.
+- Do not rely on manual edits to `capacitor.plugins.json`:
+  - `cap sync` regenerates assets and will overwrite changes.
+- Avoid `await`-ing a plugin proxy:
+  - Capacitor plugins are proxies; `await plugin` can trigger a `then()` lookup and cause `AppUpdater.then()` errors.
+
+### Android build gotchas (plugin module dependencies)
+
+For Android library-style plugin modules:
+
+- Add AndroidX dependencies explicitly when the compiler complains:
+  - Example: missing `androidx.appcompat.app.AppCompatActivity` → add `androidx.appcompat:appcompat`.
+- Avoid `BuildConfig.DEBUG` in library modules unless you wire it up:
+  - Use the app’s debuggable flag (`ApplicationInfo.FLAG_DEBUGGABLE`) instead.
+
+### Debugging checklist (fast)
+
+- On the device/emulator:
+  - Uninstall + reinstall after plugin/sync changes (stale assets are common).
+  - Filter Logcat by:
+    - `AppUpdater` (download/install flow logs)
+    - `Capacitor/Console` (JS errors)
+- On the backend:
+  - Test these three URLs in order:
+    - `/api/app-updates/latest?appId=pm-tech`
+    - `/api/app-updates/download?token=...` (from the JSON above)
+    - Store `/apk/manifest.json` and `/apk/<file>.apk`

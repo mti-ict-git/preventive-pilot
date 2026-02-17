@@ -9,6 +9,7 @@ const SHARE_DIR = (process.env.SHARE_DIR ?? '/mnt/share').trim();
 const UPLOAD_TOKEN = (process.env.SECURE_APK_UPLOAD_TOKEN ?? '').trim();
 const ALLOWED_PREFIXES_RAW = (process.env.SECURE_APK_ALLOWED_PREFIXES ?? 'pm-tech_v').trim();
 const MAX_BYTES = Number(process.env.SECURE_APK_UPLOAD_MAX_BYTES ?? String(400 * 1024 * 1024));
+const MAX_RELEASE_NOTES_CHARS = Number(process.env.SECURE_APK_RELEASE_NOTES_MAX_CHARS ?? '10000');
 
 const FALLBACK_SUBDIR = ['Apps Standard', 'Android', 'Release', 'apk'];
 
@@ -20,6 +21,30 @@ const sendJson = (res, status, payload) => {
   res.setHeader('content-type', 'application/json; charset=utf-8');
   res.setHeader('cache-control', 'no-store');
   res.end(text);
+};
+
+const normalizeReleaseNotes = (value) => {
+  if (typeof value !== 'string') return '';
+  const text = value.replace(/\r\n/g, '\n');
+  if (!Number.isFinite(MAX_RELEASE_NOTES_CHARS) || MAX_RELEASE_NOTES_CHARS < 0) return text;
+  if (text.length <= MAX_RELEASE_NOTES_CHARS) return text;
+  return text.slice(0, MAX_RELEASE_NOTES_CHARS);
+};
+
+const decodeReleaseNotesFromHeaders = (headers) => {
+  const rawB64 = headers['x-release-notes-b64'];
+  const b64 = typeof rawB64 === 'string' ? rawB64.trim() : '';
+  if (b64) {
+    try {
+      const decoded = Buffer.from(b64, 'base64url').toString('utf-8');
+      return normalizeReleaseNotes(decoded);
+    } catch {
+      return '';
+    }
+  }
+  const raw = headers['x-release-notes'];
+  const notes = typeof raw === 'string' ? raw : '';
+  return normalizeReleaseNotes(notes);
 };
 
 const parseSemverParts = (versionName) => {
@@ -93,7 +118,7 @@ const readManifest = async () => {
     if (Array.isArray(json)) {
       return json
         .filter((x) => typeof x === 'string')
-        .map((fileName) => ({ fileName, sizeBytes: 0, sha256: '', modifiedAt: new Date().toISOString() }));
+        .map((fileName) => ({ fileName, sizeBytes: 0, sha256: '', modifiedAt: new Date().toISOString(), releaseNotes: '' }));
     }
     if (json && typeof json === 'object' && Array.isArray(json.files)) {
       return json.files
@@ -103,6 +128,7 @@ const readManifest = async () => {
           sizeBytes: typeof x.sizeBytes === 'number' ? x.sizeBytes : 0,
           sha256: typeof x.sha256 === 'string' ? x.sha256 : '',
           modifiedAt: typeof x.modifiedAt === 'string' ? x.modifiedAt : new Date().toISOString(),
+          releaseNotes: typeof x.releaseNotes === 'string' ? normalizeReleaseNotes(x.releaseNotes) : '',
         }));
     }
     return [];
@@ -181,6 +207,7 @@ const handleUpload = (req, res) => {
   const contentType = req.headers['content-type'];
   const fileNameHeader = req.headers['x-file-name'];
   const rawFileName = typeof fileNameHeader === 'string' ? fileNameHeader.trim() : '';
+  const releaseNotesFromHeaders = decodeReleaseNotesFromHeaders(req.headers);
 
   const canUseRawUpload =
     rawFileName.length > 0 &&
@@ -242,7 +269,7 @@ const handleUpload = (req, res) => {
             await fs.rename(tmpPath, targetPath);
             const sum = sha256.digest('hex');
             const modifiedAt = new Date().toISOString();
-            const entry = { fileName: base, sizeBytes, sha256: sum, modifiedAt };
+            const entry = { fileName: base, sizeBytes, sha256: sum, modifiedAt, releaseNotes: releaseNotesFromHeaders };
             const manifest = await upsertManifestEntry(entry);
             sendJson(res, 200, { ok: true, entry, manifestCount: manifest.length, versionName });
           } catch (e) {
@@ -272,6 +299,12 @@ const handleUpload = (req, res) => {
 
   let saved = null;
   let failed = false;
+  let releaseNotes = '';
+
+  busboy.on('field', (name, value) => {
+    if (name !== 'releaseNotes') return;
+    releaseNotes = normalizeReleaseNotes(value);
+  });
 
   busboy.on('file', (fieldName, file, info) => {
     if (failed) {
@@ -326,7 +359,7 @@ const handleUpload = (req, res) => {
             await fs.rename(tmpPath, targetPath);
             const sum = sha256.digest('hex');
             const modifiedAt = new Date().toISOString();
-            const entry = { fileName: base, sizeBytes, sha256: sum, modifiedAt };
+            const entry = { fileName: base, sizeBytes, sha256: sum, modifiedAt, releaseNotes };
             const manifest = await upsertManifestEntry(entry);
             saved = { entry, manifestCount: manifest.length, versionName };
             sendJson(res, 200, { ok: true, ...saved });

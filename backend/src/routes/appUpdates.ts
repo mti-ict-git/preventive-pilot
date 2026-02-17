@@ -25,6 +25,7 @@ type LatestApkInfo = {
   sha256: string;
   modifiedAt: string;
   downloadUrl: string;
+  releaseNotes?: string;
 };
 
 const LatestQuerySchema = z.object({
@@ -166,6 +167,7 @@ type StoreManifestEntry = {
   sizeBytes: number | null;
   sha256: string | null;
   modifiedAt: string | null;
+  releaseNotes: string | null;
 };
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
@@ -179,7 +181,7 @@ const parseManifest = (input: unknown): StoreManifestEntry[] => {
     if (typeof item === "string") {
       const name = item.trim();
       if (!name) continue;
-      out.push({ fileName: name, sizeBytes: null, sha256: null, modifiedAt: null });
+      out.push({ fileName: name, sizeBytes: null, sha256: null, modifiedAt: null, releaseNotes: null });
       continue;
     }
     if (!isRecord(item)) continue;
@@ -188,7 +190,8 @@ const parseManifest = (input: unknown): StoreManifestEntry[] => {
     const sizeBytes = typeof item.sizeBytes === "number" && Number.isFinite(item.sizeBytes) && item.sizeBytes >= 0 ? item.sizeBytes : null;
     const sha256 = typeof item.sha256 === "string" && item.sha256.trim() ? item.sha256.trim() : null;
     const modifiedAt = typeof item.modifiedAt === "string" && item.modifiedAt.trim() ? item.modifiedAt.trim() : null;
-    out.push({ fileName, sizeBytes, sha256, modifiedAt });
+    const releaseNotes = typeof item.releaseNotes === "string" && item.releaseNotes.trim() ? item.releaseNotes : null;
+    out.push({ fileName, sizeBytes, sha256, modifiedAt, releaseNotes });
   }
   return out;
 };
@@ -259,6 +262,7 @@ const findLatestApkFromStoreManifest = async (input: { storeBaseUrl: string; con
     sha256: chosen.entry.sha256 ?? "",
     modifiedAt: chosen.entry.modifiedAt ?? new Date().toISOString(),
     downloadUrl,
+    ...(chosen.entry.releaseNotes ? { releaseNotes: chosen.entry.releaseNotes } : {}),
   };
 };
 

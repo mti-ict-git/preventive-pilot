@@ -85,6 +85,17 @@ const resolveUploadToken = () => {
   return token;
 };
 
+const resolveReleaseNotes = async (repoRootAbs) => {
+  const inline = (process.env.PUSH_ANDROID_RELEASE_NOTES ?? '').trim();
+  if (inline) return inline;
+  const filePathRaw = (process.env.PUSH_ANDROID_RELEASE_NOTES_FILE ?? '').trim();
+  if (!filePathRaw) return null;
+  const filePathAbs = path.isAbsolute(filePathRaw) ? filePathRaw : path.resolve(repoRootAbs, filePathRaw);
+  const text = await readTextFile(filePathAbs);
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  return normalized.length > 0 ? normalized : null;
+};
+
 const toBoolean = (value, defaultValue) => {
   if (value === undefined || value === null || value === '') return defaultValue;
   const normalized = String(value).trim().toLowerCase();
@@ -180,6 +191,7 @@ const postMultipartFile = async (input) => {
         Authorization: `Bearer ${input.token}`,
         'Content-Type': 'application/vnd.android.package-archive',
         'X-File-Name': input.fileName,
+        ...(input.releaseNotesB64 ? { 'X-Release-Notes-B64': input.releaseNotesB64 } : {}),
       },
       body: fileBuffer,
     });
@@ -217,9 +229,11 @@ const main = async () => {
   const apkPath = await resolveApkPath(repoRootAbs);
   const uploadUrl = resolveUploadUrl();
   const token = resolveUploadToken();
+  const releaseNotes = await resolveReleaseNotes(repoRootAbs);
+  const releaseNotesB64 = releaseNotes ? Buffer.from(releaseNotes, 'utf-8').toString('base64url') : null;
 
   const fileName = `pm-tech_v${androidVersion.versionName}.apk`;
-  const result = await postMultipartFile({ uploadUrl, token, filePath: apkPath, fileName });
+  const result = await postMultipartFile({ uploadUrl, token, filePath: apkPath, fileName, releaseNotesB64 });
 
   if (pkgVersion !== androidVersion.versionName) {
     process.stdout.write(

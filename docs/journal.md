@@ -1,5 +1,11 @@
 # Journal
 
+## Tue Feb 17 20:26:11 WITA 2026
+- Store (secure_apk): persist release notes per APK entry in manifest.json.
+- Backend: expose release notes in /api/app-updates/latest response.
+- Mobile (pm-tech): show “What’s new” in forced update modal and Profile.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Tue Feb 17 14:11:27 WITA 2026
 - Backend: optional proxy for APK downloads to avoid device DNS/redirect issues.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
@@ -25,6 +31,48 @@
 ## Tue Feb 17 15:36:23 WITA 2026
 - Env: point app update store base/manifest to internal secure_apk service.
 - Env: force proxy download to avoid redirects on Android.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 15:51:46 WITA 2026
+- Docker: allow backend container to reach host via host.docker.internal.
+- Env: point app update store base/manifest to host-mapped secure_apk port.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 16:01:50 WITA 2026
+- Env: point app update store base/manifest to Docker gateway host port for server.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 16:23:27 WITA 2026
+- Mobile (pm-tech Android): add logcat logs for updater download/install flow.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 16:33:59 WITA 2026
+- Mobile (pm-tech Android): log MainActivity plugin registration for troubleshooting.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 16:40:55 WITA 2026
+- Mobile (pm-tech Android): include AppUpdater in capacitor.plugins.json for native availability.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 17:02:23 WITA 2026
+- Mobile (pm-tech Android): move AppUpdater into a local Capacitor plugin package for sync.
+- Mobile (pm-tech Android): allow HTTP updater URLs in debug builds only.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 17:09:05 WITA 2026
+- Mobile (pm-tech Android): add appcompat dependency to AppUpdater plugin build.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 17:11:26 WITA 2026
+- Mobile (pm-tech Android): detect debuggable app without BuildConfig in plugin module.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 17:20:10 WITA 2026
+- Mobile (pm-tech): avoid awaiting AppUpdater proxy to prevent AppUpdater.then() error.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 20:04:56 WITA 2026
+- Docs: add lessons learned for APK updates, backend proxying, and Capacitor plugins.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## Tue Feb 17 11:55:15 WITA 2026

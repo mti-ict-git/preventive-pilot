@@ -191,6 +191,7 @@ Required environment variables:
 - Android back button navigates to the previous in-app screen before exiting.
 - Profile & Settings shows authenticated user info and local preferences for theme and notifications.
 - Android: optional in-app APK auto-update via `/api/app-updates` (signed token URLs).
+- Android: update UI can display “What’s new” release notes from the store manifest.
 
 #### Android APK updates (store redirect)
 
@@ -200,6 +201,7 @@ Required environment variables:
   - Publish `https://store.justanapi.my.id/apk/manifest.json` listing available APKs.
   - If you must use plain HTTP (dev/LAN), set `APP_UPDATE_STORE_ALLOW_HTTP=true` and use `APP_UPDATE_STORE_BASE_URL=http://<host>:<port>`.
 - Filenames must start with `pm-tech_v` and include a semver suffix like `pm-tech_v1.3.0.apk`.
+- Store manifest entries can include `releaseNotes` (shown in the mobile update UI).
 - Optional: the `mobile/secure_apk` docker stack can host `/apk/*` and provide an authenticated `/api/upload` to publish new APKs and update `manifest.json`.
 
 #### Publish an Android APK (push:android)
@@ -209,6 +211,7 @@ From repo root, upload the built APK to `secure_apk` (stores as `pm-tech_v<versi
 ```bash
 export SECURE_APK_BASE_URL=https://store.justanapi.my.id
 export SECURE_APK_UPLOAD_TOKEN=...
+export PUSH_ANDROID_RELEASE_NOTES_FILE=docs/release-notes.md
 npm run push:android
 ```
 
