@@ -6,6 +6,10 @@
 - Mobile (pm-tech): show “What’s new” in forced update modal and Profile.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Tue Feb 17 20:33:38 WITA 2026
+- Mobile (pm-tech): Assets “All” now lists all assets instead of recents.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Tue Feb 17 14:11:27 WITA 2026
 - Backend: optional proxy for APK downloads to avoid device DNS/redirect issues.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
