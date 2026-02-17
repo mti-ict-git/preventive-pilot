@@ -1,0 +1,9 @@
+{
+  "name": "secure-apk-uploader",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "dependencies": {
+    "busboy": "1.6.0"
+  }
+}

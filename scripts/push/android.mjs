@@ -76,14 +76,14 @@ const resolveApkPath = async (repoRootAbs) => {
 const resolveUploadUrl = () => {
   const full = (process.env.SECURE_APK_UPLOAD_URL ?? '').trim();
   if (full) return full;
-  const base = (process.env.SECURE_APK_BASE_URL ?? '').trim();
-  if (!base) throw new Error('Missing SECURE_APK_UPLOAD_URL or SECURE_APK_BASE_URL');
+  const base = ((process.env.SECURE_APK_BASE_URL ?? process.env.APP_UPDATE_STORE_BASE_URL) ?? '').trim();
+  if (!base) throw new Error('Missing SECURE_APK_UPLOAD_URL or SECURE_APK_BASE_URL or APP_UPDATE_STORE_BASE_URL');
   return `${base.replace(/\/$/, '')}/api/upload`;
 };
 
 const resolveUploadToken = () => {
-  const token = (process.env.SECURE_APK_UPLOAD_TOKEN ?? '').trim();
-  if (!token) throw new Error('Missing SECURE_APK_UPLOAD_TOKEN');
+  const token = ((process.env.SECURE_APK_UPLOAD_TOKEN ?? process.env.APP_UPDATE_STORE_UPLOAD_TOKEN) ?? '').trim();
+  if (!token) throw new Error('Missing SECURE_APK_UPLOAD_TOKEN or APP_UPDATE_STORE_UPLOAD_TOKEN');
   return token;
 };
 
