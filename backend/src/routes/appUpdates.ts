@@ -604,7 +604,11 @@ appUpdatesRouter.get("/download", async (req, res) => {
   const storeBaseUrl = resolveStoreBaseUrl();
   if (storeBaseUrl) {
     const target = `${storeBaseUrl}/apk/${encodeURIComponent(tokenInfo.fileName)}`;
-    if (!env.APP_UPDATE_STORE_PROXY_DOWNLOAD) {
+    const ua = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : "";
+    const isAndroidClient = /android|dalvik/i.test(ua);
+    const shouldProxy = env.APP_UPDATE_STORE_PROXY_DOWNLOAD || isAndroidClient;
+
+    if (!shouldProxy) {
       res.redirect(302, target);
       return;
     }
@@ -612,7 +616,8 @@ appUpdatesRouter.get("/download", async (req, res) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
     try {
-      const upstream = await fetch(target, { method: "GET", signal: controller.signal });
+      const upstreamMethod = req.method === "HEAD" ? "HEAD" : "GET";
+      const upstream = await fetch(target, { method: upstreamMethod, signal: controller.signal });
       if (!upstream.ok) {
         res.status(502).json({ message: `Upstream download failed: HTTP ${upstream.status}` });
         return;
@@ -622,6 +627,11 @@ appUpdatesRouter.get("/download", async (req, res) => {
       res.setHeader("Content-Type", "application/vnd.android.package-archive");
       if (contentLength) res.setHeader("Content-Length", contentLength);
       res.setHeader("Content-Disposition", `attachment; filename=\"${tokenInfo.fileName.replace(/"/g, "")}\"`);
+
+      if (req.method === "HEAD") {
+        res.status(200).end();
+        return;
+      }
 
       if (!upstream.body) {
         res.status(502).json({ message: "Upstream response missing body" });
@@ -645,7 +655,6 @@ appUpdatesRouter.get("/download", async (req, res) => {
     } finally {
       clearTimeout(timeout);
     }
-    return;
   }
 
   const rootAbs = resolveUpdateRoot();

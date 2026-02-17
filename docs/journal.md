@@ -18,6 +18,15 @@
 - Mobile (pm-tech): preflight download check no longer depends on AbortController.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
+## Tue Feb 17 15:22:58 WITA 2026
+- Backend: proxy APK downloads for Android clients to avoid store DNS redirects.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Tue Feb 17 15:36:23 WITA 2026
+- Env: point app update store base/manifest to internal secure_apk service.
+- Env: force proxy download to avoid redirects on Android.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Tue Feb 17 11:55:15 WITA 2026
 - secure_apk: uploader accepts raw APK uploads via X-File-Name header.
 - Scripts: push:android now uses raw upload request body for reliability.
