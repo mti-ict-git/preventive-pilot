@@ -1,5 +1,556 @@
 # Journal
 
+## Fri Feb 13 23:32:50 WITA 2026
+- Backend: added signed APK update discovery and download endpoints (/api/app-updates).
+- Mobile (pm-tech): added update check UI and optional startup update prompt.
+- Mobile (pm-tech Android): added native downloader/installer plugin for in-app APK updates.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Fri Feb 13 23:41:33 WITA 2026
+- Docker: added secure-apk nginx service with CIFS-mounted APK share.
+- Docker: wired APP_UPDATE_* env vars for api when using docker-compose.cifs.yml.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Fri Feb 13 23:46:10 WITA 2026
+- Docker: adjusted CIFS mount and secure-apk nginx alias for release-folder share path.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Fri Feb 13 23:53:00 WITA 2026
+- Docker: moved secure-apk compose to mobile/secure_apk/docker-compose.yml.
+- Docker: removed secure-apk service from root docker-compose.cifs.yml.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Fri Feb 13 23:59:19 WITA 2026
+- Docker: secure-apk now mounts Windows share root with CIFS prefixpath for subfolder.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 00:04:31 WITA 2026
+- Docs: added mobile/secure_apk README with CIFS prefixpath and volume recreate notes.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Fri Feb 13 21:38:30 WITA 2026
+- Web: improved Tabs active state highlight across the app.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 22:52:07 WITA 2026
+- Web: added new notification rule event types (Due Today, Revised, Submitted for approval, Pending superadmin).
+- Backend: enqueue immediate push notifications for approval workflow transitions with role-based audiences.
+- Backend: improved reminder rule default templates per event type and expanded push title mapping.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 22:27:34 WITA 2026
+- Web: added Push rule template support (channel type select + title/body templates + preview).
+- Backend: parse rendered Push JSON template into notification title/body on send.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 21:38:22 WITA 2026
+- Mobile (pm-tech): updated Home header title to “OPTIMA Mobile”.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 21:21:06 WITA 2026
+- Mobile (pm-tech): updated login header/subtitle copy.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 21:19:03 WITA 2026
+- Mobile (pm-tech): updated login title to “MTI Mobile PM System”.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 20:22:14 WITA 2026
+- Mobile (pm-tech): replaced login icon with app logo image.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 19:56:50 WITA 2026
+- Web: added Push Broadcast dialog (title/message/audience) on Notifications page.
+- Web: added apiPushBroadcast client helper and documented Broadcast dialog in README.
+
+## Sun Feb  8 19:45:09 WITA 2026
+- Mobile (pm-tech): show app version in Profile > Account > About Version.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 19:39:21 WITA 2026
+- Mobile (pm-tech): bump app version to 1.0.0.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 19:43:15 WITA 2026
+- Web: refactored Push channel card to match existing channel list UI/UX.
+
+## Sun Feb  8 19:39:15 WITA 2026
+- Web: added Push channel card with enable/disable toggle and push test.
+- README: documented Push channel card in Notifications section.
+
+## Sun Feb  8 18:55:27 WITA 2026
+- Backend: validate device platform as ios/android/web and normalize broadcast audience.
+- Backend: add fallback Firebase service account path for local dev.
+- DB: add pm.Devices indexes for UserId and IsActive.
+- Docker: set FIREBASE_SERVICE_ACCOUNT_PATH for api container.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 18:40:53 WITA 2026
+- Backend: added /api/devices/push-broadcast for admin push announcements with role filtering.
+- Backend: documented push broadcast schema in OpenAPI spec.
+- Docs: updated README with push broadcast endpoint.
+
+## Sun Feb  8 18:35:29 WITA 2026
+- Git: stop tracking pm-tech Android google-services.json.
+
+## Sun Feb  8 17:46:22 WITA 2026
+- Mobile (pm-tech): Offline sync now flushes queued actions and attachments.
+- Mobile (pm-tech): auto-sync queued work when connection returns.
+- Mobile (pm-tech): show pending sync state and queued attachment counts on Task detail.
+- Mobile (pm-tech): record non-retryable sync failures as conflicts and allow clearing.
+
+## Sun Feb  8 17:52:37 WITA 2026
+- Mobile (pm-tech): Task Detail Save Draft now shows immediate “Saved” feedback and saved timestamp.
+
+## Sun Feb  8 18:13:45 WITA 2026
+- Mobile (pm-tech): Offline page now shows per-task pending actions/files and refresh progress during sync.
+
+## Sun Feb  8 18:21:24 WITA 2026
+- Mobile (pm-tech): Offline cached task cards now show explicit status (Synced/Pending/Conflict/Failed).
+
+## Sun Feb  8 17:32:17 WITA 2026
+- Mobile (pm-tech): add outstanding badge count on Home > My Tasks.
+- Backend: add /api/tasks/my-outstanding-counts for technician badge.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 17:25:56 WITA 2026
+- Mobile (pm-tech): show success acknowledgement after Submit for approval.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 17:21:30 WITA 2026
+- Mobile (pm-tech): added local Save action for PM Task checklist draft.
+- Mobile (pm-tech): persist checklist drafts in localStorage for offline usage.
+- Mobile (pm-tech): enable offline reads by caching GET API responses.
+- Mobile (pm-tech): Offline page now syncs and lists cached tasks.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 17:16:46 WITA 2026
+- Docker: mount Firebase service account into api container and point FIREBASE_SERVICE_ACCOUNT_PATH to /app/firebase-adminsdk.json.
+
+## Sun Feb  8 17:20:30 WITA 2026
+- Docker: switch FIREBASE_SERVICE_ACCOUNT_HOST_PATH to repo-relative path for dev/prod parity.
+
+## Sun Feb  8 18:17:17 WITA 2026
+- Docs: added detailed push notifications phased plan and templates in docs/push_channel.md.
+
+## Sun Feb  8 18:21:41 WITA 2026
+- Docs: expanded push notification phase tasks with step-by-step instructions.
+## Sun Feb  8 15:23:06 WITA 2026
+- Mobile (pm-tech): re-register push token when push notifications are enabled.
+- Mobile (pm-tech): export registerDeviceToken for reuse.
+## Sun Feb  8 14:59:55 WITA 2026
+- Mobile (pm-tech): fixed assets:android script to use @capacitor/assets generate.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 14:52:12 WITA 2026
+- Mobile (pm-tech): added assets:android script to regenerate Android icons/splash from assets/logo.png.
+
+## Sun Feb  8 14:34:06 WITA 2026
+- Mobile (pm-tech): replaced Android app icons and splash assets with new logo.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 12:04:41 WITA 2026
+- Mobile (pm-tech): made PM Now role gating case-insensitive.
+- Backend: /api/auth/me and /api/auth/refresh now reload roles from DB.
+- Backend: role middleware checks are now case-insensitive.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:27:51 WITA 2026
+- Mobile (pm-tech): PM Task Detail asset name now links to Asset Detail.
+- Mobile (pm-tech): PM Task Detail now shows asset notes from Asset Detail.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 08:51:08 WITA 2026
+- Mobile (pm-tech): added submit-for-approval, revise/reject modals, and strict role-based edit locks.
+- Mobile (pm-tech): superadmin can edit only during PendingSuperadmin review (not after Approved).
+- Mobile (pm-tech): surfaced rejection reason and revision note on Task detail.
+- Backend: enforced approval-state edit locks on evidence upload/delete endpoints.
+- Backend/DB: added revised audit fields (RevisedAt, RevisedByUserId, RevisionNote) and returned them in task detail.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 08:57:53 WITA 2026
+- Mobile (pm-tech): made checklist and evidence editing read-only for Supervisor/Admin.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 11:01:34 WITA 2026
+- Mobile (pm-tech): Home Resolve Now now opens PM Tasks on the Overdue tab.
+- Mobile (pm-tech): PM Tasks page supports deep-linking via /tasks?tab=overdue.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 12:04:28 WITA 2026
+- Backend: added /api/devices/push-test to send FCM test notification to registered tokens.
+- Web: added Notifications page “Push Test” button.
+- Mobile (pm-tech): registers push token and calls /api/devices/register after login.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 12:35:20 WITA 2026
+- Backend: added Firebase Admin SDK support for push (service account path/base64 env).
+- Backend: /api/devices/push-test and notifications job now prefer Admin SDK, fallback to legacy key.
+- Repo: ignored firebase-adminsdk JSON files to prevent committing secrets.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 12:43:52 WITA 2026
+- Backend: push-test returns detailed failure reasons and configUsed.
+- Backend: Firebase Admin init failures no longer block legacy FCM fallback.
+- Web: Push Test toast shows first failure reason for faster debugging.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 12:48:50 WITA 2026
+- Backend: improved CORS allowlist to support wildcard origins via FRONTEND_ORIGIN.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 12:54:30 WITA 2026
+- Backend: CORS error now logs the rejected Origin to simplify production setup.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:05:25 WITA 2026
+- Docker: included https://pmit.merdekabattery.com in default FRONTEND_ORIGIN for api service.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:13:05 WITA 2026
+- Backend: allow Capacitor Android origin http://localhost for CORS.
+- Docker: added http://localhost to default FRONTEND_ORIGIN for api service.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:58:34 WITA 2026
+- Mobile (pm-tech): disable submit-for-approval while task is paused.
+- Mobile (pm-tech): disable pause/resume actions when approval is locked.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 14:04:37 WITA 2026
+- Mobile (pm-tech): persist checklist draft through evidence uploads.
+- Mobile (pm-tech): keep draft values when reloading task detail.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 15:28:03 WITA 2026
+- Mobile (pm-tech): add My Tasks filter view using assigned=me.
+- Mobile (pm-tech): add My Tasks shortcut icon in Tasks header.
+- Mobile (pm-tech): update Home My Tasks button to open assigned=me.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:53:22 WITA 2026
+- Mobile (pm-tech): allow any file type for task and checklist attachments.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:35:30 WITA 2026
+- Docker: mounted evidence storage into api container for checklist evidence download.
+- Docker: added EVIDENCE_STORAGE_HOST_PATH volume mapping to /app/shared-documents.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 13:25:13 WITA 2026
+- Mobile (pm-tech): made attachment preview fullscreen.
+- Mobile (pm-tech): added pinch-to-zoom and pan for image attachments.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 08:43:43 WITA 2026
+- Mobile (pm-tech): added Capacitor Android scaffolding (appId com.merdekatsingshan.pmtech, appName MTI Mobile PM).
+- Mobile (pm-tech): added biometric login using native secure storage for refresh token (kept on logout).
+- Mobile (pm-tech): updated Vite base for Capacitor production builds.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 08:51:21 WITA 2026
+- Mobile (pm-tech): added build:android script (build + sync + open Android Studio).
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 09:30:39 WITA 2026
+- Mobile (pm-tech): enabled Scan QR on Home and Asset Detail to open scanned asset.
+- Mobile (pm-tech): added Capacitor MLKit barcode scanner and Android camera config.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 09:55:30 WITA 2026
+- Mobile (pm-tech): fixed Scan QR tap behavior by removing false-disabled state.
+- Mobile (pm-tech): centralized scanner logic and improved error handling.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 10:22:06 WITA 2026
+- Mobile (pm-tech): wired Scan QR / Barcode button in Asset Lookup.
+- Mobile (pm-tech): expanded scanner to accept barcodes in addition to QR.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 11:01:54 WITA 2026
+- Mobile (pm-tech): added page transition animation between routes.
+- Mobile (pm-tech): animated Assets/Facilities sidebar drawer open/close.
+- Mobile (pm-tech): added subtle active-state animation on bottom nav.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 03:50:19 WITA 2026
+- Mobile Login: added subtle enter animations (fade/slide) for hero and card.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 03:48:30 WITA 2026
+- Mobile Login: made login screen full-screen (no scrolling) by reducing hero height and spacing.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sun Feb  8 03:45:11 WITA 2026
+- Mobile Profile & Settings now shows authenticated user data and sync status.
+## Sun Feb  8 04:20:22 WITA 2026
+- Mobile Asset Detail now loads the real asset image from /api/assets/:id/image.
+- Added mobile API helper to download asset images with auth.
+
+## Sun Feb  8 04:26:21 WITA 2026
+- Mobile Asset Detail now prefers asset imageUrl when available, falling back to image endpoint.
+
+## Sun Feb  8 04:30:07 WITA 2026
+- Mobile Asset Detail image now uses contain to avoid cropping.
+
+## Sun Feb  8 04:44:37 WITA 2026
+- Mobile Home Dashboard: removed duplicate Report Breakdown button.
+
+- Added theme mode, accent selection, and push toggle state persisted locally.
+- Profile sync now refreshes user from /api/auth/me and updates last sync timestamp.
+
+## Sun Feb  8 03:29:59 WITA 2026
+
+## Sun Feb  8 03:29:59 WITA 2026
+- Mobile PM History: display checklist evidence attachments on Task detail.
+- Added evidence download APIs for checklist evidence and task evidence.
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sun Feb  8 03:35:31 WITA 2026
+- Mobile PM History: made completed PM tasks read-only (disable checklist toggles).
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sun Feb  8 03:43:40 WITA 2026
+- Mobile Asset Detail: added PM Now action for Supervisor/Admin/Superadmin.
+- Added mobile API helper for POST /api/tasks/pm-now (handles duplicate by returning existing task id).
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sat Feb  7 22:44:55 WITA 2026
+- Mobile Work Orders: wired list to /api/work-orders with status tabs and search.
+- Added Work Order detail screen with CM metadata, checklist, evidence upload, and lifecycle actions.
+- Added Report Breakdown form with asset/facility targeting and navigation from Asset Detail.
+
+## Sat Feb  7 22:38:26 WITA 2026
+- Added mobile Facilities list with search and location filters and a new /facilities route.
+- Added Assets/Facilities sidebar switcher in mobile Assets and Facilities headers.
+- Added mobile facilities API client types and list call.
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sat Feb  7 20:56:00 WITA 2026
+- Mobile Home: replaced mock data with real API calls using apiListTasks.
+- Added state for user profile (getMe), stats (today, week, overdue, done), and task lists.
+- Implemented real-time stats calculation based on apiListTasks results.
+- Added loading states and empty state handling.
+- Verified with typecheck and lint.
+
+## Sat Feb  7 20:49:46 WITA 2026
+- Phase 3 PM Tasks: wired Tasks list and Task detail in mobile.
+- Implemented apiListTasks and lifecycle actions: start, pause, resume, complete.
+- Tasks page fetches assigned=me with filters; Task detail loads metadata and checklist, buttons call server.
+- Verified with typecheck and lint.
+
+## Sat Feb  7 20:45:24 WITA 2026
+- Phase 2 Models & API Client: added typed models (Asset, Task, WorkOrder) and shared helpers apiGet/apiPost with normalized ApiError.
+- Extended mobile lib/api.ts with TaskDetail, TaskListItem, WorkOrder list/detail shapes aligned to backend.
+- Centralized JSON serialization and bearer header handling; 401 auto-refresh remains in apiFetchJson.
+- Verified typecheck and lint for mobile.
+
+## Sat Feb  7 20:38:47 WITA 2026
+- Fixed runtime error "tailwind is not defined" by removing CDN Tailwind inline config from pm-tech/index.html; project now uses build-time Tailwind.
+- Removed importmap block referencing CDN React modules; Vite bundler handles all imports.
+- Added inline SVG favicon link to prevent /favicon.ico 404 in mobile dev.
+- Verified with `npm run lint` and `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`.
+
+## Sat Feb  7 20:34:59 WITA 2026
+- Phase 1 Auth & Session for mobile: added lib/auth.ts with in-memory tokens and local storage fallback.
+- Implemented lib/api.ts with API_BASE_URL, apiFetchJson, login, refresh, and getMe.
+- Added providers/AuthProvider.tsx and wrapped App with AuthProvider; ProtectedRoute now checks context.
+- Refactored Login page to call backend /api/auth/login, provider selection, and error handling; offline routes moved to public.
+- Updated mobile tsconfig to include vite/client types; verified `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json` and repo `npm run lint`.
+
+## Sat Feb  7 20:30:17 WITA 2026
+- Phase 0 mobile hardening: configured VITE_API_BASE_URL and removed exposed GEMINI keys from Vite define.
+- Replaced Tailwind CDN with build-time Tailwind (added tailwind/postcss configs and index.css; imported in index.tsx).
+- Backend CORS: updated FRONTEND_ORIGIN to include http://localhost:3000 and http://127.0.0.1:3000.
+- Ran `npm run lint`, `npx tsc --noEmit -p mobile/pm-tech/tsconfig.json`, and `npx tsc --noEmit -p backend/tsconfig.json`; all passed.
+
+## Sun Feb  1 02:31:52 UTC 2026
+- PM Task Approval Workflow 6.2: added backend approval endpoints.
+- API: POST /api/tasks/{taskId}/submit-for-approval sets ApprovalStatus=PendingSupervisor and technician completion trail.
+- API: POST /api/tasks/{taskId}/approve-by-supervisor transitions to PendingSuperadmin.
+- API: POST /api/tasks/{taskId}/approve-by-superadmin finalizes approval, sets Approved, and updates AssetPMSettings with NextPMDueAt.
+- API: POST /api/tasks/{taskId}/reject-approval allows supervisor or superadmin to reject; optional reopen.
+- OpenAPI: documented approval workflow endpoints under backend entrypoint.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 02:38:54 UTC 2026
+- PM Task Approval Workflow 6.3: surfaced approval state in tasks APIs.
+- Tasks list: added approvalStatus and approver/submission fields (technician/supervisor/superadmin).
+- Task detail: included full approval metadata for display and audit.
+- Asset PM history: added approvalStatus field and optional approvedOnly filter.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 02:39:52 UTC 2026
+- Reports: added optional approvedOnly filter to compliance summary and CSV.
+- Compliance metrics can count only Approved tasks when requested.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 10:30:54 WITA 2026
+- Notifications: added Test button on each channel row in Notifications page.
+- Web: test button calls settings test APIs with per-channel overrides (Mail/WhatsApp).
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 10:35:48 WITA 2026
+- Notifications: disabled Test button for unsupported channel types (e.g., Teams).
+- Button shows "Unsupported" tooltip when channel type cannot be tested.
+- Re-ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## Sun Feb  1 10:39:48 WITA 2026
+- Notifications: updated Reminder Rule flow to match new implementation.
+- Event options limited by type (Reminder: Due/Overdue; Escalation: Overdue).
+- Channel display uses channel name in Rule modal and rule cards.
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
+## Sun Feb  1 10:46:26 WITA 2026
+- Notifications: Test button now stops row click; no edit modal opens.
+- Clicking Test only runs the test and shows a toast result.
+- Re-ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## Sun Feb  1 10:23:15 WITA 2026
+- PM Task Approval Workflow 6.1: extended DB schema for approval tracking.
+- DB: pm.PMTasks added ApprovalStatus (default None, enum constraint) and approval trail fields:
+- TechnicianCompletedAt/TechnicianCompletedByUserId, SupervisorApprovedAt/SupervisorApprovedByUserId, SuperadminApprovedAt/SuperadminApprovedByUserId with FKs to pm.Users.
+- Verified repository with `npx tsc --noEmit` and `npm run lint`.
+
+## 2026-02-01 09:09:02 WITA
+- Notifications: applied per-channel overrides in backend delivery job.
+- Email: channel to/cc/bcc merge mode (override/append), sender and templates.
+- WhatsApp: channel base URL, target, number/group, and mentions merged.
+- Updated queue processor to load channel config and compute effective settings.
+- Ran `npx tsc --noEmit` (root + backend) and `npm run lint`; all passed.
+
+## 2026-02-01 09:25:52 WITA
+- Notifications: added per-channel display name across DB, API, and UI.
+- DB: pm.NotificationChannels.ChannelName with create-time and migration add.
+- API: channels list includes channelName; create/update accept channelName.
+- UI: Channel modal has Name field; list shows channelName fallback to type.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## 2026-02-01 10:19:44 WITA
+- Notifications: implemented delete channel backend route and UI confirmation.
+- Backend: DELETE /api/notifications/channels/:channelId with reference checks.
+- Frontend: Delete button with AlertDialog confirm; shows errors if references exist.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## 2026-02-01 10:21:53 WITA
+- Fix: added missing AlertDialogTrigger import to Notifications.tsx to resolve runtime error.
+- Verified with `npx tsc --noEmit` and `npm run lint`.
+
+## 2026-01-31 13:18:10 UTC
+- CM Work Orders: added superadmin-only delete endpoint (DELETE /api/work-orders/:taskId).
+- Deletes DB rows and unlinks stored evidence files when configured.
+- Web: added Delete button on Work Order Detail for superadmins with confirmation dialog.
+- Wired frontend API client (apiDeleteWorkOrder) and cache invalidation.
+- Ran `npx tsc --noEmit` and `npm run lint` after changes.
+
+## 2026-01-31 13:08:38 UTC
+- Asset Detail: added CM History tab and CM incident count.
+- Implemented cmHistoryQuery using apiListWorkOrders filtered by asset and status.
+- Restricted PM History to PM-only by passing maintenanceType="PM".
+- Updated stats grid to include CM Incidents card.
+- Ran `npx tsc --noEmit` and `npm run lint` after changes.
+
+## 2026-01-31 20:36:41 WITA
+- CM Work Orders: removed checklist UI/logic from Work Order detail.
+- Added ResolutionNotes column to PMTasks schema.
+- Implemented backend endpoint POST /api/work-orders/:taskId/resolution to save free-text notes.
+- Extended work order detail API to return resolutionNotes.
+- Updated web UI Resolution card with editable Textarea and Save action.
+- Ran `npx tsc --noEmit` and `npm run lint`; both passed.
+
+## Friday, January 23, 2026 5:18:16 PM
+- Web: added Replace buttons for checklist attachments and task evidence in Task Detail.
+- Renamed attachment action label from Preview to View for clarity.
+- Confirmed attachment uploads happen immediately to the server when files are attached.
+- Ran `npm run lint` and `npx tsc --noEmit`; both passed.
+
+## Friday, January 23, 2026 5:22:50 PM
+- Mobile: added apiDownloadChecklistEvidence and apiDeleteChecklistEvidence in mobile client.
+- Fixed type predicate in TaskDetailPage for checklist evidence mapping.
+- Verified mobile lint (warnings only) and typecheck passes.
+
+## 2026-01-23 10:05:57 +08:00
+- Updated docker-compose FRONTEND_ORIGIN to allow mobile dev origins (http://localhost:8081) and Capacitor (capacitor://localhost) via env default.
+- This resolves CORS preflight failures when the mobile app calls ngrok-hosted API.
+- Next: restart api service to apply env change; verify /api/auth/login preflight succeeds.
+## 2026-01-23 16:59:41 +08:00
+- Mobile: enabled starting overdue tasks on TaskDetailPage and added refetch after start/pause/resume/cancel.
+- Fixed JSX variable scope by moving action gating booleans out of render.
+- Ran mobile lint and typecheck; warnings only, no errors.
+- Audited web PM Tasks: Start allowed for open/scheduled; parity confirmed.
+## Thursday, January 22, 2026 3:02:02 PM
+- Implemented Phase 1 PM backend validation updates (category enforcement, assignment fallback, PM Now errors).
+- Standardized error responses for PM-related endpoints to use code and details fields.
+- Ran `npm run db:verify`, `npm run lint`, and `npx tsc --noEmit`.
+
+## 2026-01-22 14:10:00
+- Added CM reporting backend for breakdowns, MTTR, and monthly incidents.
+- Extended compliance and overdue reports with PM/CM maintenance type filter and CSV exports.
+- Implemented CM Metrics card and overview widget on Reports page with Shadcn UI.
+- Wired CM metrics CSV export on web and documented Reports behavior in README.
+
+## 2026-01-22 13:08:59 PM
+- Added CM reported by/channel and downtime fields to Work Order detail response and UI.
+- Added Close Downtime action in Work Order detail.
+- Updated README with downtime detail note.
+
+## 2026-01-22 12:57:50 PM
+- Fixed backdateMode scope ordering in Work Order detail to satisfy TypeScript.
+
+## 2026-01-22 12:52:04 PM
+- Wired Work Orders list row click and View button to the detail route.
+- Updated README with Work Order detail route notes.
+- Ran `npm run lint` (ESLintIgnoreWarning about .eslintignore) and `npx tsc --noEmit`.
+
+## 2026-01-22 12:36:58 PM
+- Added PM Task Enhancement Plan document with phased roadmap and specs.
+## Sun Jan 25 12:57:05 WITA 2026
+- Updated scheduling day and calendar projections to respect asset broken state and frozen schedules.
+- Ensured projected events are suppressed for broken assets and frozen schedules while existing tasks remain visible.
+- Ran `npm run lint` and `npx tsc --noEmit` in repo root.
+## Sun Jan 25 20:08:46 WITA 2026
+- Extended GET /api/scheduling/day to include per-item estimatedMinutes based on template EstimatedDurationMinutes with a 60-minute fallback when null.
+- Verified asset, facility, and projected occurrences return estimatedMinutes for capacity calculations.
+- Ran `npm run lint` and `npx tsc --noEmit` after backend changes.
+## Sun Jan 25 20:29:44 WITA 2026
+- Extended GET /api/scheduling/calendar to compute CapacityMinutes per date using the same estimated duration rules as the day API.
+- Calendar response items now include capacityMinutes alongside bucketed counts for each date.
+- Ran `npm run lint` and `npx tsc --noEmit` after calendar capacity changes.
+## Sun Jan 25 21:40:26 WITA 2026
+- Updated Scheduling page to display per-day capacity badges in the calendar based on total estimated minutes versus an 8-hour threshold.
+- Added a capacity summary card for the selected date showing used versus threshold minutes and overall utilization.
+- Exposed per-task estimatedMinutes in the day view and updated README to document the new capacity overlays.
+## 2026-01-22 13:00:12
+- Added PM Now idempotency settings with env fallback and system endpoints.
+- Enforced PM Now idempotency checks for assets and facilities.
+- Added unique indexes to prevent duplicate PM tasks per due time.
+- Verified with `npm run lint`, `npx tsc --noEmit`, and `npm --prefix backend run typecheck`.
+
+
+## 2026-01-22 12:42:16 PM
+
+## 2026-01-22 12:42:16 PM
+- Expanded PM Task Enhancement Plan with detailed phase breakdowns and rollout checklist.
+
+## 2026-01-21 05:44:31 WITA
+- Mounted CM Work Orders API router at /api/work-orders (backend).
+- Extended OpenAPI docs with Work Orders schemas and endpoints.
+- Verified repo lint and typecheck (frontend + backend).
+
+## Wed Jan 21 06:04:05 WITA 2026
+- Added Work Orders web page (`/work-orders`) with filters and list layout.
+- Registered Work Orders route and sidebar navigation entry.
+- Implemented reusable Report Breakdown dialog component.
+- Integrated Report Breakdown into Asset Detail and Facility Detail pages.
+- Ran `npm run lint` and `npx tsc --noEmit` locally to validate.
+
+## 2026-01-20 23:47:57 WITA
+- Split PM checklist attachments into Enable Attachment vs Attachment Required flags.
+- Updated template DB schema, backend APIs, and web UI to expose both flags.
+- Enforced mandatory checklist items to require non-skip outcomes with notes.
+- Adjusted task completion validation and UI to respect new attachment semantics.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## 2026-01-01 14:03
 - Added initial SQL Server `pm` schema script and apply runner.
 - Added implementation plan document for database, API, jobs, and UI integration.
@@ -1482,6 +2033,19 @@
 ## Sat Feb 14 00:04:19 WITA 2026
 - Mobile (pm-tech): default production API base to https://preventivepm.justanapi.my.id.
 - Mobile (pm-tech): removed default ngrok discovery URL.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 22:22:06 WITA 2026
+- Mobile (pm-tech): set .env.local to Cloudflare base and disabled discovery.
+- Mobile (pm-tech): documented backend URL in mobile README.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 22:30:43 WITA 2026
+- Mobile (pm-tech): notifications bell view now opens as full-screen overlay.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Sat Feb 14 22:35:39 WITA 2026
+- Mobile (pm-tech): bottom nav active icon is larger than inactive icons.
 - Verified with `npm run lint` and `npx tsc --noEmit`.
 
 ## Sat Feb 14 00:04:31 WITA 2026

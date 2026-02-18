@@ -6,6 +6,8 @@ services:
     ports:
       - "5056:5056"
     restart: on-failure
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - ./.env
     environment:

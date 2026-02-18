@@ -1,10 +1,15 @@
 import { Router } from "express";
 import { z } from "zod";
+import sql from "mssql";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { Buffer } from "node:buffer";
+import { Readable } from "node:stream";
 import { env } from "../config/env.js";
+import { getDb } from "../db/mssql.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireSuperadmin } from "../middleware/requireRole.js";
 
 type AppUpdateConfigItem = {
   appId: string;
@@ -20,6 +25,7 @@ type LatestApkInfo = {
   sha256: string;
   modifiedAt: string;
   downloadUrl: string;
+  releaseNotes?: string;
 };
 
 const LatestQuerySchema = z.object({
@@ -28,6 +34,33 @@ const LatestQuerySchema = z.object({
 
 const DownloadQuerySchema = z.object({
   token: z.string().trim().min(1).max(4096),
+});
+
+const PolicyQuerySchema = z.object({
+  appId: z.string().trim().min(1).max(64),
+  platform: z.enum(["android", "ios", "web"]),
+  versionCode: z
+    .string()
+    .trim()
+    .regex(/^\d+$/)
+    .transform((v) => Number(v))
+    .pipe(z.number().int().min(1)),
+});
+
+const PolicyUpdateSchema = z.object({
+  appId: z.string().trim().min(1).max(64),
+  platform: z.enum(["android", "ios", "web"]),
+  enabled: z.boolean(),
+  requiredVersionCode: z.number().int().min(1),
+  message: z.string().trim().min(1).max(256).optional(),
+});
+
+const InstallationReportSchema = z.object({
+  installationId: z.string().uuid(),
+  appId: z.string().trim().min(1).max(64),
+  platform: z.enum(["android", "ios", "web"]),
+  versionCode: z.number().int().min(1),
+  versionName: z.string().trim().min(1).max(64).optional(),
 });
 
 const ConfigJsonSchema = z.array(
@@ -108,6 +141,131 @@ const resolveUpdateRoot = (): string | null => {
   return path.resolve(root);
 };
 
+const normalizeBaseUrl = (value: string): string => value.trim().replace(/\/+$/, "");
+
+const resolveStoreBaseUrl = (): string | null => {
+  const raw = (env.APP_UPDATE_STORE_BASE_URL ?? "").trim();
+  if (!raw) return null;
+  const normalized = normalizeBaseUrl(raw);
+  let u: URL;
+  try {
+    u = new URL(normalized);
+  } catch {
+    return null;
+  }
+  if (u.search || u.hash) return null;
+  if (u.pathname && u.pathname !== "/") return null;
+
+  const protocol = u.protocol.toLowerCase();
+  if (protocol === "https:") return normalized;
+  if (protocol === "http:" && env.APP_UPDATE_STORE_ALLOW_HTTP) return normalized;
+  return null;
+};
+
+type StoreManifestEntry = {
+  fileName: string;
+  sizeBytes: number | null;
+  sha256: string | null;
+  modifiedAt: string | null;
+  releaseNotes: string | null;
+};
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+
+const parseManifest = (input: unknown): StoreManifestEntry[] => {
+  const list: unknown[] =
+    Array.isArray(input) ? input : isRecord(input) && Array.isArray(input.files) ? (input.files as unknown[]) : [];
+
+  const out: StoreManifestEntry[] = [];
+  for (const item of list) {
+    if (typeof item === "string") {
+      const name = item.trim();
+      if (!name) continue;
+      out.push({ fileName: name, sizeBytes: null, sha256: null, modifiedAt: null, releaseNotes: null });
+      continue;
+    }
+    if (!isRecord(item)) continue;
+    const fileName = typeof item.fileName === "string" ? item.fileName.trim() : "";
+    if (!fileName) continue;
+    const sizeBytes = typeof item.sizeBytes === "number" && Number.isFinite(item.sizeBytes) && item.sizeBytes >= 0 ? item.sizeBytes : null;
+    const sha256 = typeof item.sha256 === "string" && item.sha256.trim() ? item.sha256.trim() : null;
+    const modifiedAt = typeof item.modifiedAt === "string" && item.modifiedAt.trim() ? item.modifiedAt.trim() : null;
+    const releaseNotes = typeof item.releaseNotes === "string" && item.releaseNotes.trim() ? item.releaseNotes : null;
+    out.push({ fileName, sizeBytes, sha256, modifiedAt, releaseNotes });
+  }
+  return out;
+};
+
+const fetchJsonWithTimeout = async (url: string, timeoutMs: number): Promise<unknown> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { method: "GET", headers: { Accept: "application/json" }, signal: controller.signal });
+    if (!res.ok) throw new Error("fetch failed");
+    return (await res.json()) as unknown;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const createSignedDownloadUrl = (input: { appId: string; fileName: string }): string | null => {
+  const ttlSeconds = env.APP_UPDATE_TOKEN_TTL_SECONDS;
+  const signingSecret = (env.APP_UPDATE_SIGNING_SECRET ?? "").trim();
+  if (!signingSecret) return null;
+
+  const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const tokenPayload = JSON.stringify({ appId: input.appId, fileName: input.fileName, exp: expiresAt });
+  const sig = crypto.createHmac("sha256", signingSecret).update(tokenPayload).digest("hex");
+  const token = Buffer.from(tokenPayload, "utf8").toString("base64url") + "." + sig;
+  return `/api/app-updates/download?token=${encodeURIComponent(token)}`;
+};
+
+const findLatestApkFromStoreManifest = async (input: { storeBaseUrl: string; config: AppUpdateConfigItem }): Promise<LatestApkInfo | null> => {
+  const manifestUrlRaw = (env.APP_UPDATE_STORE_MANIFEST_URL ?? "").trim();
+  const manifestUrl = manifestUrlRaw ? manifestUrlRaw : `${input.storeBaseUrl}/apk/manifest.json`;
+
+  let json: unknown;
+  try {
+    json = await fetchJsonWithTimeout(manifestUrl, 4000);
+  } catch {
+    return null;
+  }
+
+  const entries = parseManifest(json);
+  const candidates: Array<{ entry: StoreManifestEntry; versionName: string }> = [];
+  for (const entry of entries) {
+    const fileName = entry.fileName;
+    if (!fileName.toLowerCase().endsWith(".apk")) continue;
+    if (!fileName.toLowerCase().startsWith(input.config.prefix.toLowerCase())) continue;
+    const versionName = parseVersionNameFromFileName(fileName, input.config.prefix);
+    if (!versionName) continue;
+    candidates.push({ entry, versionName });
+  }
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    const cmp = compareSemver(a.versionName, b.versionName);
+    if (cmp !== 0) return -cmp;
+    return 0;
+  });
+
+  const chosen = candidates[0];
+  if (!chosen) return null;
+  const downloadUrl = createSignedDownloadUrl({ appId: input.config.appId, fileName: chosen.entry.fileName });
+  if (!downloadUrl) return null;
+
+  return {
+    appId: input.config.appId,
+    versionName: chosen.versionName,
+    fileName: chosen.entry.fileName,
+    sizeBytes: chosen.entry.sizeBytes ?? 0,
+    sha256: chosen.entry.sha256 ?? "",
+    modifiedAt: chosen.entry.modifiedAt ?? new Date().toISOString(),
+    downloadUrl,
+    ...(chosen.entry.releaseNotes ? { releaseNotes: chosen.entry.releaseNotes } : {}),
+  };
+};
+
 const hashCache = new Map<string, { mtimeMs: number; size: number; sha256: string }>();
 
 const computeSha256 = async (fileAbs: string, st: fs.Stats): Promise<string> => {
@@ -169,14 +327,8 @@ const findLatestApkForApp = async (input: { rootAbs: string; config: AppUpdateCo
   const chosenAbs = path.resolve(dirAbs, chosen.fileName);
   const sha256 = await computeSha256(chosenAbs, chosen.st);
 
-  const ttlSeconds = env.APP_UPDATE_TOKEN_TTL_SECONDS;
-  const signingSecret = (env.APP_UPDATE_SIGNING_SECRET ?? "").trim();
-  if (!signingSecret) return null;
-
-  const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
-  const tokenPayload = JSON.stringify({ appId: input.config.appId, fileName: chosen.fileName, exp: expiresAt });
-  const sig = crypto.createHmac("sha256", signingSecret).update(tokenPayload).digest("hex");
-  const token = Buffer.from(tokenPayload, "utf8").toString("base64url") + "." + sig;
+  const downloadUrl = createSignedDownloadUrl({ appId: input.config.appId, fileName: chosen.fileName });
+  if (!downloadUrl) return null;
 
   return {
     appId: input.config.appId,
@@ -185,7 +337,7 @@ const findLatestApkForApp = async (input: { rootAbs: string; config: AppUpdateCo
     sizeBytes: chosen.st.size,
     sha256,
     modifiedAt: chosen.st.mtime.toISOString(),
-    downloadUrl: `/api/app-updates/download?token=${encodeURIComponent(token)}`,
+    downloadUrl,
   };
 };
 
@@ -233,6 +385,163 @@ const verifyToken = (token: string): { appId: string; fileName: string; exp: num
 
 export const appUpdatesRouter = Router();
 
+const APP_UPDATE_POLICY_KEY_PREFIX = "appUpdates.force.";
+
+const PolicyValueSchema = z.object({
+  enabled: z.boolean(),
+  requiredVersionCode: z.number().int().min(1),
+  message: z.string().trim().min(1).max(256).optional(),
+});
+
+type PolicyValue = z.infer<typeof PolicyValueSchema>;
+
+const loadPolicyValue = async (input: { appId: string; platform: "android" | "ios" | "web" }): Promise<PolicyValue | null> => {
+  const settingKey = `${APP_UPDATE_POLICY_KEY_PREFIX}${input.appId}.${input.platform}`;
+  const db = await getDb();
+  const result = await db
+    .request()
+    .input("settingKey", sql.NVarChar(128), settingKey)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  SettingValueJson",
+        "FROM pm.SystemSettings",
+        "WHERE SettingKey = @settingKey",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
+  if (!valueJson) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(valueJson);
+  } catch {
+    return null;
+  }
+
+  const validated = PolicyValueSchema.safeParse(parsed);
+  if (!validated.success) return null;
+  return validated.data;
+};
+
+appUpdatesRouter.get("/policy", async (req, res) => {
+  const parsed = PolicyQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  try {
+    const policy = await loadPolicyValue({ appId: parsed.data.appId, platform: parsed.data.platform });
+    if (!policy || !policy.enabled) {
+      res.json({ enabled: false, requiredVersionCode: null, shouldDownload: false, message: null });
+      return;
+    }
+
+    const shouldDownload = parsed.data.versionCode < policy.requiredVersionCode;
+    res.json({
+      enabled: true,
+      requiredVersionCode: policy.requiredVersionCode,
+      shouldDownload,
+      message: policy.message ?? null,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+  }
+});
+
+appUpdatesRouter.put("/policy", requireAuth, requireSuperadmin, async (req, res) => {
+  const parsed = PolicyUpdateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const settingKey = `${APP_UPDATE_POLICY_KEY_PREFIX}${parsed.data.appId}.${parsed.data.platform}`;
+  const valueJson = JSON.stringify({
+    enabled: parsed.data.enabled,
+    requiredVersionCode: parsed.data.requiredVersionCode,
+    message: parsed.data.message,
+  });
+
+  try {
+    const db = await getDb();
+    await db
+      .request()
+      .input("settingKey", sql.NVarChar(128), settingKey)
+      .input("settingValueJson", sql.NVarChar(sql.MAX), valueJson)
+      .input("updatedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "MERGE pm.SystemSettings WITH (HOLDLOCK) AS target",
+          "USING (SELECT @settingKey AS SettingKey) AS source",
+          "ON target.SettingKey = source.SettingKey",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    SettingValueJson = @settingValueJson,",
+          "    UpdatedAt = sysutcdatetime(),",
+          "    UpdatedByUserId = @updatedByUserId",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (SettingKey, SettingValueJson, UpdatedByUserId)",
+          "  VALUES (@settingKey, @settingValueJson, @updatedByUserId);",
+        ].join("\n"),
+      );
+
+    const updated = await loadPolicyValue({ appId: parsed.data.appId, platform: parsed.data.platform });
+    res.json({
+      enabled: updated?.enabled ?? false,
+      requiredVersionCode: updated?.requiredVersionCode ?? null,
+      message: updated?.message ?? null,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ message });
+  }
+});
+
+appUpdatesRouter.post("/report", requireAuth, async (req, res) => {
+  const parsed = InstallationReportSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  await db
+    .request()
+    .input("installationId", sql.UniqueIdentifier, parsed.data.installationId)
+    .input("userId", sql.UniqueIdentifier, req.user.sub)
+    .input("appId", sql.NVarChar(64), parsed.data.appId)
+    .input("platform", sql.NVarChar(32), parsed.data.platform)
+    .input("versionCode", sql.Int, parsed.data.versionCode)
+    .input("versionName", sql.NVarChar(64), parsed.data.versionName ?? null)
+    .query(
+      [
+        "DECLARE @now datetime2(0) = sysutcdatetime();",
+        "MERGE pm.AppInstallations WITH (HOLDLOCK) AS target",
+        "USING (SELECT @installationId AS InstallationId) AS source",
+        "ON target.InstallationId = source.InstallationId",
+        "WHEN MATCHED THEN",
+        "  UPDATE SET",
+        "    UserId = @userId,",
+        "    AppId = @appId,",
+        "    Platform = @platform,",
+        "    VersionCode = @versionCode,",
+        "    VersionName = @versionName,",
+        "    LastSeenAt = @now,",
+        "    UpdatedAt = @now",
+        "WHEN NOT MATCHED THEN",
+        "  INSERT (InstallationId, UserId, AppId, Platform, VersionCode, VersionName, LastSeenAt, CreatedAt, UpdatedAt)",
+        "  VALUES (@installationId, @userId, @appId, @platform, @versionCode, @versionName, @now, @now, @now);",
+      ].join("\n"),
+    );
+
+  res.json({ ok: true });
+});
+
 appUpdatesRouter.get("/latest", async (req, res) => {
   const parsed = LatestQuerySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -246,12 +555,6 @@ appUpdatesRouter.get("/latest", async (req, res) => {
     return;
   }
 
-  const rootAbs = resolveUpdateRoot();
-  if (!rootAbs) {
-    res.status(400).json({ message: "App updates not configured" });
-    return;
-  }
-
   const configs = loadConfig();
   const config = configs.find((c) => c.appId.toLowerCase() === parsed.data.appId.toLowerCase()) ?? null;
   if (!config) {
@@ -259,13 +562,22 @@ appUpdatesRouter.get("/latest", async (req, res) => {
     return;
   }
 
-  const latest = await findLatestApkForApp({ rootAbs, config });
-  if (!latest) {
+  const rootAbs = resolveUpdateRoot();
+  const storeBaseUrl = resolveStoreBaseUrl();
+
+  const latest = rootAbs ? await findLatestApkForApp({ rootAbs, config }) : null;
+  const latestFromStore = !latest && storeBaseUrl ? await findLatestApkFromStoreManifest({ storeBaseUrl, config }) : null;
+  const chosenLatest = latest ?? latestFromStore;
+  if (!chosenLatest) {
+    if (!rootAbs && !storeBaseUrl) {
+      res.status(400).json({ message: "App updates not configured" });
+      return;
+    }
     res.status(404).json({ message: "No releases found" });
     return;
   }
 
-  res.json({ latest });
+  res.json({ latest: chosenLatest });
 });
 
 appUpdatesRouter.get("/download", async (req, res) => {
@@ -281,12 +593,6 @@ appUpdatesRouter.get("/download", async (req, res) => {
     return;
   }
 
-  const rootAbs = resolveUpdateRoot();
-  if (!rootAbs) {
-    res.status(400).json({ message: "App updates not configured" });
-    return;
-  }
-
   const configs = loadConfig();
   const config = configs.find((c) => c.appId.toLowerCase() === tokenInfo.appId.toLowerCase()) ?? null;
   if (!config) {
@@ -296,6 +602,68 @@ appUpdatesRouter.get("/download", async (req, res) => {
 
   if (!tokenInfo.fileName.toLowerCase().startsWith(config.prefix.toLowerCase())) {
     res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const storeBaseUrl = resolveStoreBaseUrl();
+  if (storeBaseUrl) {
+    const target = `${storeBaseUrl}/apk/${encodeURIComponent(tokenInfo.fileName)}`;
+    const ua = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : "";
+    const isAndroidClient = /android|dalvik/i.test(ua);
+    const shouldProxy = env.APP_UPDATE_STORE_PROXY_DOWNLOAD || isAndroidClient;
+
+    if (!shouldProxy) {
+      res.redirect(302, target);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+    try {
+      const upstreamMethod = req.method === "HEAD" ? "HEAD" : "GET";
+      const upstream = await fetch(target, { method: upstreamMethod, signal: controller.signal });
+      if (!upstream.ok) {
+        res.status(502).json({ message: `Upstream download failed: HTTP ${upstream.status}` });
+        return;
+      }
+
+      const contentLength = upstream.headers.get("content-length");
+      res.setHeader("Content-Type", "application/vnd.android.package-archive");
+      if (contentLength) res.setHeader("Content-Length", contentLength);
+      res.setHeader("Content-Disposition", `attachment; filename=\"${tokenInfo.fileName.replace(/"/g, "")}\"`);
+
+      if (req.method === "HEAD") {
+        res.status(200).end();
+        return;
+      }
+
+      if (!upstream.body) {
+        res.status(502).json({ message: "Upstream response missing body" });
+        return;
+      }
+
+      const body = Readable.fromWeb(upstream.body as unknown as Parameters<typeof Readable.fromWeb>[0]);
+      body.on("error", () => {
+        if (!res.headersSent) {
+          res.status(502).end();
+          return;
+        }
+        res.end();
+      });
+      body.pipe(res);
+      return;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Upstream download failed";
+      res.status(502).json({ message });
+      return;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  const rootAbs = resolveUpdateRoot();
+  if (!rootAbs) {
+    res.status(400).json({ message: "App updates not configured" });
     return;
   }
 

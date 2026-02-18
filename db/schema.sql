@@ -974,6 +974,33 @@ BEGIN
   CREATE INDEX IX_pm_Devices_IsActive ON pm.Devices(IsActive);
 END;
 
+IF OBJECT_ID(N'pm.AppInstallations', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.AppInstallations (
+    InstallationId uniqueidentifier NOT NULL,
+    UserId uniqueidentifier NOT NULL,
+    AppId nvarchar(64) NOT NULL,
+    Platform nvarchar(32) NOT NULL,
+    VersionCode int NOT NULL,
+    VersionName nvarchar(64) NULL,
+    LastSeenAt datetime2(0) NULL,
+    CreatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_AppInstallations_CreatedAt DEFAULT (sysutcdatetime()),
+    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_AppInstallations_UpdatedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_AppInstallations PRIMARY KEY CLUSTERED (InstallationId),
+    CONSTRAINT FK_pm_AppInstallations_Users FOREIGN KEY (UserId) REFERENCES pm.Users(UserId)
+  );
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_AppInstallations_UserId' AND object_id = OBJECT_ID(N'pm.AppInstallations'))
+BEGIN
+  CREATE INDEX IX_pm_AppInstallations_UserId ON pm.AppInstallations(UserId);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_AppInstallations_AppIdPlatform' AND object_id = OBJECT_ID(N'pm.AppInstallations'))
+BEGIN
+  CREATE INDEX IX_pm_AppInstallations_AppIdPlatform ON pm.AppInstallations(AppId, Platform);
+END;
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_pm_Assets_CategoryId' AND object_id = OBJECT_ID(N'pm.Assets'))
 BEGIN
   CREATE INDEX IX_pm_Assets_CategoryId ON pm.Assets(CategoryId);

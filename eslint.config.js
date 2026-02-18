@@ -19,6 +19,17 @@ export default [
   {
     files: ["scripts/**/*.mjs"],
     languageOptions: {
+      globals: {
+        ...globals.node,
+        fetch: "readonly",
+        FormData: "readonly",
+        Blob: "readonly",
+      },
+    },
+  },
+  {
+    files: ["secure_apk/uploader/**/*.{js,mjs}", "mobile/secure_apk/uploader/**/*.{js,mjs}"],
+    languageOptions: {
       globals: globals.node,
     },
   },

@@ -115,6 +115,10 @@ const EnvSchema = z.object({
   APP_UPDATE_STORAGE_ROOT: z.string().optional(),
   APP_UPDATE_CONFIG_JSON: z.string().optional(),
   APP_UPDATE_SIGNING_SECRET: z.string().optional(),
+  APP_UPDATE_STORE_BASE_URL: z.string().optional(),
+  APP_UPDATE_STORE_MANIFEST_URL: z.string().optional(),
+  APP_UPDATE_STORE_ALLOW_HTTP: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
+  APP_UPDATE_STORE_PROXY_DOWNLOAD: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
   APP_UPDATE_TOKEN_TTL_SECONDS: z.string().optional().default("600").pipe(numberFromString).pipe(z.number().int().min(60).max(86400)),
 });
 
