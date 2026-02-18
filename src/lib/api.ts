@@ -164,6 +164,7 @@ export type Asset = {
   assetStatus: string | null;
   assetOperationalStatus: AssetOperationalStatus;
   assignedToText: string | null;
+  assetResponsibility: string | null;
   snipeNotes: string | null;
   imageUrl: string | null;
   category: { id: string | null; name: string | null };

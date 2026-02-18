@@ -18,6 +18,14 @@ type SnipeLocation = {
   name: string;
 };
 
+type SnipeCustomFieldValue = {
+  value?: string | null;
+  field?: string | null;
+  name?: string | null;
+  label?: string | null;
+  db_column_name?: string | null;
+};
+
 type SnipeHardware = {
   id: number;
   asset_tag?: string | null;
@@ -28,7 +36,13 @@ type SnipeHardware = {
   model?: { name?: string | null } | null;
   category?: { id?: number | null; name?: string | null } | null;
   location?: { id?: number | null; name?: string | null } | null;
-  assigned_to?: { name?: string | null } | null;
+  custom_fields?: Record<string, SnipeCustomFieldValue | null> | null;
+  assigned_to?: {
+    name?: string | null;
+    username?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null;
   notes?: string | null;
   image?: string | null;
 };
@@ -40,6 +54,51 @@ const toOperationalStatus = (statusLabelName: string | null): AssetOperationalSt
   if (/^archived\b/.test(normalized)) return "archived";
   if (/^broken\b/.test(normalized)) return "broken";
   return "operational";
+};
+
+const normalizeCustomFieldText = (value?: string | null): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const getCustomFieldValue = (
+  customFields: SnipeHardware["custom_fields"],
+  lookup: { exact: string[]; contains?: string[] },
+): string | null => {
+  if (!customFields) return null;
+  const normalizedCandidates = new Set(lookup.exact.map((c) => c.trim().toLowerCase()).filter(Boolean));
+  const normalizedContains = (lookup.contains ?? []).map((c) => c.trim().toLowerCase()).filter(Boolean);
+  for (const [key, field] of Object.entries(customFields)) {
+    const keyText = key.trim().toLowerCase();
+    const keyMatch = normalizedCandidates.has(keyText);
+    const dbColumn = normalizeCustomFieldText(field?.db_column_name);
+    const fieldName = normalizeCustomFieldText(field?.field);
+    const name = normalizeCustomFieldText(field?.name);
+    const label = normalizeCustomFieldText(field?.label);
+    const exactMatch =
+      keyMatch ||
+      (dbColumn ? normalizedCandidates.has(dbColumn.toLowerCase()) : false) ||
+      (fieldName ? normalizedCandidates.has(fieldName.toLowerCase()) : false) ||
+      (name ? normalizedCandidates.has(name.toLowerCase()) : false) ||
+      (label ? normalizedCandidates.has(label.toLowerCase()) : false);
+    const containsMatch =
+      normalizedContains.length === 0
+        ? false
+        : normalizedContains.some((term) =>
+            [
+              keyText,
+              dbColumn?.toLowerCase() ?? "",
+              fieldName?.toLowerCase() ?? "",
+              name?.toLowerCase() ?? "",
+              label?.toLowerCase() ?? "",
+            ].some((value) => value.includes(term)),
+          );
+    if (!exactMatch && !containsMatch) continue;
+    const value = normalizeCustomFieldText(field?.value);
+    if (value) return value;
+  }
+  return null;
 };
 
 const safeWriteSystemLog = async (args: Parameters<typeof writeSystemLog>[0]): Promise<void> => {
@@ -360,7 +419,30 @@ const upsertAssets = async (
     const serial = a.serial ?? null;
     const status = a.status_label?.name ?? null;
     const operationalStatus = toOperationalStatus(status);
-    const assignedToText = a.assigned_to?.name ?? null;
+    const responsibilityValue = getCustomFieldValue(a.custom_fields, {
+      exact: ["_snipeit_asset_responsibility_6", "asset responsibility", "asset_responsibility", "responsibility"],
+      contains: ["responsibility", "penanggung jawab", "penanggungjawab"],
+    });
+    const assignedToName =
+      typeof a.assigned_to?.name === "string" && a.assigned_to.name.trim() ? a.assigned_to.name.trim() : null;
+    const assignedToUsername =
+      typeof a.assigned_to?.username === "string" && a.assigned_to.username.trim()
+        ? a.assigned_to.username.trim()
+        : null;
+    const assignedToFirst =
+      typeof a.assigned_to?.first_name === "string" && a.assigned_to.first_name.trim()
+        ? a.assigned_to.first_name.trim()
+        : null;
+    const assignedToLast =
+      typeof a.assigned_to?.last_name === "string" && a.assigned_to.last_name.trim()
+        ? a.assigned_to.last_name.trim()
+        : null;
+    const assignedToFullName = [assignedToFirst, assignedToLast].filter(Boolean).join(" ").trim();
+    const assignedToBase = assignedToName ?? (assignedToFullName ? assignedToFullName : null) ?? assignedToUsername;
+    const assignedToSuffix =
+      assignedToUsername && assignedToUsername !== assignedToBase ? `(${assignedToUsername})` : null;
+    const assetResponsibility = responsibilityValue;
+    const assignedToText = assignedToBase ? [assignedToBase, assignedToSuffix].filter(Boolean).join(" ") : null;
     const notes = a.notes ?? null;
     const assetTag = a.asset_tag ?? null;
     const imagePath = typeof a.image === "string" && a.image.trim() ? a.image.trim() : null;
@@ -379,6 +461,7 @@ const upsertAssets = async (
       .input("assetStatus", sql.NVarChar(64), status)
       .input("assetOperationalStatus", sql.NVarChar(16), operationalStatus)
       .input("assignedToText", sql.NVarChar(256), assignedToText)
+      .input("assetResponsibility", sql.NVarChar(256), assetResponsibility)
       .input("notes", sql.NVarChar(sql.MAX), notes)
       .input("imageUrl", sql.NVarChar(512), imagePath)
       .input("imageData", sql.VarBinary(sql.MAX), downloadedImage.data)
@@ -401,6 +484,7 @@ const upsertAssets = async (
           "    AssetStatus = @assetStatus,",
           "    AssetOperationalStatus = @assetOperationalStatus,",
           "    AssignedToText = @assignedToText,",
+          "    AssetResponsibility = @assetResponsibility,",
           "    Notes = @notes,",
           "    ImageUrl = @imageUrl,",
           "    ImageData = @imageData,",
@@ -411,10 +495,10 @@ const upsertAssets = async (
           "    UpdatedAt = sysutcdatetime()",
           "WHEN NOT MATCHED THEN",
           "  INSERT (",
-          "    SnipeAssetId, AssetTag, Name, Manufacturer, Model, SerialNumber, CategoryId, LocationId, AssetStatus, AssignedToText, AssetOperationalStatus, Notes, ImageUrl, ImageData, ImageContentType, ImageFileName, IsArchived, LastSyncedAt",
+          "    SnipeAssetId, AssetTag, Name, Manufacturer, Model, SerialNumber, CategoryId, LocationId, AssetStatus, AssignedToText, AssetResponsibility, AssetOperationalStatus, Notes, ImageUrl, ImageData, ImageContentType, ImageFileName, IsArchived, LastSyncedAt",
           "  )",
           "  VALUES (",
-          "    @snipeAssetId, @assetTag, @name, @manufacturer, @model, @serialNumber, @categoryId, @locationId, @assetStatus, @assignedToText, @assetOperationalStatus, @notes, @imageUrl, @imageData, @imageContentType, @imageFileName, 0, sysutcdatetime()",
+          "    @snipeAssetId, @assetTag, @name, @manufacturer, @model, @serialNumber, @categoryId, @locationId, @assetStatus, @assignedToText, @assetResponsibility, @assetOperationalStatus, @notes, @imageUrl, @imageData, @imageContentType, @imageFileName, 0, sysutcdatetime()",
           "  );",
         ].join("\n"),
       );

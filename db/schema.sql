@@ -172,6 +172,7 @@ BEGIN
     LocationId uniqueidentifier NULL,
     AssetStatus nvarchar(64) NULL,
     AssignedToText nvarchar(256) NULL,
+    AssetResponsibility nvarchar(256) NULL,
     AssetOperationalStatus nvarchar(16) NOT NULL CONSTRAINT DF_pm_Assets_AssetOperationalStatus DEFAULT (N'operational'),
     Notes nvarchar(max) NULL,
     IsArchived bit NOT NULL CONSTRAINT DF_pm_Assets_IsArchived DEFAULT (0),
@@ -188,6 +189,11 @@ END;
 IF COL_LENGTH(N'pm.Assets', N'ImageUrl') IS NULL
 BEGIN
   ALTER TABLE pm.Assets ADD ImageUrl nvarchar(512) NULL;
+END;
+
+IF COL_LENGTH(N'pm.Assets', N'AssetResponsibility') IS NULL
+BEGIN
+  ALTER TABLE pm.Assets ADD AssetResponsibility nvarchar(256) NULL;
 END;
 
 IF COL_LENGTH(N'pm.Assets', N'ImageUrl') IS NULL
