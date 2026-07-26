@@ -545,6 +545,7 @@ const Assets = () => {
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Category</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Location</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Asset Responsibility</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operational</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PM Status</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next PM</TableHead>
@@ -608,6 +609,7 @@ const Assets = () => {
                       </SelectContent>
                     </Select>
                   </TableHead>
+                  <TableHead></TableHead>
                   <TableHead>
                     <Select
                       value={operationalStatusFilter}
@@ -725,6 +727,7 @@ const Assets = () => {
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{asset.location.name ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{asset.assetResponsibility ?? "—"}</TableCell>
                       <TableCell>
                         <OperationalStatusBadge status={asset.assetOperationalStatus} />
                       </TableCell>

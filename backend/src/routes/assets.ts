@@ -108,6 +108,7 @@ assetsRouter.get("/", async (req, res) => {
       "  a.AssetStatus AS AssetStatus,",
       "  a.AssetOperationalStatus AS AssetOperationalStatus,",
       "  a.AssignedToText AS AssignedToText,",
+      "  a.AssetResponsibility AS AssetResponsibility,",
       "  a.Notes AS SnipeNotes,",
       "  a.ImageUrl AS ImageUrl,",
       "  a.CategoryId AS CategoryId,",
@@ -192,6 +193,7 @@ assetsRouter.get("/", async (req, res) => {
           ? r.AssetOperationalStatus
           : "operational",
       assignedToText: r.AssignedToText,
+      assetResponsibility: r.AssetResponsibility,
       snipeNotes: r.SnipeNotes ?? null,
       imageUrl: typeof r.ImageUrl === "string" && r.ImageUrl.trim() ? r.ImageUrl : null,
       category: r.CategoryId
@@ -439,6 +441,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
         "  a.AssetStatus AS AssetStatus,",
         "  a.AssetOperationalStatus AS AssetOperationalStatus,",
         "  a.AssignedToText AS AssignedToText,",
+        "  a.AssetResponsibility AS AssetResponsibility,",
           "  a.Notes AS Notes,",
           "  a.ImageUrl AS ImageUrl,",
         "  a.CategoryId AS CategoryId,",
@@ -503,6 +506,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
         ? row.AssetOperationalStatus
         : "operational",
     assignedToText: row.AssignedToText,
+    assetResponsibility: row.AssetResponsibility,
     snipeNotes: row.Notes ?? null,
     imageUrl: typeof row.ImageUrl === "string" && row.ImageUrl.trim() ? row.ImageUrl : null,
     category: row.CategoryId ? { id: row.CategoryId, name: row.CategoryName ?? null } : null,
