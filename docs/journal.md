@@ -1,5 +1,9 @@
 # Journal
 
+## Wed Feb 18 02:02:16 WITA 2026
+- Mobile (pm-tech): make Task Detail header chips responsive and compact on small screens.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
 ## Fri Feb 13 23:32:50 WITA 2026
 - Backend: added signed APK update discovery and download endpoints (/api/app-updates).
 - Mobile (pm-tech): added update check UI and optional startup update prompt.
@@ -1504,4 +1508,8 @@
 
 ## Sat Feb 14 22:35:39 WITA 2026
 - Mobile (pm-tech): bottom nav active icon is larger than inactive icons.
+- Verified with `npm run lint` and `npx tsc --noEmit`.
+
+## Wed Feb 18 02:04:16 WITA 2026
+- Mobile (pm-tech): fixed Schedule calendar tabs (week/day/upcoming) rendering and loading.
 - Verified with `npm run lint` and `npx tsc --noEmit`.

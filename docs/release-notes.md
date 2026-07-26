@@ -1,3 +1,5 @@
-## What's new
-
-- Fix Assets view > All to show all assets
+- Add new schedule modes: week and upcoming (next 7 days)
+- Implement week view with navigation and visual indicators
+- Add upcoming view that loads tasks for the next 7 days
+- Enhance TaskDetail header with responsive design and icons
+- Bump Android versionCode for new release
