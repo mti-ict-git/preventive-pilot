@@ -1,0 +1,361 @@
+openapi: 3.1.0
+info:
+  title: Preventive Pilot API
+  version: 1.0.1
+  description: |
+    Version-controlled baseline for the REST API used by the web and mobile clients.
+    The route inventory is complete as of the documentation audit on 2026-07-26.
+    Detailed request/response reconciliation remains an active Phase 0 checklist item;
+    until it is complete, handler Zod schemas and SQL behavior must also be reviewed.
+x-contract-status: baseline-route-inventory
+servers:
+  - url: http://localhost:3001
+    description: Local development
+security:
+  - bearerAuth: []
+tags:
+  - { name: Health }
+  - { name: Auth }
+  - { name: Assets }
+  - { name: Facilities }
+  - { name: Templates }
+  - { name: Scheduling }
+  - { name: Tasks }
+  - { name: WorkOrders }
+  - { name: Reports }
+  - { name: Notifications }
+  - { name: AppUpdates }
+  - { name: System }
+  - { name: Dashboard }
+  - { name: Devices }
+paths:
+  /health:
+    get: { tags: [Health], security: [], operationId: health, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/docs.json:
+    get: { tags: [Health], security: [], operationId: apiDocument, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/auth/login:
+    post: { tags: [Auth], security: [], operationId: login, responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } } }
+  /api/auth/refresh:
+    post: { tags: [Auth], security: [], operationId: refreshToken, responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } } }
+  /api/auth/me:
+    get: { tags: [Auth], operationId: getCurrentUser, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/auth/me/preferences:
+    get: { tags: [Auth], operationId: getPreferences, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [Auth], operationId: updatePreferences, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/assets:
+    get: { tags: [Assets], operationId: listAssets, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/assets/pm/bulk:
+    post: { tags: [Assets], operationId: bulkSetAssetPm, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/assets/pm/bulk/template:
+    post: { tags: [Assets], operationId: bulkSetAssetTemplate, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/assets/{assetId}:
+    parameters: [{ $ref: "#/components/parameters/AssetId" }]
+    get: { tags: [Assets], operationId: getAsset, responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/Error" } } }
+  /api/assets/{assetId}/image:
+    parameters: [{ $ref: "#/components/parameters/AssetId" }]
+    get: { tags: [Assets], operationId: getAssetImage, responses: { "200": { description: Asset image binary }, "404": { $ref: "#/components/responses/Error" } } }
+  /api/assets/{assetId}/history:
+    parameters: [{ $ref: "#/components/parameters/AssetId" }]
+    get: { tags: [Assets], operationId: getAssetHistory, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/assets/{assetId}/pm:
+    parameters: [{ $ref: "#/components/parameters/AssetId" }]
+    patch: { tags: [Assets], operationId: updateAssetPm, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/facilities:
+    get: { tags: [Facilities], operationId: listFacilities, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    post: { tags: [Facilities], operationId: createFacility, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/facilities/{facilityId}:
+    parameters: [{ $ref: "#/components/parameters/FacilityId" }]
+    get: { tags: [Facilities], operationId: getFacility, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [Facilities], operationId: updateFacility, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/facilities/{facilityId}/pm-settings:
+    parameters: [{ $ref: "#/components/parameters/FacilityId" }]
+    put: { tags: [Facilities], operationId: updateFacilityPm, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/facilities/{facilityId}/pm-now:
+    parameters: [{ $ref: "#/components/parameters/FacilityId" }]
+    post: { tags: [Facilities], operationId: facilityPmNow, responses: { "201": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } } }
+  /api/facilities/{facilityId}/clone:
+    parameters: [{ $ref: "#/components/parameters/FacilityId" }]
+    post: { tags: [Facilities], operationId: cloneFacility, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/templates:
+    get: { tags: [Templates], operationId: listTemplates, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    post: { tags: [Templates], operationId: createTemplate, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/templates/{templateId}:
+    parameters: [{ $ref: "#/components/parameters/TemplateId" }]
+    get: { tags: [Templates], operationId: getTemplate, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [Templates], operationId: updateTemplate, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    delete: { tags: [Templates], operationId: deleteTemplate, responses: { "204": { description: Deleted } } }
+  /api/scheduling/assignment-rules:
+    get: { tags: [Scheduling], operationId: listAssignmentRules, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    post: { tags: [Scheduling], operationId: createAssignmentRule, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/scheduling/assignment-rules/{ruleId}:
+    parameters: [{ $ref: "#/components/parameters/RuleId" }]
+    put: { tags: [Scheduling], operationId: updateAssignmentRule, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    delete: { tags: [Scheduling], operationId: deleteAssignmentRule, responses: { "204": { description: Deleted } } }
+  /api/scheduling/blackout-windows:
+    get: { tags: [Scheduling], operationId: listBlackoutWindows, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    post: { tags: [Scheduling], operationId: createBlackoutWindow, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/scheduling/blackout-windows/{blackoutWindowId}:
+    parameters: [{ $ref: "#/components/parameters/BlackoutWindowId" }]
+    put: { tags: [Scheduling], operationId: updateBlackoutWindow, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    delete: { tags: [Scheduling], operationId: deleteBlackoutWindow, responses: { "204": { description: Deleted } } }
+  /api/scheduling/recalculate:
+    post: { tags: [Scheduling], operationId: recalculateSchedule, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/scheduling/day:
+    get: { tags: [Scheduling], operationId: getScheduleDay, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/scheduling/calendar:
+    get: { tags: [Scheduling], operationId: getScheduleCalendar, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks:
+    get: { tags: [Tasks], operationId: listTasks, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/status-counts:
+    get: { tags: [Tasks], operationId: taskStatusCounts, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/my-outstanding-counts:
+    get: { tags: [Tasks], operationId: myOutstandingCounts, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/approvals:
+    get: { tags: [Tasks], operationId: listApprovals, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/pm-now:
+    post: { tags: [Tasks], operationId: taskPmNow, responses: { "201": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } } }
+  /api/tasks/bulk-assign-unassigned:
+    post: { tags: [Tasks], operationId: bulkAssignTasks, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    get: { tags: [Tasks], operationId: getTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    delete: { tags: [Tasks], operationId: deleteTask, responses: { "204": { description: Deleted } } }
+  /api/tasks/{taskId}/export.pdf:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    get: { tags: [Tasks], operationId: exportTaskPdf, responses: { "200": { description: PDF document } } }
+  /api/tasks/{taskId}/assign:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: assignTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/start:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: startTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/pause:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: pauseTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/resume:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: resumeTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/cancel:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: cancelTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/reopen:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: reopenTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/complete:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: completeTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/draft:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    get: { tags: [Tasks], operationId: getTaskDraft, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    patch: { tags: [Tasks], operationId: saveTaskDraft, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    delete: { tags: [Tasks], operationId: deleteTaskDraft, responses: { "204": { description: Deleted } } }
+  /api/tasks/{taskId}/submit-for-approval:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: submitTaskApproval, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/approve-by-supervisor:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: supervisorApproveTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/approve-by-superadmin:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: superadminApproveTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/revise-approval:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: reviseTaskApproval, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/reject-approval:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: rejectTaskApproval, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/superadmin-update-checklist:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: superadminUpdateChecklist, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/evidence:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: addTaskEvidenceMetadata, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/evidence/upload:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [Tasks], operationId: uploadTaskEvidence, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/{taskId}/checklist-items/{templateChecklistItemId}/evidence/upload:
+    parameters:
+      - { $ref: "#/components/parameters/TaskId" }
+      - { $ref: "#/components/parameters/TemplateChecklistItemId" }
+    post: { tags: [Tasks], operationId: uploadChecklistEvidence, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/tasks/evidence/{evidenceId}:
+    parameters: [{ $ref: "#/components/parameters/EvidenceId" }]
+    get: { tags: [Tasks], operationId: getTaskEvidence, responses: { "200": { description: Evidence binary } } }
+    delete: { tags: [Tasks], operationId: deleteTaskEvidence, responses: { "204": { description: Deleted } } }
+  /api/tasks/checklist-evidence/{checklistEvidenceId}:
+    parameters: [{ $ref: "#/components/parameters/ChecklistEvidenceId" }]
+    get: { tags: [Tasks], operationId: getChecklistEvidence, responses: { "200": { description: Evidence binary } } }
+    delete: { tags: [Tasks], operationId: deleteChecklistEvidence, responses: { "204": { description: Deleted } } }
+  /api/work-orders:
+    get: { tags: [WorkOrders], operationId: listWorkOrders, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    post: { tags: [WorkOrders], operationId: createWorkOrder, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/work-orders/{taskId}:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    get: { tags: [WorkOrders], operationId: getWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    delete: { tags: [WorkOrders], operationId: deleteWorkOrder, responses: { "204": { description: Deleted } } }
+  /api/work-orders/{taskId}/assign:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [WorkOrders], operationId: assignWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/work-orders/{taskId}/start:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [WorkOrders], operationId: startWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/work-orders/{taskId}/pause:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [WorkOrders], operationId: pauseWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/work-orders/{taskId}/resume:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [WorkOrders], operationId: resumeWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/work-orders/{taskId}/complete:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [WorkOrders], operationId: completeWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/work-orders/{taskId}/cancel:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [WorkOrders], operationId: cancelWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/work-orders/{taskId}/close-downtime:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [WorkOrders], operationId: closeWorkOrderDowntime, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/work-orders/{taskId}/resolution:
+    parameters: [{ $ref: "#/components/parameters/TaskId" }]
+    post: { tags: [WorkOrders], operationId: saveWorkOrderResolution, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/reports/overdue:
+    get: { tags: [Reports], operationId: overdueReport, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/reports/overdue/export.csv:
+    get: { tags: [Reports], operationId: overdueCsv, responses: { "200": { description: CSV document } } }
+  /api/reports/compliance:
+    get: { tags: [Reports], operationId: complianceReport, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/reports/compliance/export.csv:
+    get: { tags: [Reports], operationId: complianceCsv, responses: { "200": { description: CSV document } } }
+  /api/reports/system-logs/export.csv:
+    get: { tags: [Reports], operationId: systemLogsCsv, responses: { "200": { description: CSV document } } }
+  /api/reports/assets-without-pm/export.csv:
+    get: { tags: [Reports], operationId: assetsWithoutPmCsv, responses: { "200": { description: CSV document } } }
+  /api/reports/cm/metrics:
+    get: { tags: [Reports], operationId: cmMetrics, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/reports/cm/metrics/export.csv:
+    get: { tags: [Reports], operationId: cmMetricsCsv, responses: { "200": { description: CSV document } } }
+  /api/notifications/channels:
+    get: { tags: [Notifications], operationId: listNotificationChannels, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    post: { tags: [Notifications], operationId: createNotificationChannel, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/notifications/channels/{channelId}:
+    parameters: [{ $ref: "#/components/parameters/ChannelId" }]
+    put: { tags: [Notifications], operationId: updateNotificationChannel, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    delete: { tags: [Notifications], operationId: deleteNotificationChannel, responses: { "204": { description: Deleted } } }
+  /api/notifications/rules:
+    get: { tags: [Notifications], operationId: listNotificationRules, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    post: { tags: [Notifications], operationId: createNotificationRule, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/notifications/rules/{ruleId}:
+    parameters: [{ $ref: "#/components/parameters/RuleId" }]
+    put: { tags: [Notifications], operationId: updateNotificationRule, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/notifications/log:
+    get: { tags: [Notifications], operationId: notificationLog, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/app-updates/policy:
+    get: { tags: [AppUpdates], operationId: getAppUpdatePolicy, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [AppUpdates], operationId: updateAppUpdatePolicy, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/app-updates/report:
+    post: { tags: [AppUpdates], operationId: reportAppInstallation, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/app-updates/latest:
+    get: { tags: [AppUpdates], operationId: latestAppUpdate, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/app-updates/download:
+    get: { tags: [AppUpdates], security: [], operationId: downloadAppUpdate, responses: { "200": { description: Application package binary } } }
+  /api/dashboard/overview:
+    get: { tags: [Dashboard], operationId: dashboardOverview, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/devices/register:
+    post: { tags: [Devices], operationId: registerDevice, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/devices/push-test:
+    post: { tags: [Devices], operationId: testDevicePush, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/devices/push-broadcast:
+    post: { tags: [Devices], operationId: broadcastPush, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/status:
+    get: { tags: [System], operationId: systemStatus, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/pm-settings:
+    get: { tags: [System], operationId: getPmSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [System], operationId: updatePmSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/snipeit-settings:
+    get: { tags: [System], operationId: getSnipeSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [System], operationId: updateSnipeSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/snipeit-settings/test:
+    post: { tags: [System], operationId: testSnipeSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/microsoft-graph-settings:
+    get: { tags: [System], operationId: getGraphSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [System], operationId: updateGraphSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/microsoft-graph-settings/test:
+    post: { tags: [System], operationId: testGraphSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/whatsapp-settings:
+    get: { tags: [System], operationId: getWhatsAppSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [System], operationId: updateWhatsAppSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/whatsapp-settings/test:
+    post: { tags: [System], operationId: testWhatsAppSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/ui-settings/assets:
+    get: { tags: [System], operationId: getAssetUiSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [System], operationId: updateAssetUiSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/ui-settings/label-designer:
+    get: { tags: [System], operationId: getLabelUiSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+    put: { tags: [System], operationId: updateLabelUiSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/logs:
+    get: { tags: [System], operationId: listSystemLogs, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/lookups:
+    get: { tags: [System], operationId: systemLookups, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/users:
+    get: { tags: [System], operationId: listUsers, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/users/for-assignment:
+    get: { tags: [System], operationId: listAssignmentUsers, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/users/local:
+    post: { tags: [System], operationId: createLocalUser, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/system/users/assign-ldap:
+    post: { tags: [System], operationId: assignLdapUser, responses: { "201": { $ref: "#/components/responses/Success" } } }
+  /api/system/users/{userId}:
+    parameters: [{ $ref: "#/components/parameters/UserId" }]
+    delete: { tags: [System], operationId: deleteUser, responses: { "204": { description: Deleted } } }
+  /api/system/users/{userId}/roles:
+    parameters: [{ $ref: "#/components/parameters/UserId" }]
+    put: { tags: [System], operationId: updateUserRoles, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/users/{userId}/refresh-ldap:
+    parameters: [{ $ref: "#/components/parameters/UserId" }]
+    post: { tags: [System], operationId: refreshLdapUser, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/ldap/search:
+    get: { tags: [System], operationId: searchLdap, responses: { "200": { $ref: "#/components/responses/Success" } } }
+  /api/system/jobs/{jobName}/run:
+    parameters: [{ name: jobName, in: path, required: true, schema: { type: string, enum: [snipe-sync, schedule-calc, notifications] } }]
+    post: { tags: [System], operationId: runJob, responses: { "202": { $ref: "#/components/responses/Success" } } }
+  /api/system/evidence-import/run:
+    post: { tags: [System], operationId: runEvidenceImport, responses: { "202": { $ref: "#/components/responses/Success" } } }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    AssetId: { name: assetId, in: path, required: true, schema: { type: string } }
+    FacilityId: { name: facilityId, in: path, required: true, schema: { type: string, format: uuid } }
+    TemplateId: { name: templateId, in: path, required: true, schema: { type: string, format: uuid } }
+    TemplateChecklistItemId: { name: templateChecklistItemId, in: path, required: true, schema: { type: string, format: uuid } }
+    TaskId: { name: taskId, in: path, required: true, schema: { type: string, format: uuid } }
+    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    RuleId: { name: ruleId, in: path, required: true, schema: { type: string, format: uuid } }
+    BlackoutWindowId: { name: blackoutWindowId, in: path, required: true, schema: { type: string, format: uuid } }
+    ChannelId: { name: channelId, in: path, required: true, schema: { type: string, format: uuid } }
+    EvidenceId: { name: evidenceId, in: path, required: true, schema: { type: string, format: uuid } }
+    ChecklistEvidenceId: { name: checklistEvidenceId, in: path, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    GenericObject:
+      type: object
+      additionalProperties: true
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        code: { type: [string, "null"] }
+      additionalProperties: true
+  responses:
+    Success:
+      description: Successful JSON response; detailed schema reconciliation is pending.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/GenericObject" }
+    Error:
+      description: Request failed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
