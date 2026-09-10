@@ -1,3 +1,6 @@
+> Historical reference — superseded as an active specification on 2026-09-10.
+> Use the [documentation index](README.md), [current roadmap](implementation-roadmap.md), and [open questions](open-questions-and-challenges.md). This document preserves earlier plans or reported work; it does not establish current behavior or fresh verification.
+
 # PM Task Enhancement – Delta Plan
 
 This document captures the concrete deltas required to bring the implementation in line with the PM Task Enhancement Plan, based on the current repository state.

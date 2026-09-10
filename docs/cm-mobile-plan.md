@@ -1,3 +1,6 @@
+> Historical reference — superseded as an active specification on 2026-09-10.
+> Use the [documentation index](README.md), [current roadmap](implementation-roadmap.md), and [open questions](open-questions-and-challenges.md). This document preserves earlier plans or reported work; it does not establish current behavior or fresh verification.
+
 # CM Mobile Implementation Plan (Field-Ready)
 
 This plan describes how the **Field-Ready** mobile app (`mobile/field-ready`) will support Corrective Maintenance (CM) work orders in three phases:
