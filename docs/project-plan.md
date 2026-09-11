@@ -42,9 +42,13 @@ Inventory/spare-parts control, procurement, purchase orders, vendor contracts, c
 
 Snipe-IT remains the source for synchronized asset attributes. The PM database owns maintenance settings, tasks, checklists, approvals, evidence references, and maintenance history. Facility records are managed in this application.
 
+## Asset/facility scope clarification — 2026-09-11
+
+All assets originate in Snipe-IT; PM does not create independent assets or own synchronized master-data edits. AC and electrical panels are outside current maintenance scope, and server-specific UPS is a facility context. Location means site location. Daily desktop work prioritizes schedules and PM tasks. Potential asset/facility mapping and general exclusion rules are not approved implementation scope. See [asset/facility evaluation](implementation-roadmap.md).
+
 ## Delivery approach
 
-D0 documentation baseline is complete. The desktop-first priority is recorded as a documentation follow-up. Proposed D1–D3 work reconciles desktop contracts/workflows, makes web/backend setup and delivery reproducible, and validates desktop operational acceptance. Mobile work is deferred. No delivery dates, business KPIs, or production-readiness claim are implied by this reconstruction.
+D0 documentation baseline is complete. The desktop-first priority is recorded as a documentation follow-up. D1 requirements discussion is active, beginning with assets/facilities. Later implementation and proposed D2–D3 work reconcile desktop contracts/workflows, make web/backend setup and delivery reproducible, and validate desktop operational acceptance. Mobile work is deferred. No delivery dates, business KPIs, or production-readiness claim are implied by this reconstruction.
 
 ## Success criteria
 

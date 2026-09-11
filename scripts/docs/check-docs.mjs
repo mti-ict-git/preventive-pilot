@@ -109,6 +109,17 @@ const roadmap = read('docs/implementation-roadmap.md');
 for (const phase of roadmap.split(/^## D\d+ — /m).slice(1)) {
   for (const section of ['Objective', 'Source documents', 'Checklist', 'Output', 'Challenge / verification']) assert(phase.includes(`### ${section}`), `Phase lacks ${section}`);
 }
+// The roadmap is the only active feature backlog; redirects must not keep live checklists.
+for (const id of ['af-01', 'af-02', 'tc-01', 'tc-02', 'sc-01', 'as-01']) {
+  assert.equal(roadmap.split(`<a id="${id}"></a>`).length - 1, 1, `Missing or duplicate roadmap action: ${id}`);
+}
+assert(roadmap.includes('## Start work here') && roadmap.includes('**Next action:**'), 'Roadmap lacks a clear work entry point');
+for (const name of ['asset-facility-decisions.md', 'asset-facility-action-plan.md', 'template-checklist-review.md', 'pm-scheduling-review.md']) {
+  const redirect = read(`docs/${name}`);
+  assert(redirect.includes('](implementation-roadmap.md)'), `Missing roadmap redirect: ${name}`);
+  assert(!/^- \[([ x])\]/m.test(redirect), `Competing feature checklist: ${name}`);
+  assert(fs.existsSync(path.join(root, 'docs/archive', name)), `Missing preserved discussion: ${name}`);
+}
 const schemaTables = [...read('db/schema.sql').matchAll(/CREATE TABLE pm\.(\w+)/g)].map((m) => m[1]);
 const schemaDoc = read('docs/database-schema-specification.md');
 for (const name of schemaTables) assert(schemaDoc.includes('`' + name + '`'), `Undocumented table: ${name}`);

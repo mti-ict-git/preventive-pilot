@@ -66,7 +66,7 @@ Scheduling uses SQL date calculation and background generation, with additional 
 5. Run appropriate static, contract, database, and workflow checks.
 6. Attach evidence, synchronize documentation, and update the roadmap.
 
-D0 modifies documentation and documentation tooling only. D1–D3 remain proposed until their scope and open decisions are addressed.
+D0 modifies documentation and documentation tooling only. D1 is active for desktop requirements discussion, starting with assets/facilities; application changes await resolution of the relevant decisions. D2–D3 remain proposed.
 
 ## Technical risks to resolve
 

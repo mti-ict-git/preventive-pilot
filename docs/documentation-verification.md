@@ -50,3 +50,63 @@ OpenAPI snapshot parity, reference checks, and route inventory are structural ch
 User direction on 2026-09-10 deferred mobile uncertainties and prioritized the desktop/browser application. Updated the root README, documentation index, project plan, functional/technical/testing scope notes, question triage, and D1–D3 roadmap checklists. Q-06, Q-07, and Q-11 remain deferred rather than resolved. Mobile-only contract coverage remains recorded but is not a desktop acceptance gate.
 
 Verification: documentation checker passed after the scope changes (required documents, local links, OpenAPI parity and references, coverage freshness, roadmap sections, and schema inventory). Source review of the revised D1–D3 checklist confirms that APK/device/native/mobile acceptance is no longer required for desktop completion. No application behavior changed.
+
+## D1 — Asset/facility requirements discussion, 2026-09-11
+
+Recorded the ten user answers in `asset-facility-decisions.md` and reconciled F-01, product scope, the index, and roadmap. Q-12–Q-15 preserve tentative or unanswered decisions. The first documentation-evaluation checklist item is complete; implementation and runtime acceptance remain unchecked.
+
+Verification: the documentation checker passed with 8 mandatory documents, 21 active Markdown files, 120 local links, 285 OpenAPI references, and 33 table entries. OpenAPI parity and coverage remained unchanged. This is documentation verification only.
+
+## D1 — Implementation-first asset/facility follow-up, 2026-09-11
+
+Read Snipe-IT sync hardware ingestion/upsert/archive paths, schedule broken-state filtering, task cancellation references, facility mutation guards, shared role middleware, and relevant DDL. No category-specific AC/panel ingestion filter or automatic broken-asset task cancellation was found in the inspected paths. Facility administration currently admits Supervisor through requireManager. These are source observations, not live-system test results.
+
+Recorded confirmed cancellation with record retention and Admin/Superadmin-only facility changes with verbal supervisor requests. Updated specification, access policy, Q-12–Q-14, evaluation evidence, and roadmap. Further questions require brief implementation inspection first. Verification: run documentation checker and diff whitespace check; no application behavior was changed.
+
+## D1 — Asset/facility action handoff and template review, 2026-09-11
+
+Published AF-01/AF-02 with unchecked implementation tasks, scoped requirements, source gaps, and verification criteria. Linked the action plan from the index, decisions, and roadmap. Inspected template create/update/delete schemas and guards, in-place checklist updates/version increments, task detail joins, and completion notes/evidence validation before drafting the next questions. User answers for Templates and Checklists remain pending.
+
+Verification passed: documentation checker reports 8 mandatory documents, 23 active Markdown files, 131 local links, 285 OpenAPI references, and 33 schema tables. API parity/coverage remains unchanged. `git diff --check` passed. No application implementation or runtime testing was performed.
+
+## D1 — Template/checklist decision record, 2026-09-11
+
+Recorded unchanged template roles/evidence policy, outcome-based notes direction, and live-versus-final checklist preservation in TC-01/TC-02, F-02, Q-16/Q-17, and the roadmap. Re-read approval transitions to identify the unresolved meaning of final submit rather than assume a cutoff. Verification passed: documentation checker (23 active Markdown files, 134 local links, contract parity/references, phase sections, schema inventory) and git diff --check. Implementation and runtime tests remain unperformed.
+
+## D1 — Technician-submission cutoff confirmed, 2026-09-11
+
+User clarified final submit as technician submission for approval. Mapped the decision to the previously inspected submit-for-approval transition to PendingSupervisor. Updated TC-02, F-02, Q-16, and the roadmap: the cutoff decision is complete; implementation, revision/history-migration boundaries, and acceptance remain open. Verification passed: documentation checker (23 active Markdown files, 134 local links, contract parity/references, phase sections, schema inventory) and git diff --check. No application behavior changed.
+
+## D1 — PM scheduling initial review, 2026-09-11
+
+Inspected default PM configuration, due-date precedence/calendar intervals, candidate generation, completion updates, blackout logic, and route permissions. Published pm-scheduling-review.md and updated the index/roadmap; user decisions remain pending. Documentation checker and git diff --check passed (24 active Markdown files, 136 local links, unchanged API parity/coverage). No runtime execution or application changes.
+
+## D1 — Fixed planned-date recurrence agreed, 2026-09-11
+
+Recorded all five scheduling answers, including explicit agreement that late completion does not shift recurrence. Published SC-01 as the implementation reference and synchronized F-03, Q-18, and the roadmap. Retained source observations separately from desired behavior; missed-cycle and migration choices remain undecided. Documentation checker passed (24 active Markdown files, 139 local links, unchanged API parity/coverage) and git diff --check passed. No runtime behavior changed; implementation checks remain open.
+
+## Unified work reference consolidation — 2026-09-11
+
+Consolidated the full AF-01/AF-02/TC-01/TC-02/SC-01 checklists into implementation-roadmap.md, with explicit current mode, next action, execution order, confirmed decisions, source documents, boundaries, and verification. Root README and documentation index now direct work there. Four former feature documents are historical redirects with original content retained in docs/archive. Active specifications/question links now point directly to the roadmap.
+
+Verification: all original pending AF/TC/SC checklist lines were found verbatim in the unified roadmap. The checker passed and now enforces a unique anchor for each of the five actions, the work-entry/next-action section, and absence of competing checklists in historical redirects. Existing documentation checks passed (149 local links, OpenAPI parity/references, phase sections, and table inventory); git diff --check passed. No application code, API behavior, database state, or feature acceptance status changed.
+
+## D1 — Missed cycles and PM Now policy agreed, 2026-09-11
+
+Recorded user agreement in the unified roadmap SC-01, F-03, and Q-18: one actionable current job with missed periods recorded as not performed, early execution fulfills the next occurrence, and PM Now reuses due/overdue then next regular work before creating a task. Preserved in-progress/review exceptions and separated technical period/migration boundaries from settled policy. No additional feature-plan document was created. Documentation checker passed (151 local links, mandatory documents, unique roadmap actions, contract parity/references, schema inventory) and git diff --check passed. Application implementation and runtime acceptance remain pending.
+
+## D1 — Blackout/suspension inspection, 2026-09-11
+
+Inspected blackout request fields and SQL date shifting, scheduling Frozen reads, PMEnabled setters, and context filtering. Added source observations and pending product questions directly to the unified roadmap. No new feature document or application behavior was introduced. Documentation checker (151 local links, mandatory/roadmap checks, contract parity/references, schema inventory) and git diff --check passed. No runtime verification was performed.
+
+## D1 — Skip next PM scope and roles, 2026-09-11
+
+Recorded user correction that Supervisor is included alongside Admin/Superadmin for Skip next PM. Consolidated no blackout expansion, one-occurrence skip with reason/history, and pending compliance treatment in SC-01/F-03, the access model, and Q-18. No new feature document was added. Documentation checker passed (152 local links, required documents, unique backlog actions, contract parity/references, schema inventory) and git diff --check passed. Implementation remains pending.
+
+## D1 — Assignment/capacity inspection, 2026-09-11
+
+Read assignment resolver priorities/fallbacks, task ownership helper, individual/bulk assignment guards and update/audit logic, assignment-rule mutation guards, and calendar date-capacity aggregation. Added observations and pending questions only to the unified roadmap. Documentation checker (152 local links and unchanged contract/schema checks) and git diff --check passed. No application changes or runtime verification.
+
+## D1 — Role queue and technician claim agreed, 2026-09-11
+
+Recorded user agreement on role-queue routing, exclusive technician claim, retained manager assignment, reassignment before submit or after Supervisor return for revision, unchanged Superadmin rule administration, and unchanged aggregate daily workload. Added AS-01 directly to the unified roadmap, with ownership/state/concurrency and history-preservation checks; synchronized F-03, access policy, and Q-19. Extended the documentation checker to require the AS-01 anchor. Checks passed: 160 local links, mandatory/roadmap checks, unchanged OpenAPI parity/references and table inventory, and git diff --check. No feature implementation or runtime test was performed.

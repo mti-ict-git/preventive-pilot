@@ -22,6 +22,32 @@ Desktop/web first, per user direction on 2026-09-10. Q-01–Q-05 and Q-08–Q-10
 | Q-10 | What are the release, recovery, and job-coordination guarantees? | Compose provides API/web and external SQL/storage; no verified CI/restore evidence was supplied; jobs run inside API process | Establish staging/release gates, backup retention and restore test, job ownership across replicas, and recovery targets | Operations / D2 |
 | Q-11 | What security and offline guarantees does the mobile app provide? | `mobile/pm-tech/lib/auth.ts` persists tokens in localStorage as well as memory; biometric credentials use native storage separately; historical plan says to avoid localStorage | Agree token policy and verify device storage/logout, offline replay, conflicts, evidence retries, push, and expired-token behavior | Mobile + security / Deferred mobile |
 
+## Asset/facility follow-up — 2026-09-11
+
+Based on the [user-answer evaluation](implementation-roadmap.md). Confirmed requirements belong in F-01; unanswered details remain open below.
+
+| ID | Remaining question | Closure criterion | Phase |
+| --- | --- | --- | --- |
+| Q-12 | Asset-to-facility mapping is tentative. Inspection shows sync imports returned hardware without special AC/panel filtering. Actual upstream inventory was not queried. | Inspect existing behavior before asking remaining mapping/identity questions; no relationship/filter change is currently approved | Product / D1 discussion |
+| Q-13 | Cancellation for broken-asset tasks is now confirmed, with history retained; sync/scheduler currently only stop new generation. Upsert currently unarchives reappearing assets. | Reconcile cancellation trigger, applicable nonterminal PM states, audit/reason, retries, report effects, and reappearance behavior; do not reopen the settled cancellation decision or infer cancellation of CM repairs/completed history | Backend + product / D1 gap |
+| Q-14 | Admin/Superadmin ownership and exclusion of Supervisor from facility master-data changes are confirmed; requests are verbal. Existing routes still allow Supervisor through requireManager. | Align scoped facility administration guards and verify them; inspect closure behavior before asking remaining task-handling questions. Do not add an in-app request/approval workflow | Backend + product / D1 gap |
+| Q-15 | The suggested category/location/responsibility/template information is sufficient, but which fields are mandatory for assets versus facilities? How should deliberate PM exclusion work? | Agree per-context prerequisites and decide whether an exclusion policy is needed; do not infer validation from a general acceptance of suggested fields | Product / D1 discussion |
+
+## Template/checklist follow-up — 2026-09-11
+
+| ID | Remaining question / gap | Closure criterion | Phase |
+| --- | --- | --- | --- |
+| Q-16 | Cutoff resolved by user on 2026-09-11: freeze the checklist definition when the technician successfully submits for approval, entering PendingSupervisor. Current detail still uses live definitions. | Product cutoff decision closed; implement and verify TC-02, including scoped returned/reopened work and historical migration handling. This does not mark the implementation gap fixed | Decision resolved; backend work pending / D1 |
+| Q-17 | Notes on Fail is accepted; current mandatory/non-skip validation and RequiresNotes settings need reconciliation | Implement outcome-based validation and consistent settings/UI semantics via TC-01, retaining evidence rules and mandatory no-skip | Backend + desktop / D1 |
+
+## Scheduling follow-up — 2026-09-11
+
+Q-18: Fixed recurrence from the planned schedule is confirmed. Existing completion-based next-due calculations must be reconciled via [SC-01](implementation-roadmap.md#sc-01). Missed-cycle and PM Now policy is now confirmed: one actionable job with missed periods recorded as not performed, early work fulfills the next occurrence, and PM Now reuses due/overdue work then upcoming work before creating a task. Protect in-progress/review work from automatic replacement. Blackout remains as implemented without expansion. Skip next PM is scoped to one occurrence with a reason and history, allowed for Supervisor/Admin/Superadmin; compliance treatment is still open under Q-09. Inspect before asking remaining questions about manual schedule/interval changes, month-end handling, task-period attribution, missed/skip representation, concurrency, and existing-record migration. Do not introduce indefinite suspension by inference. Do not reopen the settled fixed-versus-completion-based decision. Q-04 continues to track cross-path and asset/facility parity. Status: policy confirmed; implementation and boundary decisions pending, D1.
+
+## Assignment follow-up — 2026-09-11
+
+Q-19: Role-queue assignment plus exclusive technician claim is agreed. Supervisor/Admin/Superadmin may assign/reassign before submission and after explicit return for revision; submitted tasks otherwise remain locked. Rule editing stays Superadmin-only; aggregate daily capacity stays unchanged. [AS-01](implementation-roadmap.md#as-01) tracks atomic claim, ownership enforcement, revision handoff, existing individual-rule/assignment migration, and state-bypass verification. Inspect those details before further questions; no claim-endpoint/data design or per-technician workload feature is assumed. Status: product direction confirmed; implementation pending, D1.
+
 ## Reconciled documentation conflicts
 
 | Conflict | Baseline decision |

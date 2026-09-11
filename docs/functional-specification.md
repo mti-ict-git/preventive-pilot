@@ -10,7 +10,7 @@ The current priority is the desktop/browser application and its backend/database
 
 Technician, Supervisor, Admin, and Superadmin are the main role names. Assignment may target a user or a role. See [security and access](security-and-access-model.md) for endpoint-specific distinctions.
 
-An **asset** is synchronized equipment. A **facility** is a locally maintained non-asset area. A **template** defines recurring PM and checklist requirements. A **PM task** is preventive work. A **CM work order** is reactive work stored in the same task entity with `MaintenanceType = CM`. Each task references exactly one asset or facility.
+An **asset** is synchronized equipment. A **facility** is a locally maintained maintenance context, including areas and server-specific UPS equipment under the user-confirmed scope. A **template** defines recurring PM and checklist requirements. A **PM task** is preventive work. A **CM work order** is reactive work stored in the same task entity with `MaintenanceType = CM`. Each task references exactly one asset or facility.
 
 ## F-01 — Assets and facilities
 
@@ -20,6 +20,14 @@ Facilities support creation, editing, archive, cloning, and PM defaults, includi
 
 Acceptance: maintenance settings persist for the selected context; history retains task/evidence relationships; archived/broken state is reflected in scheduling behavior.
 
+### User-confirmed scope — 2026-09-11
+
+Snipe-IT is the sole asset master source: create new assets there, then synchronize. PM is passive for synchronized asset master data while owning maintenance configuration and records. AC and electrical panels are excluded from the current maintenance scope; server-specific UPS is classified as a facility. Current sync imports returned Snipe-IT hardware without a special AC/panel filter; this inspection does not establish which categories are present upstream. No sync-filter change is authorized by the maintenance-scope exclusion alone.
+
+Location represents the site and is not expected to change in normal operations. Admin/Superadmin own facility master-data changes; Supervisors communicate needs verbally and cannot create/edit/archive facilities. No in-app facility change-request workflow is required. Closure behavior remains open. Broken assets receive no new scheduled PM tasks, and the user requires task cancellation with records retained. Current source stops new generation but does not implement cancellation on broken-status synchronization; affected nonterminal PM states and reporting effects require implementation reconciliation. Automatic archival of missing upstream assets does not require admin confirmation; reappearance behavior remains open.
+
+Asset-to-facility mapping is only a possible future capability. No additional prerequisite fields were requested, but exact mandatory-field and exclusion rules remain undecided. The primary daily desktop needs are schedules and PM tasks. See the [answer evaluation](implementation-roadmap.md) for confirmed versus tentative decisions; implementation parity has not yet been tested.
+
 ## F-02 — Templates and checklists
 
 Templates define intervals, applicable category, required assignment role, estimated duration, and ordered checklist items. Attachment enablement controls whether an attachment is offered; attachment requirement controls completion validation. Required items cannot be skipped. Outcomes use `0 = skip`, `1 = pass`, `2 = fail` for pass/fail checklist items; non-pass/fail items display nonzero completion as done.
@@ -27,6 +35,12 @@ Templates define intervals, applicable category, required assignment role, estim
 Completion handlers validate applicable checklist, notes, and evidence rules. Do not assume that submission applies identical validation: Q-02 remains open. Unused template deletion and references must be checked against the route rather than assuming all deletions are soft deletes.
 
 Acceptance: ordering survives save/reload; applicable category restrictions hold; required evidence/notes failures are rejected and explained.
+
+### User decisions — 2026-09-11
+
+Template management remains available to Supervisor/Admin/Superadmin. Notes should be required on failure rather than merely because an item is mandatory; current completion validation does not yet match this direction. Existing per-item attachment rules remain unchanged.
+
+Nonfinal tasks follow template changes, while final-submitted/historical tasks retain their original checklist definitions. Current task detail reads live template items, so history preservation is an implementation gap. The user confirmed that the cutoff is successful technician submission for approval (`submit-for-approval`, entering `PendingSupervisor`). Capture the checklist definition then and preserve it throughout review and history; do not wait for final Superadmin approval. Q-16 records the resolved cutoff, while TC-02 implementation and returned/reopened/history-migration handling remain open. Use [TC-01/TC-02](implementation-roadmap.md#tc-01) as the action reference.
 
 ## F-03 — Scheduling and assignment
 
@@ -37,6 +51,34 @@ Broken/archived assets and frozen schedule rows are excluded from applicable new
 `pm.fn_CalculateNextDueAt` is used in scheduling paths. Approval still contains separate next-due logic, so universal calculation parity is not established (Q-04).
 
 Acceptance: test duplicate requests, frozen rows, broken assets, blackouts, interval boundaries, asset/facility parity, and the distinction between actual and projected work.
+
+### Confirmed scheduling policy — 2026-09-11
+
+Use one default template per asset/facility. Recurring PM remains anchored to planned due dates: monthly work due 1 September and completed 10 September is next due 1 October. Completion or approval delays must not shift the planned cadence. This is confirmed product behavior to implement, not a claim that all existing calculations already comply.
+
+Retain the existing first-date fallback (current time plus template interval when no date/history exists), 30-day default generation horizon, and Supervisor/Admin/Superadmin planning permissions. See [SC-01](implementation-roadmap.md#sc-01) for implementation and verification. Missed-period and PM Now behavior is defined below. Blackout/manual changes and technical/migration boundaries still require scoped reconciliation before dependent changes.
+
+### Missed periods, early PM, and PM Now — agreed 2026-09-11
+
+Maintain one actionable PM job for the current maintenance need rather than requiring several repeated checklists for one physical execution. Preserve missed periods as not performed, never implicitly completed. Do not automatically replace in-progress or approval-stage work. For work caught up in November, preserve September/October misses and keep the next planned date at 1 December.
+
+Early execution fulfills the next regular occurrence: performing a 1 October task on 20 September leaves 1 November as the next planned date. Preserve the original planned date and actual execution date separately.
+
+For the same asset/facility and template, PM Now reuses applicable due/overdue work first, then an existing next regular task. If no applicable task exists, create a task representing the next regular occurrence and prevent duplicate generation. State handling, period identity, missed-period representation, concurrency, and migration remain implementation work in SC-01; these decisions are not yet runtime-verified.
+
+### Blackout and Skip next PM — 2026-09-11
+
+Retain existing global blackout behavior; no blackout expansion or separate indefinite suspension workflow is requested. Skip next PM intentionally omits one upcoming occurrence and leaves PM enabled on its original cadence. Supervisor, Admin, and Superadmin may perform it with a required reason. Preserve the occurrence, actor/time, and any existing task history; do not record the skip as completed work or automatically replace in-progress/approval-stage tasks.
+
+Example: skipping 1 October leaves 1 November as the next regular occurrence. A deliberately skipped occurrence must be distinguishable from ordinary overdue nonperformance. Compliance scoring/exclusion remains undecided (Q-09). Implementation and verification live in SC-01; no runtime behavior has changed yet. Skip privileges do not broaden existing blackout-administration privileges.
+
+### Role queue and capacity — agreed 2026-09-11
+
+Routine PM work is routed to an appropriate role queue using assignment rules/template-role fallback. An eligible technician claims the task and becomes its single responsible person. Claims must be exclusive under concurrency; role membership does not permit takeover of a task already assigned to another technician. Managers retain direct assignment/reassignment for operational exceptions, and existing individual assignments must not be silently cleared.
+
+Supervisor/Admin/Superadmin may reassign before technician submission, including while work is in progress. After submission, reassignment is locked until the Supervisor explicitly returns the work for revision. Preserve actor/result/evidence history across a handoff; returning for revision does not implicitly change the submitted checklist definition.
+
+Assignment-rule editing remains Superadmin-only. Keep the current aggregate estimated workload per day; no per-technician capacity, shift management, or automatic balancing is requested. See [AS-01](implementation-roadmap.md#as-01) for pending implementation and verification; source inspection has not established these controls as already enforced.
 
 ## F-04 — Task execution and evidence
 

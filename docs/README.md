@@ -25,6 +25,10 @@ The documents below are the active source of truth. Code is evidence of existing
 | [Implementation roadmap](implementation-roadmap.md) | Active phase, checklists, outputs, and verification gates |
 | [Open questions and challenges](open-questions-and-challenges.md) | Unresolved decisions, observed discrepancies, and closure criteria |
 
+## Single work reference
+
+Start from [implementation-roadmap.md](implementation-roadmap.md). It contains the current mode, next discussion/action, ordered AF/TC/SC backlog, complete implementation checklists, sources, and verification gates. Confirmed behavior belongs in the functional specification; previous feature-review files are historical redirects and are not alternative starting points.
+
 ## Supporting references
 
 | Document | Responsibility |
