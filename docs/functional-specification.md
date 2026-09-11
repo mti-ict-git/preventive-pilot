@@ -88,6 +88,12 @@ Evidence supports task-level and checklist-level attachments. Storage is configu
 
 Acceptance: successful execution persists results and evidence; missing/invalid data, forbidden ownership, approval locks, oversized files, and future backdates fail appropriately. Verify upload limits and formats against each operation rather than assuming generic multipart behavior.
 
+### Execution decisions — 2026-09-11
+
+Support Start/Pause/Resume to measure PM work time; Pause does not require a reason for now. Persist timing rather than deriving active duration from StartedAt/CompletedAt alone. Active work must be distinguished from paused/review waiting time; detailed timing, handoff, and legacy-record rules remain EX-01/Q-20. Whether drafts are allowed before Start is not implied by the timing requirement.
+
+An inspection containing Fail may be submitted with required notes and configured evidence. Offer explicit work-order creation for the finding; this is optional, not automatic or a prerequisite to submitting the PM inspection. Repair completion is distinct from inspection submission.
+
 ## F-05 — PM approval
 
 Expected review path:
@@ -116,9 +122,15 @@ The web Approvals page provides review queues. Task detail and PDF export expose
 
 Acceptance: test each actor and valid/invalid transition, repeated submission, required evidence, returned work, own-work approval policy, and facility/asset finalization. Do not count source inspection as acceptance.
 
+### Return-to-work decisions — 2026-09-11
+
+Revise means the existing task can be corrected and requires a written reason. Reject means the work is incorrect and must be repeated. User confirmed that repeated work uses a new replacement task linked to the rejected original. Retain original results, evidence, work time, and rejection reason. Creation trigger, duplicate prevention, assignment, template selection, and recurrence/compliance attribution remain implementation boundaries (Q-20). Preserve rejected history and the submitted checklist definition; do not silently discard prior results/evidence or treat every rejected state as a revision unlock.
+
+See [EX-01](implementation-roadmap.md#ex-01) for implementation/verification. Existing optional-reason and state-only rejection handlers do not yet establish this full behavior.
+
 ## F-06 — Corrective maintenance
 
-Create a work order from an asset/facility breakdown or a PM finding. Collect symptom, impact, optional failure category/code, reported channel, and downtime start. CM reuses task/checklist/evidence infrastructure through `/api/work-orders` and shared task operations where applicable.
+Create a work order from an asset/facility breakdown or a PM finding. Collect symptom, impact, optional failure category/code, reported channel, and downtime start. CM reuses task/checklist/evidence infrastructure through `/api/work-orders` and shared task operations where applicable. A failed PM finding must offer an explicit option to create a work order; source linkage and duplicate handling require implementation review under EX-01, and automatic creation is not requested.
 
 Work orders support list/detail, assignment, start/pause/resume, complete, cancel, closing downtime, and resolution updates. The web provides a ticket-style subject and resolution view. Do not assume PM approval is automatically required for CM.
 

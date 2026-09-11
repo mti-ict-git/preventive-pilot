@@ -6,7 +6,7 @@ Last reviewed: 2026-09-11.
 
 This is the **single work reference** for this repository. It owns the next action, ordered backlog, implementation checklists, dependencies, and verification status. Do not reconstruct work from feature-review notes or use their old checkboxes as a second backlog.
 
-**Current mode:** D1 desktop requirements discussion. Application implementation has not started. **Next action:** inspect PM execution/submission and revision paths before the next feature questions. Role-queue assignment, technician self-claim, reassignment boundaries, and aggregate daily capacity are agreed. Blackout remains as implemented; Skip next PM includes Supervisor, Admin, and Superadmin. Skip treatment in compliance remains undecided. Multi-period overdue, early execution, and PM Now reuse policy are now agreed (Q-18). Do not reopen settled decisions.
+**Current mode:** D1 desktop requirements discussion. Application implementation has not started. **Next action:** resume desktop requirements discussion after the laptop handoff; briefly inspect corrective work orders (F-06) before proposing the next questions. Reject creates a linked replacement task; execution/timing, optional Pause reason, Fail submission/WO option, and mandatory revision reason are recorded below. Role-queue assignment, technician self-claim, reassignment boundaries, and aggregate daily capacity are agreed. Blackout remains as implemented; Skip next PM includes Supervisor, Admin, and Superadmin. Skip treatment in compliance remains undecided. Multi-period overdue, early execution, and PM Now reuse policy are now agreed (Q-18). Do not reopen settled decisions.
 
 **When implementation is requested:** start with AF-02, the smallest defined permission change, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
 
@@ -18,8 +18,30 @@ This is the **single work reference** for this repository. It owns the next acti
 | 4 | [AF-01](#af-01) | Cancel affected PM tasks when assets become broken | Not started; scope nonterminal/approval states, PM Now and concurrency, Q-13 |
 | 5 | [SC-01](#sc-01) | Recurrence follows planned dates | Not started; missed-cycle/PM Now policy agreed; blackout/migration and technical boundaries remain, Q-04/Q-18 |
 | 6 | [AS-01](#as-01) | Role queue, exclusive technician claim, and reassignment locks | Not started; inspect ownership across execution/approval paths and existing individual assignments |
+| 7 | [EX-01](#ex-01) | PM work timing, Fail-to-WO option, and revision/rejection semantics | Not started; linked replacement agreed; creation, timing, and recurrence boundaries remain |
 
 Read the item's linked specification and current implementation, perform its checklist, record actual evidence in [documentation verification](documentation-verification.md) for documentation work or a dated implementation verification record for runtime work, then update this document. Inspect code before asking further questions. Preserve user work and published Git history under [AGENTS.md](../AGENTS.md).
+
+### Laptop and session handoff
+
+Updated: 2026-09-11. This section carries conversational working context; this roadmap remains the only active backlog. Read AGENTS.md, README.md, this document, then the linked specification and open questions for the selected topic.
+
+- Working mode: discuss and document requirements in D1; do not start application implementation merely because a new session begins. Communicate with the user in Indonesian; maintain repository documentation in English.
+- Working preference: inspect relevant implementation briefly before asking a small batch of feature questions. Recommend practical defaults when requested, preserve explicit agreements, and distinguish implemented behavior from approved future behavior.
+- Latest agreement: Reject creates a new linked replacement task; the rejected task retains its results, evidence, work time, and rejection reason. Revise corrects the existing task and requires a written reason. EX-01 owns remaining technical boundaries.
+- Resume point: propose CM work orders (F-06), inspect current creation/lifecycle and PM-finding entry paths, then ask remaining product questions. Creation trigger/linkage for rejected replacement work, timing boundaries, and skip compliance are still open. This next topic is a proposed continuation, not a newly approved feature change.
+- Transfer checkpoint: inspected branch was `main`, HEAD `3039da9`. This is a pre-handoff baseline, not proof that the latest edits are committed or uploaded. Run `git status --short` and inspect the current commit on both laptops. Documentation/checker edits were still uncommitted when this handoff was prepared; this session did not commit or push.
+- Verification: run `node scripts/docs/check-docs.mjs` and `git diff --check`; see [verification evidence](documentation-verification.md). Runtime/database acceptance remains pending. Install Node.js 22 on the new laptop; do not depend on the old laptop's editor-bundled Node path.
+
+Before leaving the old laptop, review and commit the intended documentation/checker changes and push normally to the intended remote branch, then confirm the remote contains that commit. Preserve published history and the Lovable connection. A clone only receives committed, pushed files. Alternatively, privately transfer the complete working repository including `.git` and uncommitted files; verify its status after copying. Do not assume either transfer has happened just because this section exists.
+
+On the new laptop, clone/pull the transferred branch or open the private repository copy. Compare the commit and working changes, then open the project in Codex. Requirements discussion only needs the repository; application execution additionally needs dependencies and environment setup in the [deployment guide](deployment-and-environment.md). Transfer `.env` and credentials privately, never through Git. The current `.gitignore` also excludes `mobile`; preserve that local source separately even though mobile work is deferred. Database contents and uploaded files require their own backup/access arrangement if locally hosted; Git does not carry them. Reconfigure machine-specific paths and sign in to required tools on the new laptop.
+
+Starter prompt for a new session:
+
+> Read AGENTS.md, README.md, and docs/implementation-roadmap.md, especially Start work here and Laptop and session handoff. Continue D1 desktop requirements discussion in Indonesian. Read the linked specifications and open questions, inspect relevant code before asking questions, preserve confirmed decisions, and do not implement application changes yet. Start from the recorded resume point and report any repository-state mismatch.
+
+Before future handoffs, update Current mode, Next action, this checkpoint, settled decisions, remaining questions, and verification evidence together. Keep secrets and full chat transcripts out of this document.
 
 ### Confirmed decisions to preserve
 
@@ -36,7 +58,7 @@ Product semantics remain in the [functional specification](functional-specificat
 
 ## Active phase
 
-**D0 — Documentation baseline (complete, 2026-09-10).** This phase reconstructs the documentation baseline for an existing application. It does not represent a new implementation of the product. D1 is active for desktop requirements discussion. The asset/facility handoff is recorded; Template/Checklist decisions and the technician-submission preservation cutoff are confirmed; the current feature discussion is PM settings and scheduling, with the first five decisions confirmed, including fixed planned-date recurrence; operational edge cases remain to discuss. Application implementation has not started; D2–D3 remain proposed.
+**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop requirements discussion. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. Resume with a brief CM work-order inspection and remaining questions; application changes for this backlog have not started. D2–D3 remain proposed.
 
 Historical plans describe earlier intentions; an unchecked historical item is not proof that a feature is missing. Source inspection establishes implementation presence, not runtime correctness.
 
@@ -93,8 +115,9 @@ Resolve differences between documented desktop/web behavior, supporting API defi
 - [x] Record agreed missed-cycle, early-execution, and PM Now reuse policy after source inspection. [Evidence](documentation-verification.md).
 - [x] Record no blackout expansion and the Skip next PM role correction (Supervisor/Admin/Superadmin). [Evidence](documentation-verification.md).
 - [x] Record role-queue/self-claim policy, unchanged rule administration, pre-submit/revision reassignment, and aggregate daily capacity. [Evidence](documentation-verification.md).
-- [ ] Inspect PM execution/submission/revision before further questions; scope remaining implementation/migration and skip-reporting details under Q-18/Q-09.
-- [ ] Execute AF-02, TC-01, TC-02, AF-01, SC-01, and AS-01 using the detailed checklist below; attach verification before marking implementation complete.
+- [x] Inspect execution/submission/revision and record initial EX-01 decisions, including linked replacement after Reject; prepare the repository session handoff. [Evidence](documentation-verification.md).
+- [ ] Resolve remaining execution/CM, implementation/migration, and skip-reporting boundaries under Q-20/Q-18/Q-09 after source inspection.
+- [ ] Execute AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, and EX-01 using the detailed checklist below; attach verification before marking implementation complete.
 - [ ] Resolve applicable Q-12–Q-15 boundaries without re-asking settled asset/facility decisions.
 - [ ] Agree on completion versus submission validation and approval role/self-approval behavior (Q-02, Q-03).
 - [ ] Reconcile desktop API dependencies and payload/error contracts (Q-01); defer mobile-only gaps.
@@ -273,6 +296,42 @@ Observed gap: role membership currently permits task modification without an exc
 - [ ] Retain aggregate daily capacity behavior and verify no per-technician staffing/balancing feature was added inadvertently.
 
 No application checklist item is complete. Remaining ownership/handoff mechanics must be inspected and resolved without reopening the agreed primary workflow.
+
+### Current execution, submission, and revision discussion
+
+Source inspection, 2026-09-11, `backend/src/routes/tasks.ts`:
+
+- Start/pause/resume handlers use task access checks; the inspected pause handler accepts no required reason and changes any non-completed/non-cancelled state to paused while setting StartedAt if absent. This is not a strict open-to-start-to-pause state machine.
+- Submit-for-approval accepts checklist results and moves approval to PendingSupervisor; its access/state checks do not require an explicit preceding Start transition. It does not apply the same checklist completeness/evidence validation as the manager-only complete handler (Q-02).
+- The inspected complete handler has an explicit manager check in addition to task access. Do not describe it as the technician's ordinary final action; technician submission and manager completion are different operations.
+- Fail is an allowed checklist outcome. Notes-on-Fail is already agreed (TC-01); it does not decide whether a failed inspection may be submitted or must await repair.
+- Revise and reject routes accept an optional reason and optional reopen flag. Both are distinct existing operations. Revise from PendingSupervisor goes to None; from PendingSuperadmin goes back to PendingSupervisor. Reject sets Rejected. Reopen logic does not reopen completed/cancelled lifecycle states in the inspected code.
+
+Confirmed user direction, 2026-09-11:
+
+- Start/Pause/Resume must support measuring PM work time. Pause does not need a reason for now. The response confirms timed execution, but does not independently settle whether draft checklist entry must be blocked before Start.
+- Fail findings may be submitted for approval; provide an option to create a corrective work order from the finding. Do not require repair before inspection submission or automatically create a work order for every Fail.
+- Returning for revision requires a written reason.
+- Revise means the existing task is still correctable. Reject means the work is incorrect and must be repeated. User confirmed a new replacement task linked to the rejected task. Retain the original results, evidence, work time, and rejection reason; creation timing and recurrence attribution still need design.
+
+Additional source inspection: current DDL has StartedAt/CompletedAt and approval timestamps but no dedicated pause/resume work-session structure was found in the inspected paths. Pause updates status and can set StartedAt without recording an elapsed-work interval. The existing CM create payload includes asset/facility context and symptom/impact metadata; it does not declare a source-PM task/checklist field. Generic PM-to-WO entry points are documented, but full finding-level traceability is not established by this inspection.
+
+<a id="ex-01"></a>
+
+#### EX-01 — Timed PM execution, findings, and return-to-work semantics
+
+**Status:** not started. **Sources:** [F-04/F-05/F-06](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-02/Q-20; inspect task lifecycle/submission/revision routes, CM creation, existing desktop task/WO entry points, and TC-01/TC-02/AS-01 boundaries.
+
+- [ ] Design persisted Start/Pause/Resume timing and valid transitions. Separate elapsed calendar time from active work; avoid charging paused or approval-waiting time as active PM work. Resolve treatment of revisions, handoff, cancellation, backdating, and missing legacy intervals before claiming a precise metric.
+- [ ] Keep Pause reason optional. Define Start/claim and draft-entry gates explicitly instead of inferring that task ownership automatically starts the timer.
+- [ ] Make timing robust to repeated requests, browser reloads, concurrent actions, and server timestamps; define when intervals close on successful submission and exceptional transitions.
+- [ ] Permit Fail submission with required notes and existing evidence rules; preserve approval validation and submitted checklist snapshot. Do not equate a completed inspection with repaired equipment.
+- [ ] Reuse/extend existing PM-to-WO entry points for an explicit user action on a failed finding. Inspect context transfer, source traceability, repeated clicks/existing work orders, and the API/schema changes needed; no automatic creation is approved.
+- [ ] Require a nonblank revision reason in the backend and desktop flow; preserve prior submission/results/evidence/checklist definition and make the correction instructions visible to the technician.
+- [ ] Implement distinct Revise (correct existing task) and Reject (repeat work in a new linked replacement task) behavior. Resolve creation trigger, duplicate prevention, ownership, template version, and recurrence/compliance attribution before implementation. Preserve rejected evidence and decisions; do not treat rejection alone as the already-agreed return-for-revision reassignment exception.
+- [ ] Verify timing with multiple pauses (active intervals only), reload/retry/concurrency, Fail submission, optional WO creation, no WO on omitted action, blank revision rejection, same-task correction, and the agreed repeat-work path. Update API/data/workflow documentation and attach actual evidence.
+
+No application implementation is complete. Snapshot freezing at technician submission, Fail notes, and exclusive ownership remain requirements of the earlier linked actions.
 
 ### Feature intake rule
 

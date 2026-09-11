@@ -48,6 +48,10 @@ Q-18: Fixed recurrence from the planned schedule is confirmed. Existing completi
 
 Q-19: Role-queue assignment plus exclusive technician claim is agreed. Supervisor/Admin/Superadmin may assign/reassign before submission and after explicit return for revision; submitted tasks otherwise remain locked. Rule editing stays Superadmin-only; aggregate daily capacity stays unchanged. [AS-01](implementation-roadmap.md#as-01) tracks atomic claim, ownership enforcement, revision handoff, existing individual-rule/assignment migration, and state-bypass verification. Inspect those details before further questions; no claim-endpoint/data design or per-technician workload feature is assumed. Status: product direction confirmed; implementation pending, D1.
 
+## Execution/review follow-up — 2026-09-11
+
+Q-20: Timed Start/Pause/Resume, no mandatory Pause reason, Fail submission with optional WO creation, mandatory revision reason, and Revise-versus-Reject meaning are confirmed. Reject requires repeating work in a new linked replacement task, confirmed by the user. Preserve original results, evidence, work time, and rejection reason. Creation trigger, duplicate prevention, ownership, template selection, and recurrence/compliance attribution remain open implementation boundaries. Inspect before asking remaining active-time/revision/handoff/backdating boundaries, pre-Start draft policy, and finding-to-WO traceability/duplicates. [EX-01](implementation-roadmap.md#ex-01) owns implementation and verification; Q-02 still covers validation parity. Do not invent historical work-session data or delete rejected evidence. Status: product directions recorded; specified boundaries pending, D1.
+
 ## Reconciled documentation conflicts
 
 | Conflict | Baseline decision |

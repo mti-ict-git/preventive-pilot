@@ -110,3 +110,15 @@ Read assignment resolver priorities/fallbacks, task ownership helper, individual
 ## D1 — Role queue and technician claim agreed, 2026-09-11
 
 Recorded user agreement on role-queue routing, exclusive technician claim, retained manager assignment, reassignment before submit or after Supervisor return for revision, unchanged Superadmin rule administration, and unchanged aggregate daily workload. Added AS-01 directly to the unified roadmap, with ownership/state/concurrency and history-preservation checks; synchronized F-03, access policy, and Q-19. Extended the documentation checker to require the AS-01 anchor. Checks passed: 160 local links, mandatory/roadmap checks, unchanged OpenAPI parity/references and table inventory, and git diff --check. No feature implementation or runtime test was performed.
+
+## D1 — Execution/submission/revision inspection, 2026-09-11
+
+Inspected pause behavior, submission schema/state checks, complete-handler manager restriction, checklist outcomes, and revise/reject transitions and optional reasons/reopen flags. Recorded observations and five pending product questions directly in the roadmap, preserving previously agreed template/claim/notes rules. Documentation checker (160 local links, required documents, unique action anchors, contract parity/references, schema inventory) and git diff --check passed. No implementation or runtime verification occurred.
+
+## D1 — Timed execution and return-to-work decisions, 2026-09-11
+
+Recorded Start/Pause/Resume for PM time, optional Pause reason, Fail submission with optional corrective work order, mandatory revision reason, and distinct correction versus repeat-work semantics. Added EX-01 to the unified roadmap and synchronized F-04/F-05/F-06 and Q-20. Reject task identity remains a product question. Inspected timing columns, pause behavior, revision/rejection schemas, and CM creation payload; no application behavior changed. Extended the checker to require the EX-01 anchor. Documentation checker passed (165 local links, mandatory documents, roadmap structure, OpenAPI parity and 285 references, 33 table entries); git diff --check passed. Runtime, database, and feature acceptance tests were not run; implementation remains pending.
+
+## D1 — Linked rejection replacement and laptop handoff, 2026-09-11
+
+Recorded user approval for a new replacement task linked to the rejected original in F-05, EX-01, and Q-20; creation and recurrence boundaries remain open. Updated the roadmap active-phase summary and added a session handoff with working preferences, resume point, repository checkpoint, transfer steps, local-only dependencies, and a starter prompt. README links directly to the handoff; no second backlog or new feature document was created. Checked branch/HEAD, working status, and ignore rules without reading credentials. Documentation checker passed (169 local links, eight mandatory documents, roadmap checks, unchanged OpenAPI parity/285 references, 33 table entries); git diff --check passed. No application implementation, runtime testing, commit, push, or laptop transfer was performed.

@@ -110,7 +110,7 @@ for (const phase of roadmap.split(/^## D\d+ — /m).slice(1)) {
   for (const section of ['Objective', 'Source documents', 'Checklist', 'Output', 'Challenge / verification']) assert(phase.includes(`### ${section}`), `Phase lacks ${section}`);
 }
 // The roadmap is the only active feature backlog; redirects must not keep live checklists.
-for (const id of ['af-01', 'af-02', 'tc-01', 'tc-02', 'sc-01', 'as-01']) {
+for (const id of ['af-01', 'af-02', 'tc-01', 'tc-02', 'sc-01', 'as-01', 'ex-01']) {
   assert.equal(roadmap.split(`<a id="${id}"></a>`).length - 1, 1, `Missing or duplicate roadmap action: ${id}`);
 }
 assert(roadmap.includes('## Start work here') && roadmap.includes('**Next action:**'), 'Roadmap lacks a clear work entry point');

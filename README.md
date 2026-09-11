@@ -7,6 +7,7 @@ Preventive Pilot is a maintenance management system (CMMS) centered on preventiv
 - Read the [documentation index](docs/README.md) for the current source-of-truth documents.
 - Read [AGENTS.md](AGENTS.md) for the repository working method.
 - **Start work at [implementation-roadmap.md](docs/implementation-roadmap.md): the single work reference containing the next action and complete ordered backlog.**
+- Moving laptops or starting a new session: follow the [session handoff](docs/implementation-roadmap.md#laptop-and-session-handoff), including the starter prompt and transfer checklist.
 - Review [open questions](docs/open-questions-and-challenges.md) rather than assuming historical plans match implementation.
 
 The current documentation baseline was reviewed on 2026-09-10 through source inspection. Application runtime, database, integration, and device acceptance remain separate verification work.
