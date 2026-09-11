@@ -1,361 +1,4198 @@
+# Versioned contract baseline; see api-coverage.md for known gaps.
+# Exported from the embedded runtime definition; server URL normalized to same origin.
 openapi: 3.1.0
 info:
   title: Preventive Pilot API
   version: 1.0.1
-  description: |
-    Version-controlled baseline for the REST API used by the web and mobile clients.
-    The route inventory is complete as of the documentation audit on 2026-07-26.
-    Detailed request/response reconciliation remains an active Phase 0 checklist item;
-    until it is complete, handler Zod schemas and SQL behavior must also be reviewed.
-x-contract-status: baseline-route-inventory
+  description: REST API for Preventive Pilot (web + mobile clients). Docs updated 2026-01-07.
 servers:
-  - url: http://localhost:3001
-    description: Local development
-security:
-  - bearerAuth: []
-tags:
-  - { name: Health }
-  - { name: Auth }
-  - { name: Assets }
-  - { name: Facilities }
-  - { name: Templates }
-  - { name: Scheduling }
-  - { name: Tasks }
-  - { name: WorkOrders }
-  - { name: Reports }
-  - { name: Notifications }
-  - { name: AppUpdates }
-  - { name: System }
-  - { name: Dashboard }
-  - { name: Devices }
-paths:
-  /health:
-    get: { tags: [Health], security: [], operationId: health, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/docs.json:
-    get: { tags: [Health], security: [], operationId: apiDocument, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/auth/login:
-    post: { tags: [Auth], security: [], operationId: login, responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } } }
-  /api/auth/refresh:
-    post: { tags: [Auth], security: [], operationId: refreshToken, responses: { "200": { $ref: "#/components/responses/Success" }, "401": { $ref: "#/components/responses/Error" } } }
-  /api/auth/me:
-    get: { tags: [Auth], operationId: getCurrentUser, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/auth/me/preferences:
-    get: { tags: [Auth], operationId: getPreferences, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [Auth], operationId: updatePreferences, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/assets:
-    get: { tags: [Assets], operationId: listAssets, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/assets/pm/bulk:
-    post: { tags: [Assets], operationId: bulkSetAssetPm, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/assets/pm/bulk/template:
-    post: { tags: [Assets], operationId: bulkSetAssetTemplate, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/assets/{assetId}:
-    parameters: [{ $ref: "#/components/parameters/AssetId" }]
-    get: { tags: [Assets], operationId: getAsset, responses: { "200": { $ref: "#/components/responses/Success" }, "404": { $ref: "#/components/responses/Error" } } }
-  /api/assets/{assetId}/image:
-    parameters: [{ $ref: "#/components/parameters/AssetId" }]
-    get: { tags: [Assets], operationId: getAssetImage, responses: { "200": { description: Asset image binary }, "404": { $ref: "#/components/responses/Error" } } }
-  /api/assets/{assetId}/history:
-    parameters: [{ $ref: "#/components/parameters/AssetId" }]
-    get: { tags: [Assets], operationId: getAssetHistory, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/assets/{assetId}/pm:
-    parameters: [{ $ref: "#/components/parameters/AssetId" }]
-    patch: { tags: [Assets], operationId: updateAssetPm, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/facilities:
-    get: { tags: [Facilities], operationId: listFacilities, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    post: { tags: [Facilities], operationId: createFacility, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/facilities/{facilityId}:
-    parameters: [{ $ref: "#/components/parameters/FacilityId" }]
-    get: { tags: [Facilities], operationId: getFacility, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [Facilities], operationId: updateFacility, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/facilities/{facilityId}/pm-settings:
-    parameters: [{ $ref: "#/components/parameters/FacilityId" }]
-    put: { tags: [Facilities], operationId: updateFacilityPm, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/facilities/{facilityId}/pm-now:
-    parameters: [{ $ref: "#/components/parameters/FacilityId" }]
-    post: { tags: [Facilities], operationId: facilityPmNow, responses: { "201": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } } }
-  /api/facilities/{facilityId}/clone:
-    parameters: [{ $ref: "#/components/parameters/FacilityId" }]
-    post: { tags: [Facilities], operationId: cloneFacility, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/templates:
-    get: { tags: [Templates], operationId: listTemplates, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    post: { tags: [Templates], operationId: createTemplate, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/templates/{templateId}:
-    parameters: [{ $ref: "#/components/parameters/TemplateId" }]
-    get: { tags: [Templates], operationId: getTemplate, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [Templates], operationId: updateTemplate, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    delete: { tags: [Templates], operationId: deleteTemplate, responses: { "204": { description: Deleted } } }
-  /api/scheduling/assignment-rules:
-    get: { tags: [Scheduling], operationId: listAssignmentRules, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    post: { tags: [Scheduling], operationId: createAssignmentRule, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/scheduling/assignment-rules/{ruleId}:
-    parameters: [{ $ref: "#/components/parameters/RuleId" }]
-    put: { tags: [Scheduling], operationId: updateAssignmentRule, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    delete: { tags: [Scheduling], operationId: deleteAssignmentRule, responses: { "204": { description: Deleted } } }
-  /api/scheduling/blackout-windows:
-    get: { tags: [Scheduling], operationId: listBlackoutWindows, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    post: { tags: [Scheduling], operationId: createBlackoutWindow, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/scheduling/blackout-windows/{blackoutWindowId}:
-    parameters: [{ $ref: "#/components/parameters/BlackoutWindowId" }]
-    put: { tags: [Scheduling], operationId: updateBlackoutWindow, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    delete: { tags: [Scheduling], operationId: deleteBlackoutWindow, responses: { "204": { description: Deleted } } }
-  /api/scheduling/recalculate:
-    post: { tags: [Scheduling], operationId: recalculateSchedule, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/scheduling/day:
-    get: { tags: [Scheduling], operationId: getScheduleDay, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/scheduling/calendar:
-    get: { tags: [Scheduling], operationId: getScheduleCalendar, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks:
-    get: { tags: [Tasks], operationId: listTasks, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/status-counts:
-    get: { tags: [Tasks], operationId: taskStatusCounts, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/my-outstanding-counts:
-    get: { tags: [Tasks], operationId: myOutstandingCounts, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/approvals:
-    get: { tags: [Tasks], operationId: listApprovals, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/pm-now:
-    post: { tags: [Tasks], operationId: taskPmNow, responses: { "201": { $ref: "#/components/responses/Success" }, "409": { $ref: "#/components/responses/Error" } } }
-  /api/tasks/bulk-assign-unassigned:
-    post: { tags: [Tasks], operationId: bulkAssignTasks, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    get: { tags: [Tasks], operationId: getTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    delete: { tags: [Tasks], operationId: deleteTask, responses: { "204": { description: Deleted } } }
-  /api/tasks/{taskId}/export.pdf:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    get: { tags: [Tasks], operationId: exportTaskPdf, responses: { "200": { description: PDF document } } }
-  /api/tasks/{taskId}/assign:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: assignTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/start:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: startTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/pause:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: pauseTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/resume:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: resumeTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/cancel:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: cancelTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/reopen:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: reopenTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/complete:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: completeTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/draft:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    get: { tags: [Tasks], operationId: getTaskDraft, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    patch: { tags: [Tasks], operationId: saveTaskDraft, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    delete: { tags: [Tasks], operationId: deleteTaskDraft, responses: { "204": { description: Deleted } } }
-  /api/tasks/{taskId}/submit-for-approval:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: submitTaskApproval, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/approve-by-supervisor:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: supervisorApproveTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/approve-by-superadmin:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: superadminApproveTask, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/revise-approval:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: reviseTaskApproval, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/reject-approval:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: rejectTaskApproval, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/superadmin-update-checklist:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: superadminUpdateChecklist, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/evidence:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: addTaskEvidenceMetadata, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/evidence/upload:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [Tasks], operationId: uploadTaskEvidence, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/{taskId}/checklist-items/{templateChecklistItemId}/evidence/upload:
-    parameters:
-      - { $ref: "#/components/parameters/TaskId" }
-      - { $ref: "#/components/parameters/TemplateChecklistItemId" }
-    post: { tags: [Tasks], operationId: uploadChecklistEvidence, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/tasks/evidence/{evidenceId}:
-    parameters: [{ $ref: "#/components/parameters/EvidenceId" }]
-    get: { tags: [Tasks], operationId: getTaskEvidence, responses: { "200": { description: Evidence binary } } }
-    delete: { tags: [Tasks], operationId: deleteTaskEvidence, responses: { "204": { description: Deleted } } }
-  /api/tasks/checklist-evidence/{checklistEvidenceId}:
-    parameters: [{ $ref: "#/components/parameters/ChecklistEvidenceId" }]
-    get: { tags: [Tasks], operationId: getChecklistEvidence, responses: { "200": { description: Evidence binary } } }
-    delete: { tags: [Tasks], operationId: deleteChecklistEvidence, responses: { "204": { description: Deleted } } }
-  /api/work-orders:
-    get: { tags: [WorkOrders], operationId: listWorkOrders, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    post: { tags: [WorkOrders], operationId: createWorkOrder, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/work-orders/{taskId}:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    get: { tags: [WorkOrders], operationId: getWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    delete: { tags: [WorkOrders], operationId: deleteWorkOrder, responses: { "204": { description: Deleted } } }
-  /api/work-orders/{taskId}/assign:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [WorkOrders], operationId: assignWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/work-orders/{taskId}/start:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [WorkOrders], operationId: startWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/work-orders/{taskId}/pause:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [WorkOrders], operationId: pauseWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/work-orders/{taskId}/resume:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [WorkOrders], operationId: resumeWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/work-orders/{taskId}/complete:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [WorkOrders], operationId: completeWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/work-orders/{taskId}/cancel:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [WorkOrders], operationId: cancelWorkOrder, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/work-orders/{taskId}/close-downtime:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [WorkOrders], operationId: closeWorkOrderDowntime, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/work-orders/{taskId}/resolution:
-    parameters: [{ $ref: "#/components/parameters/TaskId" }]
-    post: { tags: [WorkOrders], operationId: saveWorkOrderResolution, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/reports/overdue:
-    get: { tags: [Reports], operationId: overdueReport, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/reports/overdue/export.csv:
-    get: { tags: [Reports], operationId: overdueCsv, responses: { "200": { description: CSV document } } }
-  /api/reports/compliance:
-    get: { tags: [Reports], operationId: complianceReport, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/reports/compliance/export.csv:
-    get: { tags: [Reports], operationId: complianceCsv, responses: { "200": { description: CSV document } } }
-  /api/reports/system-logs/export.csv:
-    get: { tags: [Reports], operationId: systemLogsCsv, responses: { "200": { description: CSV document } } }
-  /api/reports/assets-without-pm/export.csv:
-    get: { tags: [Reports], operationId: assetsWithoutPmCsv, responses: { "200": { description: CSV document } } }
-  /api/reports/cm/metrics:
-    get: { tags: [Reports], operationId: cmMetrics, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/reports/cm/metrics/export.csv:
-    get: { tags: [Reports], operationId: cmMetricsCsv, responses: { "200": { description: CSV document } } }
-  /api/notifications/channels:
-    get: { tags: [Notifications], operationId: listNotificationChannels, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    post: { tags: [Notifications], operationId: createNotificationChannel, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/notifications/channels/{channelId}:
-    parameters: [{ $ref: "#/components/parameters/ChannelId" }]
-    put: { tags: [Notifications], operationId: updateNotificationChannel, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    delete: { tags: [Notifications], operationId: deleteNotificationChannel, responses: { "204": { description: Deleted } } }
-  /api/notifications/rules:
-    get: { tags: [Notifications], operationId: listNotificationRules, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    post: { tags: [Notifications], operationId: createNotificationRule, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/notifications/rules/{ruleId}:
-    parameters: [{ $ref: "#/components/parameters/RuleId" }]
-    put: { tags: [Notifications], operationId: updateNotificationRule, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/notifications/log:
-    get: { tags: [Notifications], operationId: notificationLog, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/app-updates/policy:
-    get: { tags: [AppUpdates], operationId: getAppUpdatePolicy, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [AppUpdates], operationId: updateAppUpdatePolicy, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/app-updates/report:
-    post: { tags: [AppUpdates], operationId: reportAppInstallation, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/app-updates/latest:
-    get: { tags: [AppUpdates], operationId: latestAppUpdate, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/app-updates/download:
-    get: { tags: [AppUpdates], security: [], operationId: downloadAppUpdate, responses: { "200": { description: Application package binary } } }
-  /api/dashboard/overview:
-    get: { tags: [Dashboard], operationId: dashboardOverview, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/devices/register:
-    post: { tags: [Devices], operationId: registerDevice, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/devices/push-test:
-    post: { tags: [Devices], operationId: testDevicePush, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/devices/push-broadcast:
-    post: { tags: [Devices], operationId: broadcastPush, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/status:
-    get: { tags: [System], operationId: systemStatus, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/pm-settings:
-    get: { tags: [System], operationId: getPmSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [System], operationId: updatePmSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/snipeit-settings:
-    get: { tags: [System], operationId: getSnipeSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [System], operationId: updateSnipeSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/snipeit-settings/test:
-    post: { tags: [System], operationId: testSnipeSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/microsoft-graph-settings:
-    get: { tags: [System], operationId: getGraphSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [System], operationId: updateGraphSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/microsoft-graph-settings/test:
-    post: { tags: [System], operationId: testGraphSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/whatsapp-settings:
-    get: { tags: [System], operationId: getWhatsAppSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [System], operationId: updateWhatsAppSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/whatsapp-settings/test:
-    post: { tags: [System], operationId: testWhatsAppSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/ui-settings/assets:
-    get: { tags: [System], operationId: getAssetUiSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [System], operationId: updateAssetUiSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/ui-settings/label-designer:
-    get: { tags: [System], operationId: getLabelUiSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-    put: { tags: [System], operationId: updateLabelUiSettings, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/logs:
-    get: { tags: [System], operationId: listSystemLogs, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/lookups:
-    get: { tags: [System], operationId: systemLookups, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/users:
-    get: { tags: [System], operationId: listUsers, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/users/for-assignment:
-    get: { tags: [System], operationId: listAssignmentUsers, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/users/local:
-    post: { tags: [System], operationId: createLocalUser, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/system/users/assign-ldap:
-    post: { tags: [System], operationId: assignLdapUser, responses: { "201": { $ref: "#/components/responses/Success" } } }
-  /api/system/users/{userId}:
-    parameters: [{ $ref: "#/components/parameters/UserId" }]
-    delete: { tags: [System], operationId: deleteUser, responses: { "204": { description: Deleted } } }
-  /api/system/users/{userId}/roles:
-    parameters: [{ $ref: "#/components/parameters/UserId" }]
-    put: { tags: [System], operationId: updateUserRoles, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/users/{userId}/refresh-ldap:
-    parameters: [{ $ref: "#/components/parameters/UserId" }]
-    post: { tags: [System], operationId: refreshLdapUser, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/ldap/search:
-    get: { tags: [System], operationId: searchLdap, responses: { "200": { $ref: "#/components/responses/Success" } } }
-  /api/system/jobs/{jobName}/run:
-    parameters: [{ name: jobName, in: path, required: true, schema: { type: string, enum: [snipe-sync, schedule-calc, notifications] } }]
-    post: { tags: [System], operationId: runJob, responses: { "202": { $ref: "#/components/responses/Success" } } }
-  /api/system/evidence-import/run:
-    post: { tags: [System], operationId: runEvidenceImport, responses: { "202": { $ref: "#/components/responses/Success" } } }
+  - url: /
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-  parameters:
-    AssetId: { name: assetId, in: path, required: true, schema: { type: string } }
-    FacilityId: { name: facilityId, in: path, required: true, schema: { type: string, format: uuid } }
-    TemplateId: { name: templateId, in: path, required: true, schema: { type: string, format: uuid } }
-    TemplateChecklistItemId: { name: templateChecklistItemId, in: path, required: true, schema: { type: string, format: uuid } }
-    TaskId: { name: taskId, in: path, required: true, schema: { type: string, format: uuid } }
-    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
-    RuleId: { name: ruleId, in: path, required: true, schema: { type: string, format: uuid } }
-    BlackoutWindowId: { name: blackoutWindowId, in: path, required: true, schema: { type: string, format: uuid } }
-    ChannelId: { name: channelId, in: path, required: true, schema: { type: string, format: uuid } }
-    EvidenceId: { name: evidenceId, in: path, required: true, schema: { type: string, format: uuid } }
-    ChecklistEvidenceId: { name: checklistEvidenceId, in: path, required: true, schema: { type: string, format: uuid } }
   schemas:
-    GenericObject:
+    EntityRef:
       type: object
-      additionalProperties: true
-    Error:
-      type: object
-      required: [message]
       properties:
-        message: { type: string }
-        code: { type: [string, "null"] }
+        id:
+          type: string
+        name:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+      additionalProperties: false
+    EntityRefNullable:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - "null"
+        name:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - name
+      additionalProperties: false
+    AssetPmInfo:
+      type: object
+      properties:
+        enabled:
+          type:
+            - boolean
+            - "null"
+        defaultTemplateId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        lastCompletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        nextDueAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+      required:
+        - enabled
+      additionalProperties: false
+    AssetListItem:
+      type: object
+      properties:
+        id:
+          type: string
+        snipeAssetId:
+          type:
+            - string
+            - "null"
+        assetTag:
+          type:
+            - string
+            - "null"
+        name:
+          type: string
+        manufacturer:
+          type:
+            - string
+            - "null"
+        model:
+          type:
+            - string
+            - "null"
+        serialNumber:
+          type:
+            - string
+            - "null"
+        assetStatus:
+          type:
+            - string
+            - "null"
+        assetOperationalStatus:
+          type: string
+          enum:
+            - operational
+            - broken
+            - archived
+        assignedToText:
+          type:
+            - string
+            - "null"
+        imageUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+        category:
+          $ref: "#/components/schemas/EntityRefNullable"
+        location:
+          $ref: "#/components/schemas/EntityRefNullable"
+        pm:
+          $ref: "#/components/schemas/AssetPmInfo"
+      required:
+        - id
+        - name
+        - assetOperationalStatus
+        - category
+        - location
+        - pm
+      additionalProperties: false
+    AssetListResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetListItem"
+      required:
+        - page
+        - pageSize
+        - items
+      additionalProperties: false
+    FacilityPmInfo:
+      type: object
+      properties:
+        enabled:
+          type:
+            - boolean
+            - "null"
+        defaultTemplateId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        lastCompletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        nextDueAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+      required:
+        - enabled
+      additionalProperties: false
+    FacilityListItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type:
+            - string
+            - "null"
+        isActive:
+          type: boolean
+        location:
+          $ref: "#/components/schemas/EntityRefNullable"
+        pm:
+          $ref: "#/components/schemas/FacilityPmInfo"
+      required:
+        - id
+        - name
+        - isActive
+        - location
+        - pm
+      additionalProperties: false
+    FacilityListResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FacilityListItem"
+      required:
+        - page
+        - pageSize
+        - items
+      additionalProperties: false
+    AssetDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        snipeAssetId:
+          type:
+            - string
+            - "null"
+        assetTag:
+          type:
+            - string
+            - "null"
+        name:
+          type: string
+        manufacturer:
+          type:
+            - string
+            - "null"
+        model:
+          type:
+            - string
+            - "null"
+        serialNumber:
+          type:
+            - string
+            - "null"
+        assetStatus:
+          type:
+            - string
+            - "null"
+        assetOperationalStatus:
+          type: string
+          enum:
+            - operational
+            - broken
+            - archived
+        assignedToText:
+          type:
+            - string
+            - "null"
+        snipeNotes:
+          type:
+            - string
+            - "null"
+        imageUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/EntityRef"
+            - type: "null"
+        location:
+          oneOf:
+            - $ref: "#/components/schemas/EntityRef"
+            - type: "null"
+        pm:
+          $ref: "#/components/schemas/AssetPmInfo"
+      required:
+        - id
+        - name
+        - assetOperationalStatus
+        - pm
+      additionalProperties: false
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Role UUID
+        name:
+          type: string
+      required:
+        - id
+        - name
+      additionalProperties: false
+    AssetCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Category UUID
+        name:
+          type: string
+        isActive:
+          type: boolean
+      required:
+        - id
+        - name
+        - isActive
+      additionalProperties: false
+    Location:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Location UUID
+        name:
+          type: string
+        isActive:
+          type: boolean
+      required:
+        - id
+        - name
+        - isActive
+      additionalProperties: false
+    LookupsResponse:
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+        assetCategories:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetCategory"
+        locations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Location"
+      required:
+        - roles
+        - assetCategories
+        - locations
+      additionalProperties: false
+    UserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type:
+            - string
+            - "null"
+        email:
+          type:
+            - string
+            - "null"
+        phone:
+          type:
+            - string
+            - "null"
+        externalProvider:
+          type:
+            - string
+            - "null"
+        isActive:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+        tasksCompleted:
+          type: integer
+      required:
+        - id
+        - username
+        - isActive
+        - roles
+        - tasksCompleted
+        - externalProvider
+      additionalProperties: false
+    UsersListResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserSummary"
+      required:
+        - page
+        - pageSize
+        - total
+        - items
+      additionalProperties: false
+    UpdateUserRolesRequest:
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+      required:
+        - roles
+      additionalProperties: false
+    UpdateUserRolesResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+      required:
+        - ok
+        - roles
+      additionalProperties: false
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required:
+        - ok
+      additionalProperties: false
+    IdResponse:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+        - id
+      additionalProperties: false
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
       additionalProperties: true
-  responses:
-    Success:
-      description: Successful JSON response; detailed schema reconciliation is pending.
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/GenericObject" }
-    Error:
-      description: Request failed.
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+    LoginRequest:
+      type: object
+      properties:
+        identifier:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        provider:
+          type: string
+          enum:
+            - ldap
+            - local
+          default: ldap
+      required:
+        - password
+      additionalProperties: false
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            username:
+              type: string
+            displayName:
+              type:
+                - string
+                - "null"
+            email:
+              type:
+                - string
+                - "null"
+            roles:
+              type: array
+              items:
+                type: string
+          required:
+            - id
+            - username
+            - roles
+      required:
+        - accessToken
+        - refreshToken
+        - user
+    RefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+      required:
+        - refreshToken
+      additionalProperties: false
+    RefreshResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+      required:
+        - accessToken
+        - refreshToken
+      additionalProperties: false
+    MeResponse:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            username:
+              type: string
+            roles:
+              type: array
+              items:
+                type: string
+          required:
+            - id
+            - username
+            - roles
+      required:
+        - user
+    PaginatedList:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        items:
+          type: array
+      required:
+        - page
+        - pageSize
+        - items
+    PmNowRequest:
+      type: object
+      properties:
+        assetId:
+          type: string
+          format: uuid
+      required:
+        - assetId
+      additionalProperties: false
+    BulkSetPmEnabledRequest:
+      type: object
+      properties:
+        assetIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 500
+        pmEnabled:
+          type: boolean
+      required:
+        - assetIds
+        - pmEnabled
+      additionalProperties: false
+    BulkSetPmTemplateRequest:
+      type: object
+      properties:
+        assetIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 500
+        defaultTemplateId:
+          type:
+            - string
+            - "null"
+          format: uuid
+      required:
+        - assetIds
+        - defaultTemplateId
+      additionalProperties: false
+    UpdateAssetPmRequest:
+      type: object
+      properties:
+        pmEnabled:
+          type: boolean
+        defaultTemplateId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        nextPmDueAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+      additionalProperties: false
+    NotificationChannelCreateRequest:
+      type: object
+      properties:
+        channelType:
+          type: string
+          maxLength: 32
+        config:
+          type:
+            - string
+            - "null"
+        isActive:
+          type: boolean
+          default: true
+      required:
+        - channelType
+      additionalProperties: false
+    NotificationChannelUpdateRequest:
+      type: object
+      properties:
+        channelType:
+          type: string
+          maxLength: 32
+        config:
+          type:
+            - string
+            - "null"
+        isActive:
+          type: boolean
+      additionalProperties: false
+    NotificationRuleCreateRequest:
+      type: object
+      properties:
+        ruleName:
+          type: string
+          maxLength: 256
+        eventType:
+          type: string
+          maxLength: 64
+        offsetDays:
+          type:
+            - integer
+            - "null"
+        escalateAfterDays:
+          type:
+            - integer
+            - "null"
+        channelId:
+          type: string
+          format: uuid
+        messageTemplate:
+          type:
+            - string
+            - "null"
+        isActive:
+          type: boolean
+          default: true
+      required:
+        - ruleName
+        - eventType
+        - channelId
+      additionalProperties: false
+    NotificationRuleUpdateRequest:
+      type: object
+      properties:
+        ruleName:
+          type: string
+          maxLength: 256
+        eventType:
+          type: string
+          maxLength: 64
+        offsetDays:
+          type:
+            - integer
+            - "null"
+        escalateAfterDays:
+          type:
+            - integer
+            - "null"
+        channelId:
+          type: string
+          format: uuid
+        messageTemplate:
+          type:
+            - string
+            - "null"
+        isActive:
+          type: boolean
+      additionalProperties: false
+    PushBroadcastRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        body:
+          type: string
+          maxLength: 2000
+        audience:
+          type: string
+          enum:
+            - all
+            - technician
+            - supervisor
+            - superadmin
+          default: all
+      required:
+        - title
+        - body
+      additionalProperties: false
+    PushBroadcastError:
+      type: object
+      properties:
+        token:
+          type: string
+        message:
+          type: string
+        code:
+          type:
+            - string
+            - "null"
+      required:
+        - token
+        - message
+      additionalProperties: false
+    PushBroadcastResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        attempted:
+          type: integer
+        sent:
+          type: integer
+        failed:
+          type: integer
+        configUsed:
+          type: string
+          enum:
+            - firebase-admin
+            - fcm-legacy
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PushBroadcastError"
+      required:
+        - ok
+        - attempted
+        - sent
+        - failed
+        - configUsed
+        - errors
+      additionalProperties: false
+    TaskAssignRequest:
+      type: object
+      properties:
+        assigneeUserId:
+          type:
+            - string
+            - "null"
+          format: uuid
+      required:
+        - assigneeUserId
+      additionalProperties: false
+    WorkOrderCreateRequest:
+      type: object
+      properties:
+        assetId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        facilityId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        templateId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        symptom:
+          type: string
+          maxLength: 1024
+        impactLevel:
+          type:
+            - string
+            - "null"
+          enum:
+            - normal
+            - high
+            - critical
+        failureCategory:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        failureCode:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        downtimeStartedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        reportedChannel:
+          type:
+            - string
+            - "null"
+          maxLength: 32
+      required:
+        - symptom
+      additionalProperties: false
+    WorkOrderAssignRequest:
+      type: object
+      properties:
+        assignedToUserId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        assignedToRoleId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        priority:
+          type:
+            - string
+            - "null"
+          enum:
+            - low
+            - medium
+            - high
+      additionalProperties: false
+    WorkOrderChecklistResult:
+      type: object
+      properties:
+        templateChecklistItemId:
+          type: string
+          format: uuid
+        outcome:
+          type: integer
+          enum:
+            - 0
+            - 1
+            - 2
+        notes:
+          type:
+            - string
+            - "null"
+          maxLength: 1024
+      required:
+        - templateChecklistItemId
+        - outcome
+      additionalProperties: false
+    WorkOrderCompleteRequest:
+      type: object
+      properties:
+        checklistResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkOrderChecklistResult"
+        forceCompleted:
+          type:
+            - boolean
+            - "null"
+        completedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        backdateReason:
+          type:
+            - string
+            - "null"
+          maxLength: 1024
+        technicianName:
+          type:
+            - string
+            - "null"
+          maxLength: 256
+      additionalProperties: false
+    SchedulingAssignmentRule:
+      type: object
+      properties:
+        RuleId:
+          type: string
+          format: uuid
+        Priority:
+          type: integer
+        CategoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        LocationId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        AssetStatus:
+          type:
+            - string
+            - "null"
+        AssignToUserId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        AssignToRoleId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        IsActive:
+          type: boolean
+        EffectiveFrom:
+          type:
+            - string
+            - "null"
+          format: date-time
+        EffectiveTo:
+          type:
+            - string
+            - "null"
+          format: date-time
+        CreatedAt:
+          type: string
+          format: date-time
+        UpdatedAt:
+          type: string
+          format: date-time
+      required:
+        - RuleId
+        - Priority
+        - IsActive
+        - CreatedAt
+        - UpdatedAt
+      additionalProperties: false
+    SchedulingAssignmentRuleListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchedulingAssignmentRule"
+      required:
+        - items
+      additionalProperties: false
+    SchedulingAssignmentRuleCreateRequest:
+      type: object
+      properties:
+        priority:
+          type: integer
+        categoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        locationId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        assetStatus:
+          type:
+            - string
+            - "null"
+        assignToUserId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        assignToRoleId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        isActive:
+          type:
+            - boolean
+            - "null"
+        effectiveFrom:
+          type:
+            - string
+            - "null"
+          format: date-time
+        effectiveTo:
+          type:
+            - string
+            - "null"
+          format: date-time
+      required:
+        - priority
+      additionalProperties: false
+    SchedulingAssignmentRuleUpdateRequest:
+      type: object
+      properties:
+        priority:
+          type: integer
+        categoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        locationId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        assetStatus:
+          type:
+            - string
+            - "null"
+        assignToUserId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        assignToRoleId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        isActive:
+          type:
+            - boolean
+            - "null"
+        effectiveFrom:
+          type:
+            - string
+            - "null"
+          format: date-time
+        effectiveTo:
+          type:
+            - string
+            - "null"
+          format: date-time
+      additionalProperties: false
+    SchedulingBlackoutWindow:
+      type: object
+      properties:
+        BlackoutWindowId:
+          type: string
+          format: uuid
+        Name:
+          type: string
+        StartsAt:
+          type: string
+          format: date-time
+        EndsAt:
+          type: string
+          format: date-time
+        IsActive:
+          type: boolean
+        CreatedAt:
+          type: string
+          format: date-time
+        UpdatedAt:
+          type: string
+          format: date-time
+      required:
+        - BlackoutWindowId
+        - Name
+        - StartsAt
+        - EndsAt
+        - IsActive
+        - CreatedAt
+        - UpdatedAt
+      additionalProperties: false
+    SchedulingBlackoutWindowListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchedulingBlackoutWindow"
+      required:
+        - items
+      additionalProperties: false
+    SchedulingBlackoutWindowCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        isActive:
+          type:
+            - boolean
+            - "null"
+      required:
+        - name
+        - startsAt
+        - endsAt
+      additionalProperties: false
+    SchedulingBlackoutWindowUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        isActive:
+          type:
+            - boolean
+            - "null"
+      additionalProperties: false
+    SchedulingCalendarDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        type:
+          type: string
+          enum:
+            - scheduled
+            - due
+            - overdue
+        count:
+          type: integer
+        capacityMinutes:
+          type: integer
+      required:
+        - date
+        - type
+        - count
+        - capacityMinutes
+      additionalProperties: false
+    SchedulingCalendarResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchedulingCalendarDay"
+      required:
+        - items
+      additionalProperties: false
+    SchedulingDayEventItem:
+      type: object
+      properties:
+        id:
+          type: string
+        taskNumber:
+          type: string
+        scheduledDueAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+        priority:
+          type: string
+        estimatedMinutes:
+          type: integer
+        bucket:
+          type: string
+          enum:
+            - scheduled
+            - due
+            - overdue
+        asset:
+          type: object
+          properties:
+            id:
+              type: string
+            assetTag:
+              type: string
+            name:
+              type: string
+          required:
+            - id
+            - assetTag
+            - name
+          additionalProperties: false
+        template:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+          required:
+            - id
+            - name
+          additionalProperties: false
+      required:
+        - id
+        - taskNumber
+        - scheduledDueAt
+        - status
+        - priority
+        - estimatedMinutes
+        - bucket
+        - asset
+        - template
+      additionalProperties: false
+    SchedulingDayEventsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchedulingDayEventItem"
+      required:
+        - items
+      additionalProperties: false
+    SchedulingRecalculateRequest:
+      type: object
+      properties:
+        assetId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        facilityId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        force:
+          type:
+            - boolean
+            - "null"
+      additionalProperties: false
+    SchedulingRecalculateResponse:
+      type: object
+      properties:
+        updated:
+          type: integer
+      required:
+        - updated
+      additionalProperties: false
+    WorkOrderListItem:
+      type: object
+      properties:
+        id:
+          type: string
+        taskNumber:
+          type: string
+        status:
+          type: string
+        priority:
+          type:
+            - string
+            - "null"
+          enum:
+            - low
+            - medium
+            - high
+        scheduledDueAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        completedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        symptom:
+          type:
+            - string
+            - "null"
+        impactLevel:
+          type:
+            - string
+            - "null"
+        failureCategory:
+          type:
+            - string
+            - "null"
+        failureCode:
+          type:
+            - string
+            - "null"
+        reportedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        reportedByUsername:
+          type:
+            - string
+            - "null"
+        asset:
+          $ref: "#/components/schemas/EntityRefNullable"
+        facility:
+          $ref: "#/components/schemas/EntityRefNullable"
+        templateName:
+          type:
+            - string
+            - "null"
+        assignedTo:
+          type: object
+          properties:
+            userId:
+              type:
+                - string
+                - "null"
+              format: uuid
+            username:
+              type:
+                - string
+                - "null"
+            displayName:
+              type:
+                - string
+                - "null"
+            roleId:
+              type:
+                - string
+                - "null"
+              format: uuid
+            roleName:
+              type:
+                - string
+                - "null"
+          required:
+            - userId
+            - username
+            - displayName
+            - roleId
+            - roleName
+          additionalProperties: false
+      required:
+        - id
+        - taskNumber
+        - status
+        - createdAt
+        - asset
+        - facility
+        - assignedTo
+      additionalProperties: false
+    WorkOrderListResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkOrderListItem"
+      required:
+        - page
+        - pageSize
+        - items
+      additionalProperties: false
+    WorkOrderDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        taskNumber:
+          type: string
+        status:
+          type: string
+        priority:
+          type:
+            - string
+            - "null"
+          enum:
+            - low
+            - medium
+            - high
+        scheduledDueAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        completedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        cancelledAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        symptom:
+          type:
+            - string
+            - "null"
+        impactLevel:
+          type:
+            - string
+            - "null"
+        failureCategory:
+          type:
+            - string
+            - "null"
+        failureCode:
+          type:
+            - string
+            - "null"
+        reportedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        asset:
+          $ref: "#/components/schemas/EntityRefNullable"
+        facility:
+          $ref: "#/components/schemas/EntityRefNullable"
+        template:
+          $ref: "#/components/schemas/EntityRef"
+        assignedTo:
+          type: object
+          properties:
+            userId:
+              type:
+                - string
+                - "null"
+              format: uuid
+            username:
+              type:
+                - string
+                - "null"
+            displayName:
+              type:
+                - string
+                - "null"
+            roleId:
+              type:
+                - string
+                - "null"
+              format: uuid
+            roleName:
+              type:
+                - string
+                - "null"
+          required:
+            - userId
+            - username
+            - displayName
+            - roleId
+            - roleName
+          additionalProperties: false
+        completedBy:
+          oneOf:
+            - type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                username:
+                  type:
+                    - string
+                    - "null"
+                displayName:
+                  type:
+                    - string
+                    - "null"
+              required:
+                - userId
+            - type: "null"
+        cancelledBy:
+          oneOf:
+            - type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                username:
+                  type:
+                    - string
+                    - "null"
+                displayName:
+                  type:
+                    - string
+                    - "null"
+              required:
+                - userId
+            - type: "null"
+      required:
+        - id
+        - taskNumber
+        - status
+        - createdAt
+        - asset
+        - facility
+        - template
+        - assignedTo
+      additionalProperties: false
+security:
+  - bearerAuth: []
+tags:
+  - name: Health
+  - name: Auth
+  - name: App Updates
+  - name: Assets
+  - name: Facilities
+  - name: Scheduling
+  - name: Tasks
+  - name: Work Orders
+  - name: Notifications
+  - name: System
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                required:
+                  - status
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login and receive access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid username or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Get current user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/devices/push-broadcast:
+    post:
+      tags:
+        - Notifications
+      summary: Send push broadcast
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushBroadcastRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushBroadcastResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/assets:
+    get:
+      tags:
+        - Assets
+      summary: List assets (updated)
+      description: >-
+        Returns a paginated list of assets. Search matches substrings in Name, AssetTag, and SerialNumber. Use
+        categoryId or categoryIds (CSV of UUIDs, max 50) to filter. pageSize is capped at 500.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          description: Substring match on Name, AssetTag, SerialNumber
+          schema:
+            type: string
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: categoryIds
+          in: query
+          required: false
+          description: Comma-separated list of category UUIDs (max 50)
+          schema:
+            type: string
+          examples:
+            csv:
+              summary: CSV UUIDs
+              value: e1f2...,c3d4...,a5b6...
+        - name: locationId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          description: Exact match on asset status
+          schema:
+            type: string
+        - name: operationalStatus
+          in: query
+          required: false
+          description: Filter by normalized operational status
+          schema:
+            type: string
+            enum:
+              - operational
+              - broken
+              - archived
+        - name: pmEnabled
+          in: query
+          required: false
+          description: Filter by PM enabled
+          schema:
+            oneOf:
+              - type: string
+                enum:
+                  - "true"
+                  - "false"
+              - type: boolean
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/facilities:
+    get:
+      tags:
+        - Facilities
+      summary: List facilities
+      description: >-
+        Returns a paginated list of facilities that can have PM configured. Facilities represent locations or
+        areas, not Snipe-IT assets.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          description: Substring match on Name or Description
+          schema:
+            type: string
+        - name: locationId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: pmEnabled
+          in: query
+          required: false
+          description: Filter by PM enabled
+          schema:
+            oneOf:
+              - type: string
+                enum:
+                  - "true"
+                  - "false"
+              - type: boolean
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FacilityListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Facilities
+      summary: Create facility
+      description: Create a new facility record for non-asset PM.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                locationId:
+                  type:
+                    - string
+                    - "null"
+                  format: uuid
+                description:
+                  type:
+                    - string
+                    - "null"
+                isActive:
+                  type: boolean
+              required:
+                - name
+              additionalProperties: false
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/assets/{assetId}:
+    get:
+      tags:
+        - Assets
+      summary: Get asset by id (updated)
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetDetail"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/assets/{assetId}/image:
+    get:
+      tags:
+        - Assets
+      summary: Get asset image as binary
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/assets/{assetId}/pm:
+    patch:
+      tags:
+        - Assets
+      summary: Update asset PM settings
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAssetPmRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/assets/pm/bulk:
+    post:
+      tags:
+        - Assets
+      summary: Bulk set PM enabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkSetPmEnabledRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/assets/pm/bulk/template:
+    post:
+      tags:
+        - Assets
+      summary: Bulk set default PM template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkSetPmTemplateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks:
+    get:
+      tags:
+        - Tasks
+      summary: List tasks
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: assigned
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - me
+              - unassigned
+              - any
+            default: any
+        - name: overdue
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+        - name: maintenanceType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PM
+              - CM
+              - all
+        - name: assetId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: templateId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: dueFrom
+          in: query
+          required: false
+          description: Start of due range; accepts date-time or date (date assumes 00:00:00Z)
+          schema:
+            oneOf:
+              - type: string
+                format: date-time
+              - type: string
+                format: date
+        - name: dueTo
+          in: query
+          required: false
+          description: End of due range; accepts date-time or date (date assumes 23:59:59Z)
+          schema:
+            oneOf:
+              - type: string
+                format: date-time
+              - type: string
+                format: date
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedList"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/pm-now:
+    post:
+      tags:
+        - Tasks
+      summary: Create an immediate PM task for an asset's default template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PmNowRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/evidence/{evidenceId}:
+    get:
+      tags:
+        - Tasks
+      summary: Download task evidence
+      parameters:
+        - name: evidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Tasks
+      summary: Delete task evidence
+      parameters:
+        - name: evidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/checklist-evidence/{checklistEvidenceId}:
+    get:
+      tags:
+        - Tasks
+      summary: Download checklist item evidence
+      parameters:
+        - name: checklistEvidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Tasks
+      summary: Delete checklist item evidence
+      parameters:
+        - name: checklistEvidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/export.pdf:
+    get:
+      tags:
+        - Tasks
+      summary: Export task PDF
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/assign:
+    post:
+      tags:
+        - Tasks
+      summary: Assign/unassign a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskAssignRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/start:
+    post:
+      tags:
+        - Tasks
+      summary: Start a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      /api/tasks/{taskId}/draft:
+        get:
+          tags:
+            - Tasks
+          summary: Get my draft checklist entries for task
+          parameters:
+            - name: taskId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+          responses:
+            "200":
+              description: OK
+            "400":
+              description: Invalid request
+            "403":
+              description: Forbidden
+            "404":
+              description: Not found
+          security:
+            - bearerAuth: []
+        patch:
+          tags:
+            - Tasks
+          summary: Save my draft checklist entries for task
+          parameters:
+            - name: taskId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+          requestBody:
+            required: true
+          responses:
+            "200":
+              description: OK
+            "400":
+              description: Invalid request
+            "403":
+              description: Forbidden
+            "404":
+              description: Not found
+          security:
+            - bearerAuth: []
+        delete:
+          tags:
+            - Tasks
+          summary: Clear my draft checklist entries for task
+          parameters:
+            - name: taskId
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+          responses:
+            "200":
+              description: OK
+            "400":
+              description: Invalid request
+            "403":
+              description: Forbidden
+            "404":
+              description: Not found
+          security:
+            - bearerAuth: []
+  /api/tasks/{taskId}/pause:
+    post:
+      tags:
+        - Tasks
+      summary: Pause a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/resume:
+    post:
+      tags:
+        - Tasks
+      summary: Resume a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/cancel:
+    post:
+      tags:
+        - Tasks
+      summary: Cancel a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/complete:
+    post:
+      tags:
+        - Tasks
+      summary: Complete a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/submit-for-approval:
+    post:
+      tags:
+        - Tasks
+      summary: Submit task for approval
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/approve-by-supervisor:
+    post:
+      tags:
+        - Tasks
+      summary: Approve by supervisor
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/approve-by-superadmin:
+    post:
+      tags:
+        - Tasks
+      summary: Approve by superadmin
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/reject-approval:
+    post:
+      tags:
+        - Tasks
+      summary: Reject approval
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                reopenTask:
+                  type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/evidence:
+    post:
+      tags:
+        - Tasks
+      summary: Upload task evidence
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+                - file
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/notifications/channels:
+    get:
+      tags:
+        - Notifications
+      summary: List notification channels
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Notifications
+      summary: Create notification channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationChannelCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/notifications/channels/{channelId}:
+    put:
+      tags:
+        - Notifications
+      summary: Update notification channel
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationChannelUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/notifications/rules:
+    get:
+      tags:
+        - Notifications
+      summary: List notification rules
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Notifications
+      summary: Create notification rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRuleCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/notifications/rules/{ruleId}:
+    put:
+      tags:
+        - Notifications
+      summary: Update notification rule
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRuleUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/notifications/log:
+    get:
+      tags:
+        - Notifications
+      summary: List notification log entries
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: taskId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: ruleId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/system/lookups:
+    get:
+      tags:
+        - System
+      summary: List roles, categories, locations
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupsResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/system/users:
+    get:
+      tags:
+        - System
+      summary: List users
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/system/users/{userId}/roles:
+    put:
+      tags:
+        - System
+      summary: Update user roles
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRolesRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateUserRolesResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/system/users/{userId}:
+    delete:
+      tags:
+        - System
+      summary: Delete local user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/work-orders:
+    get:
+      tags:
+        - Work Orders
+      summary: List CM work orders
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: assetId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: facilityId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: impactLevel
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: reportedFrom
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: reportedTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: completedFrom
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: completedTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: assigned
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - any
+              - unassigned
+              - me
+            default: any
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkOrderListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Work Orders
+      summary: Create a CM work order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkOrderCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/work-orders/{taskId}:
+    get:
+      tags:
+        - Work Orders
+      summary: Get work order detail
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkOrderDetail"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/work-orders/{taskId}/assign:
+    post:
+      tags:
+        - Work Orders
+      summary: Assign/unassign work order
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkOrderAssignRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/work-orders/{taskId}/start:
+    post:
+      tags:
+        - Work Orders
+      summary: Start work order
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/work-orders/{taskId}/pause:
+    post:
+      tags:
+        - Work Orders
+      summary: Pause work order
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/work-orders/{taskId}/resume:
+    post:
+      tags:
+        - Work Orders
+      summary: Resume work order
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/work-orders/{taskId}/complete:
+    post:
+      tags:
+        - Work Orders
+      summary: Complete work order
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkOrderCompleteRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/work-orders/{taskId}/cancel:
+    post:
+      tags:
+        - Work Orders
+      summary: Cancel work order
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/work-orders/{taskId}/close-downtime:
+    post:
+      tags:
+        - Work Orders
+      summary: Close current downtime
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/scheduling/assignment-rules:
+    get:
+      tags:
+        - Scheduling
+      summary: List scheduling assignment rules
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingAssignmentRuleListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Scheduling
+      summary: Create scheduling assignment rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingAssignmentRuleCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/scheduling/assignment-rules/{ruleId}:
+    put:
+      tags:
+        - Scheduling
+      summary: Update scheduling assignment rule
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingAssignmentRuleUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Scheduling
+      summary: Deactivate scheduling assignment rule
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/scheduling/blackout-windows:
+    get:
+      tags:
+        - Scheduling
+      summary: List blackout windows
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingBlackoutWindowListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Scheduling
+      summary: Create blackout window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingBlackoutWindowCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/scheduling/blackout-windows/{blackoutWindowId}:
+    put:
+      tags:
+        - Scheduling
+      summary: Update blackout window
+      parameters:
+        - name: blackoutWindowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingBlackoutWindowUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Scheduling
+      summary: Deactivate blackout window
+      parameters:
+        - name: blackoutWindowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/scheduling/recalculate:
+    post:
+      tags:
+        - Scheduling
+      summary: Recalculate PM schedules for assets and facilities
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingRecalculateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingRecalculateResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/scheduling/day:
+    get:
+      tags:
+        - Scheduling
+      summary: List scheduled, due, and projected PM tasks for a day
+      parameters:
+        - name: date
+          in: query
+          required: true
+          description: UTC date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingDayEventsResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/scheduling/calendar:
+    get:
+      tags:
+        - Scheduling
+      summary: Aggregate PM counts and capacity for a month
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: UTC month in YYYY-MM format (defaults to current month)
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingCalendarResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

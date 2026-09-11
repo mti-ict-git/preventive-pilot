@@ -1,49 +1,16 @@
 # Product Principles
 
-## 1. Traceability Before Convenience
+Last reviewed: 2026-09-10. These principles guide future changes; they do not claim that every existing route already complies.
 
-Maintenance work must be attributable. Lifecycle changes, assignment, evidence, completion, approval, rejection, revision, and administrative actions should preserve actor and timestamp information.
+1. **Maintenance work stays traceable.** Preserve the relationship between asset/facility, template, task, checklist results, evidence, responsible users, and timestamps. Destructive operations need explicit lifecycle rules.
+2. **PM and CM remain distinguishable.** Reuse shared infrastructure while making planned maintenance and breakdown work identifiable in screens, API filters, and reports.
+3. **Completion and approval are separate concepts.** A technician submission, supervisor review, and final approval have different meanings. Never infer final approval from a completed label alone.
+4. **The backend enforces access.** Hidden or disabled UI controls improve usability but do not establish authorization. Role and assignment checks belong at the operation boundary.
+5. **Scheduling must be explainable.** Existing tasks and projected occurrences are different. Blackout, operational state, freeze, idempotency, and completion-date effects must be documented and tested.
+6. **Evidence requirements are explicit.** Attachment visibility and mandatory evidence are distinct flags. Users must understand what prevents completion and how to correct it.
+7. **Field work must expose synchronization state.** Offline actions, pending evidence, failures, and conflicts must be visible. Local persistence does not prove that a server accepted an action.
+8. **Metrics need stable definitions.** State the population, dates, maintenance type, approval inclusion, and exclusions behind compliance, overdue, and CM metrics.
+9. **Integrations fail visibly.** Surface sync/job failures and notification outcomes without conflating queued work with successful delivery.
+10. **Documentation and evidence move with the change.** Update active contracts and roadmap evidence; keep unresolved questions visible. Avoid rewriting published Git history because the repository is connected to Lovable.
 
-## 2. Safety-Critical Validation Happens on the Server
-
-Clients may guide users, but the API must enforce permissions, lifecycle transitions, mandatory checklist outcomes, notes, evidence requirements, and approval locks.
-
-## 3. One Work Record, Two Maintenance Modes
-
-PM and CM share task/checklist/evidence infrastructure where useful, while retaining explicit `MaintenanceType` semantics and CM-specific reporting, impact, downtime, and resolution fields.
-
-## 4. Assets and Facilities Are First-Class Maintenance Subjects
-
-Every maintenance task targets exactly one asset or one facility. Scheduling, display, reporting, and permissions must not assume assets only.
-
-## 5. External Masters Are Synchronized, Not Silently Replaced
-
-Snipe-IT is the upstream asset source. Local records preserve maintenance history and normalize operational status. Missing upstream assets are archived rather than deleted.
-
-## 6. Scheduling Must Be Deterministic and Idempotent
-
-Schedule calculation, PM Now, blackout handling, frozen schedules, and job retries must not create duplicate work. Broken or archived assets do not receive new projected/generated PM work.
-
-## 7. Approval Is a Controlled State Machine
-
-Technician submission, supervisor review, superadmin approval, rejection, revision, and reopen operations are explicit transitions. Non-authorized edits are blocked while approval is pending or final.
-
-## 8. Evidence Must Be Durable and Explainable
-
-Metadata belongs in SQL Server; file content belongs in configured storage. Upload, replacement, deletion, import, and download behavior must be permission-aware and auditable.
-
-## 9. Least Privilege
-
-Technicians modify work they are allowed to execute. Manager capabilities are shared by Supervisor, Admin, and Superadmin where appropriate. Sensitive configuration and destructive actions require Admin or Superadmin, with Superadmin reserved for the highest-impact operations.
-
-## 10. Web and Mobile Share Contracts
-
-Web and mobile clients consume the same REST contract. Platform-specific UX may differ, but status names, validation, permissions, and response meaning must not diverge.
-
-## 11. Degraded Integrations Must Be Visible
-
-Snipe-IT, LDAP, Graph email, Firebase push, shared storage, and APK hosting are external failure domains. Failures should be logged and surfaced without corrupting core maintenance records.
-
-## 12. Documentation Is Part of the Product
-
-The mandatory documents, OpenAPI contract, database specification, roadmap, and verification evidence are updated with the behavior they describe. Historical plans are supporting context, not automatic truth.
+Use the [functional specification](functional-specification.md) for expected behavior and the [question register](open-questions-and-challenges.md) when observed behavior falls short or is ambiguous.

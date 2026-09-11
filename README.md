@@ -1,104 +1,79 @@
 # Preventive Pilot
 
-Preventive Pilot is a maintenance operations system for preventive maintenance (PM) and corrective maintenance (CM). It combines an operations web application, a REST API, Microsoft SQL Server persistence, scheduled jobs, external asset synchronization, notifications, evidence storage, and a Capacitor field application.
+Preventive Pilot is a maintenance management system (CMMS) centered on preventive maintenance, with corrective work orders for asset and facility breakdowns. It covers maintenance templates, scheduling, execution, evidence, approval, reporting, and notifications.
 
-## Start Here
+## Start here
 
-The documentation under [`docs/`](docs/) is the source of truth:
+- Read the [documentation index](docs/README.md) for the current source-of-truth documents.
+- Read [AGENTS.md](AGENTS.md) for the repository working method.
+- **Start work at [implementation-roadmap.md](docs/implementation-roadmap.md): the single work reference containing the next action and complete ordered backlog.**
+- Moving laptops or starting a new session: follow the [session handoff](docs/implementation-roadmap.md#laptop-and-session-handoff), including the starter prompt and transfer checklist.
+- Review [open questions](docs/open-questions-and-challenges.md) rather than assuming historical plans match implementation.
 
-- [Project plan](docs/project-plan.md) — goals, scope, stakeholders, and delivery boundaries.
-- [Product principles](docs/product-principles.md) — durable product and engineering decisions.
-- [Functional specification](docs/functional-specification.md) — roles, workflows, and expected behavior.
-- [Technical implementation plan](docs/technical-implementation-plan.md) — architecture and component responsibilities.
-- [OpenAPI contract](docs/openapi.yaml) — version-controlled API contract.
-- [Database specification](docs/database-schema-specification.md) — logical data model and invariants.
-- [Implementation roadmap](docs/implementation-roadmap.md) — active phase, checklists, and verification evidence.
-- [Open questions and challenges](docs/open-questions-and-challenges.md) — unresolved ambiguity and known gaps.
+The current documentation baseline was reviewed on 2026-09-10 through source inspection. Application runtime, database, integration, and device acceptance remain separate verification work.
 
-Read [`AGENTS.md`](AGENTS.md) before making non-trivial changes. Older feature plans and the journal remain useful historical evidence, but the mandatory documents above take precedence.
+## Current priority
 
-## Repository Map
+Focus first on the browser-based desktop application and its supporting backend/database. Mobile uncertainties and mobile-specific delivery/testing are deferred, not resolved, and do not block desktop work. See the [roadmap](docs/implementation-roadmap.md) for scope and priorities.
 
-| Path | Responsibility |
+## Product scope
+
+- Assets synchronized from Snipe-IT and locally managed facilities.
+- PM templates, ordered checklists, assignment, recurring scheduling, blackouts, and PM Now.
+- Technician execution, attachments, supervisor review, and superadmin approval.
+- CM work orders with breakdown context, impact, downtime, and resolution.
+- Reports, task PDF/CSV outputs, mail/WhatsApp/push integration, and background jobs.
+- PM Tech mobile source is available in this local workspace; its version-control/delivery status is unresolved because `mobile` is ignored by Git.
+
+See the [functional specification](docs/functional-specification.md) for workflow semantics and known differences between product intent and existing behavior.
+
+## Repository layout
+
+| Path | Purpose |
 | --- | --- |
-| `src/` | React web client, routes, pages, API client, and reusable UI |
-| `backend/src/` | Express API, authentication, authorization, jobs, integrations, and data access |
-| `db/schema.sql` | Idempotent SQL Server schema and migrations |
-| `mobile/pm-tech/` | Capacitor field application; currently present locally but not tracked by Git |
-| `scripts/` | Local development, schema, publishing, and operational helpers |
-| `secure_apk/` | APK manifest, download host, and authenticated uploader |
-| `docs/` | Product, contract, architecture, roadmap, operations, and historical documentation |
-| `docker-compose*.yml` | Web/API deployment and evidence-volume variants |
+| `src/` | React + Vite web application, shadcn-ui, Tailwind, React Query |
+| `backend/` | Express + TypeScript API, JWT/LDAP/local auth, jobs, and explicit SQL through mssql |
+| `db/schema.sql` | SQL Server schema creation and conditional evolution |
+| `scripts/` | Development, schema, discovery, and documentation utilities |
+| `docs/` | Maintained product, workflow, architecture, API, data, and operational documentation |
+| `mobile/pm-tech/` | Locally available React + Capacitor client; see Q-06 |
+| `nginx/` and Compose files | Web/API container delivery and optional storage overlays |
 
-## Technology
+## Local development
 
-- Web: React 18, TypeScript, Vite, TanStack Query, React Router, Tailwind, shadcn/Radix UI.
-- API: Node.js, Express, TypeScript, Zod, JWT, LDAP.
-- Data: Microsoft SQL Server via `mssql`.
-- Mobile: React 19, Capacitor 6, Android/iOS wrappers, barcode scanning, push notifications, native biometric support.
-- Integrations: Snipe-IT, Microsoft Graph, Firebase/FCM, SMB/CIFS or bind-mounted evidence storage.
-
-## Local Development
-
-Prerequisites:
-
-- Node.js and npm.
-- Reachable Microsoft SQL Server database.
-- LDAP configuration, even when primarily using local authentication, because the current environment schema requires LDAP variables.
-
-Install dependencies:
+Prerequisites: Node.js/npm, a reachable SQL Server database, and backend configuration. Docker uses Node 22. Root and backend dependencies must be installed separately:
 
 ```sh
-npm install
-npm --prefix backend install
+npm ci
+npm ci --prefix backend
 ```
 
-Create a root `.env` with the variables described in [Deployment and environment](docs/deployment-and-environment.md), then initialize/verify the database:
+Configure the root `.env` using [deployment and environment](docs/deployment-and-environment.md). Database credentials, `JWT_SECRET`, and the currently mandatory LDAP fields are required. Preserve any existing environment configuration.
+
+After confirming the intended database target:
 
 ```sh
 npm run db:apply-schema
-npm run db:verify-schema
-```
-
-Run web and API together:
-
-```sh
+npm run db:verify
 npm run dev:full
 ```
 
-Default development endpoints:
+Schema application mutates the configured database. The backend can start enabled jobs. For bootstrap account creation and isolated verification settings, follow the deployment guide.
 
-- Web: Vite URL printed by the development command.
-- API: `http://localhost:3001`.
-- Health: `GET http://localhost:3001/health`.
-- Swagger UI: `http://localhost:3001/api/docs`.
+Web development defaults to port 8080; backend defaults to 3001. Root Docker Compose exposes web on 9102 and API on 5056, with same-origin `/api/` proxying. SQL Server is not provisioned by the supplied root Compose stack.
 
-## Verification
+## Documentation and verification
 
-Run the baseline checks before handing off changes:
+The eight mandatory documents are linked from the [documentation index](docs/README.md). API documentation is versioned in [docs/openapi.yaml](docs/openapi.yaml), with known coverage gaps in [API coverage](docs/api-coverage.md). The running backend serves its embedded definition at `/api/docs` and `/api/docs.json`.
 
 ```sh
-npm run lint
-npx tsc --noEmit
-npm --prefix backend run typecheck
-npm run build
+node scripts/docs/check-docs.mjs
 ```
 
-For database, mobile, integration, or deployment changes, also run the area-specific verification recorded in the active roadmap checklist.
+See [testing strategy](docs/testing-strategy.md) for application checks and [documentation verification](docs/documentation-verification.md) for the baseline evidence. A successful documentation check is not a production-readiness certification.
 
-## Safe Change Rules
+## Deployment and history
 
-- Do not rewrite published history; this repository is connected to Lovable.
-- Do not implement from assumptions when a source document exists.
-- Review `docs/openapi.yaml` for every backend change.
-- Synchronize workflow, schema, API, and roadmap documents in the same work item.
-- Never commit secrets, `.env` files, service-account JSON, generated native build output, or evidence files.
+Use the [deployment guide](docs/deployment-and-environment.md), [operational runbook](docs/operational-runbook.md), and [APK publication notes](docs/apk-publish.md). The repository is connected to Lovable; preserve published Git history as required by AGENTS.md.
 
-## Deployment
-
-The default compose stack builds the API and Nginx-served web application. Evidence storage can use:
-
-- `docker-compose.bind.yml` for a host bind mount.
-- `docker-compose.cifs.yml` for an SMB/CIFS volume.
-
-See [Deployment and environment](docs/deployment-and-environment.md) and [Operational runbook](docs/operational-runbook.md) before deploying.
+Earlier plans and journal entries are retained as historical references with explicit banners. The [previous README](docs/archive/readme-before-baseline.md) is archived; its placeholder project links and old setup instructions are not active guidance.

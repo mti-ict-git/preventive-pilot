@@ -1,3 +1,6 @@
+> Historical reference — superseded as an active specification on 2026-09-10.
+> Use the [documentation index](README.md), [current roadmap](implementation-roadmap.md), and [open questions](open-questions-and-challenges.md). This document preserves earlier plans or reported work; it does not establish current behavior or fresh verification.
+
 # Journal
 
 ## Wed Feb 18 02:02:16 WITA 2026

@@ -1,138 +1,153 @@
 # Functional Specification
 
-## Product Surfaces
+Last reviewed: 2026-09-10. Baseline: observed source and reconciled product intent. Runtime acceptance remains open.
 
-- **Web operations application:** planning, administration, execution, approval, reporting, and configuration.
-- **PM Tech mobile application:** field execution, schedules, assets/facilities, CM reporting, offline queue, push, biometric entry, and Android updates.
-- **REST API:** shared business rules and integration boundary.
-- **Scheduled workers:** Snipe-IT sync, schedule calculation, reminders/notifications, and evidence import.
+## Current delivery scope
 
-## Roles
+The current priority is the desktop/browser application and its backend/database. Mobile-specific work and acceptance are deferred; retained mobile descriptions provide context and do not create desktop release gates. Follow the [desktop-first roadmap](implementation-roadmap.md) for the scoped checklist.
 
-| Capability | Technician | Supervisor | Admin | Superadmin |
-| --- | ---: | ---: | ---: | ---: |
-| View operational records | Yes | Yes | Yes | Yes |
-| Execute permitted assigned work | Yes | Yes | Yes | Yes |
-| Assign/reassign and PM Now | No | Yes | Yes | Yes |
-| Review supervisor approval stage | No | Yes | According to route policy | Yes |
-| Final PM approval | No | No | No | Yes |
-| Manage general system/users | No | Limited | Yes | Yes |
-| Delete protected records / highest-impact policy | No | No | No | Yes |
+## Actors and terminology
 
-Route-level middleware is authoritative where this matrix is intentionally broad.
+Technician, Supervisor, Admin, and Superadmin are the main role names. Assignment may target a user or a role. See [security and access](security-and-access-model.md) for endpoint-specific distinctions.
 
-## Authentication and Session
+An **asset** is synchronized equipment. A **facility** is a locally maintained maintenance context, including areas and server-specific UPS equipment under the user-confirmed scope. A **template** defines recurring PM and checklist requirements. A **PM task** is preventive work. A **CM work order** is reactive work stored in the same task entity with `MaintenanceType = CM`. Each task references exactly one asset or facility.
 
-1. User submits identifier, password, and `ldap` or `local` provider.
-2. API verifies identity and loads roles from SQL Server.
-3. API returns access and refresh JWTs.
-4. Clients attach a Bearer access token.
-5. On `401`, clients may exchange a valid refresh token and retry once.
-6. Role middleware may reload roles from the database before returning `403`.
+## F-01 — Assets and facilities
 
-## Asset Management
+Assets support search, filters, detail, maintenance settings, history, images, and PM Now. Snipe-IT sync preserves its raw status label and a normalized operational status (`operational`, `broken`, `archived`). Assets missing from sync are archived to retain history.
 
-- List and filter assets by search, upstream status, operational status, PM state, category, and location.
-- Read asset detail, PM settings, maintenance history, assignment/responsibility, and image.
-- Managers can enable/disable PM, choose a default template, and update next due.
-- Managers can apply PM enabled/template settings in bulk.
-- Snipe-IT sync updates supported asset fields and binary image content.
-- An upstream-deleted asset is archived locally to preserve history.
-- Operational states are `operational`, `broken`, and `archived`.
+Facilities support creation, editing, archive, cloning, and PM defaults, including bulk PM operations. They are not Snipe-IT hardware records.
 
-## Facility Management
+Acceptance: maintenance settings persist for the selected context; history retains task/evidence relationships; archived/broken state is reflected in scheduling behavior.
 
-- List, create, view, update, and clone facilities.
-- Facilities may reference a location and have independent PM settings.
-- Managers can trigger immediate facility PM work.
-- Inactive facilities remain historical records.
+### User-confirmed scope — 2026-09-11
 
-## Templates and Checklists
+Snipe-IT is the sole asset master source: create new assets there, then synchronize. PM is passive for synchronized asset master data while owning maintenance configuration and records. AC and electrical panels are excluded from the current maintenance scope; server-specific UPS is classified as a facility. Current sync imports returned Snipe-IT hardware without a special AC/panel filter; this inspection does not establish which categories are present upstream. No sync-filter change is authorized by the maintenance-scope exclusion alone.
 
-- Managers create, update, and delete PM templates.
-- Templates define category applicability, required role, estimated duration, recurrence defaults, and ordered checklist items.
-- Checklist items can be mandatory, permit skipping, enable attachment, and require attachment.
-- Completion validates current template rules on the server.
+Location represents the site and is not expected to change in normal operations. Admin/Superadmin own facility master-data changes; Supervisors communicate needs verbally and cannot create/edit/archive facilities. No in-app facility change-request workflow is required. Closure behavior remains open. Broken assets receive no new scheduled PM tasks, and the user requires task cancellation with records retained. Current source stops new generation but does not implement cancellation on broken-status synchronization; affected nonterminal PM states and reporting effects require implementation reconciliation. Automatic archival of missing upstream assets does not require admin confirmation; reappearance behavior remains open.
 
-## PM Scheduling
+Asset-to-facility mapping is only a possible future capability. No additional prerequisite fields were requested, but exact mandatory-field and exclusion rules remain undecided. The primary daily desktop needs are schedules and PM tasks. See the [answer evaluation](implementation-roadmap.md) for confirmed versus tentative decisions; implementation parity has not yet been tested.
 
-- Assignment rules map category/location conditions to a user or role.
-- Blackout windows exclude configured date ranges.
-- Asset and facility schedules track template, frequency, next due, and frozen state.
-- Schedule calculation generates work within a configurable horizon.
-- Broken/archived assets and frozen schedules do not generate or project new work.
-- Calendar and day views include existing work, projections, estimated minutes, and capacity summaries.
-- PM Now creates immediate work subject to server idempotency rules.
+## F-02 — Templates and checklists
 
-## PM Task Lifecycle
+Templates define intervals, applicable category, required assignment role, estimated duration, and ordered checklist items. Attachment enablement controls whether an attachment is offered; attachment requirement controls completion validation. Required items cannot be skipped. Outcomes use `0 = skip`, `1 = pass`, `2 = fail` for pass/fail checklist items; non-pass/fail items display nonzero completion as done.
 
-Expected operational states include Upcoming, In Progress, Paused, Completed, and Cancelled, with overdue/due-today often derived from dates rather than persisted as independent lifecycle states.
+Completion handlers validate applicable checklist, notes, and evidence rules. Do not assume that submission applies identical validation: Q-02 remains open. Unused template deletion and references must be checked against the route rather than assuming all deletions are soft deletes.
 
-1. A task is generated or created using PM Now.
-2. A manager assigns it, or an assignment rule supplies responsibility.
-3. Authorized user starts, pauses/resumes, or cancels it.
-4. Draft checklist data may be saved.
-5. Completion validates outcomes, mandatory notes, and required evidence.
-6. Supervisors may backdate completion with reason where permitted.
-7. Completed work can enter approval.
+Acceptance: ordering survives save/reload; applicable category restrictions hold; required evidence/notes failures are rejected and explained.
 
-## PM Approval
+### User decisions — 2026-09-11
 
-1. Technician submits completed work: `PendingSupervisor`.
-2. Supervisor approves: `PendingSuperadmin`.
-3. Superadmin approves: final approved state.
-4. Authorized reviewers may reject with a reason.
-5. Revision can add a correction note and optionally reopen for technician edits.
-6. Approval trail and remarks history remain visible.
+Template management remains available to Supervisor/Admin/Superadmin. Notes should be required on failure rather than merely because an item is mandatory; current completion validation does not yet match this direction. Existing per-item attachment rules remain unchanged.
 
-Exact persisted status strings and all transition guards must be regression-tested; see the open-questions document.
+Nonfinal tasks follow template changes, while final-submitted/historical tasks retain their original checklist definitions. Current task detail reads live template items, so history preservation is an implementation gap. The user confirmed that the cutoff is successful technician submission for approval (`submit-for-approval`, entering `PendingSupervisor`). Capture the checklist definition then and preserve it throughout review and history; do not wait for final Superadmin approval. Q-16 records the resolved cutoff, while TC-02 implementation and returned/reopened/history-migration handling remain open. Use [TC-01/TC-02](implementation-roadmap.md#tc-01) as the action reference.
 
-## Evidence
+## F-03 — Scheduling and assignment
 
-- Task-level and checklist-item evidence are supported.
-- Files are written below `EVIDENCE_STORAGE_ROOT`; SQL stores metadata.
-- Maximum request handling for evidence is currently implemented separately from the global 1 MB JSON parser.
-- Evidence can be streamed/downloaded and deleted by authorized users.
-- Non-superadmin evidence changes are restricted during approval stages.
-- Import job can ingest legacy/shared files with skip or replace behavior.
+Recurring schedules exist for assets and facilities. The background job calculates upcoming work within its configured horizon. PM Now can create immediate work and includes idempotency checks. Assignment rules can fall back to the template's required role.
 
-## Corrective Maintenance Work Orders
+Broken/archived assets and frozen schedule rows are excluded from applicable new-task generation. Existing tasks remain visible. Calendar/day responses can include projected occurrences that are not yet persisted tasks. Estimated duration uses the template value with a 60-minute fallback; the web capacity display uses an eight-hour default threshold. This is a planning display, not proof of per-technician staffing optimization.
 
-- Users report a breakdown against exactly one asset or facility.
-- Report captures symptom, impact (`normal`, `high`, `critical`), optional failure classification, channel, and optional downtime start.
-- Work orders can be listed, filtered, assigned, started, paused, resumed, completed, cancelled, and have downtime closed.
-- Managers can set assignment and priority (`low`, `medium`, `high`).
-- Resolution data records outcome/notes for completed or cancelled work.
-- CM reporting includes breakdown dimensions, monthly incident counts, and MTTR.
+`pm.fn_CalculateNextDueAt` is used in scheduling paths. Approval still contains separate next-due logic, so universal calculation parity is not established (Q-04).
 
-## Notifications and Devices
+Acceptance: test duplicate requests, frozen rows, broken assets, blackouts, interval boundaries, asset/facility parity, and the distinction between actual and projected work.
 
-- Notification channels and rules are configurable.
-- Notification attempts are recorded in a log.
-- Authenticated devices can register Firebase tokens.
-- Admin/Superadmin can send broadcast push notifications.
-- Reminder/escalation work runs on a configurable interval.
+### Confirmed scheduling policy — 2026-09-11
 
-## Reporting
+Use one default template per asset/facility. Recurring PM remains anchored to planned due dates: monthly work due 1 September and completed 10 September is next due 1 October. Completion or approval delays must not shift the planned cadence. This is confirmed product behavior to implement, not a claim that all existing calculations already comply.
 
-- Overdue maintenance, compliance, system-log export, assets without PM, and CM metrics.
-- Maintenance-type filters accept PM, CM, or combined mode where implemented.
-- CSV exports are provided for operational reports.
-- PM task detail can export PDF with execution and approval evidence.
+Retain the existing first-date fallback (current time plus template interval when no date/history exists), 30-day default generation horizon, and Supervisor/Admin/Superadmin planning permissions. See [SC-01](implementation-roadmap.md#sc-01) for implementation and verification. Missed-period and PM Now behavior is defined below. Blackout/manual changes and technical/migration boundaries still require scoped reconciliation before dependent changes.
 
-## Administration and Operations
+### Missed periods, early PM, and PM Now — agreed 2026-09-11
 
-- View system status and logs.
-- Manage PM Now defaults, UI settings, users/roles, LDAP assignment, Snipe-IT, Microsoft Graph, and WhatsApp configuration.
-- Trigger supported jobs manually.
-- Configure Android/iOS/web minimum-version policy and receive installation reports.
-- Host/download signed APK updates through the configured store or proxy.
+Maintain one actionable PM job for the current maintenance need rather than requiring several repeated checklists for one physical execution. Preserve missed periods as not performed, never implicitly completed. Do not automatically replace in-progress or approval-stage work. For work caught up in November, preserve September/October misses and keep the next planned date at 1 December.
 
-## Failure Behavior
+Early execution fulfills the next regular occurrence: performing a 1 October task on 20 September leaves 1 November as the next planned date. Preserve the original planned date and actual execution date separately.
 
-- Invalid input returns `400` with a JSON message.
-- Missing/invalid authentication returns `401`.
-- Insufficient role or record access returns `403`.
-- Missing records return `404`.
-- Duplicate/idempotency conflicts should return `409`.
-- Unexpected dependency/server failures return `500` and should generate system-log evidence without leaking secrets.
+For the same asset/facility and template, PM Now reuses applicable due/overdue work first, then an existing next regular task. If no applicable task exists, create a task representing the next regular occurrence and prevent duplicate generation. State handling, period identity, missed-period representation, concurrency, and migration remain implementation work in SC-01; these decisions are not yet runtime-verified.
+
+### Blackout and Skip next PM — 2026-09-11
+
+Retain existing global blackout behavior; no blackout expansion or separate indefinite suspension workflow is requested. Skip next PM intentionally omits one upcoming occurrence and leaves PM enabled on its original cadence. Supervisor, Admin, and Superadmin may perform it with a required reason. Preserve the occurrence, actor/time, and any existing task history; do not record the skip as completed work or automatically replace in-progress/approval-stage tasks.
+
+Example: skipping 1 October leaves 1 November as the next regular occurrence. A deliberately skipped occurrence must be distinguishable from ordinary overdue nonperformance. Compliance scoring/exclusion remains undecided (Q-09). Implementation and verification live in SC-01; no runtime behavior has changed yet. Skip privileges do not broaden existing blackout-administration privileges.
+
+### Role queue and capacity — agreed 2026-09-11
+
+Routine PM work is routed to an appropriate role queue using assignment rules/template-role fallback. An eligible technician claims the task and becomes its single responsible person. Claims must be exclusive under concurrency; role membership does not permit takeover of a task already assigned to another technician. Managers retain direct assignment/reassignment for operational exceptions, and existing individual assignments must not be silently cleared.
+
+Supervisor/Admin/Superadmin may reassign before technician submission, including while work is in progress. After submission, reassignment is locked until the Supervisor explicitly returns the work for revision. Preserve actor/result/evidence history across a handoff; returning for revision does not implicitly change the submitted checklist definition.
+
+Assignment-rule editing remains Superadmin-only. Keep the current aggregate estimated workload per day; no per-technician capacity, shift management, or automatic balancing is requested. See [AS-01](implementation-roadmap.md#as-01) for pending implementation and verification; source inspection has not established these controls as already enforced.
+
+## F-04 — Task execution and evidence
+
+Task APIs expose start, pause, resume, cancel, reopen, complete, assignment, draft, evidence, and export operations. Stored lifecycle values and UI filters must not be treated as one enum: due-today/overdue/upcoming labels may be derived from dates and state.
+
+Evidence supports task-level and checklist-level attachments. Storage is configured server-side; the existing convention uses quarter/year folders. The documented upload limit is 50 MB per file. Access and approval locks must be enforced server-side. Backdated completion is restricted to management roles and requires a non-future timestamp and a reason; effective completion time and data-entry time remain separate.
+
+Acceptance: successful execution persists results and evidence; missing/invalid data, forbidden ownership, approval locks, oversized files, and future backdates fail appropriately. Verify upload limits and formats against each operation rather than assuming generic multipart behavior.
+
+### Execution decisions — 2026-09-11
+
+Support Start/Pause/Resume to measure PM work time; Pause does not require a reason for now. Persist timing rather than deriving active duration from StartedAt/CompletedAt alone. Active work must be distinguished from paused/review waiting time; detailed timing, handoff, and legacy-record rules remain EX-01/Q-20. Whether drafts are allowed before Start is not implied by the timing requirement.
+
+An inspection containing Fail may be submitted with required notes and configured evidence. Offer explicit work-order creation for the finding; this is optional, not automatic or a prerequisite to submitting the PM inspection. Repair completion is distinct from inspection submission.
+
+## F-05 — PM approval
+
+Expected review path:
+
+```mermaid
+flowchart LR
+  N[None or returned work] -->|Submit| S[PendingSupervisor]
+  S -->|Supervisor-level review| A[PendingSuperadmin]
+  A -->|Superadmin approval| F[Approved]
+  S -->|Reject| R[Rejected]
+  A -->|Reject| R
+```
+
+Revision is a separate action and can reopen work; its exact reset behavior must be read together with the endpoint contract. The overview above is not a complete transition validator.
+
+| Operation | Observed behavior |
+| --- | --- |
+| `complete` | Sets lifecycle completion fields after validation; not equivalent to final approval |
+| `submit-for-approval` | Writes technician trail and `PendingSupervisor`; the handler does not itself set lifecycle `Status = completed` |
+| `approve-by-supervisor` | Requires `PendingSupervisor`; allows Supervisor, Admin, or Superadmin; moves to `PendingSuperadmin` |
+| `approve-by-superadmin` | Requires `PendingSuperadmin`; Superadmin only; sets `Approved` and lifecycle completion |
+| `revise-approval` | Separate correction path with Supervisor/Superadmin route guard |
+| `reject-approval` | Records rejection metadata; verify reopening and transition details per route |
+
+The web Approvals page provides review queues. Task detail and PDF export expose sign-off information. Historical statements that submission always marks lifecycle completion are superseded by this distinction. Checklist validation at submission, segregation of duties, and facility finalization require D1 verification (Q-02–Q-04).
+
+Acceptance: test each actor and valid/invalid transition, repeated submission, required evidence, returned work, own-work approval policy, and facility/asset finalization. Do not count source inspection as acceptance.
+
+### Return-to-work decisions — 2026-09-11
+
+Revise means the existing task can be corrected and requires a written reason. Reject means the work is incorrect and must be repeated. User confirmed that repeated work uses a new replacement task linked to the rejected original. Retain original results, evidence, work time, and rejection reason. Creation trigger, duplicate prevention, assignment, template selection, and recurrence/compliance attribution remain implementation boundaries (Q-20). Preserve rejected history and the submitted checklist definition; do not silently discard prior results/evidence or treat every rejected state as a revision unlock.
+
+See [EX-01](implementation-roadmap.md#ex-01) for implementation/verification. Existing optional-reason and state-only rejection handlers do not yet establish this full behavior.
+
+## F-06 — Corrective maintenance
+
+Create a work order from an asset/facility breakdown or a PM finding. Collect symptom, impact, optional failure category/code, reported channel, and downtime start. CM reuses task/checklist/evidence infrastructure through `/api/work-orders` and shared task operations where applicable. A failed PM finding must offer an explicit option to create a work order; source linkage and duplicate handling require implementation review under EX-01, and automatic creation is not requested.
+
+Work orders support list/detail, assignment, start/pause/resume, complete, cancel, closing downtime, and resolution updates. The web provides a ticket-style subject and resolution view. Do not assume PM approval is automatically required for CM.
+
+Acceptance: a breakdown remains associated with exactly one context; assignment and lifecycle access are enforced; closing downtime and completing work have distinguishable effects; PM views exclude CM where required.
+
+## F-07 — Reports and notifications
+
+Reports cover compliance, overdue work, assets without PM, and system logs. CM metrics include incident counts, grouping by category/location/failure/impact, and reported-to-complete MTTR. CSV exports and task PDF exports are available in the existing implementation. Approval inclusion and date denominators need verification before using these as audited KPIs (Q-09).
+
+Notification configuration supports mail/Microsoft Graph, WhatsApp, and push. Rules cover reminders/escalations and task/approval events. Admin/Superadmin broadcast is a separate action. See [integration contracts](integration-contracts.md) for routing and delivery limitations.
+
+## F-08 — Mobile
+
+The available client is `mobile/pm-tech`: React + Vite + Capacitor, not React Native. It includes PM tasks, CM work orders, assets/facilities, schedule, offline, and profile pages, plus native QR/biometric/push/update integrations.
+
+Production API fallback is a fixed HTTPS domain in the client. Discovery is opt-in. Offline replay, native installation, and biometric storage guarantees require device testing. Mobile is currently ignored by Git; local presence is not fresh-checkout availability (Q-06).
+
+## Traceability
+
+Source evidence: `src/pages`, `src/lib/api.ts`, `backend/src/routes`, `backend/src/jobs`, `db/schema.sql`, and the available `mobile/pm-tech` source. Contract gaps are in [API coverage](api-coverage.md). Verification scenarios and phase gates are in [testing strategy](testing-strategy.md) and the [roadmap](implementation-roadmap.md).
