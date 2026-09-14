@@ -73,3 +73,7 @@ These documents are retained at their existing paths to preserve references. The
 5. Keep documentation in English. Store examples without credentials or deployment secrets.
 
 Dates identify documentation review, not a release date. “Observed” means found in source. “Verified” requires a recorded check. “Proposed” means future work that has not started.
+
+## D1 implementation mapping
+
+[Code-to-implementation map](code-implementation-map.md) links each roadmap item to observed source behavior, affected files, data/API work, dependencies and verification. The [screening inventory](code-audit-inventory.json) records the audit scope. These support the roadmap; they do not replace its backlog or imply runtime verification.

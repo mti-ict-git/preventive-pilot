@@ -7,8 +7,8 @@ This is a static inventory of literal Express route registrations. It does not v
 The OpenAPI baseline preserves the embedded contract rather than inventing schemas for uncovered operations. Missing descriptions are tracked as Q-01 in [open questions](open-questions-and-challenges.md). A passing parity check does not mean full API coverage.
 
 - Implemented operations found: **134**
-- Documented operations: **63**
-- Implemented operations absent from the contract: **71**
+- Documented operations: **65**
+- Implemented operations absent from the contract: **69**
 - Contract operations without a matching literal route: **0**
 
 ## Implemented operations missing from OpenAPI
@@ -57,7 +57,6 @@ The OpenAPI baseline preserves the embedded contract rather than inventing schem
 | `POST /api/app-updates/report` | `backend/src/routes/appUpdates.ts` |
 | `POST /api/devices/push-test` | `backend/src/routes/devices.ts` |
 | `POST /api/devices/register` | `backend/src/routes/devices.ts` |
-| `POST /api/facilities/{facilityId}/clone` | `backend/src/routes/facilities.ts` |
 | `POST /api/facilities/{facilityId}/pm-now` | `backend/src/routes/facilities.ts` |
 | `POST /api/system/evidence-import/run` | `backend/src/routes/system.ts` |
 | `POST /api/system/jobs/{jobName}/run` | `backend/src/routes/system.ts` |
@@ -77,7 +76,6 @@ The OpenAPI baseline preserves the embedded contract rather than inventing schem
 | `POST /api/work-orders/{taskId}/resolution` | `backend/src/routes/workOrders.ts` |
 | `PUT /api/app-updates/policy` | `backend/src/routes/appUpdates.ts` |
 | `PUT /api/auth/me/preferences` | `backend/src/routes/auth.ts` |
-| `PUT /api/facilities/{facilityId}` | `backend/src/routes/facilities.ts` |
 | `PUT /api/facilities/{facilityId}/pm-settings` | `backend/src/routes/facilities.ts` |
 | `PUT /api/system/microsoft-graph-settings` | `backend/src/routes/system.ts` |
 | `PUT /api/system/pm-settings` | `backend/src/routes/system.ts` |

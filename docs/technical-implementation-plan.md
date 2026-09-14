@@ -66,7 +66,7 @@ Scheduling uses SQL date calculation and background generation, with additional 
 5. Run appropriate static, contract, database, and workflow checks.
 6. Attach evidence, synchronize documentation, and update the roadmap.
 
-D0 modifies documentation and documentation tooling only. D1 is active for desktop requirements discussion, starting with assets/facilities; application changes await resolution of the relevant decisions. D2–D3 remain proposed.
+D0 modifies documentation and documentation tooling only. D1 implementation is authorized; AF-02 is locally implemented and TC-01 is next. Resolve only the applicable remaining decision before each dependent change. D2–D3 remain proposed.
 
 ## Technical risks to resolve
 
@@ -78,3 +78,7 @@ D0 modifies documentation and documentation tooling only. D1 is active for deskt
 - Root `tsconfig.json` is a references-only configuration; `tsc --noEmit` against it alone is not proof that application files were checked.
 
 Follow [testing strategy](testing-strategy.md) and [open questions](open-questions-and-challenges.md) for verification and decisions.
+
+## D1 code-based implementation map — 2026-09-11
+
+The [code-to-implementation map](code-implementation-map.md) records observed behavior, gaps, affected source/API/schema paths, dependencies and verification for AF-02 through CM-01. Use it with the roadmap, which remains the only execution backlog. The audit includes alternate writers (evidence import, user deletion, maintenance CLI), shared PM/CM routes and report consumers. Application source and API contracts were not changed; proposed data structures still require implementation design.

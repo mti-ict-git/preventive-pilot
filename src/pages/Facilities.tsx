@@ -41,7 +41,10 @@ import {
   type TemplateSummary,
 } from "@/lib/api";
 
+import { canManageFacilities } from "@/lib/auth";
+
 const Facilities = () => {
+  const canManageMaster = canManageFacilities();
   const formatTitleCase = (value?: string | null) => {
     if (!value) return "—";
     return value
@@ -52,6 +55,8 @@ const Facilities = () => {
   const [locationId, setLocationId] = useState<string>("all");
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [createNameError, setCreateNameError] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
   const [bulkTemplateValue, setBulkTemplateValue] = useState<string>("none");
   const [selectedFacilityIds, setSelectedFacilityIds] = useState<Record<string, true>>({});
@@ -98,7 +103,10 @@ const Facilities = () => {
       locationId?: string | null;
       description?: string | null;
       isActive?: boolean;
-    }) => apiUpdateFacility(input),
+    }) => {
+      if (!canManageFacilities()) throw new Error("Only Admin or Superadmin can change facility details.");
+      return apiUpdateFacility(input);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["facilities"] });
     },
@@ -106,7 +114,10 @@ const Facilities = () => {
 
   const createMutation = useMutation({
     mutationFn: (input: { name: string; locationId?: string | null; description?: string | null; isActive?: boolean }) =>
-      apiCreateFacility(input),
+      {
+        if (!canManageFacilities()) throw new Error("Only Admin or Superadmin can create facilities.");
+        return apiCreateFacility(input);
+      },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["facilities"] });
       setCreateOpen(false);
@@ -121,7 +132,10 @@ const Facilities = () => {
 
   const cloneFacilityMutation = useMutation({
     mutationFn: (input: { facilityId: string; name?: string; includePmSettings?: boolean }) =>
-      apiCloneFacility(input),
+      {
+        if (!canManageFacilities()) throw new Error("Only Admin or Superadmin can clone facilities.");
+        return apiCloneFacility(input);
+      },
     onSuccess: () => {
       setCloneDialogFacilityId(null);
       queryClient.invalidateQueries({ queryKey: ["facilities"] });
@@ -145,6 +159,11 @@ const Facilities = () => {
     <>
       <Header title="Facilities" subtitle="Manage non-asset areas and PM settings" />
       <div className="p-6 space-y-6 bg-background">
+        {(createMutation.error || updateFacilityMutation.error || cloneFacilityMutation.error || archiveError) && (
+          <p role="alert" className="text-sm text-destructive">
+            {archiveError ?? (createMutation.error || updateFacilityMutation.error || cloneFacilityMutation.error)?.message}
+          </p>
+        )}
         <Card className="border-border/60 bg-card shadow-sm">
           <CardHeader className="border-b border-border/60">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -152,7 +171,7 @@ const Facilities = () => {
                 <CardTitle className="text-lg">Facilities</CardTitle>
                 <CardDescription>Manage non-asset areas and PM settings</CardDescription>
               </div>
-              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              {canManageMaster && <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                 <DialogTrigger asChild>
                   <Button className="gap-2">
                     <Plus className="h-4 w-4" />
@@ -165,6 +184,7 @@ const Facilities = () => {
                   </DialogHeader>
                   <form
                     className="space-y-4"
+                    noValidate
                     onSubmit={(e) => {
                       e.preventDefault();
                       const form = e.currentTarget as HTMLFormElement;
@@ -172,21 +192,24 @@ const Facilities = () => {
                       const locationSelect = form.elements.namedItem("location") as HTMLSelectElement;
                       const nameVal = nameInput.value.trim();
                       const locVal = locationSelect.value;
-                      if (!nameVal) return;
+                      setCreateNameError(!nameVal);
+                      if (!nameVal) { nameInput.focus(); return; }
                       createMutation.mutate({ name: nameVal, locationId: locVal ? locVal : null });
                     }}
                   >
-                    <Input name="name" placeholder="Name" required />
-                    <select name="location" className="w-full border rounded px-3 py-2">
+                    <Input name="name" aria-label="Facility name" placeholder="Name" required aria-invalid={createNameError} aria-describedby={createNameError ? "facility-name-error" : undefined} onChange={() => setCreateNameError(false)} />
+                    {createNameError && <p id="facility-name-error" role="alert" className="text-sm text-destructive">Enter a facility name.</p>}
+                    <select aria-label="Facility location" name="location" className="w-full border rounded px-3 py-2">
                       <option value="">No Location</option>
                       {locations.map((l) => (
                         <option key={l.id} value={l.id}>{l.name ?? l.id}</option>
                       ))}
                     </select>
-                    <Button type="submit">Save</Button>
+                    {createMutation.error && <p role="alert" className="text-sm text-destructive">{createMutation.error.message}</p>}
+                    <Button type="submit" disabled={createMutation.isPending}>Save</Button>
                   </form>
                 </DialogContent>
-              </Dialog>
+              </Dialog>}
             </div>
             <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-12">
               <div className="lg:col-span-5">
@@ -310,9 +333,9 @@ const Facilities = () => {
                     </div>
                   </DialogContent>
                 </Dialog>
-                <AlertDialog>
+                {canManageMaster && <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button size="sm" variant="destructive" disabled={selectedCount === 0}>
+                    <Button size="sm" variant="destructive" disabled={selectedCount === 0 || updateFacilityMutation.isPending}>
                       Archive Facilities
                     </Button>
                   </AlertDialogTrigger>
@@ -329,6 +352,7 @@ const Facilities = () => {
                         onClick={() => {
                           const ids = Object.keys(selectedFacilityIds);
                           if (ids.length === 0) return;
+                          setArchiveError(null);
                           Promise.all(
                             ids.map((id) =>
                               updateFacilityMutation.mutateAsync({
@@ -339,6 +363,8 @@ const Facilities = () => {
                           ).then(() => {
                             setSelectedFacilityIds({});
                             queryClient.invalidateQueries({ queryKey: ["facilities"] });
+                          }).catch((error: unknown) => {
+                            setArchiveError(error instanceof Error ? error.message : "Could not archive the selected facilities.");
                           });
                         }}
                       >
@@ -346,7 +372,7 @@ const Facilities = () => {
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
-                </AlertDialog>
+                </AlertDialog>}
               </div>
             </div>
 
@@ -439,7 +465,7 @@ const Facilities = () => {
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-8 w-8">
+                              <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Actions for ${f.name}`}>
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -493,7 +519,7 @@ const Facilities = () => {
                                   </div>
                                 </DialogContent>
                               </Dialog>
-                              <Dialog
+                              {canManageMaster && <Dialog
                                 open={cloneDialogFacilityId === f.id}
                                 onOpenChange={(open) => {
                                   if (open) {
@@ -515,14 +541,16 @@ const Facilities = () => {
                                     <DialogTitle>Clone Facility</DialogTitle>
                                   </DialogHeader>
                                   <div className="space-y-4">
-                                    <Input value={cloneName} onChange={(e) => setCloneName(e.target.value)} placeholder="New name" />
+                                    <Input aria-label="Cloned facility name" value={cloneName} onChange={(e) => setCloneName(e.target.value)} placeholder="New name" />
                                     <label className="flex items-center gap-2 text-sm">
                                       <input type="checkbox" checked={cloneIncludePm} onChange={(e) => setCloneIncludePm(e.target.checked)} />
                                       <span>Copy PM settings</span>
                                     </label>
+                                    {cloneFacilityMutation.error && <p role="alert" className="text-sm text-destructive">{cloneFacilityMutation.error.message}</p>}
                                     <div className="flex justify-end gap-2">
                                       <Button onClick={() => setCloneDialogFacilityId(null)}>Cancel</Button>
                                       <Button
+                                        disabled={cloneFacilityMutation.isPending}
                                         onClick={() =>
                                           cloneFacilityMutation.mutate({
                                             facilityId: f.id,
@@ -536,7 +564,7 @@ const Facilities = () => {
                                     </div>
                                   </div>
                                 </DialogContent>
-                              </Dialog>
+                              </Dialog>}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>

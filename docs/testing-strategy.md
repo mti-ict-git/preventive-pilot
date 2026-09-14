@@ -71,3 +71,11 @@ Use a disposable database with explicit configuration. Apply schema twice; run `
 Record date, revision, environment, requirement/question ID, command or scenario, expected result, actual result, and limitation. Preserve sanitized output or artifact links. For each completed roadmap item, link to evidence that specifically verifies that item.
 
 Only D0 documentation checks are required for this documentation task. Application builds, integration tests, DB mutation, and device acceptance belong to the respective follow-up phases. Existing journal entries are historical reports, not fresh verification evidence.
+
+## D1 audit-derived verification — 2026-09-11
+
+Use the per-item scenarios in the [technical map](code-implementation-map.md). Prioritize direct endpoint bypasses, concurrent claim/submit/generation, template-edit versus snapshot transactions, retained historical evidence, actor deletion/handoff, multiple downtime intervals and shared PM/CM routes. No dedicated application test script was found in root/backend packages during this audit; introduce focused policy and disposable-SQL workflow coverage with implementation. The existing schema verifier must be extended for new columns, indexes, constraints and migration behavior. Static source findings do not satisfy these runtime checks.
+
+## AF-02 executable checks
+
+Run `npm run test:facilities` for the real Express router, JWT and role middleware with an injected deterministic SQL boundary. The harness never imports backend/index.ts or real env configuration. Run `node scripts/tests/facility-browser-fixture.mjs` for an isolated browser fixture on 127.0.0.1:4179. It explicitly uses same-origin fixture APIs; `/__fixture/Admin` and `/__fixture/Supervisor` select synthetic users, `?detail=1` opens detail and `?fail=1` simulates a refused mutation. Only loopback access is needed. These tests do not certify SQL persistence or deployment. See [evidence](verification-af02.md).

@@ -103,3 +103,6 @@ export const hasAnyRole = (roleNames: readonly string[]): boolean => {
 export const isSuperadmin = (): boolean => hasRole("Superadmin");
 
 export const isManager = (): boolean => hasAnyRole(["Superadmin", "Admin", "Supervisor"]);
+
+// Facility master data has a narrower policy than PM planning.
+export const canManageFacilities = (): boolean => hasAnyRole(["Admin", "Superadmin"]);

@@ -29,7 +29,7 @@ This is not an exhaustive endpoint matrix. [API coverage](api-coverage.md) and Q
 
 ## Confirmed facility policy — 2026-09-11
 
-Facility master-data creation, editing, and archival belong to Admin/Superadmin. Supervisors communicate needs verbally; no application change-request or approval queue is required. The existing facility routes use `requireManager`, which also permits Supervisor, so this is a documented implementation gap. Scope any future guard change to facility administration; do not narrow shared manager privileges for unrelated task execution/assignment without a separate requirement.
+Facility master-data creation, editing, and archival belong to Admin/Superadmin. Supervisors communicate needs verbally; no application change-request or approval queue is required. AF-02 now applies a scoped Admin/Superadmin guard to create, update (including isActive), and clone. Facility PM settings and PM Now retain requireManager and Supervisor access. Local HTTP tests exercise the real router/auth middleware with a fixture DB; deployment verification remains separate. Scope any future guard change to facility administration; do not narrow shared manager privileges for unrelated task execution/assignment without a separate requirement.
 
 ## Approval and evidence boundaries
 
@@ -58,3 +58,9 @@ Supervisor, Admin, and Superadmin may intentionally skip one upcoming PM occurre
 Eligible technicians may exclusively claim an unowned task from their assigned role queue. After a claim, role membership alone must not grant other technicians modification/takeover rights. Supervisor/Admin/Superadmin retain direct assignment and reassignment before submission, including during execution. Submitted work is locked against reassignment until explicitly returned for revision by the Supervisor. Assignment-rule management stays Superadmin-only.
 
 Current role-based task access and assignment routes do not yet establish this full policy; [AS-01](implementation-roadmap.md#as-01) owns implementation and role/state/concurrency verification. Do not broaden or narrow unrelated facility master-data permissions.
+
+## Confirmed CM review policy — 2026-09-11
+
+Technicians report repair completion; Supervisor verification is required before WO closure. This supersedes direct technician closure as the target CM workflow, but is not yet enforced by the application. Confirmed: Supervisor, Admin and Superadmin may perform the single verification/closure stage and return incomplete repair to the technician on the same WO with a mandatory written reason. The repair performer cannot verify their own WO, including users with any of these privileged roles. Preserve previous work and evidence during correction. Actor attribution across handoffs and multiple performers, and correction-state access remain design work under CM-01/Q-21. These CM rules do not change the PM approval chain.
+
+Confirmed restoration access, 2026-09-11: the assigned technician or Supervisor/Admin/Superadmin may record restoration independently of WO verification. Actual past restoration times require a written reason and change history. This permission does not override the prohibition on self-verification. Detailed timestamp validation and correction of an already-recorded event remain CM-01 design boundaries.

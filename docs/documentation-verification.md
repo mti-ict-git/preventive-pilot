@@ -128,3 +128,37 @@ Recorded user approval for a new replacement task linked to the rejected origina
 Resolved 14 documentation conflicts between local baseline `24d9eae` and remote `6bb0c27`. The newer remote D1 requirements, specifications, roadmap, and embedded-contract OpenAPI baseline supersede the earlier local Phase 0 documents. Preserved local mandatory OpenAPI review/update rules in AGENTS.md; existing local commits and release notes remain in merge history. No published history was rewritten.
 
 Verification: `node scripts/docs/check-docs.mjs` passed mandatory documents, local links, historical banners, roadmap structure, embedded OpenAPI parity, 285 references, and 33 schema table entries. Conflict-marker scan and `git diff --check` passed. No application/backend/schema source differs from either merge parent; runtime tests were not required for this documentation-only merge. The checker still reports 71 literal route operations missing from OpenAPI; this existing Q-01 limitation remains open. No feature checklist or runtime acceptance was marked complete.
+
+## D1 — CM work-order continuation inspection, 2026-09-11
+
+Resumed from the laptop handoff at synchronized checkpoint b3b11c7. Read AGENTS.md, README.md, handoff, F-06 and related access/data/open-question records. Inspected CM creation, completion, close-downtime and desktop report/detail paths. Recorded findings and pending product questions in the roadmap without changing confirmed requirements. Documentation checker and git diff --check passed. OpenAPI was not changed because no backend or contract behavior changed. No runtime/database tests or application implementation were performed.
+
+## D1 — CM verification and downtime decisions, 2026-09-11
+
+Recorded explicit user acceptance of technician repair-completion submission followed by Supervisor verification/closure, and independent downtime end at equipment restoration. Synchronized F-06, access/data semantics, Q-21, roadmap CM-01 and the session resume point. Documentation checker and git diff --check passed. No backend, frontend or database implementation changed; OpenAPI remains unchanged because no API contract behavior was implemented. Runtime acceptance and CM-01 implementation checks remain pending.
+
+## D1 — CM correction/reviewer inspection, 2026-09-11
+
+Read workOrders.ts lifecycle/resolution guards, tasks.ts reopen and approval/revision handlers, role middleware and desktop WorkOrderDetail. Recorded source findings and three unapproved Q-21 proposals in the roadmap. Documentation checker and git diff --check passed. No application or API contract change; OpenAPI unchanged. Runtime tests not performed.
+
+## D1 — CM correction and reviewer policy confirmed, 2026-09-11
+
+Recorded explicit user acceptance of same-WO correction with mandatory reason and preserved work/evidence, one verification by Supervisor/Admin/Superadmin, and prohibition of self-verification regardless of role. Synchronized F-06, access/data semantics, Q-21, CM-01 checklist and session next action. Documentation checker and git diff --check passed; implementation checklist items remain open. No application/backend/schema changes or runtime tests; OpenAPI unchanged because no API behavior was implemented.
+
+## D1 — Restoration and repeat-outage inspection, 2026-09-11
+
+Inspected creation and close-downtime behavior in workOrders.ts, the desktop mutation, and DowntimeStartedAt/DowntimeEndedAt schema fields. Recorded source limitations and unapproved restoration/recurrence proposals under Q-21 in the roadmap. Documentation checker and git diff --check passed. No application/schema/API behavior changed; OpenAPI unchanged. No runtime tests performed.
+
+## D1 — Restoration and repeat-outage policy confirmed, 2026-09-11
+
+Recorded user acceptance of restoration by the assigned technician or Supervisor/Admin/Superadmin, current-time default and reasoned historical restoration entry with change history, same-WO outage intervals before closure, and new linked WO after closure. Operational gaps do not count as downtime. Synchronized F-06, access/data semantics, Q-21, CM-01 and session next action. Documentation checker and git diff --check passed. No application, backend or schema implementation; OpenAPI unchanged because no runtime contract changed. CM-01 implementation and runtime verification remain pending.
+
+## D1 — Eight-item code audit and implementation map, 2026-09-11
+
+At source checkpoint b3b11c7, screened 126 tracked source files across src/backend/src/db/scripts and followed the relevant desktop handlers, backend routes, SQL and jobs for AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, EX-01 and CM-01. Thirty-five files matched domain screening terms; that count is not a claim of exhaustive manual correctness review. Recorded per-item observations, work, contract/data impact, dependencies and test scenarios in code-implementation-map.md, with source inventory in code-audit-inventory.json. Included alternate writers, report/export readers and shared PM/CM bypasses.
+
+Updated roadmap mapping evidence/next action, technical plan, testing strategy, documentation index and existing open-question boundaries. Documentation checker, referenced source-path existence, inventory consistency and git diff --check passed. No application/backend/schema changes; docs/openapi.yaml was reviewed alongside embedded contract coverage but left unchanged because this is a mapping task, not an API behavior change. Runtime, builds, database mutation and external integrations were not run. All eight application implementation items remain not started.
+
+## D1 — AF-02 implemented, 2026-09-11
+
+Restricted facility create/update/clone to Admin/Superadmin, including isActive and bulk archival through update. Preserved PM planning guards; aligned list/detail controls and visible failure handling. Updated embedded and versioned OpenAPI plus API coverage in the same work item. [AF-02 verification](verification-af02.md) records 37 HTTP tests with isolated SQL, Chrome interaction/failure/narrow-viewport checks, static/build results and limits. AF-02 checklist is complete for local implementation; deployment and remaining items remain open.

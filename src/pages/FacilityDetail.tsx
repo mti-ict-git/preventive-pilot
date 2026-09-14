@@ -34,7 +34,10 @@ import {
 } from "@/lib/api";
 import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
 
+import { canManageFacilities } from "@/lib/auth";
+
 const FacilityDetail = () => {
+  const canManageMaster = canManageFacilities();
   const params = useParams();
   const facilityId = params.facilityId as string;
   const queryClient = useQueryClient();
@@ -102,7 +105,10 @@ const FacilityDetail = () => {
       locationId?: string | null;
       description?: string | null;
       isActive?: boolean;
-    }) => apiUpdateFacility(input),
+    }) => {
+      if (!canManageFacilities()) throw new Error("Only Admin or Superadmin can change facility details.");
+      return apiUpdateFacility(input);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["facility", facilityId] });
       queryClient.invalidateQueries({ queryKey: ["facilities"] });
@@ -139,14 +145,16 @@ const FacilityDetail = () => {
             <div className="grid grid-cols-12 gap-4">
               <div className="col-span-12 md:col-span-4">
                 <Input
+                  aria-label="Facility name"
+                  readOnly={!canManageMaster}
                   placeholder="Name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
               <div className="col-span-12 md:col-span-4">
-                <Select value={locationId} onValueChange={setLocationId}>
-                  <SelectTrigger>
+                <Select disabled={!canManageMaster} value={locationId} onValueChange={setLocationId}>
+                  <SelectTrigger aria-label="Facility location">
                     <SelectValue placeholder="Location" />
                   </SelectTrigger>
                   <SelectContent>
@@ -159,14 +167,19 @@ const FacilityDetail = () => {
               </div>
               <div className="col-span-12 md:col-span-4">
                 <Input
+                  aria-label="Facility description"
+                  readOnly={!canManageMaster}
                   placeholder="Description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
               </div>
             </div>
-            <div className="flex gap-2">
+            {!canManageMaster && <p className="text-sm text-muted-foreground">Facility details can be changed by Admin or Superadmin.</p>}
+            {updateFacilityMutation.error && <p role="alert" className="text-sm text-destructive">{updateFacilityMutation.error.message}</p>}
+            {canManageMaster && <div className="flex gap-2">
               <Button
+                disabled={updateFacilityMutation.isPending || !f}
                 onClick={() =>
                   updateFacilityMutation.mutate({
                     facilityId,
@@ -180,7 +193,7 @@ const FacilityDetail = () => {
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" disabled={!isActive}>
+                  <Button variant="destructive" disabled={!isActive || updateFacilityMutation.isPending || !f}>
                     Archive Facility
                   </Button>
                 </AlertDialogTrigger>
@@ -206,7 +219,7 @@ const FacilityDetail = () => {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-            </div>
+            </div>}
           </CardContent>
         </Card>
 

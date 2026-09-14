@@ -96,6 +96,7 @@ if (fs.existsSync(path.join(root, 'mobile/pm-tech/README.md'))) active.push('mob
 let links = 0;
 for (const file of active) {
   const body = read(file);
+  // eslint-disable-next-line no-control-regex -- Intentionally reject control characters in documentation.
   assert(!/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(body), `Control character in ${file}`);
   assert(!body.includes('REPLACE_WITH_PROJECT_ID'), `Unresolved project placeholder in ${file}`);
   for (const match of body.matchAll(/\[[^\]\n]+\]\(([^)\n]+)\)/g)) {

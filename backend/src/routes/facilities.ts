@@ -4,7 +4,9 @@ import sql from "mssql";
 import { getDb } from "../db/mssql.js";
 import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { requireManager } from "../middleware/requireRole.js";
+import { requireAnyRole, requireManager } from "../middleware/requireRole.js";
+
+const requireFacilityAdmin = requireAnyRole(["Admin", "Superadmin"]);
 
 const parseBoolean = (value: unknown): boolean | null => {
   if (value === undefined || value === null) return null;
@@ -196,7 +198,7 @@ facilitiesRouter.get("/", async (req, res) => {
   });
 });
 
-facilitiesRouter.post("/", requireManager, async (req, res) => {
+facilitiesRouter.post("/", requireFacilityAdmin, async (req, res) => {
   const parsed = FacilityCreateSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: "Invalid request" });
@@ -291,7 +293,7 @@ facilitiesRouter.get("/:facilityId", async (req, res) => {
   });
 });
 
-facilitiesRouter.put("/:facilityId", requireManager, async (req, res) => {
+facilitiesRouter.put("/:facilityId", requireFacilityAdmin, async (req, res) => {
   const facilityId = req.params.facilityId;
   if (!z.string().uuid().safeParse(facilityId).success) {
     res.status(400).json({ message: "Invalid request" });
@@ -646,7 +648,7 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
   res.status(201).json({ id: taskId });
 });
 
-facilitiesRouter.post("/:facilityId/clone", requireManager, async (req, res) => {
+facilitiesRouter.post("/:facilityId/clone", requireFacilityAdmin, async (req, res) => {
   const facilityId = req.params.facilityId;
   if (!z.string().uuid().safeParse(facilityId).success) {
     res.status(400).json({ message: "Invalid request" });

@@ -6,19 +6,22 @@ Last reviewed: 2026-09-11.
 
 This is the **single work reference** for this repository. It owns the next action, ordered backlog, implementation checklists, dependencies, and verification status. Do not reconstruct work from feature-review notes or use their old checkboxes as a second backlog.
 
-**Current mode:** D1 desktop requirements discussion. Application implementation has not started. **Next action:** resume desktop requirements discussion after the laptop handoff; briefly inspect corrective work orders (F-06) before proposing the next questions. Reject creates a linked replacement task; execution/timing, optional Pause reason, Fail submission/WO option, and mandatory revision reason are recorded below. Role-queue assignment, technician self-claim, reassignment boundaries, and aggregate daily capacity are agreed. Blackout remains as implemented; Skip next PM includes Supervisor, Admin, and Superadmin. Skip treatment in compliance remains undecided. Multi-period overdue, early execution, and PM Now reuse policy are now agreed (Q-18). Do not reopen settled decisions.
+**Current mode:** D1 implementation. AF-02 facility master permissions are implemented and locally verified; [evidence](verification-af02.md) separates fixture checks from deployment acceptance. **Next action:** TC-01 checklist notes/submission validation, following the code map and resolving only its RequiresNotes boundary. Other approved requirements remain unchanged; do not reopen settled decisions.
 
-**When implementation is requested:** start with AF-02, the smallest defined permission change, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
+**When implementation is requested:** continue with TC-01 after completed AF-02, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
 
 | Order | Item | Requirement | Status / remaining boundary |
 | --- | --- | --- | --- |
-| 1 | [AF-02](#af-02) | Admin/Superadmin-only facility master changes | Not started; inventory scoped mutations; keep PM planning rights unchanged |
+| 1 | [AF-02](#af-02) | Admin/Superadmin-only facility master changes | Implemented; local HTTP/browser/static/build checks passed; deployment verification separate |
 | 2 | [TC-01](#tc-01) | Notes required on Fail, not merely mandatory status | Not started; reconcile RequiresNotes setting and submission validation, Q-02/Q-17 |
 | 3 | [TC-02](#tc-02) | Preserve checklist at technician submission | Not started; cutoff settled; returned work and historical migration need design |
 | 4 | [AF-01](#af-01) | Cancel affected PM tasks when assets become broken | Not started; scope nonterminal/approval states, PM Now and concurrency, Q-13 |
 | 5 | [SC-01](#sc-01) | Recurrence follows planned dates | Not started; missed-cycle/PM Now policy agreed; blackout/migration and technical boundaries remain, Q-04/Q-18 |
 | 6 | [AS-01](#as-01) | Role queue, exclusive technician claim, and reassignment locks | Not started; inspect ownership across execution/approval paths and existing individual assignments |
 | 7 | [EX-01](#ex-01) | PM work timing, Fail-to-WO option, and revision/rejection semantics | Not started; linked replacement agreed; creation, timing, and recurrence boundaries remain |
+| 8 | [CM-01](#cm-01) | Supervisor-verified WO closure and independent downtime end | Not started; review/restoration/recurrence policy agreed; event design and migration remain |
+
+The [code-to-implementation map](code-implementation-map.md) and [source inventory](code-audit-inventory.json) support every item; this roadmap remains the only execution checklist.
 
 Read the item's linked specification and current implementation, perform its checklist, record actual evidence in [documentation verification](documentation-verification.md) for documentation work or a dated implementation verification record for runtime work, then update this document. Inspect code before asking further questions. Preserve user work and published Git history under [AGENTS.md](../AGENTS.md).
 
@@ -26,10 +29,10 @@ Read the item's linked specification and current implementation, perform its che
 
 Updated: 2026-09-11. This section carries conversational working context; this roadmap remains the only active backlog. Read AGENTS.md, README.md, this document, then the linked specification and open questions for the selected topic.
 
-- Working mode: discuss and document requirements in D1; do not start application implementation merely because a new session begins. Communicate with the user in Indonesian; maintain repository documentation in English.
+- Working mode: user authorized implementation on 2026-09-11. AF-02 is locally complete; continue in roadmap order with TC-01. Communicate with the user in Indonesian; maintain repository documentation in English.
 - Working preference: inspect relevant implementation briefly before asking a small batch of feature questions. Recommend practical defaults when requested, preserve explicit agreements, and distinguish implemented behavior from approved future behavior.
 - Latest agreement: Reject creates a new linked replacement task; the rejected task retains its results, evidence, work time, and rejection reason. Revise corrects the existing task and requires a written reason. EX-01 owns remaining technical boundaries.
-- Resume point: propose CM work orders (F-06), inspect current creation/lifecycle and PM-finding entry paths, then ask remaining product questions. Creation trigger/linkage for rejected replacement work, timing boundaries, and skip compliance are still open. This next topic is a proposed continuation, not a newly approved feature change.
+- Resume point: the eight-item source audit and implementation map are complete; review code-implementation-map.md before starting the user-selected implementation item. The audit did not authorize application changes; the subsequent explicit implementation request authorized AF-02, now locally complete. CM creation/completion/downtime paths inspected. User confirmed technician repair-completion submission followed by Supervisor verification/closure, and downtime ending at equipment restoration independently of administrative closure. Same-WO correction with a mandatory reason, one review by Supervisor/Admin/Superadmin, and no self-verification are now confirmed. Restoration permissions and past-time entry with reason/history are confirmed. Same-fault recurrence before closure adds a downtime interval to the same WO; after closure it creates a new linked WO. For CM implementation, inspect reporting and Q-09 metric definitions when that item is reached; technical CM-01 boundaries remain pending. The immediate next item is TC-01. Creation trigger/linkage for rejected replacement work, timing boundaries, and skip compliance are still open. This next topic is a proposed continuation, not a newly approved feature change.
 - Transfer checkpoint: inspected branch was `main`, HEAD `3039da9`. This is a pre-handoff baseline, not proof that the latest edits are committed or uploaded. Run `git status --short` and inspect the current commit on both laptops. Documentation/checker edits were still uncommitted when this handoff was prepared; this session did not commit or push.
 - Verification: run `node scripts/docs/check-docs.mjs` and `git diff --check`; see [verification evidence](documentation-verification.md). Runtime/database acceptance remains pending. Install Node.js 22 on the new laptop; do not depend on the old laptop's editor-bundled Node path.
 
@@ -58,7 +61,7 @@ Product semantics remain in the [functional specification](functional-specificat
 
 ## Active phase
 
-**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop requirements discussion. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. Resume with a brief CM work-order inspection and remaining questions; application changes for this backlog have not started. D2–D3 remain proposed.
+**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop implementation. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. AF-02 is now implemented with local evidence; continue with TC-01 and keep remaining implementation items open. D2–D3 remain proposed.
 
 Historical plans describe earlier intentions; an unchecked historical item is not proof that a feature is missing. Source inspection establishes implementation presence, not runtime correctness.
 
@@ -98,7 +101,7 @@ User direction, 2026-09-10: prioritize the browser-based desktop application and
 
 ## D1 — Contract and workflow reconciliation
 
-Status: active requirements discussion since 2026-09-11; application changes and runtime verification have not started.
+Status: active implementation since 2026-09-11. AF-02 is implemented and verified locally; remaining items and deployment acceptance are pending.
 
 ### Objective
 
@@ -110,6 +113,7 @@ Resolve differences between documented desktop/web behavior, supporting API defi
 
 ### Checklist
 
+- [x] Audit and map all eight roadmap items across desktop/backend/SQL/jobs and indirect writers. Evidence: [technical map](code-implementation-map.md), [126-file screening inventory](code-audit-inventory.json), and [verification record](documentation-verification.md#d1--eight-item-code-audit-and-implementation-map-2026-09-11). Static mapping only; implementation remains pending.
 - [x] Consolidate confirmed asset/facility, template/checklist, and initial scheduling decisions into this roadmap and the functional specification. [Evidence](documentation-verification.md).
 - [x] Replace per-feature work references with historical redirects; this roadmap owns AF-01/AF-02/TC-01/TC-02/SC-01.
 - [x] Record agreed missed-cycle, early-execution, and PM Now reuse policy after source inspection. [Evidence](documentation-verification.md).
@@ -117,7 +121,8 @@ Resolve differences between documented desktop/web behavior, supporting API defi
 - [x] Record role-queue/self-claim policy, unchanged rule administration, pre-submit/revision reassignment, and aggregate daily capacity. [Evidence](documentation-verification.md).
 - [x] Inspect execution/submission/revision and record initial EX-01 decisions, including linked replacement after Reject; prepare the repository session handoff. [Evidence](documentation-verification.md).
 - [ ] Resolve remaining execution/CM, implementation/migration, and skip-reporting boundaries under Q-20/Q-18/Q-09 after source inspection.
-- [ ] Execute AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, and EX-01 using the detailed checklist below; attach verification before marking implementation complete.
+- [x] Implement and verify AF-02 scoped facility permissions. [Evidence](verification-af02.md).
+- [ ] Execute TC-01, TC-02, AF-01, SC-01, AS-01, EX-01, and CM-01 using the detailed checklist below; attach verification before marking implementation complete.
 - [ ] Resolve applicable Q-12–Q-15 boundaries without re-asking settled asset/facility decisions.
 - [ ] Agree on completion versus submission validation and approval role/self-approval behavior (Q-02, Q-03).
 - [ ] Reconcile desktop API dependencies and payload/error contracts (Q-01); defer mobile-only gaps.
@@ -140,22 +145,24 @@ The order below is the default execution order after implementation is requested
 
 #### AF-02 — Restrict facility master-data changes
 
-**Status:** not started. **Sources:** [F-01](functional-specification.md), [access model](security-and-access-model.md), Q-14; inspect facility routes, shared middleware and desktop facility controls.
+**Status:** implemented and locally verified, 2026-09-11. **Sources:** [F-01](functional-specification.md), [access model](security-and-access-model.md), Q-14; inspect facility routes, shared middleware and desktop facility controls.
 
 User requirement: Admin/Superadmin create, edit, and archive facilities. Supervisors communicate needs verbally; no application request/approval queue is required.
 
-Observed gap: facility administration routes use `requireManager`, which also allows Supervisor.
+Resolved gap: create/update/clone now use scoped Admin/Superadmin authorization; PM settings/PM Now retain requireManager. The desktop bulk archive uses the guarded update endpoint.
 
 Implementation checklist:
 
-- [ ] Inventory all facility master-data mutations, including clone and any bulk/archive path; distinguish them from PM configuration and task execution.
-- [ ] Apply scoped Admin/Superadmin authorization to facility master-data changes; do not narrow the shared manager guard globally.
-- [ ] Align desktop controls with backend authorization.
-- [ ] Verify authorized Admin/Superadmin requests and rejected Supervisor/Technician requests directly against each affected endpoint.
-- [ ] Verify reading facilities and unrelated PM execution/assignment are not accidentally restricted.
-- [ ] Synchronize API/access/workflow documentation and attach verification evidence.
+- [x] Inventory all facility master-data mutations, including clone and any bulk/archive path; distinguish them from PM configuration and task execution.
+- [x] Apply scoped Admin/Superadmin authorization to facility master-data changes; do not narrow the shared manager guard globally.
+- [x] Align desktop controls with backend authorization.
+- [x] Verify authorized Admin/Superadmin requests and rejected Supervisor/Technician requests directly against each affected endpoint.
+- [x] Verify reading facilities and unrelated PM execution/assignment are not accidentally restricted.
+- [x] Synchronize API/access/workflow documentation and attach verification evidence.
 
 Verification: role matrix tests for each affected mutation, direct-request bypass attempts, and a desktop interaction check. Facility closure effects on open work remain a separate decision; do not add an approval workflow to satisfy verbal coordination.
+
+Evidence: [AF-02 verification](verification-af02.md), 37 passing HTTP tests with a fixture SQL boundary, Chrome role/interaction checks, lint/typechecks/builds and OpenAPI parity. No live database/deployment acceptance is claimed.
 
 <a id="tc-01"></a>
 
@@ -332,6 +339,46 @@ Additional source inspection: current DDL has StartedAt/CompletedAt and approval
 - [ ] Verify timing with multiple pauses (active intervals only), reload/retry/concurrency, Fail submission, optional WO creation, no WO on omitted action, blank revision rejection, same-task correction, and the agreed repeat-work path. Update API/data/workflow documentation and attach actual evidence.
 
 No application implementation is complete. Snapshot freezing at technician submission, Fail notes, and exclusive ownership remain requirements of the earlier linked actions.
+
+### CM work-order inspection — 2026-09-11
+
+D1 requirements discussion only; no application change. Inspected `backend/src/routes/workOrders.ts`, `src/components/workorders/ReportBreakdownDialog.tsx`, `src/pages/WorkOrderDetail.tsx`, and report-dialog call sites in Tasks/AssetDetail/FacilityDetail.
+
+- Creation accepts one asset/facility context, symptom and optional impact/failure/downtime metadata. The shared report dialog and create schema do not carry a source PM task/checklist identifier.
+- The complete handler checks task modification access and writes completed status directly; it does not introduce a CM supervisor-review stage. This is source evidence, not approval of the intended CM workflow.
+- Close downtime writes DowntimeEndedAt separately. The inspected completion update does not close downtime automatically.
+- Next product questions: whether technician CM completion requires Supervisor review, and whether equipment restoration should close downtime independently before administrative WO closure. Recommendations remain proposals until the user responds. PM finding linkage/duplicate boundaries remain under EX-01/Q-20.
+
+<a id="cm-01"></a>
+
+#### CM-01 — Supervisor verification and restoration timing
+
+**Status:** requirements confirmed, implementation not started. **Sources:** F-06, access model, data model, Q-21/Q-09, `backend/src/routes/workOrders.ts`, desktop WorkOrderDetail and shared task paths.
+
+User confirmed on 2026-09-11: technician reports repair completion; Supervisor verifies and closes the WO. Equipment restoration ends downtime independently of administrative closure. Earlier inspection questions above are resolved by this decision.
+
+- [ ] Implement technician submission and one verification/closure stage for Supervisor/Admin/Superadmin. Reject self-verification by repair performers regardless of role; resolve actor attribution across handoffs before implementation.
+- [ ] Return incomplete repair to the technician on the same WO with a nonblank written reason, preserving previous work and evidence. Define correction/resubmission access and keep post-closure reopening separate; no PM-style replacement WO is implied.
+- [ ] Define separate restoration, repair submission and closure events, actors and valid timestamps; resolve repeat outages and historical migration without inventing evidence.
+- [ ] Implement backend and desktop transitions with authorization, preservation of submitted work/evidence, and retry/concurrency protection. Reconcile shared task routes to prevent bypasses.
+- [ ] Permit the assigned technician or Supervisor/Admin/Superadmin to record restoration independently of review/closure. Default to now; allow actual past restoration time with mandatory reason and change history. Define chronology validation and correction of recorded events.
+- [ ] Preserve multiple downtime intervals when the same fault recurs before closure on the same WO. For recurrence after closure, create a new linked WO. Preserve previous intervals and exclude operational gaps; resolve event storage, duplicate/concurrency handling and legacy migration before implementation.
+- [ ] Review/update OpenAPI and synchronize data, access, workflow and reporting semantics in the implementation work item.
+- [ ] Verify technician cannot close without review, closure by each authorized reviewer role, self-verification rejection for every privileged role, invalid/duplicate transitions, blank return-reason rejection and same-WO correction with preserved history, restoration before closure without extending downtime through review waiting, permitted restoration actors, past-time reason/history, repeated outage intervals excluding operational gaps, and a new linked WO for recurrence after closure.
+
+Decision evidence: user accepted both proposals; documentation checker and whitespace checks recorded in documentation-verification.md. No application checklist item is complete.
+
+### CM correction and reviewer inspection — 2026-09-11
+
+Inspected CM lifecycle/resolution routes, shared task reopen/approval routes and role middleware. No dedicated CM return-for-correction route was found in workOrders.ts. Shared reopen accepts only cancelled tasks; shared Supervisor approval advances to PendingSuperadmin and is not the agreed CM closure flow. Existing shared approval/revision role guards differ (approval includes Admin; revision excludes Admin), so reviewer substitution must be specified explicitly. The inspected CM resolution route checks ownership/manager access but does not gate edits on review/closure state.
+
+Confirmed user acceptance, 2026-09-11: return incomplete repair to the same WO with a mandatory written reason and preserved work/evidence history; allow Supervisor/Admin/Superadmin to perform one verification/closure stage; prohibit verification by the repair performer regardless of role. These are approved requirements only. Restoration recording, repeat outages, correction/resubmission mechanics and post-closure reopening remain open; application implementation is not authorized yet.
+
+### CM restoration and repeat-outage inspection — 2026-09-11
+
+Inspected work-order creation/close-downtime handlers, desktop close-downtime mutation and schema downtime columns. Creation accepts an optional downtime start; close-downtime uses the first server timestamp through COALESCE and accepts no restoration-time input. It uses the broad task modification helper. The inspected schema stores one start/end pair per WO; this does not represent multiple distinct outage intervals on the same WO. No application behavior was changed.
+
+Confirmed user acceptance, 2026-09-11: the assigned technician or Supervisor/Admin/Superadmin may record restoration without completing review; default restoration time to now but permit actual past restoration time with a mandatory reason and change history. If the same fault recurs before WO closure, retain the WO and append an outage interval; recurrence after closure creates a new linked WO. Exclude operational gaps from downtime. An unrelated fault remains separate work. These requirements are approved; application implementation remains pending.
 
 ### Feature intake rule
 

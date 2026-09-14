@@ -1837,7 +1837,9 @@ paths:
       tags:
         - Facilities
       summary: Create facility
-      description: Create a new facility record for non-asset PM.
+      description: >-
+        Create a facility. Only Admin and Superadmin may change facility master data; Supervisor retains PM
+        planning rights but cannot create, edit, archive or clone facilities.
       requestBody:
         required: true
         content:
@@ -1882,6 +1884,150 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/facilities/{facilityId}:
+    put:
+      tags:
+        - Facilities
+      summary: Update facility master data
+      description: >-
+        Admin/Superadmin only. Set isActive=false to archive or true to activate. At least one recognized
+        field is required; unspecified fields are preserved. PM settings are a separate planning operation.
+        Unknown fields are stripped.
+      parameters:
+        - name: facilityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                locationId:
+                  type:
+                    - string
+                    - "null"
+                  format: uuid
+                description:
+                  type:
+                    - string
+                    - "null"
+                  maxLength: 1024
+                isActive:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                required:
+                  - ok
+        "400":
+          description: Invalid facility ID or request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Requires Admin or Superadmin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Facility not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/facilities/{facilityId}/clone:
+    post:
+      tags:
+        - Facilities
+      summary: Clone facility
+      description: >-
+        Admin/Superadmin only, including when copying PM settings. Copies facility details and active state;
+        blank or omitted name generates a copy name. Optional PM settings copy preserves enabled/default
+        template and resets last/next PM dates. Source is retained. Unknown fields are stripped.
+      parameters:
+        - name: facilityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 256
+                includePmSettings:
+                  type: boolean
+                  default: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid facility ID or request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Requires Admin or Superadmin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Facility not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to create facility
           content:
             application/json:
               schema:

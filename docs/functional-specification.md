@@ -134,6 +134,10 @@ Create a work order from an asset/facility breakdown or a PM finding. Collect sy
 
 Work orders support list/detail, assignment, start/pause/resume, complete, cancel, closing downtime, and resolution updates. The web provides a ticket-style subject and resolution view. Do not assume PM approval is automatically required for CM.
 
+Confirmed user direction, 2026-09-11: the technician reports repair completion; the Supervisor verifies the repair and closes the WO. Equipment restoration ends downtime even if administrative WO closure is still pending. Keep restoration, technician completion, and Supervisor closure as distinct events. This is approved target behavior, not the current direct-completion implementation. User additionally confirmed: incomplete repair is returned to the technician on the same WO with a mandatory written reason and preserved work/evidence history. Supervisor, Admin or Superadmin may perform the single verification and close the WO; no second approval stage is required. A repair performer must never verify their own WO, regardless of role. Timestamp/state mapping, return/resubmission mechanics, restoration recording and post-closure reopening remain CM-01/Q-21 design boundaries.
+
+Confirmed restoration and recurrence policy, 2026-09-11: the assigned technician or Supervisor/Admin/Superadmin may record equipment restoration; recording restoration does not approve or close the WO. Default to the current time, but allow an actual past restoration time with a mandatory written reason and change history. If the same fault recurs before WO closure, retain that WO and append a new downtime interval. If it recurs after closure, create a new WO linked to the previous WO. Exclude the intervening operational time from downtime; retain previous intervals. An unrelated fault is separate work. These are target requirements under CM-01/Q-21, not current schema/API behavior.
+
 Acceptance: a breakdown remains associated with exactly one context; assignment and lifecycle access are enforced; closing downtime and completing work have distinguishable effects; PM views exclude CM where required.
 
 ## F-07 — Reports and notifications
@@ -151,3 +155,7 @@ Production API fallback is a fixed HTTPS domain in the client. Discovery is opt-
 ## Traceability
 
 Source evidence: `src/pages`, `src/lib/api.ts`, `backend/src/routes`, `backend/src/jobs`, `db/schema.sql`, and the available `mobile/pm-tech` source. Contract gaps are in [API coverage](api-coverage.md). Verification scenarios and phase gates are in [testing strategy](testing-strategy.md) and the [roadmap](implementation-roadmap.md).
+
+## AF-02 implementation evidence — 2026-09-11
+
+Facility creation, master edits/archival/activation and cloning now enforce Admin/Superadmin in the backend and corresponding desktop controls. Supervisor retains PM settings/PM Now rights and read access. See [AF-02 verification](verification-af02.md) for route, browser and static/build evidence and its database/deployment limits. No facility lifecycle or task-cancellation behavior was added by this permission change.
