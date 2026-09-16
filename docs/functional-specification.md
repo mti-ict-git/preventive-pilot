@@ -32,15 +32,15 @@ Asset-to-facility mapping is only a possible future capability. No additional pr
 
 Templates define intervals, applicable category, required assignment role, estimated duration, and ordered checklist items. Attachment enablement controls whether an attachment is offered; attachment requirement controls completion validation. Required items cannot be skipped. Outcomes use `0 = skip`, `1 = pass`, `2 = fail` for pass/fail checklist items; non-pass/fail items display nonzero completion as done.
 
-Completion handlers validate applicable checklist, notes, and evidence rules. Do not assume that submission applies identical validation: Q-02 remains open. Unused template deletion and references must be checked against the route rather than assuming all deletions are soft deletes.
+PM completion and technician submission now share the same checklist-validation baseline for active item membership, mandatory non-skip outcomes, fail notes, explicit notes-on-pass/done flags, and attachment requirements. Submission still does not set lifecycle `Status = completed`; the completion-versus-submission state boundary remains Q-02. Unused template deletion and references must be checked against the route rather than assuming all deletions are soft deletes.
 
 Acceptance: ordering survives save/reload; applicable category restrictions hold; required evidence/notes failures are rejected and explained.
 
 ### User decisions — 2026-09-11
 
-Template management remains available to Supervisor/Admin/Superadmin. Notes should be required on failure rather than merely because an item is mandatory; current completion validation does not yet match this direction. Existing per-item attachment rules remain unchanged.
+Template management remains available to Supervisor/Admin/Superadmin. Notes are required on failure rather than merely because an item is mandatory. For checklist items explicitly configured with `RequiresNotes`, notes are also required on Pass/Done. Existing per-item attachment rules remain unchanged.
 
-Nonfinal tasks follow template changes, while final-submitted/historical tasks retain their original checklist definitions. Current task detail reads live template items, so history preservation is an implementation gap. The user confirmed that the cutoff is successful technician submission for approval (`submit-for-approval`, entering `PendingSupervisor`). Capture the checklist definition then and preserve it throughout review and history; do not wait for final Superadmin approval. Q-16 records the resolved cutoff, while TC-02 implementation and returned/reopened/history-migration handling remain open. Use [TC-01/TC-02](implementation-roadmap.md#tc-01) as the action reference.
+Nonfinal tasks follow template changes, while final-submitted/historical tasks retain their original checklist definitions. The cutoff is successful technician submission for approval (`submit-for-approval`, entering `PendingSupervisor`), not final Superadmin approval. TC-02 now preserves an additive per-task checklist snapshot at the first successful submission and reuses it for later review, revision/resubmission, task detail, checklist progress counts, evidence labeling, and PDF/history export. Returned/reopened work keeps the original submitted definition; later template edits must not silently replace it. Legacy historical tasks that predate the snapshot model fall back to the current template, but the API/export must make that uncertainty explicit rather than claiming the live definition is the original historical one. Use [TC-02](implementation-roadmap.md#tc-02) as the action reference.
 
 ## F-03 — Scheduling and assignment
 
@@ -112,13 +112,13 @@ Revision is a separate action and can reopen work; its exact reset behavior must
 | Operation | Observed behavior |
 | --- | --- |
 | `complete` | Sets lifecycle completion fields after validation; not equivalent to final approval |
-| `submit-for-approval` | Writes technician trail and `PendingSupervisor`; the handler does not itself set lifecycle `Status = completed` |
+| `submit-for-approval` | Applies the PM checklist validation baseline, writes technician trail and `PendingSupervisor`; the handler does not itself set lifecycle `Status = completed` |
 | `approve-by-supervisor` | Requires `PendingSupervisor`; allows Supervisor, Admin, or Superadmin; moves to `PendingSuperadmin` |
 | `approve-by-superadmin` | Requires `PendingSuperadmin`; Superadmin only; sets `Approved` and lifecycle completion |
 | `revise-approval` | Separate correction path with Supervisor/Superadmin route guard |
 | `reject-approval` | Records rejection metadata; verify reopening and transition details per route |
 
-The web Approvals page provides review queues. Task detail and PDF export expose sign-off information. Historical statements that submission always marks lifecycle completion are superseded by this distinction. Checklist validation at submission, segregation of duties, and facility finalization require D1 verification (Q-02–Q-04).
+The web Approvals page provides review queues. Task detail and PDF export expose sign-off information. Historical statements that submission always marks lifecycle completion are superseded by this distinction. PM checklist validation at submission is aligned with completion; lifecycle timing, segregation of duties, and facility finalization still require D1 verification (Q-02–Q-04).
 
 Acceptance: test each actor and valid/invalid transition, repeated submission, required evidence, returned work, own-work approval policy, and facility/asset finalization. Do not count source inspection as acceptance.
 

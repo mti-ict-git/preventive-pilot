@@ -54,6 +54,7 @@ const expectedTables = [
   "PMSchedules",
   "PMTasks",
   "PMTaskChecklistResults",
+  "PMTaskChecklistSnapshots",
   "PMTaskEvidence",
   "TaskDrafts",
   "NotificationChannels",

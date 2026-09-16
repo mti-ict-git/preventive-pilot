@@ -1432,6 +1432,22 @@ const AssetDetail = () => {
 
                               <div>
                                 <h4 className="font-semibold text-foreground mb-3">Checklist Results</h4>
+                                {expandedTask.checklistDefinitionSource === "snapshot" ? (
+                                  <div className="mb-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+                                    <p className="text-xs text-muted-foreground">
+                                      {expandedTask.checklistDefinitionCapturedAt
+                                        ? `Checklist frozen at first submission on ${expandedTask.checklistDefinitionCapturedAt}`
+                                        : "Checklist frozen at first submission"}
+                                    </p>
+                                  </div>
+                                ) : expandedTask.checklistDefinitionSource === "legacy-live" ? (
+                                  <div className="mb-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+                                    <p className="text-xs text-warning">
+                                      {expandedTask.checklistDefinitionNote ??
+                                        "Historical checklist definition was not preserved for this task. Current template values are shown."}
+                                    </p>
+                                  </div>
+                                ) : null}
                                 <div className="space-y-2">
                                   {[...expandedTask.checklistItems]
                                     .sort((a, b) => a.sortOrder - b.sortOrder)

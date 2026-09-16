@@ -529,6 +529,9 @@ export type TaskDetail = {
     roleId: string | null;
     roleName: string | null;
   };
+  checklistDefinitionSource?: "live" | "snapshot" | "legacy-live";
+  checklistDefinitionCapturedAt?: string | null;
+  checklistDefinitionNote?: string | null;
   checklistItems: TaskDetailChecklistItem[];
   evidence: TaskEvidence[];
 };

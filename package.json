@@ -17,7 +17,9 @@
     "db:verify": "node scripts/db/verify-schema.mjs",
     "ngrok:gist-watch": "node scripts/ngrok/gist-watcher.mjs",
     "git:force-main": "node scripts/git/force-main-to-commit.mjs",
-    "test:facilities": "node --test scripts/tests/facility-permissions.test.mjs"
+    "test:facilities": "node --test scripts/tests/facility-permissions.test.mjs",
+    "test:tc01": "node --test scripts/tests/task-checklist-validation.test.mjs",
+    "test:tc02": "node --test scripts/tests/task-checklist-snapshot.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

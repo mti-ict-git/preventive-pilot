@@ -983,9 +983,9 @@ export const TaskDetailDialog = (props: {
 				throw new Error("Mandatory checklist items cannot be skipped");
 			}
 
-			const notesValue = draft?.notes ?? "";
-			const notesRequired = item.requiresNotes || item.isMandatory;
-			if (notesRequired && outcome !== 0 && notesValue.trim().length === 0) {
+                        const notesValue = draft?.notes ?? "";
+                        const notesRequired = outcome === 2 || (item.requiresNotes && outcome !== 0);
+                        if (notesRequired && notesValue.trim().length === 0) {
 				throw new Error("Notes are required for this checklist item");
 			}
 
@@ -1584,6 +1584,14 @@ export const TaskDetailDialog = (props: {
   }, [task?.checklistItems, checklistDraft]);
 
   const checklistProgress = checklistTotal > 0 ? Math.round((checklistCompleted / checklistTotal) * 100) : 0;
+  const checklistDefinitionLabel =
+    task?.checklistDefinitionSource === "snapshot"
+      ? task.checklistDefinitionCapturedAt
+        ? `Checklist frozen at first submission on ${task.checklistDefinitionCapturedAt}`
+        : "Checklist frozen at first submission"
+      : task?.checklistDefinitionSource === "legacy-live"
+        ? task.checklistDefinitionNote ?? "Historical checklist definition was not preserved for this task."
+        : null;
 
   return (
     <>
@@ -1910,6 +1918,11 @@ export const TaskDetailDialog = (props: {
 
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-2">Checklist</h3>
+                  {checklistDefinitionLabel ? (
+                    <div className="mb-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+                      <p className="text-xs text-muted-foreground">{checklistDefinitionLabel}</p>
+                    </div>
+                  ) : null}
                   <div className="space-y-2">
                     {task.checklistItems
                       .filter((i) => i.isActive)
@@ -1929,9 +1942,19 @@ export const TaskDetailDialog = (props: {
                                     Pass/Fail
                                   </Badge>
                                 ) : null}
-                                {item.requiresNotes ? (
+                                {item.requiresPassFail ? (
                                   <Badge variant="outline" className="bg-accent/20 text-accent border-accent/30">
-                                    Notes
+                                    Notes on Fail
+                                  </Badge>
+                                ) : null}
+                                {item.requiresPassFail && item.requiresNotes ? (
+                                  <Badge variant="outline" className="bg-accent/20 text-accent border-accent/30">
+                                    Notes on Pass
+                                  </Badge>
+                                ) : null}
+                                {!item.requiresPassFail && item.requiresNotes ? (
+                                  <Badge variant="outline" className="bg-accent/20 text-accent border-accent/30">
+                                    Notes Required
                                   </Badge>
                                 ) : null}
                                 {item.enableAttachment && item.requiresAttachment ? (
@@ -1978,6 +2001,15 @@ export const TaskDetailDialog = (props: {
                           </div>
                           <div className="mt-3">
                             <p className="text-xs text-muted-foreground">Notes</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {item.requiresPassFail
+                                ? item.requiresNotes
+                                  ? "Fail always needs notes. Pass also needs notes for this item."
+                                  : "Fail always needs notes."
+                                : item.requiresNotes
+                                  ? "Notes are required when this item is marked done."
+                                  : "Notes are optional for this item."}
+                            </p>
                               <Input
                                 value={checklistDraft[item.id]?.notes ?? ""}
                                 onChange={(e) => {

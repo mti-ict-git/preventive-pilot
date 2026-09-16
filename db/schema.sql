@@ -38,6 +38,11 @@ BEGIN
   INSERT INTO pm.SchemaInfo (Version) VALUES (5);
 END;
 
+IF (SELECT ISNULL(MAX(Version), 0) FROM pm.SchemaInfo) < 6
+BEGIN
+  INSERT INTO pm.SchemaInfo (Version) VALUES (6);
+END;
+
 IF OBJECT_ID(N'pm.Roles', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.Roles (
@@ -739,6 +744,50 @@ BEGIN
     CONSTRAINT FK_pm_PMTaskChecklistResults_TemplateItems FOREIGN KEY (TemplateChecklistItemId) REFERENCES pm.PMTemplateChecklistItems(TemplateChecklistItemId),
     CONSTRAINT FK_pm_PMTaskChecklistResults_CompletedByUser FOREIGN KEY (CompletedByUserId) REFERENCES pm.Users(UserId)
   );
+END;
+
+IF OBJECT_ID(N'pm.PMTaskChecklistSnapshots', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.PMTaskChecklistSnapshots (
+    TaskChecklistSnapshotId uniqueidentifier NOT NULL CONSTRAINT DF_pm_PMTaskChecklistSnapshots_Id DEFAULT (newsequentialid()),
+    TaskId uniqueidentifier NOT NULL,
+    TemplateChecklistItemId uniqueidentifier NOT NULL,
+    SortOrder int NOT NULL,
+    ItemText nvarchar(512) NOT NULL,
+    IsMandatory bit NOT NULL,
+    RequiresNotes bit NOT NULL,
+    RequiresPassFail bit NOT NULL,
+    EnableAttachment bit NOT NULL,
+    RequiresAttachment bit NOT NULL,
+    IsActive bit NOT NULL,
+    SourceTemplateVersion int NULL,
+    CapturedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_PMTaskChecklistSnapshots_CapturedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_PMTaskChecklistSnapshots PRIMARY KEY CLUSTERED (TaskChecklistSnapshotId),
+    CONSTRAINT FK_pm_PMTaskChecklistSnapshots_Tasks FOREIGN KEY (TaskId) REFERENCES pm.PMTasks(TaskId),
+    CONSTRAINT FK_pm_PMTaskChecklistSnapshots_TemplateItems FOREIGN KEY (TemplateChecklistItemId) REFERENCES pm.PMTemplateChecklistItems(TemplateChecklistItemId)
+  );
+END;
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.indexes i
+  WHERE i.object_id = OBJECT_ID(N'pm.PMTaskChecklistSnapshots')
+    AND i.name = N'UQ_pm_PMTaskChecklistSnapshots_TaskItem'
+)
+BEGIN
+  CREATE UNIQUE INDEX UQ_pm_PMTaskChecklistSnapshots_TaskItem
+  ON pm.PMTaskChecklistSnapshots (TaskId, TemplateChecklistItemId);
+END;
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.indexes i
+  WHERE i.object_id = OBJECT_ID(N'pm.PMTaskChecklistSnapshots')
+    AND i.name = N'IX_pm_PMTaskChecklistSnapshots_TaskSortOrder'
+)
+BEGIN
+  CREATE INDEX IX_pm_PMTaskChecklistSnapshots_TaskSortOrder
+  ON pm.PMTaskChecklistSnapshots (TaskId, SortOrder, TemplateChecklistItemId);
 END;
 
 IF NOT EXISTS (

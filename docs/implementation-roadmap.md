@@ -1,19 +1,19 @@
 # Implementation Roadmap
 
-Last reviewed: 2026-09-11.
+Last reviewed: 2026-09-15.
 
 ## Start work here
 
 This is the **single work reference** for this repository. It owns the next action, ordered backlog, implementation checklists, dependencies, and verification status. Do not reconstruct work from feature-review notes or use their old checkboxes as a second backlog.
 
-**Current mode:** D1 implementation. AF-02 facility master permissions are implemented and locally verified; [evidence](verification-af02.md) separates fixture checks from deployment acceptance. **Next action:** TC-01 checklist notes/submission validation, following the code map and resolving only its RequiresNotes boundary. Other approved requirements remain unchanged; do not reopen settled decisions.
+**Current mode:** D1 implementation. AF-02 facility master permissions and TC-01 checklist validation are implemented and locally verified; [AF-02 evidence](verification-af02.md) remains separate from [TC-01 evidence](verification-tc01.md). **Next action:** TC-02 checklist snapshot at technician submission, following the code map and preserving the confirmed submission cutoff. Other approved requirements remain unchanged; do not reopen settled decisions.
 
-**When implementation is requested:** continue with TC-01 after completed AF-02, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
+**When implementation is requested:** continue with TC-02 after completed AF-02 and TC-01, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
 
 | Order | Item | Requirement | Status / remaining boundary |
 | --- | --- | --- | --- |
 | 1 | [AF-02](#af-02) | Admin/Superadmin-only facility master changes | Implemented; local HTTP/browser/static/build checks passed; deployment verification separate |
-| 2 | [TC-01](#tc-01) | Notes required on Fail, not merely mandatory status | Not started; reconcile RequiresNotes setting and submission validation, Q-02/Q-17 |
+| 2 | [TC-01](#tc-01) | Notes required on Fail, not merely mandatory status | Implemented; local HTTP/typecheck/build/docs checks passed; lifecycle timing boundary remains Q-02 |
 | 3 | [TC-02](#tc-02) | Preserve checklist at technician submission | Not started; cutoff settled; returned work and historical migration need design |
 | 4 | [AF-01](#af-01) | Cancel affected PM tasks when assets become broken | Not started; scope nonterminal/approval states, PM Now and concurrency, Q-13 |
 | 5 | [SC-01](#sc-01) | Recurrence follows planned dates | Not started; missed-cycle/PM Now policy agreed; blackout/migration and technical boundaries remain, Q-04/Q-18 |
@@ -29,10 +29,10 @@ Read the item's linked specification and current implementation, perform its che
 
 Updated: 2026-09-11. This section carries conversational working context; this roadmap remains the only active backlog. Read AGENTS.md, README.md, this document, then the linked specification and open questions for the selected topic.
 
-- Working mode: user authorized implementation on 2026-09-11. AF-02 is locally complete; continue in roadmap order with TC-01. Communicate with the user in Indonesian; maintain repository documentation in English.
+- Working mode: user authorized implementation on 2026-09-11. AF-02 and TC-01 are locally complete; continue in roadmap order with TC-02. Communicate with the user in Indonesian; maintain repository documentation in English.
 - Working preference: inspect relevant implementation briefly before asking a small batch of feature questions. Recommend practical defaults when requested, preserve explicit agreements, and distinguish implemented behavior from approved future behavior.
 - Latest agreement: Reject creates a new linked replacement task; the rejected task retains its results, evidence, work time, and rejection reason. Revise corrects the existing task and requires a written reason. EX-01 owns remaining technical boundaries.
-- Resume point: the eight-item source audit and implementation map are complete; review code-implementation-map.md before starting the user-selected implementation item. The audit did not authorize application changes; the subsequent explicit implementation request authorized AF-02, now locally complete. CM creation/completion/downtime paths inspected. User confirmed technician repair-completion submission followed by Supervisor verification/closure, and downtime ending at equipment restoration independently of administrative closure. Same-WO correction with a mandatory reason, one review by Supervisor/Admin/Superadmin, and no self-verification are now confirmed. Restoration permissions and past-time entry with reason/history are confirmed. Same-fault recurrence before closure adds a downtime interval to the same WO; after closure it creates a new linked WO. For CM implementation, inspect reporting and Q-09 metric definitions when that item is reached; technical CM-01 boundaries remain pending. The immediate next item is TC-01. Creation trigger/linkage for rejected replacement work, timing boundaries, and skip compliance are still open. This next topic is a proposed continuation, not a newly approved feature change.
+- Resume point: the eight-item source audit and implementation map are complete; review code-implementation-map.md before starting the user-selected implementation item. The audit did not authorize application changes; the subsequent explicit implementation request authorized AF-02 and TC-01, now locally complete. CM creation/completion/downtime paths inspected. User confirmed technician repair-completion submission followed by Supervisor verification/closure, and downtime ending at equipment restoration independently of administrative closure. Same-WO correction with a mandatory reason, one review by Supervisor/Admin/Superadmin, and no self-verification are now confirmed. Restoration permissions and past-time entry with reason/history are confirmed. Same-fault recurrence before closure adds a downtime interval to the same WO; after closure it creates a new linked WO. For CM implementation, inspect reporting and Q-09 metric definitions when that item is reached; technical CM-01 boundaries remain pending. The immediate next item is TC-02. Creation trigger/linkage for rejected replacement work, timing boundaries, and skip compliance are still open. This next topic is a proposed continuation, not a newly approved feature change.
 - Transfer checkpoint: inspected branch was `main`, HEAD `3039da9`. This is a pre-handoff baseline, not proof that the latest edits are committed or uploaded. Run `git status --short` and inspect the current commit on both laptops. Documentation/checker edits were still uncommitted when this handoff was prepared; this session did not commit or push.
 - Verification: run `node scripts/docs/check-docs.mjs` and `git diff --check`; see [verification evidence](documentation-verification.md). Runtime/database acceptance remains pending. Install Node.js 22 on the new laptop; do not depend on the old laptop's editor-bundled Node path.
 
@@ -61,7 +61,7 @@ Product semantics remain in the [functional specification](functional-specificat
 
 ## Active phase
 
-**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop implementation. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. AF-02 is now implemented with local evidence; continue with TC-01 and keep remaining implementation items open. D2–D3 remain proposed.
+**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop implementation. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. AF-02 and TC-01 are now implemented with local evidence; continue with TC-02 and keep remaining implementation items open. D2–D3 remain proposed.
 
 Historical plans describe earlier intentions; an unchecked historical item is not proof that a feature is missing. Source inspection establishes implementation presence, not runtime correctness.
 
@@ -101,7 +101,7 @@ User direction, 2026-09-10: prioritize the browser-based desktop application and
 
 ## D1 — Contract and workflow reconciliation
 
-Status: active implementation since 2026-09-11. AF-02 is implemented and verified locally; remaining items and deployment acceptance are pending.
+Status: active implementation since 2026-09-11. AF-02 and TC-01 are implemented and verified locally; remaining items and deployment acceptance are pending.
 
 ### Objective
 
@@ -168,12 +168,14 @@ Evidence: [AF-02 verification](verification-af02.md), 37 passing HTTP tests with
 
 #### TC-01 — Outcome-based notes validation
 
-**Status:** not started. **Sources:** [F-02/F-05](functional-specification.md), [OpenAPI](openapi.yaml), Q-02/Q-17; inspect template flags, complete/submit validation and desktop task controls.
+**Status:** implemented and locally verified, 2026-09-15. **Sources:** [F-02/F-05](functional-specification.md), [OpenAPI](openapi.yaml), Q-02/Q-17; inspect template flags, complete/submit validation and desktop task controls.
 
-- [ ] Align desktop and backend notes rules so Fail requires notes and mandatory status alone does not require notes on Pass/Done.
-- [ ] Reconcile the existing RequiresNotes flag and UI wording with that rule; do not leave contradictory settings or silently impose extra requirements.
-- [ ] Check complete and submit-for-approval paths together (Q-02), including inactive/invalid items and optional notes retention.
-- [ ] Verify Fail without notes is rejected, Fail with notes is accepted when other requirements are met, and Pass/Done without notes is not rejected merely for mandatory status. Preserve mandatory no-skip enforcement and attachment behavior.
+- [x] Align desktop and backend notes rules so Fail requires notes and mandatory status alone does not require notes on Pass/Done.
+- [x] Reconcile the existing RequiresNotes flag and UI wording with that rule; do not leave contradictory settings or silently impose extra requirements.
+- [x] Check complete and submit-for-approval paths together (Q-02), including inactive/invalid items and optional notes retention.
+- [x] Verify Fail without notes is rejected, Fail with notes is accepted when other requirements are met, and Pass/Done without notes is not rejected merely for mandatory status. Preserve mandatory no-skip enforcement and attachment behavior.
+
+Evidence: [TC-01 verification](verification-tc01.md). Submit and complete now share PM checklist validation for active item membership, duplicates, mandatory non-skip outcomes, fail notes, explicit notes-on-pass/done flags, and attachment requirements. `submit-for-approval` remains distinct from lifecycle completion and still does not set `Status = completed`; that state boundary stays open under Q-02.
 
 <a id="tc-02"></a>
 

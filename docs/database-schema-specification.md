@@ -21,7 +21,7 @@ All names below belong to the `pm` schema. This inventory lists every `CREATE TA
 | PM defaults | `AssetPMSettings`, `FacilityPMSettings` | PM enabled state, default template, completion and next-due metadata |
 | Templates | `PMTemplates`, `PMTemplateChecklistItems` | Interval/category/role/duration and ordered checklist definitions |
 | Planning | `AssignmentRules`, `BlackoutWindows`, `PMSchedules`, `FacilityPMSchedules` | Assignment selection, exclusions, recurring schedules, and freeze state |
-| Execution | `PMTasks`, `PMTaskChecklistResults`, `TaskDrafts` | Shared PM/CM work, checklist results, and user drafts |
+| Execution | `PMTasks`, `PMTaskChecklistResults`, `PMTaskChecklistSnapshots`, `TaskDrafts` | Shared PM/CM work, submitted checklist results, frozen PM checklist definitions, and user drafts |
 | Evidence | `PMTaskEvidence`, `PMTaskChecklistEvidence` | Task/checklist attachment metadata and storage references |
 | Notifications | `NotificationChannels`, `NotificationRules`, `NotificationLog` | Routing configuration, triggers, and delivery records |
 | Audit/operations | `AuditLog`, `SystemLog`, `SnipeSyncRuns` | Action history, operational events, and sync runs |
@@ -37,9 +37,11 @@ erDiagram
   PMTemplates ||--o{ PMTasks : defines_work
   PMTemplates ||--o{ PMTemplateChecklistItems : contains
   PMTasks ||--o{ PMTaskChecklistResults : records
+  PMTasks ||--o{ PMTaskChecklistSnapshots : freezes
   PMTasks ||--o{ PMTaskEvidence : attaches
   PMTasks ||--o{ PMTaskChecklistEvidence : attaches
   PMTemplateChecklistItems ||--o{ PMTaskChecklistResults : answers
+  PMTemplateChecklistItems ||--o{ PMTaskChecklistSnapshots : captured_from
   Users ||--o{ UserRoles : has
   Roles ||--o{ UserRoles : grants
 ```
@@ -56,6 +58,7 @@ The diagram is conceptual and omits many foreign keys. Each task has an asset **
 - Technician, supervisor, superadmin, rejection, completion, cancellation, and backdating fields preserve different events; do not collapse them into one timestamp.
 - CM fields include reported-by/at/channel, symptom, failure category/code, impact, and downtime boundaries. Check later alterations for resolution fields.
 - Checklist outcomes are constrained to `0`, `1`, or `2`; evidence and draft tables are distinct from submitted results.
+- `PMTaskChecklistSnapshots` is additive, keyed by task plus original `TemplateChecklistItemId`, and preserves sort order, text, requirement flags, active state, capture time, and source template version at the first successful technician submission. It does not replace submitted results/evidence rows; those continue to identify checklist items by `TemplateChecklistItemId`.
 
 ## Schedule calculation
 
@@ -65,7 +68,7 @@ Final approval currently includes additional date logic outside this primitive. 
 
 ## Storage and history
 
-Asset image binaries can be stored in SQL alongside image metadata. Evidence files use filesystem/share storage with database metadata; backing up SQL alone does not preserve all evidence. Archive behavior, permanent deletion, and reference protection vary by entity and endpoint. Preserve referential meaning when changing deletion behavior.
+Asset image binaries can be stored in SQL alongside image metadata. Evidence files use filesystem/share storage with database metadata; backing up SQL alone does not preserve all evidence. PM checklist history now depends on both submitted results/evidence and the preserved snapshot rows. Archive behavior, permanent deletion, and reference protection vary by entity and endpoint. Preserve referential meaning when changing deletion behavior.
 
 ## Applying and validating changes
 

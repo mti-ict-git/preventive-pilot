@@ -364,7 +364,9 @@ const TemplateFormDialog = ({
                             updateChecklistItem(item.id, { requiresNotes: checked === true })
                           }
                         />
-                        <span className="text-muted-foreground">Notes Required</span>
+                        <span className="text-muted-foreground">
+                          {item.requiresPassFail ? "Notes on Pass" : "Notes Required"}
+                        </span>
                       </label>
 
                       <label className="flex items-center gap-2 text-sm">
@@ -396,6 +398,11 @@ const TemplateFormDialog = ({
                         <span className="text-muted-foreground">Attachment Required</span>
                       </label>
                     </div>
+                    <p className="pl-10 text-xs text-muted-foreground">
+                      {item.requiresPassFail
+                        ? "Fail outcomes always require notes during task completion and submission."
+                        : "Use Notes Required when this checklist item must include notes once marked done."}
+                    </p>
                   </Reorder.Item>
                 ))}
               </AnimatePresence>

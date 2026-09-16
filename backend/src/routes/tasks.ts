@@ -7,6 +7,16 @@ import { getDb } from "../db/mssql.js";
 import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole.js";
+import {
+  ChecklistValidationError,
+  validateChecklistResults,
+} from "./taskChecklistValidation.js";
+import {
+  ensureTaskChecklistSnapshot,
+  loadTaskChecklistDefinition,
+  loadTaskChecklistItemDefinition,
+} from "./taskChecklistDefinitions.js";
+import type { TaskChecklistDefinitionSource } from "./taskChecklistDefinitions.js";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { runJobNow } from "../jobs/index.js";
 
@@ -166,6 +176,27 @@ const isInvalidObjectNameError = (err: unknown): boolean => {
   return getSqlErrorNumber(err) === 208;
 };
 
+const rollbackQuietly = async (tx: sql.Transaction): Promise<void> => {
+  try {
+    await tx.rollback();
+  } catch {}
+};
+
+const isHistoricalChecklistDefinition = (input: {
+  approvalStatus: unknown;
+  technicianCompletedAt: unknown;
+}): boolean => {
+  const approvalStatus = typeof input.approvalStatus === "string" ? input.approvalStatus : "None";
+  return approvalStatus !== "None" || input.technicianCompletedAt !== null && input.technicianCompletedAt !== undefined;
+};
+
+const checklistDefinitionNoteForSource = (source: TaskChecklistDefinitionSource): string | null => {
+  if (source === "legacy-live") {
+    return "Historical checklist definition was not preserved for this task. Current template values are shown.";
+  }
+  return null;
+};
+
 const parsePmNowIdempotencyWindowMinutes = (valueJson: string | null): number | null => {
   if (!valueJson || !valueJson.trim()) return null;
   try {
@@ -298,6 +329,7 @@ const buildPmHistoryPdf = async (input: {
   technicianDate: Date | null;
   supervisorDate: Date | null;
   superadminDate: Date | null;
+  definitionNote?: string | null;
 }): Promise<Uint8Array> => {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -433,6 +465,20 @@ const buildPmHistoryPdf = async (input: {
     page.drawText("Rev.000", { x: left + colW * 2 + 2, y: y + 10, size: valueSize, font });
     page.drawText("13 Dec 2024", { x: left + colW * 2 + 60, y: y + 10, size: valueSize, font });
     page.drawText(`${pageIndex}/${pageCount}`, { x: left + tableWidth - 22, y: y + 10, size: valueSize, font });
+
+    if (input.definitionNote && input.definitionNote.trim().length > 0) {
+      const noteLines = wrapText({
+        text: input.definitionNote,
+        maxWidth: tableWidth,
+        font,
+        fontSize: 7,
+      });
+      let noteY = y + 50;
+      for (const line of noteLines) {
+        page.drawText(line, { x: left, y: noteY, size: 7, font, color: rgb(0.35, 0.35, 0.35) });
+        noteY += 8;
+      }
+    }
   };
 
   const drawSignatures = (page: ReturnType<typeof doc.addPage>, yTop: number) => {
@@ -751,8 +797,6 @@ const isSuperadmin = (roles: readonly string[]): boolean => roles.includes("Supe
 
 const isApprovalLockedForEditing = (approvalStatus: string | null): boolean =>
   approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin" || approvalStatus === "Approved";
-
-const bitToBoolean = (value: unknown): boolean => value === true || value === 1;
 
 type ChecklistOutcomeLabel = "skip" | "pass" | "fail" | "done";
 
@@ -1358,20 +1402,14 @@ tasksRouter.get("/", async (req, res) => {
         "  t.CreatedAt AS CreatedAt,",
         "  t.StartedAt AS StartedAt,",
         "  t.CompletedAt AS CompletedAt,",
-        "  (",
-        "    SELECT COUNT(1)",
-        "    FROM pm.PMTemplateChecklistItems i",
-        "    WHERE i.TemplateId = t.TemplateId",
-        "      AND i.IsActive = 1",
-        "  ) AS ChecklistTotal,",
-        "  (",
-        "    SELECT COUNT(1)",
-        "    FROM pm.PMTaskChecklistResults r",
-        "    INNER JOIN pm.PMTemplateChecklistItems i ON i.TemplateChecklistItemId = r.TemplateChecklistItemId",
-        "    WHERE r.TaskId = t.TaskId",
-        "      AND r.CompletedAt IS NOT NULL",
-        "      AND i.IsActive = 1",
-        "  ) AS ChecklistCompleted",
+        "  CASE",
+        "    WHEN snapshotTotals.SnapshotChecklistTotal > 0 THEN snapshotTotals.SnapshotChecklistTotal",
+        "    ELSE liveTotals.LiveChecklistTotal",
+        "  END AS ChecklistTotal,",
+        "  CASE",
+        "    WHEN snapshotTotals.SnapshotChecklistTotal > 0 THEN snapshotTotals.SnapshotChecklistCompleted",
+        "    ELSE liveTotals.LiveChecklistCompleted",
+        "  END AS ChecklistCompleted",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
         "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
@@ -1382,6 +1420,28 @@ tasksRouter.get("/", async (req, res) => {
         "LEFT JOIN pm.Users tc ON tc.UserId = t.TechnicianCompletedByUserId",
         "LEFT JOIN pm.Users su ON su.UserId = t.SupervisorApprovedByUserId",
         "LEFT JOIN pm.Users sa ON sa.UserId = t.SuperadminApprovedByUserId",
+        "OUTER APPLY (",
+        "  SELECT",
+        "    COUNT(1) AS SnapshotChecklistTotal,",
+        "    SUM(CASE WHEN r.CompletedAt IS NOT NULL THEN 1 ELSE 0 END) AS SnapshotChecklistCompleted",
+        "  FROM pm.PMTaskChecklistSnapshots s",
+        "  LEFT JOIN pm.PMTaskChecklistResults r",
+        "    ON r.TaskId = t.TaskId",
+        "    AND r.TemplateChecklistItemId = s.TemplateChecklistItemId",
+        "  WHERE s.TaskId = t.TaskId",
+        "    AND s.IsActive = 1",
+        ") snapshotTotals",
+        "OUTER APPLY (",
+        "  SELECT",
+        "    COUNT(1) AS LiveChecklistTotal,",
+        "    SUM(CASE WHEN r.CompletedAt IS NOT NULL THEN 1 ELSE 0 END) AS LiveChecklistCompleted",
+        "  FROM pm.PMTemplateChecklistItems i",
+        "  LEFT JOIN pm.PMTaskChecklistResults r",
+        "    ON r.TaskId = t.TaskId",
+        "    AND r.TemplateChecklistItemId = i.TemplateChecklistItemId",
+        "  WHERE i.TemplateId = t.TemplateId",
+        "    AND i.IsActive = 1",
+        ") liveTotals",
         "WHERE",
         "  (@status IS NULL OR t.Status = @status)",
       "  AND (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
@@ -2456,25 +2516,14 @@ tasksRouter.post(
       res.status(400).json({ message: "Invalid state" });
       return;
     }
-    const itemResult = await db
-      .request()
-      .input("templateChecklistItemId", sql.UniqueIdentifier, templateChecklistItemId)
-      .input("templateId", sql.UniqueIdentifier, ctx.templateId)
-      .query(
-        [
-          "SELECT TOP (1)",
-          "  i.TemplateChecklistItemId AS TemplateChecklistItemId,",
-          "  i.SortOrder AS SortOrder,",
-          "  i.ItemText AS ItemText",
-          "FROM pm.PMTemplateChecklistItems i",
-          "WHERE i.TemplateChecklistItemId = @templateChecklistItemId",
-          "  AND i.TemplateId = @templateId",
-        ].join("\n"),
-      );
-
-    const itemRow = itemResult.recordset[0] as Record<string, unknown> | undefined;
-    const sortOrder = typeof itemRow?.SortOrder === "number" ? itemRow.SortOrder : Number(itemRow?.SortOrder);
-    const itemText = typeof itemRow?.ItemText === "string" ? itemRow.ItemText : null;
+    const itemDefinition = await loadTaskChecklistItemDefinition({
+      executor: db,
+      taskId,
+      templateId: ctx.templateId,
+      templateChecklistItemId,
+    });
+    const sortOrder = itemDefinition?.sortOrder ?? Number.NaN;
+    const itemText = itemDefinition?.itemText ?? null;
     if (!Number.isFinite(sortOrder) || itemText === null) {
       res.status(404).json({ message: "Not found" });
       return;
@@ -2643,22 +2692,23 @@ tasksRouter.get( "/:taskId", async (req, res) => {
     return;
   }
 
+  const checklistDefinition = await loadTaskChecklistDefinition({
+    executor: db,
+    taskId,
+    templateId: taskRow.TemplateId as string,
+    historicalSubmitted: isHistoricalChecklistDefinition({
+      approvalStatus: taskRow.ApprovalStatus,
+      technicianCompletedAt: taskRow.TechnicianCompletedAt,
+    }),
+  });
+
   const checklistResult = await db
     .request()
     .input("taskId", sql.UniqueIdentifier, taskId)
-    .input("templateId", sql.UniqueIdentifier, taskRow.TemplateId as string)
-      .query(
-        [
-          "SELECT",
-          "  i.TemplateChecklistItemId AS TemplateChecklistItemId,",
-          "  i.SortOrder AS SortOrder,",
-          "  i.ItemText AS ItemText,",
-          "  i.IsMandatory AS IsMandatory,",
-          "  i.RequiresNotes AS RequiresNotes,",
-          "  i.RequiresPassFail AS RequiresPassFail,",
-          "  i.EnableAttachment AS EnableAttachment,",
-          "  i.RequiresAttachment AS RequiresAttachment,",
-          "  i.IsActive AS IsActive,",
+    .query(
+      [
+        "SELECT",
+        "  r.TemplateChecklistItemId AS TemplateChecklistItemId,",
         "  r.TaskChecklistResultId AS TaskChecklistResultId,",
         "  r.Outcome AS Outcome,",
         "  r.Notes AS Notes,",
@@ -2666,13 +2716,9 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "  r.CompletedByUserId AS ResultCompletedByUserId,",
         "  u.Username AS ResultCompletedByUsername,",
         "  u.DisplayName AS ResultCompletedByDisplayName",
-        "FROM pm.PMTemplateChecklistItems i",
-        "LEFT JOIN pm.PMTaskChecklistResults r",
-        "  ON r.TemplateChecklistItemId = i.TemplateChecklistItemId",
-        "  AND r.TaskId = @taskId",
+        "FROM pm.PMTaskChecklistResults r",
         "LEFT JOIN pm.Users u ON u.UserId = r.CompletedByUserId",
-        "WHERE i.TemplateId = @templateId",
-        "ORDER BY i.SortOrder ASC",
+        "WHERE r.TaskId = @taskId",
       ].join("\n"),
     );
 
@@ -2721,7 +2767,13 @@ tasksRouter.get( "/:taskId", async (req, res) => {
       ].join("\n"),
     );
 
-  const checklistRows = checklistResult.recordset as Array<Record<string, unknown>>;
+  const checklistResultRows = checklistResult.recordset as Array<Record<string, unknown>>;
+  const checklistResultByItemId = new Map<string, Record<string, unknown>>();
+  for (const row of checklistResultRows) {
+    if (typeof row.TemplateChecklistItemId === "string") {
+      checklistResultByItemId.set(row.TemplateChecklistItemId, row);
+    }
+  }
   const evidenceRows = evidenceResult.recordset as Array<Record<string, unknown>>;
   const checklistEvidenceRows = checklistEvidenceResult.recordset as Array<Record<string, unknown>>;
 
@@ -2975,8 +3027,12 @@ tasksRouter.get( "/:taskId", async (req, res) => {
       roleId: taskRow.AssignedToRoleId,
       roleName: taskRow.AssignedToRoleName,
     },
-    checklistItems: checklistRows.map((r) => {
-      const requiresPassFail = bitToBoolean(r.RequiresPassFail);
+    checklistDefinitionSource: checklistDefinition.source,
+    checklistDefinitionCapturedAt: checklistDefinition.capturedAt?.toISOString?.() ?? null,
+    checklistDefinitionNote: checklistDefinitionNoteForSource(checklistDefinition.source),
+    checklistItems: checklistDefinition.items.map((item) => {
+      const r = checklistResultByItemId.get(item.templateChecklistItemId) ?? {};
+      const requiresPassFail = item.requiresPassFail;
       const rawOutcome = Number(r.Outcome);
       const normalizedOutcome: 0 | 1 | 2 = requiresPassFail
         ? rawOutcome === 1
@@ -2989,16 +3045,16 @@ tasksRouter.get( "/:taskId", async (req, res) => {
           : 0;
 
       return {
-        id: r.TemplateChecklistItemId,
-        sortOrder: r.SortOrder,
-        itemText: r.ItemText,
-        isMandatory: r.IsMandatory,
-        requiresNotes: r.RequiresNotes,
-        requiresPassFail: r.RequiresPassFail,
-        enableAttachment: r.EnableAttachment,
-        requiresAttachment: r.RequiresAttachment,
-        isActive: r.IsActive,
-        evidence: checklistEvidenceByItemId.get(String(r.TemplateChecklistItemId)) ?? [],
+        id: item.templateChecklistItemId,
+        sortOrder: item.sortOrder,
+        itemText: item.itemText,
+        isMandatory: item.isMandatory,
+        requiresNotes: item.requiresNotes,
+        requiresPassFail: item.requiresPassFail,
+        enableAttachment: item.enableAttachment,
+        requiresAttachment: item.requiresAttachment,
+        isActive: item.isActive,
+        evidence: checklistEvidenceByItemId.get(item.templateChecklistItemId) ?? [],
         result: r.TaskChecklistResultId
           ? {
               id: r.TaskChecklistResultId,
@@ -3059,6 +3115,7 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
         "  t.CompletedByUserId AS CompletedByUserId,",
         "  cu.Username AS CompletedByUsername,",
         "  cu.DisplayName AS CompletedByDisplayName,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
         "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
         "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,",
         "  tc.Username AS TechnicianCompletedByUsername,",
@@ -3101,34 +3158,46 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
         : "";
   const username = typeof taskRow.CompletedByUsername === "string" ? taskRow.CompletedByUsername : "";
 
+  const checklistDefinition = await loadTaskChecklistDefinition({
+    executor: db,
+    taskId,
+    templateId: taskRow.TemplateId as string,
+    historicalSubmitted: isHistoricalChecklistDefinition({
+      approvalStatus: taskRow.ApprovalStatus,
+      technicianCompletedAt: taskRow.TechnicianCompletedAt,
+    }),
+  });
+
   const checklistResult = await db
     .request()
     .input("taskId", sql.UniqueIdentifier, taskId)
-    .input("templateId", sql.UniqueIdentifier, taskRow.TemplateId as string)
     .query(
       [
         "SELECT",
-        "  i.SortOrder AS SortOrder,",
-        "  i.ItemText AS ItemText,",
-        "  i.RequiresPassFail AS RequiresPassFail,",
-        "  i.IsMandatory AS IsMandatory,",
+        "  r.TemplateChecklistItemId AS TemplateChecklistItemId,",
         "  r.Outcome AS Outcome,",
         "  r.Notes AS Notes",
-        "FROM pm.PMTemplateChecklistItems i",
-        "LEFT JOIN pm.PMTaskChecklistResults r",
-        "  ON r.TemplateChecklistItemId = i.TemplateChecklistItemId",
-        "  AND r.TaskId = @taskId",
-        "WHERE i.TemplateId = @templateId",
-        "  AND i.IsActive = 1",
-        "ORDER BY i.SortOrder ASC",
+        "FROM pm.PMTaskChecklistResults r",
+        "WHERE r.TaskId = @taskId",
       ].join("\n"),
     );
 
-  const checklistRows = checklistResult.recordset as Array<Record<string, unknown>>;
-  const rows: InspectionChecklistRow[] = checklistRows.map((r) => {
-    const itemText = typeof r.ItemText === "string" ? r.ItemText : "";
-    const requiresPassFail = bitToBoolean(r.RequiresPassFail);
-    const rawOutcome = typeof r.Outcome === "number" ? r.Outcome : r.Outcome ? Number(r.Outcome) : 0;
+  const checklistResultRows = checklistResult.recordset as Array<Record<string, unknown>>;
+  const checklistResultByItemId = new Map<string, Record<string, unknown>>();
+  for (const row of checklistResultRows) {
+    if (typeof row.TemplateChecklistItemId === "string") {
+      checklistResultByItemId.set(row.TemplateChecklistItemId, row);
+    }
+  }
+
+  const rows: InspectionChecklistRow[] = checklistDefinition.items
+    .filter((item) => item.isActive)
+    .map((item) => {
+    const resultRow = checklistResultByItemId.get(item.templateChecklistItemId) ?? {};
+    const itemText = item.itemText;
+    const requiresPassFail = item.requiresPassFail;
+    const rawOutcome =
+      typeof resultRow.Outcome === "number" ? resultRow.Outcome : resultRow.Outcome ? Number(resultRow.Outcome) : 0;
     const normalizedOutcome: 0 | 1 | 2 = requiresPassFail
       ? rawOutcome === 1
         ? 1
@@ -3139,7 +3208,7 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
         ? 1
         : 0;
     const outcomeLabel = outcomeLabelFor(requiresPassFail, normalizedOutcome);
-    const notes = typeof r.Notes === "string" ? r.Notes : null;
+    const notes = typeof resultRow.Notes === "string" ? resultRow.Notes : null;
     return { itemText, outcomeLabel, notes };
   });
 
@@ -3197,6 +3266,7 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
     technicianDate,
     supervisorDate,
     superadminDate,
+    definitionNote: checklistDefinitionNoteForSource(checklistDefinition.source),
   });
 
   const nowIso = new Date().toISOString().replace(/[:.]/g, "-");
@@ -3851,6 +3921,8 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
           "  t.TemplateId AS TemplateId,",
           "  t.AssignedToUserId AS AssignedToUserId,",
           "  r.Name AS AssignedToRoleName,",
+          "  t.ApprovalStatus AS ApprovalStatus,",
+          "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
           "  tpl.IntervalDays AS IntervalDays",
           "FROM pm.PMTasks t",
           "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
@@ -3885,28 +3957,25 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
 			return;
 		}
 
-    const templateItemsResult = await tx
-      .request()
-      .input("templateId", sql.UniqueIdentifier, row.TemplateId as string)
-      .query(
-        [
-          "SELECT",
-          "  i.TemplateChecklistItemId AS TemplateChecklistItemId,",
-          "  i.IsMandatory AS IsMandatory,",
-          "  i.RequiresNotes AS RequiresNotes,",
-          "  i.RequiresPassFail AS RequiresPassFail,",
-          "  i.EnableAttachment AS EnableAttachment,",
-          "  i.RequiresAttachment AS RequiresAttachment,",
-          "  i.IsActive AS IsActive",
-          "FROM pm.PMTemplateChecklistItems i",
-          "WHERE i.TemplateId = @templateId",
-        ].join("\n"),
-      );
+    const checklistDefinition = await loadTaskChecklistDefinition({
+      executor: tx,
+      taskId,
+      templateId: row.TemplateId as string,
+      historicalSubmitted: isHistoricalChecklistDefinition({
+        approvalStatus: row.ApprovalStatus,
+        technicianCompletedAt: row.TechnicianCompletedAt,
+      }),
+    });
 
-    const templateItems = templateItemsResult.recordset as Array<Record<string, unknown>>;
-    const templateItemById = new Map<string, Record<string, unknown>>(
-      templateItems.map((i) => [String(i.TemplateChecklistItemId), i]),
-    );
+    const templateItems = checklistDefinition.items.map((item) => ({
+      templateChecklistItemId: item.templateChecklistItemId,
+      isMandatory: item.isMandatory,
+      requiresNotes: item.requiresNotes,
+      requiresPassFail: item.requiresPassFail,
+      enableAttachment: item.enableAttachment,
+      requiresAttachment: item.requiresAttachment,
+      isActive: item.isActive,
+    }));
 
     const checklistEvidenceResult = await tx
       .request()
@@ -3926,55 +3995,20 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
         .filter((v): v is string => v !== null),
     );
 
-    for (const result of parsed.data.checklistResults) {
-      const templateItem = templateItemById.get(result.templateChecklistItemId);
-      if (!templateItem) {
+    try {
+      validateChecklistResults({
+        templateItems,
+        checklistResults: parsed.data.checklistResults,
+        checklistEvidenceItemIds: checklistEvidenceItemIdSet,
+        requireMandatoryItems: true,
+      });
+    } catch (err) {
+      if (err instanceof ChecklistValidationError) {
         res.status(400).json({ message: "Invalid request" });
         await tx.rollback();
         return;
       }
-
-      if (!bitToBoolean(templateItem.IsActive)) {
-        res.status(400).json({ message: "Invalid request" });
-        await tx.rollback();
-        return;
-      }
-
-      const requiresPassFail = bitToBoolean(templateItem.RequiresPassFail);
-      if (!requiresPassFail && result.outcome === 2) {
-        res.status(400).json({ message: "Invalid request" });
-        await tx.rollback();
-        return;
-      }
-
-      if (bitToBoolean(templateItem.IsMandatory) && result.outcome === 0) {
-        res.status(400).json({ message: "Invalid request" });
-        await tx.rollback();
-        return;
-      }
-
-      const notes = result.notes ?? null;
-      const requiresNotes =
-        bitToBoolean(templateItem.RequiresNotes) || bitToBoolean(templateItem.IsMandatory);
-      if (requiresNotes && result.outcome !== 0) {
-        if (!notes || notes.trim().length === 0) {
-          res.status(400).json({ message: "Invalid request" });
-          await tx.rollback();
-          return;
-        }
-      }
-
-      if (
-        bitToBoolean(templateItem.EnableAttachment) &&
-        bitToBoolean(templateItem.RequiresAttachment) &&
-        result.outcome !== 0
-      ) {
-        if (!checklistEvidenceItemIdSet.has(result.templateChecklistItemId)) {
-          res.status(400).json({ message: "Invalid request" });
-          await tx.rollback();
-          return;
-        }
-      }
+      throw err;
     }
 
     const parsedCompletedAt = parsed.data.completedAt;
@@ -4368,87 +4402,156 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
 	}
 
   const db = await getDb();
-  const accessResult = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  t.AssignedToUserId AS AssignedToUserId,",
-        "  r.Name AS AssignedToRoleName,",
-        "  t.ApprovalStatus AS ApprovalStatus",
-        "FROM pm.PMTasks t",
-        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
-        "WHERE t.TaskId = @taskId",
-      ].join("\n"),
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const accessResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.AssignedToUserId AS AssignedToUserId,",
+          "  r.Name AS AssignedToRoleName,",
+          "  t.ApprovalStatus AS ApprovalStatus,",
+          "  t.TemplateId AS TemplateId",
+          "FROM pm.PMTasks t",
+          "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+          "WHERE t.TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    const row = accessResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+
+    const accessRow: TaskAccessRow = {
+      AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
+      AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
+    };
+    if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+      res.status(403).json({ message: "Forbidden" });
+      await tx.rollback();
+      return;
+    }
+
+    const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : "None";
+    if (approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin" || approvalStatus === "Approved") {
+      res.status(400).json({ message: "Invalid state" });
+      await tx.rollback();
+      return;
+    }
+
+    await ensureTaskChecklistSnapshot({
+      tx,
+      taskId,
+      templateId: row.TemplateId as string,
+    });
+
+    const checklistDefinition = await loadTaskChecklistDefinition({
+      executor: tx,
+      taskId,
+      templateId: row.TemplateId as string,
+      historicalSubmitted: true,
+    });
+
+    const templateItems = checklistDefinition.items.map((item) => ({
+      templateChecklistItemId: item.templateChecklistItemId,
+      isMandatory: item.isMandatory,
+      requiresNotes: item.requiresNotes,
+      requiresPassFail: item.requiresPassFail,
+      enableAttachment: item.enableAttachment,
+      requiresAttachment: item.requiresAttachment,
+      isActive: item.isActive,
+    }));
+
+    const checklistEvidenceResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT",
+          "  e.TemplateChecklistItemId AS TemplateChecklistItemId",
+          "FROM pm.PMTaskChecklistEvidence e",
+          "WHERE e.TaskId = @taskId",
+        ].join("\n"),
+      );
+    const checklistEvidenceRows = checklistEvidenceResult.recordset as Array<Record<string, unknown>>;
+    const checklistEvidenceItemIdSet = new Set<string>(
+      checklistEvidenceRows
+        .map((record) => (typeof record.TemplateChecklistItemId === "string" ? record.TemplateChecklistItemId : null))
+        .filter((value): value is string => value !== null),
     );
 
-  const row = accessResult.recordset[0] as Record<string, unknown> | undefined;
-  if (!row) {
-    res.status(404).json({ message: "Not found" });
-    return;
+    try {
+      validateChecklistResults({
+        templateItems,
+        checklistResults: parsed.data.checklistResults,
+        checklistEvidenceItemIds: checklistEvidenceItemIdSet,
+        requireMandatoryItems: true,
+      });
+    } catch (err) {
+      if (err instanceof ChecklistValidationError) {
+        res.status(400).json({ message: "Invalid request" });
+        await tx.rollback();
+        return;
+      }
+      throw err;
+    }
+
+    if (parsed.data.checklistResults.length > 0) {
+      const completedAtDate = new Date();
+      for (const item of parsed.data.checklistResults) {
+        await tx
+          .request()
+          .input("taskId", sql.UniqueIdentifier, taskId)
+          .input("templateChecklistItemId", sql.UniqueIdentifier, item.templateChecklistItemId)
+          .input("outcome", sql.TinyInt, item.outcome)
+          .input("notes", sql.NVarChar(1024), item.notes ?? null)
+          .input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
+          .input("completedAt", sql.DateTime2(0), completedAtDate)
+          .query(
+            [
+              "MERGE pm.PMTaskChecklistResults WITH (HOLDLOCK) AS target",
+              "USING (SELECT @taskId AS TaskId, @templateChecklistItemId AS TemplateChecklistItemId) AS source",
+              "ON target.TaskId = source.TaskId AND target.TemplateChecklistItemId = source.TemplateChecklistItemId",
+              "WHEN MATCHED THEN",
+              "  UPDATE SET",
+              "    Outcome = @outcome,",
+              "    Notes = @notes,",
+              "    CompletedAt = @completedAt,",
+              "    CompletedByUserId = @completedByUserId",
+              "WHEN NOT MATCHED THEN",
+              "  INSERT (TaskId, TemplateChecklistItemId, Outcome, Notes, CompletedAt, CompletedByUserId)",
+              "  VALUES (@taskId, @templateChecklistItemId, @outcome, @notes, @completedAt, @completedByUserId);",
+            ].join("\n"),
+          );
+      }
+    }
+
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("userId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  TechnicianCompletedAt = COALESCE(TechnicianCompletedAt, sysutcdatetime()),",
+          "  TechnicianCompletedByUserId = COALESCE(TechnicianCompletedByUserId, @userId),",
+          "  ApprovalStatus = N'PendingSupervisor'",
+          "WHERE TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    await tx.commit();
+  } catch (err) {
+    await rollbackQuietly(tx);
+    throw err;
   }
-
-  const accessRow: TaskAccessRow = {
-    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
-    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
-  };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
-    res.status(403).json({ message: "Forbidden" });
-    return;
-  }
-
-  const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : "None";
-  if (approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin" || approvalStatus === "Approved") {
-    res.status(400).json({ message: "Invalid state" });
-    return;
-  }
-
-	const checklistResults = parsed.data.checklistResults;
-	if (checklistResults.length > 0) {
-		const completedAtDate = new Date();
-		for (const item of checklistResults) {
-			await db
-				.request()
-				.input("taskId", sql.UniqueIdentifier, taskId)
-				.input("templateChecklistItemId", sql.UniqueIdentifier, item.templateChecklistItemId)
-				.input("outcome", sql.TinyInt, item.outcome)
-				.input("notes", sql.NVarChar(1024), item.notes ?? null)
-				.input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
-				.input("completedAt", sql.DateTime2(0), completedAtDate)
-				.query(
-					[
-						"MERGE pm.PMTaskChecklistResults WITH (HOLDLOCK) AS target",
-						"USING (SELECT @taskId AS TaskId, @templateChecklistItemId AS TemplateChecklistItemId) AS source",
-						"ON target.TaskId = source.TaskId AND target.TemplateChecklistItemId = source.TemplateChecklistItemId",
-						"WHEN MATCHED THEN",
-						"  UPDATE SET",
-						"    Outcome = @outcome,",
-						"    Notes = @notes,",
-						"    CompletedAt = @completedAt,",
-						"    CompletedByUserId = @completedByUserId",
-						"WHEN NOT MATCHED THEN",
-						"  INSERT (TaskId, TemplateChecklistItemId, Outcome, Notes, CompletedAt, CompletedByUserId)",
-						"  VALUES (@taskId, @templateChecklistItemId, @outcome, @notes, @completedAt, @completedByUserId);",
-					].join("\n"),
-				);
-		}
-	}
-
-  await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .input("userId", sql.UniqueIdentifier, req.user.sub)
-    .query(
-      [
-        "UPDATE pm.PMTasks",
-        "SET",
-        "  TechnicianCompletedAt = COALESCE(TechnicianCompletedAt, sysutcdatetime()),",
-        "  TechnicianCompletedByUserId = COALESCE(TechnicianCompletedByUserId, @userId),",
-        "  ApprovalStatus = N'PendingSupervisor'",
-        "WHERE TaskId = @taskId",
-      ].join("\n"),
-    );
 
   await enqueueTaskLifecycleNotifications(taskId, "task_submitted_for_approval", "role_supervisor");
   try {
@@ -4475,7 +4578,10 @@ tasksRouter.post(
 		}
 
     const db = await getDb();
-    const statusResult = await db
+    const tx = new sql.Transaction(db);
+    await tx.begin();
+    try {
+      const statusResult = await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .query(
@@ -4488,68 +4594,143 @@ tasksRouter.post(
         ].join("\n"),
       );
 
-    const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
-    if (!row) {
-      res.status(404).json({ message: "Not found" });
-      return;
+      const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
+      if (!row) {
+        res.status(404).json({ message: "Not found" });
+        await tx.rollback();
+        return;
+      }
+
+      const maintenanceType = typeof row.MaintenanceType === "string" ? row.MaintenanceType : null;
+      if (maintenanceType !== "PM") {
+        res.status(400).json({ message: "Invalid request" });
+        await tx.rollback();
+        return;
+      }
+
+      const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+      if (approvalStatus !== "PendingSuperadmin") {
+        res.status(400).json({ message: "Invalid state" });
+        await tx.rollback();
+        return;
+      }
+
+      const taskTemplateResult = await tx
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .query(
+          [
+            "SELECT TOP (1)",
+            "  t.TemplateId AS TemplateId",
+            "FROM pm.PMTasks t",
+            "WHERE t.TaskId = @taskId",
+          ].join("\n"),
+        );
+      const templateRow = taskTemplateResult.recordset[0] as Record<string, unknown> | undefined;
+      if (!templateRow || typeof templateRow.TemplateId !== "string") {
+        res.status(400).json({ message: "Invalid request" });
+        await tx.rollback();
+        return;
+      }
+
+      const checklistDefinition = await loadTaskChecklistDefinition({
+        executor: tx,
+        taskId,
+        templateId: templateRow.TemplateId,
+        historicalSubmitted: true,
+      });
+
+      const templateItems = checklistDefinition.items.map((item) => ({
+        templateChecklistItemId: item.templateChecklistItemId,
+        isMandatory: item.isMandatory,
+        requiresNotes: item.requiresNotes,
+        requiresPassFail: item.requiresPassFail,
+        enableAttachment: item.enableAttachment,
+        requiresAttachment: item.requiresAttachment,
+        isActive: item.isActive,
+      }));
+
+      const checklistEvidenceResult = await tx
+        .request()
+        .input("taskId", sql.UniqueIdentifier, taskId)
+        .query(
+          [
+            "SELECT",
+            "  e.TemplateChecklistItemId AS TemplateChecklistItemId",
+            "FROM pm.PMTaskChecklistEvidence e",
+            "WHERE e.TaskId = @taskId",
+          ].join("\n"),
+        );
+      const checklistEvidenceRows = checklistEvidenceResult.recordset as Array<Record<string, unknown>>;
+      const checklistEvidenceItemIdSet = new Set<string>(
+        checklistEvidenceRows
+          .map((record) => (typeof record.TemplateChecklistItemId === "string" ? record.TemplateChecklistItemId : null))
+          .filter((value): value is string => value !== null),
+      );
+
+      try {
+        validateChecklistResults({
+          templateItems,
+          checklistResults: parsed.data.checklistResults,
+          checklistEvidenceItemIds: checklistEvidenceItemIdSet,
+          requireMandatoryItems: false,
+        });
+      } catch (err) {
+        if (err instanceof ChecklistValidationError) {
+          res.status(400).json({ message: "Invalid request" });
+          await tx.rollback();
+          return;
+        }
+        throw err;
+      }
+
+      if (parsed.data.checklistResults.length > 0) {
+        const completedAtDate = new Date();
+        for (const item of parsed.data.checklistResults) {
+          await tx
+            .request()
+            .input("taskId", sql.UniqueIdentifier, taskId)
+            .input("templateChecklistItemId", sql.UniqueIdentifier, item.templateChecklistItemId)
+            .input("outcome", sql.TinyInt, item.outcome)
+            .input("notes", sql.NVarChar(1024), item.notes ?? null)
+            .input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
+            .input("completedAt", sql.DateTime2(0), completedAtDate)
+            .query(
+              [
+                "MERGE pm.PMTaskChecklistResults WITH (HOLDLOCK) AS target",
+                "USING (SELECT @taskId AS TaskId, @templateChecklistItemId AS TemplateChecklistItemId) AS source",
+                "ON target.TaskId = source.TaskId AND target.TemplateChecklistItemId = source.TemplateChecklistItemId",
+                "WHEN MATCHED THEN",
+                "  UPDATE SET",
+                "    Outcome = @outcome,",
+                "    Notes = @notes,",
+                "    CompletedAt = @completedAt,",
+                "    CompletedByUserId = @completedByUserId",
+                "WHEN NOT MATCHED THEN",
+                "  INSERT (TaskId, TemplateChecklistItemId, Outcome, Notes, CompletedAt, CompletedByUserId)",
+                "  VALUES (@taskId, @templateChecklistItemId, @outcome, @notes, @completedAt, @completedByUserId);",
+              ].join("\n"),
+            );
+        }
+      }
+
+      await tx.commit();
+      await writeAuditLog({
+        actorUserId: req.user.sub,
+        action: "superadmin_checklist_updated",
+        entityType: "PMTask",
+        entityId: taskId,
+        metadata: {
+          checklistResultsCount: parsed.data.checklistResults.length,
+        },
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers["user-agent"] ?? null,
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      await rollbackQuietly(tx);
+      throw err;
     }
-
-    const maintenanceType = typeof row.MaintenanceType === "string" ? row.MaintenanceType : null;
-    if (maintenanceType !== "PM") {
-      res.status(400).json({ message: "Invalid request" });
-      return;
-    }
-
-    const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
-    if (approvalStatus !== "PendingSuperadmin") {
-      res.status(400).json({ message: "Invalid state" });
-      return;
-    }
-
-		const checklistResults = parsed.data.checklistResults;
-		if (checklistResults.length > 0) {
-			const completedAtDate = new Date();
-			for (const item of checklistResults) {
-				await db
-					.request()
-					.input("taskId", sql.UniqueIdentifier, taskId)
-					.input("templateChecklistItemId", sql.UniqueIdentifier, item.templateChecklistItemId)
-					.input("outcome", sql.TinyInt, item.outcome)
-					.input("notes", sql.NVarChar(1024), item.notes ?? null)
-					.input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
-					.input("completedAt", sql.DateTime2(0), completedAtDate)
-					.query(
-						[
-							"MERGE pm.PMTaskChecklistResults WITH (HOLDLOCK) AS target",
-							"USING (SELECT @taskId AS TaskId, @templateChecklistItemId AS TemplateChecklistItemId) AS source",
-							"ON target.TaskId = source.TaskId AND target.TemplateChecklistItemId = source.TemplateChecklistItemId",
-							"WHEN MATCHED THEN",
-							"  UPDATE SET",
-							"    Outcome = @outcome,",
-							"    Notes = @notes,",
-							"    CompletedAt = @completedAt,",
-							"    CompletedByUserId = @completedByUserId",
-							"WHEN NOT MATCHED THEN",
-							"  INSERT (TaskId, TemplateChecklistItemId, Outcome, Notes, CompletedAt, CompletedByUserId)",
-							"  VALUES (@taskId, @templateChecklistItemId, @outcome, @notes, @completedAt, @completedByUserId);",
-						].join("\n"),
-					);
-			}
-		}
-
-    await writeAuditLog({
-      actorUserId: req.user.sub,
-      action: "superadmin_checklist_updated",
-      entityType: "PMTask",
-      entityId: taskId,
-      metadata: {
-        checklistResultsCount: parsed.data.checklistResults.length,
-      },
-      ipAddress: req.ip ?? null,
-      userAgent: req.headers["user-agent"] ?? null,
-    });
-
-    res.json({ ok: true });
   },
 );
 

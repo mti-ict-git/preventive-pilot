@@ -155,7 +155,19 @@ const TemplateDetailDialog = ({
                             Pass/Fail
                           </span>
                         )}
-                        {item.requiresNotes && (
+                        {item.requiresPassFail && (
+                          <span className="flex items-center gap-1 text-xs text-accent">
+                            <MessageSquare className="w-3 h-3" />
+                            Notes on Fail
+                          </span>
+                        )}
+                        {item.requiresPassFail && item.requiresNotes && (
+                          <span className="flex items-center gap-1 text-xs text-accent">
+                            <MessageSquare className="w-3 h-3" />
+                            Notes on Pass
+                          </span>
+                        )}
+                        {!item.requiresPassFail && item.requiresNotes && (
                           <span className="flex items-center gap-1 text-xs text-accent">
                             <MessageSquare className="w-3 h-3" />
                             Notes Required

@@ -1905,6 +1905,14 @@ const openApiSpec: OpenApiSchema = {
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/WorkOrderCompleteRequest" },
+            },
+          },
+        },
         responses: {
           "200": {
             description: "OK",
@@ -1916,6 +1924,10 @@ const openApiSpec: OpenApiSchema = {
           },
           "401": {
             description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
           "404": {
@@ -1932,6 +1944,23 @@ const openApiSpec: OpenApiSchema = {
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  checklistResults: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/WorkOrderChecklistResult" },
+                  },
+                },
+                additionalProperties: false,
+              },
+            },
+          },
+        },
         responses: {
           "200": {
             description: "OK",
