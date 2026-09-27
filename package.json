@@ -22,6 +22,7 @@
     "test:as01": "node --test scripts/tests/task-assignment-policy.test.mjs",
     "test:cm01": "node --test scripts/tests/work-order-cm01.test.mjs",
     "test:ex01": "node --test scripts/tests/task-execution-policy.test.mjs",
+    "test:q02q03": "node --test scripts/tests/pm-approval-boundaries.test.mjs",
     "test:q01q09": "node --test scripts/tests/reporting-contract-policy.test.mjs",
     "test:sc01": "node --test scripts/tests/pm-scheduling-policy.test.mjs",
     "test:tc01": "node --test scripts/tests/task-checklist-validation.test.mjs",

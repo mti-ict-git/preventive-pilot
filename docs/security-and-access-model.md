@@ -25,7 +25,7 @@ The shared role middleware compares normalized role names and can refresh role m
 | CM assignment | Manager guard |
 | CM deletion | Superadmin guard |
 
-This is not an exhaustive endpoint matrix. [API coverage](api-coverage.md) and Q-03 identify the remaining audit work. Do not generalize a manager permission to every sensitive operation. UI visibility does not prove authorization, and no verified self-approval prohibition is claimed.
+This is not an exhaustive endpoint matrix. [API coverage](api-coverage.md) and Q-03 identify the remaining audit work. Local Q-02/Q-03 verification now confirms the route-role matrix above and that repeated PM submission is rejected once approval is already pending. Do not generalize a manager permission to every sensitive operation. UI visibility does not prove authorization, and no verified PM self-approval prohibition is claimed.
 
 ## Confirmed facility policy — 2026-09-11
 
@@ -33,7 +33,7 @@ Facility master-data creation, editing, and archival belong to Admin/Superadmin.
 
 ## Approval and evidence boundaries
 
-Completion, submission, review, revision, rejection, and final approval have separate rules. Evidence editing is restricted in approval states, with narrowly defined privileged exceptions. Test the direct endpoints as well as the UI. Verify required checklist/evidence validation at submission before claiming an enforced complete review chain (Q-02).
+Completion, submission, review, revision, rejection, and final approval have separate rules. Evidence editing is restricted in approval states, with narrowly defined privileged exceptions. Q-02 verification now confirms that `submit-for-approval` preserves lifecycle status while moving the task into approval review, and that repeated submission is rejected once review is already pending. PM own-work/self-approval policy remains open under Q-03.
 
 ## Mobile session storage
 

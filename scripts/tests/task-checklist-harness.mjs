@@ -306,6 +306,25 @@ export function createHarness() {
           if (
             query.includes('FROM pm.PMTasks t') &&
             query.includes('t.ApprovalStatus AS ApprovalStatus') &&
+            query.includes('t.MaintenanceType AS MaintenanceType') &&
+            !query.includes('AssignedToUserId AS AssignedToUserId') &&
+            !query.includes('t.AssetId AS AssetId') &&
+            !query.includes('t.TemplateId AS TemplateId')
+          ) {
+            return {
+              recordset: [
+                {
+                  ApprovalStatus: approvalStatus,
+                  MaintenanceType: maintenanceType,
+                },
+              ],
+              rowsAffected: [],
+            };
+          }
+
+          if (
+            query.includes('FROM pm.PMTasks t') &&
+            query.includes('t.ApprovalStatus AS ApprovalStatus') &&
               !query.includes('AssignedToUserId AS AssignedToUserId') &&
               !query.includes('t.MaintenanceType AS MaintenanceType') &&
               !query.includes('a.AssetOperationalStatus AS AssetOperationalStatus')
@@ -468,7 +487,9 @@ export function createHarness() {
             query.includes('FROM pm.PMTasks t') &&
             query.includes('t.ApprovalStatus AS ApprovalStatus') &&
             query.includes('t.AssetId AS AssetId') &&
-            query.includes('t.PlannedDueAt AS PlannedDueAt')
+            query.includes('t.PlannedDueAt AS PlannedDueAt') &&
+            !query.includes('t.TechnicianCompletedAt AS TechnicianCompletedAt') &&
+            !query.includes('tpl.IntervalDays AS IntervalDays')
           ) {
             return {
               recordset: [
@@ -490,6 +511,29 @@ export function createHarness() {
 
           if (
             query.includes('FROM pm.PMTasks t') &&
+            query.includes('t.TechnicianCompletedAt AS TechnicianCompletedAt') &&
+            query.includes('tpl.IntervalDays AS IntervalDays')
+          ) {
+            return {
+              recordset: [
+                {
+                  TaskId: fixtureTaskId,
+                  AssetId: fixtureAssetId,
+                  TemplateId: fixtureTemplateId,
+                  PlannedDueAt: new Date('2026-09-16T08:00:00Z'),
+                  MaintenanceType: maintenanceType,
+                  ApprovalStatus: approvalStatus,
+                  TechnicianCompletedAt: technicianCompletedByUserId ? new Date('2026-09-16T09:00:00Z') : null,
+                  TechnicianCompletedByUserId: technicianCompletedByUserId,
+                  IntervalDays: 30,
+                },
+              ],
+              rowsAffected: [],
+            };
+          }
+
+          if (
+            query.includes('FROM pm.PMTasks t') &&
             query.includes('t.TaskNumber AS TaskNumber') &&
             query.includes('t.MaintenanceType AS MaintenanceType')
           ) {
@@ -498,7 +542,8 @@ export function createHarness() {
 
           if (
             query.includes('FROM pm.PMTasks t') &&
-            query.includes('tpl.IntervalDays AS IntervalDays')
+            query.includes('tpl.IntervalDays AS IntervalDays') &&
+            !query.includes('t.TechnicianCompletedAt AS TechnicianCompletedAt')
           ) {
             return {
               recordset: [
@@ -723,12 +768,64 @@ export function createHarness() {
             return { recordset: [], rowsAffected: [0] };
           }
 
-          if (query.includes("UPDATE pm.PMTasks") && query.includes("TechnicianCompletedAt = COALESCE")) {
+          if (
+            query.includes("UPDATE pm.PMTasks") &&
+            query.includes("TechnicianCompletedAt = COALESCE") &&
+            query.includes("ApprovalStatus = N'PendingSupervisor'")
+          ) {
+            approvalStatus = 'PendingSupervisor';
+            technicianCompletedByUserId = inputs.userId ?? fixtureUserId;
+            return { recordset: [], rowsAffected: [1] };
+          }
+
+          if (
+            query.includes('UPDATE pm.PMTasks') &&
+            query.includes("ApprovalStatus = N'PendingSuperadmin'") &&
+            query.includes('SupervisorApprovedByUserId = @userId')
+          ) {
+            approvalStatus = 'PendingSuperadmin';
+            return { recordset: [], rowsAffected: [1] };
+          }
+
+          if (
+            query.includes('UPDATE pm.PMTasks') &&
+            query.includes("ApprovalStatus = N'Approved'") &&
+            query.includes("Status = N'completed'")
+          ) {
+            approvalStatus = 'Approved';
+            taskStatus = 'completed';
+            technicianCompletedByUserId = inputs.technicianUserId ?? technicianCompletedByUserId ?? fixtureUserId;
             return { recordset: [], rowsAffected: [1] };
           }
 
           if (query.includes("UPDATE pm.PMTasks") && query.includes("ApprovalStatus = N'Rejected'")) {
             approvalStatus = 'Rejected';
+            return { recordset: [], rowsAffected: [1] };
+          }
+
+          if (
+            query.includes('UPDATE pm.PMTasks') &&
+            query.includes("ApprovalStatus = N'None'") &&
+            !query.includes('SupervisorApprovedAt = NULL')
+          ) {
+            approvalStatus = 'None';
+            return { recordset: [], rowsAffected: [1] };
+          }
+
+          if (
+            query.includes('UPDATE pm.PMTasks') &&
+            query.includes("ApprovalStatus = N'PendingSupervisor'") &&
+            query.includes('SupervisorApprovedAt = NULL')
+          ) {
+            approvalStatus = 'PendingSupervisor';
+            return { recordset: [], rowsAffected: [1] };
+          }
+
+          if (
+            query.includes('UPDATE pm.PMTasks') &&
+            query.includes('RevisionNote = @note') &&
+            query.includes('RejectedAt = NULL')
+          ) {
             return { recordset: [], rowsAffected: [1] };
           }
 

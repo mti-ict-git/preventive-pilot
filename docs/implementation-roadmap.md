@@ -1,19 +1,19 @@
 # Implementation Roadmap
 
-Last reviewed: 2026-09-17.
+Last reviewed: 2026-09-27.
 
 ## Start work here
 
 This is the **single work reference** for this repository. It owns the next action, ordered backlog, implementation checklists, dependencies, and verification status. Do not reconstruct work from feature-review notes or use their old checkboxes as a second backlog.
 
-**Current mode:** D1 implementation. AF-02 facility master permissions, TC-01 checklist validation, TC-02 checklist snapshot preservation, AF-01 broken-asset cancellation, SC-01 planned-date recurrence, AS-01 role-queue claim/ownership boundaries, EX-01 timed PM execution/return-to-work semantics, CM-01 supervisor-verified work-order closure/restoration timing, and the current Q-09 reporting semantics plus desktop dashboard/report contract coverage are implemented and locally verified; [AF-02 evidence](verification-af02.md), [TC-01 evidence](verification-tc01.md), [TC-02 evidence](verification-tc02.md), [AF-01 evidence](verification-af01.md), [SC-01 evidence](verification-sc01.md), [AS-01 evidence](verification-as01.md), [EX-01 evidence](verification-ex01.md), [CM-01 evidence](verification-cm01.md), and [Q-01/Q-09 evidence](verification-q01-q09.md) remain separate. **Next action:** finish the remaining D1 non-reporting contract/discussion boundaries (Q-01 broader inventory, Q-02/Q-03, Q-12-Q15) or proceed to D2 when directed. Other approved requirements remain unchanged; do not reopen settled decisions.
+**Current mode:** D1 implementation. AF-02 facility master permissions, TC-01 checklist validation, TC-02 checklist snapshot preservation, AF-01 broken-asset cancellation, SC-01 planned-date recurrence, AS-01 role-queue claim/ownership boundaries, EX-01 timed PM execution/return-to-work semantics, CM-01 supervisor-verified work-order closure/restoration timing, the current Q-09 reporting semantics plus desktop dashboard/report contract coverage, and the Q-02 PM submission-versus-completion boundary are implemented and locally verified; [AF-02 evidence](verification-af02.md), [TC-01 evidence](verification-tc01.md), [TC-02 evidence](verification-tc02.md), [AF-01 evidence](verification-af01.md), [SC-01 evidence](verification-sc01.md), [AS-01 evidence](verification-as01.md), [EX-01 evidence](verification-ex01.md), [CM-01 evidence](verification-cm01.md), [Q-01/Q-09 evidence](verification-q01-q09.md), and [Q-02/Q-03 evidence](verification-q02-q03.md) remain separate. **Next action:** finish the remaining D1 non-reporting contract/discussion boundaries (Q-01 broader inventory, Q-03 own-work approval policy, Q-04 schedule parity, Q-12-Q15) or proceed to D2 when directed. Other approved requirements remain unchanged; do not reopen settled decisions.
 
 **When implementation is requested:** continue with CM-01 after completed AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, and EX-01, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
 
 | Order | Item | Requirement | Status / remaining boundary |
 | --- | --- | --- | --- |
 | 1 | [AF-02](#af-02) | Admin/Superadmin-only facility master changes | Implemented; local HTTP/browser/static/build checks passed; deployment verification separate |
-| 2 | [TC-01](#tc-01) | Notes required on Fail, not merely mandatory status | Implemented; local HTTP/typecheck/build/docs checks passed; lifecycle timing boundary remains Q-02 |
+| 2 | [TC-01](#tc-01) | Notes required on Fail, not merely mandatory status | Implemented; local HTTP/typecheck/build/docs checks passed; PM submission/completion boundary is now documented and locally verified |
 | 3 | [TC-02](#tc-02) | Preserve checklist at technician submission | Implemented; local HTTP/typecheck/build/docs checks passed; legacy fallback is explicit |
 | 4 | [AF-01](#af-01) | Cancel affected PM tasks when assets become broken | Implemented; local HTTP/typecheck/build/docs checks passed; no automatic reopen on later asset reappearance |
 | 5 | [SC-01](#sc-01) | Recurrence follows planned dates | Implemented locally; planned-versus-effective reporting semantics are now documented and locally verified |
@@ -124,7 +124,8 @@ Resolve differences between documented desktop/web behavior, supporting API defi
 - [x] Implement and verify AF-02 scoped facility permissions. [Evidence](verification-af02.md).
 - [x] Execute CM-01 using the detailed checklist below; AS-01 is implemented with [verification evidence](verification-as01.md), EX-01 is implemented with [verification evidence](verification-ex01.md), and CM-01 is implemented with [verification evidence](verification-cm01.md).
 - [ ] Resolve applicable Q-12–Q-15 boundaries without re-asking settled asset/facility decisions.
-- [ ] Agree on completion versus submission validation and approval role/self-approval behavior (Q-02, Q-03).
+- [x] Verify and record the current PM submission-versus-completion contract, including repeated submission behavior (Q-02). [Evidence](verification-q02-q03.md).
+- [ ] Agree on PM own-work/self-approval behavior and multi-role review policy (Q-03).
 - [ ] Reconcile desktop API dependencies and payload/error contracts (Q-01); defer mobile-only gaps.
 - [x] Confirm report denominators, approval inclusion, MTTR, and timezone boundaries (Q-09). [Evidence](verification-q01-q09.md).
 - [ ] Complete feature discussions for remaining task/approval, CM, reporting, notification, and administration topics; record new actions here rather than creating another feature backlog.
