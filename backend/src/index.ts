@@ -37,7 +37,7 @@ const openApiSpec: OpenApiSchema = {
   info: {
     title: "Preventive Pilot API",
     version: "1.0.1",
-    description: "REST API for Preventive Pilot (web + mobile clients). Docs updated 2026-01-07.",
+    description: "REST API for Preventive Pilot (web + mobile clients). Docs updated 2026-09-17.",
   },
   servers: [{ url: "http://localhost:" + String(env.BACKEND_PORT) }],
   components: {
@@ -73,6 +73,7 @@ const openApiSpec: OpenApiSchema = {
           enabled: { type: ["boolean", "null"] },
           defaultTemplateId: { type: ["string", "null"], format: "uuid" },
           lastCompletedAt: { type: ["string", "null"], format: "date-time" },
+          nextPlannedDueAt: { type: ["string", "null"], format: "date-time" },
           nextDueAt: { type: ["string", "null"], format: "date-time" },
         },
         required: ["enabled"],
@@ -115,6 +116,7 @@ const openApiSpec: OpenApiSchema = {
           enabled: { type: ["boolean", "null"] },
           defaultTemplateId: { type: ["string", "null"], format: "uuid" },
           lastCompletedAt: { type: ["string", "null"], format: "date-time" },
+          nextPlannedDueAt: { type: ["string", "null"], format: "date-time" },
           nextDueAt: { type: ["string", "null"], format: "date-time" },
         },
         required: ["enabled"],
@@ -265,6 +267,24 @@ const openApiSpec: OpenApiSchema = {
         required: ["id"],
         additionalProperties: false,
       },
+      WorkOrderCreateResponse: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          created: { type: "boolean" },
+        },
+        required: ["id", "created"],
+        additionalProperties: false,
+      },
+      RejectApprovalResponse: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+          replacementTaskId: { type: "string", format: "uuid" },
+        },
+        required: ["ok", "replacementTaskId"],
+        additionalProperties: false,
+      },
       ErrorResponse: {
         type: "object",
         properties: {
@@ -374,6 +394,15 @@ const openApiSpec: OpenApiSchema = {
         },
         additionalProperties: false,
       },
+      SkipNextPmRequest: {
+        type: "object",
+        properties: {
+          plannedDueAt: { type: "string", format: "date-time" },
+          reason: { type: "string", minLength: 1, maxLength: 1024 },
+        },
+        required: ["plannedDueAt", "reason"],
+        additionalProperties: false,
+      },
       NotificationChannelCreateRequest: {
         type: "object",
         properties: {
@@ -456,9 +485,20 @@ const openApiSpec: OpenApiSchema = {
       TaskAssignRequest: {
         type: "object",
         properties: {
-          assigneeUserId: { type: ["string", "null"], format: "uuid" },
+          assignedToUserId: { type: ["string", "null"], format: "uuid" },
+          assignedToRoleId: { type: ["string", "null"], format: "uuid" },
+          priority: { type: "string", maxLength: 16 },
         },
-        required: ["assigneeUserId"],
+        minProperties: 1,
+        additionalProperties: false,
+      },
+      TaskClaimResponse: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+          claimed: { type: "boolean" },
+        },
+        required: ["ok", "claimed"],
         additionalProperties: false,
       },
       WorkOrderCreateRequest: {
@@ -473,6 +513,8 @@ const openApiSpec: OpenApiSchema = {
           failureCode: { type: ["string", "null"], maxLength: 64 },
           downtimeStartedAt: { type: ["string", "null"], format: "date-time" },
           reportedChannel: { type: ["string", "null"], maxLength: 32 },
+          sourceTaskId: { type: ["string", "null"], format: "uuid" },
+          sourceTemplateChecklistItemId: { type: ["string", "null"], format: "uuid" },
         },
         required: ["symptom"],
         additionalProperties: false,
@@ -505,6 +547,312 @@ const openApiSpec: OpenApiSchema = {
           backdateReason: { type: ["string", "null"], maxLength: 1024 },
           technicianName: { type: ["string", "null"], maxLength: 256 },
         },
+        additionalProperties: false,
+      },
+      WorkOrderRestorationRequest: {
+        type: "object",
+        properties: {
+          restoredAt: { type: ["string", "null"], format: "date-time" },
+          reason: { type: ["string", "null"], maxLength: 1024 },
+        },
+        additionalProperties: false,
+      },
+      WorkOrderReturnForCorrectionRequest: {
+        type: "object",
+        properties: {
+          reason: { type: "string", minLength: 1, maxLength: 1024 },
+        },
+        required: ["reason"],
+        additionalProperties: false,
+      },
+      WorkOrderReopenDowntimeRequest: {
+        type: "object",
+        properties: {
+          downtimeStartedAt: { type: ["string", "null"], format: "date-time" },
+          reason: { type: ["string", "null"], maxLength: 1024 },
+        },
+        additionalProperties: false,
+      },
+      WorkOrderReportRecurrenceRequest: {
+        type: "object",
+        properties: {
+          downtimeStartedAt: { type: ["string", "null"], format: "date-time" },
+          reportedChannel: { type: ["string", "null"], maxLength: 32 },
+          reason: { type: ["string", "null"], maxLength: 1024 },
+        },
+        additionalProperties: false,
+      },
+      TaskUserRef: {
+        type: "object",
+        properties: {
+          userId: { type: "string", format: "uuid" },
+          username: { type: ["string", "null"] },
+          displayName: { type: ["string", "null"] },
+        },
+        required: ["userId", "username", "displayName"],
+        additionalProperties: false,
+      },
+      WorkOrderDowntimeInterval: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          startedAt: { type: "string", format: "date-time" },
+          startedReason: { type: ["string", "null"] },
+          startedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          endedAt: { type: ["string", "null"], format: "date-time" },
+          endReason: { type: ["string", "null"] },
+          endedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+        },
+        required: ["id", "startedAt", "startedReason", "startedBy", "endedAt", "endReason", "endedBy"],
+        additionalProperties: false,
+      },
+      CmTaskEvent: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          type: {
+            type: "string",
+            enum: [
+              "reported",
+              "repair_submitted",
+              "returned_for_correction",
+              "verified_closed",
+              "restoration_recorded",
+              "downtime_reopened",
+              "repeat_fault_linked",
+            ],
+          },
+          occurredAt: { type: "string", format: "date-time" },
+          reason: { type: ["string", "null"] },
+          notes: { type: ["string", "null"] },
+          metadataJson: { type: ["string", "null"] },
+          actor: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+        },
+        required: ["id", "type", "occurredAt", "reason", "notes", "metadataJson", "actor"],
+        additionalProperties: false,
+      },
+      TaskEvidence: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          fileName: { type: ["string", "null"] },
+          contentType: { type: ["string", "null"] },
+          sizeBytes: { type: ["integer", "null"] },
+          uri: { type: "string" },
+          uploadedAt: { type: "string", format: "date-time" },
+          uploadedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+        },
+        required: ["id", "fileName", "contentType", "sizeBytes", "uri", "uploadedAt", "uploadedBy"],
+        additionalProperties: false,
+      },
+      TaskChecklistEvidence: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          templateChecklistItemId: { type: "string", format: "uuid" },
+          fileName: { type: ["string", "null"] },
+          contentType: { type: ["string", "null"] },
+          sizeBytes: { type: ["integer", "null"] },
+          uri: { type: "string" },
+          uploadedAt: { type: "string", format: "date-time" },
+          uploadedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+        },
+        required: ["id", "templateChecklistItemId", "fileName", "contentType", "sizeBytes", "uri", "uploadedAt", "uploadedBy"],
+        additionalProperties: false,
+      },
+      TaskChecklistResultDetail: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          outcome: { type: "integer", enum: [0, 1, 2] },
+          outcomeLabel: { type: "string", enum: ["skip", "pass", "fail", "done"] },
+          notes: { type: ["string", "null"] },
+          completedAt: { type: ["string", "null"], format: "date-time" },
+          completedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+        },
+        required: ["id", "outcome", "outcomeLabel", "notes", "completedAt", "completedBy"],
+        additionalProperties: false,
+      },
+      TaskDetailChecklistItem: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          sortOrder: { type: "integer" },
+          itemText: { type: "string" },
+          isMandatory: { type: "boolean" },
+          requiresNotes: { type: "boolean" },
+          requiresPassFail: { type: "boolean" },
+          enableAttachment: { type: "boolean" },
+          requiresAttachment: { type: "boolean" },
+          isActive: { type: "boolean" },
+          evidence: { type: "array", items: { $ref: "#/components/schemas/TaskChecklistEvidence" } },
+          result: { oneOf: [{ $ref: "#/components/schemas/TaskChecklistResultDetail" }, { type: "null" }] },
+        },
+        required: [
+          "id",
+          "sortOrder",
+          "itemText",
+          "isMandatory",
+          "requiresNotes",
+          "requiresPassFail",
+          "enableAttachment",
+          "requiresAttachment",
+          "isActive",
+          "evidence",
+          "result",
+        ],
+        additionalProperties: false,
+      },
+      TaskDetailRemark: {
+        type: "object",
+        properties: {
+          label: { type: "string" },
+          note: { type: ["string", "null"] },
+          at: { type: ["string", "null"], format: "date-time" },
+          by: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+        },
+        required: ["label", "note", "at", "by"],
+        additionalProperties: false,
+      },
+      TaskWorkSessionSummary: {
+        type: "object",
+        properties: {
+          totalSeconds: { type: "integer", minimum: 0 },
+          sessionCount: { type: "integer", minimum: 0 },
+          activeSessionStartedAt: { type: ["string", "null"], format: "date-time" },
+        },
+        required: ["totalSeconds", "sessionCount", "activeSessionStartedAt"],
+        additionalProperties: false,
+      },
+      TaskDetailResponse: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          taskNumber: { type: "string" },
+          maintenanceType: { type: "string", enum: ["PM", "CM"] },
+          status: { type: "string" },
+          priority: { type: "string" },
+          plannedDueAt: { type: "string", format: "date-time" },
+          scheduledDueAt: { type: "string", format: "date-time" },
+          createdAt: { type: "string", format: "date-time" },
+          startedAt: { type: ["string", "null"], format: "date-time" },
+          completedAt: { type: ["string", "null"], format: "date-time" },
+          completedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          cancelledAt: { type: ["string", "null"], format: "date-time" },
+          cancelledBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          cancelledReason: { type: ["string", "null"] },
+          forceCompleted: { type: ["boolean", "null"] },
+          fulfilledPlannedDueAt: { type: ["string", "null"], format: "date-time" },
+          approvalStatus: { type: ["string", "null"] },
+          technicianCompletedAt: { type: ["string", "null"], format: "date-time" },
+          technicianCompletedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          supervisorApprovedAt: { type: ["string", "null"], format: "date-time" },
+          supervisorApprovedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          superadminApprovedAt: { type: ["string", "null"], format: "date-time" },
+          superadminApprovedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          rejectedAt: { type: ["string", "null"], format: "date-time" },
+          rejectedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          rejectionReason: { type: ["string", "null"] },
+          revisedAt: { type: ["string", "null"], format: "date-time" },
+          revisedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          revisionNote: { type: ["string", "null"] },
+          workSessionSummary: { oneOf: [{ $ref: "#/components/schemas/TaskWorkSessionSummary" }, { type: "null" }] },
+          remarksHistory: { type: "array", items: { $ref: "#/components/schemas/TaskDetailRemark" } },
+          asset: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              assetTag: { type: "string" },
+              name: { type: "string" },
+            },
+            required: ["id", "assetTag", "name"],
+            additionalProperties: false,
+          },
+          facility: {
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  name: { type: ["string", "null"] },
+                },
+                required: ["id", "name"],
+                additionalProperties: false,
+              },
+              { type: "null" },
+            ],
+          },
+          template: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              name: { type: "string" },
+            },
+            required: ["id", "name"],
+            additionalProperties: false,
+          },
+          assignedTo: {
+            type: "object",
+            properties: {
+              userId: { type: ["string", "null"], format: "uuid" },
+              username: { type: ["string", "null"] },
+              displayName: { type: ["string", "null"] },
+              roleId: { type: ["string", "null"], format: "uuid" },
+              roleName: { type: ["string", "null"] },
+            },
+            required: ["userId", "username", "displayName", "roleId", "roleName"],
+            additionalProperties: false,
+          },
+          checklistDefinitionSource: {
+            type: "string",
+            enum: ["live", "snapshot", "legacy-live"],
+            description: "Checklist provenance. `legacy-live` means the task predates snapshot preservation and is showing the current template as an explicit fallback.",
+          },
+          checklistDefinitionCapturedAt: { type: ["string", "null"], format: "date-time" },
+          checklistDefinitionNote: { type: ["string", "null"] },
+          checklistItems: { type: "array", items: { $ref: "#/components/schemas/TaskDetailChecklistItem" } },
+          evidence: { type: "array", items: { $ref: "#/components/schemas/TaskEvidence" } },
+        },
+        required: [
+          "id",
+          "taskNumber",
+          "maintenanceType",
+          "status",
+          "priority",
+          "plannedDueAt",
+          "scheduledDueAt",
+          "createdAt",
+          "startedAt",
+          "completedAt",
+          "completedBy",
+          "cancelledAt",
+          "cancelledBy",
+          "cancelledReason",
+          "forceCompleted",
+          "approvalStatus",
+          "technicianCompletedAt",
+          "technicianCompletedBy",
+          "supervisorApprovedAt",
+          "supervisorApprovedBy",
+          "superadminApprovedAt",
+          "superadminApprovedBy",
+          "rejectedAt",
+          "rejectedBy",
+          "rejectionReason",
+          "revisedAt",
+          "revisedBy",
+          "revisionNote",
+          "workSessionSummary",
+          "asset",
+          "facility",
+          "template",
+          "assignedTo",
+          "checklistDefinitionSource",
+          "checklistDefinitionCapturedAt",
+          "checklistDefinitionNote",
+          "checklistItems",
+          "evidence",
+        ],
         additionalProperties: false,
       },
       SchedulingAssignmentRule: {
@@ -759,13 +1107,21 @@ const openApiSpec: OpenApiSchema = {
           scheduledDueAt: { type: ["string", "null"], format: "date-time" },
           createdAt: { type: "string", format: "date-time" },
           startedAt: { type: ["string", "null"], format: "date-time" },
+          repairSubmittedAt: { type: ["string", "null"], format: "date-time" },
+          repairSubmittedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
           completedAt: { type: ["string", "null"], format: "date-time" },
           cancelledAt: { type: ["string", "null"], format: "date-time" },
           symptom: { type: ["string", "null"] },
           impactLevel: { type: ["string", "null"] },
           failureCategory: { type: ["string", "null"] },
           failureCode: { type: ["string", "null"] },
+          downtimeStartedAt: { type: ["string", "null"], format: "date-time" },
+          downtimeEndedAt: { type: ["string", "null"], format: "date-time" },
+          downtimeTotalSeconds: { type: "integer", minimum: 0 },
+          downtimeIntervals: { type: "array", items: { $ref: "#/components/schemas/WorkOrderDowntimeInterval" } },
           reportedAt: { type: ["string", "null"], format: "date-time" },
+          reportedChannel: { type: ["string", "null"] },
+          reportedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
           asset: { $ref: "#/components/schemas/EntityRefNullable" },
           facility: { $ref: "#/components/schemas/EntityRefNullable" },
           template: { $ref: "#/components/schemas/EntityRef" },
@@ -781,36 +1137,280 @@ const openApiSpec: OpenApiSchema = {
             required: ["userId", "username", "displayName", "roleId", "roleName"],
             additionalProperties: false,
           },
-          completedBy: {
-            oneOf: [
-              {
-                type: "object",
-                properties: {
-                  userId: { type: "string", format: "uuid" },
-                  username: { type: ["string", "null"] },
-                  displayName: { type: ["string", "null"] },
-                },
-                required: ["userId"],
-              },
-              { type: "null" },
-            ],
+          completedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          returnedAt: { type: ["string", "null"], format: "date-time" },
+          returnedBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          returnReason: { type: ["string", "null"] },
+          cancelledBy: { oneOf: [{ $ref: "#/components/schemas/TaskUserRef" }, { type: "null" }] },
+          recurringFromTaskId: { type: ["string", "null"], format: "uuid" },
+          history: { type: "array", items: { $ref: "#/components/schemas/CmTaskEvent" } },
+          resolutionNotes: { type: ["string", "null"] },
+        },
+        required: [
+          "id",
+          "taskNumber",
+          "status",
+          "createdAt",
+          "startedAt",
+          "repairSubmittedAt",
+          "repairSubmittedBy",
+          "completedAt",
+          "cancelledAt",
+          "symptom",
+          "impactLevel",
+          "failureCategory",
+          "failureCode",
+          "downtimeStartedAt",
+          "downtimeEndedAt",
+          "downtimeTotalSeconds",
+          "downtimeIntervals",
+          "reportedAt",
+          "reportedChannel",
+          "reportedBy",
+          "asset",
+          "facility",
+          "template",
+          "assignedTo",
+          "completedBy",
+          "returnedAt",
+          "returnedBy",
+          "returnReason",
+          "cancelledBy",
+          "recurringFromTaskId",
+          "history",
+          "resolutionNotes",
+        ],
+        additionalProperties: false,
+      },
+      DashboardOverviewStats: {
+        type: "object",
+        properties: {
+          totalAssetsInPm: { type: "integer" },
+          upcoming7DaysCount: { type: "integer" },
+          dueTodayCount: { type: "integer" },
+          overdueCount: { type: "integer" },
+        },
+        required: ["totalAssetsInPm", "upcoming7DaysCount", "dueTodayCount", "overdueCount"],
+        additionalProperties: false,
+      },
+      DashboardComplianceTrendRow: {
+        type: "object",
+        properties: {
+          monthStart: { type: "string", format: "date-time" },
+          monthEnd: { type: "string", format: "date-time" },
+          totalDue: { type: "integer" },
+          completedOnTime: { type: "integer" },
+          complianceRate: { type: ["number", "null"] },
+        },
+        required: ["monthStart", "monthEnd", "totalDue", "completedOnTime", "complianceRate"],
+        additionalProperties: false,
+      },
+      DashboardOverdueCategoryRow: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          count: { type: "integer" },
+        },
+        required: ["name", "count"],
+        additionalProperties: false,
+      },
+      DashboardOverdueAssetRow: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          assetTag: { type: ["string", "null"] },
+          name: { type: ["string", "null"] },
+        },
+        required: ["id", "assetTag", "name"],
+        additionalProperties: false,
+      },
+      DashboardRecentTaskRow: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          taskNumber: { type: "string" },
+          status: { type: "string" },
+          scheduledDueAt: { type: "string", format: "date-time" },
+          asset: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              assetTag: { type: ["string", "null"] },
+              name: { type: ["string", "null"] },
+              imageUrl: { type: ["string", "null"], format: "uri" },
+            },
+            required: ["id", "assetTag", "name", "imageUrl"],
+            additionalProperties: false,
           },
-          cancelledBy: {
-            oneOf: [
-              {
-                type: "object",
-                properties: {
-                  userId: { type: "string", format: "uuid" },
-                  username: { type: ["string", "null"] },
-                  displayName: { type: ["string", "null"] },
-                },
-                required: ["userId"],
-              },
-              { type: "null" },
-            ],
+          template: {
+            type: "object",
+            properties: {
+              name: { type: ["string", "null"] },
+            },
+            required: ["name"],
+            additionalProperties: false,
+          },
+          assignedTo: {
+            type: "object",
+            properties: {
+              displayName: { type: ["string", "null"] },
+              roleName: { type: ["string", "null"] },
+            },
+            required: ["displayName", "roleName"],
+            additionalProperties: false,
           },
         },
-        required: ["id", "taskNumber", "status", "createdAt", "asset", "facility", "template", "assignedTo"],
+        required: ["id", "taskNumber", "status", "scheduledDueAt", "asset", "template", "assignedTo"],
+        additionalProperties: false,
+      },
+      DashboardOverviewResponse: {
+        type: "object",
+        properties: {
+          stats: { $ref: "#/components/schemas/DashboardOverviewStats" },
+          complianceTrend: { type: "array", items: { $ref: "#/components/schemas/DashboardComplianceTrendRow" } },
+          overdueByCategory: { type: "array", items: { $ref: "#/components/schemas/DashboardOverdueCategoryRow" } },
+          overdueAssets: { type: "array", items: { $ref: "#/components/schemas/DashboardOverdueAssetRow" } },
+          recentTasks: { type: "array", items: { $ref: "#/components/schemas/DashboardRecentTaskRow" } },
+        },
+        required: ["stats", "complianceTrend", "overdueByCategory", "overdueAssets", "recentTasks"],
+        additionalProperties: false,
+      },
+      OverdueReportAsset: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          assetTag: { type: ["string", "null"] },
+          name: { type: ["string", "null"] },
+          location: { oneOf: [{ $ref: "#/components/schemas/EntityRef" }, { type: "null" }] },
+          category: { oneOf: [{ $ref: "#/components/schemas/EntityRef" }, { type: "null" }] },
+        },
+        required: ["id", "assetTag", "name", "location", "category"],
+        additionalProperties: false,
+      },
+      OverdueReportFacility: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          name: { type: ["string", "null"] },
+          location: { oneOf: [{ $ref: "#/components/schemas/EntityRef" }, { type: "null" }] },
+        },
+        required: ["id", "name", "location"],
+        additionalProperties: false,
+      },
+      OverdueReportItem: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          taskNumber: { type: "string" },
+          scheduledDueAt: { type: "string", format: "date-time" },
+          status: { type: "string" },
+          priority: { type: ["string", "null"] },
+          contextType: { type: "string", enum: ["asset", "facility"] },
+          asset: { oneOf: [{ $ref: "#/components/schemas/OverdueReportAsset" }, { type: "null" }] },
+          facility: { oneOf: [{ $ref: "#/components/schemas/OverdueReportFacility" }, { type: "null" }] },
+          template: { $ref: "#/components/schemas/EntityRef" },
+        },
+        required: ["id", "taskNumber", "scheduledDueAt", "status", "priority", "contextType", "asset", "facility", "template"],
+        additionalProperties: false,
+      },
+      OverdueReportResponse: {
+        type: "object",
+        properties: {
+          page: { type: "integer" },
+          pageSize: { type: "integer" },
+          overdueCount: { type: "integer" },
+          items: { type: "array", items: { $ref: "#/components/schemas/OverdueReportItem" } },
+        },
+        required: ["page", "pageSize", "overdueCount", "items"],
+        additionalProperties: false,
+      },
+      ComplianceReportResponse: {
+        type: "object",
+        properties: {
+          from: { type: "string", format: "date-time" },
+          to: { type: "string", format: "date-time" },
+          totalDue: { type: "integer" },
+          completedOnTime: { type: "integer" },
+          completedTotal: { type: "integer" },
+          currentlyOverdue: { type: "integer" },
+          complianceRate: { type: ["number", "null"] },
+        },
+        required: ["from", "to", "totalDue", "completedOnTime", "completedTotal", "currentlyOverdue", "complianceRate"],
+        additionalProperties: false,
+      },
+      CmBreakdownRow: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          count: { type: "integer" },
+        },
+        required: ["name", "count"],
+        additionalProperties: false,
+      },
+      CmMttrRow: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          seconds: { type: "number" },
+        },
+        required: ["name", "seconds"],
+        additionalProperties: false,
+      },
+      CmMonthlyIncidentRow: {
+        type: "object",
+        properties: {
+          monthStart: { type: "string", format: "date-time" },
+          incidentCount: { type: "integer" },
+        },
+        required: ["monthStart", "incidentCount"],
+        additionalProperties: false,
+      },
+      CmMetricsResponse: {
+        type: "object",
+        properties: {
+          from: { type: "string", format: "date-time" },
+          to: { type: "string", format: "date-time" },
+          breakdownByCategory: { type: "array", items: { $ref: "#/components/schemas/CmBreakdownRow" } },
+          breakdownByLocation: { type: "array", items: { $ref: "#/components/schemas/CmBreakdownRow" } },
+          breakdownByFailureCategory: { type: "array", items: { $ref: "#/components/schemas/CmBreakdownRow" } },
+          breakdownByImpactLevel: { type: "array", items: { $ref: "#/components/schemas/CmBreakdownRow" } },
+          monthlyIncidents: { type: "array", items: { $ref: "#/components/schemas/CmMonthlyIncidentRow" } },
+          mttrByCategory: { type: "array", items: { $ref: "#/components/schemas/CmMttrRow" } },
+          mttrByLocation: { type: "array", items: { $ref: "#/components/schemas/CmMttrRow" } },
+        },
+        required: [
+          "from",
+          "to",
+          "breakdownByCategory",
+          "breakdownByLocation",
+          "breakdownByFailureCategory",
+          "breakdownByImpactLevel",
+          "monthlyIncidents",
+          "mttrByCategory",
+          "mttrByLocation",
+        ],
+        additionalProperties: false,
+      },
+      SystemLogEntry: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          level: { type: "string" },
+          message: { type: "string" },
+          createdAt: { type: "string", format: "date-time" },
+          context: { type: ["string", "null"] },
+        },
+        required: ["id", "level", "message", "createdAt", "context"],
+        additionalProperties: false,
+      },
+      SystemLogsResponse: {
+        type: "object",
+        properties: {
+          page: { type: "integer" },
+          pageSize: { type: "integer" },
+          items: { type: "array", items: { $ref: "#/components/schemas/SystemLogEntry" } },
+        },
+        required: ["page", "pageSize", "items"],
         additionalProperties: false,
       },
     },
@@ -819,6 +1419,8 @@ const openApiSpec: OpenApiSchema = {
   tags: [
     { name: "Health" },
     { name: "Auth" },
+    { name: "Dashboard" },
+    { name: "Reports" },
     { name: "App Updates" },
     { name: "Assets" },
     { name: "Facilities" },
@@ -1242,6 +1844,119 @@ const openApiSpec: OpenApiSchema = {
     }
   }
 },
+    "/api/facilities/{facilityId}/pm-settings": {
+      put: {
+        tags: ["Facilities"],
+        summary: "Update facility PM settings",
+        parameters: [
+          { name: "facilityId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/UpdateAssetPmRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/facilities/{facilityId}/pm-now": {
+      post: {
+        tags: ["Facilities"],
+        summary: "Create or reuse the current PM occurrence for a facility",
+        parameters: [
+          { name: "facilityId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": {
+            description: "Reused an existing due, overdue, or upcoming regular PM task",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } } },
+          },
+          "201": {
+            description: "Created a PM task representing the current regular occurrence",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "500": {
+            description: "Server error",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/facilities/{facilityId}/skip-next-pm": {
+      post: {
+        tags: ["Facilities"],
+        summary: "Skip the next planned facility PM occurrence",
+        parameters: [
+          { name: "facilityId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/SkipNextPmRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "409": {
+            description: "The requested occurrence changed or is protected by active or approval-stage work",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
     "/api/facilities/{facilityId}/clone": {
   "post": {
     "tags": [
@@ -1401,6 +2116,7 @@ const openApiSpec: OpenApiSchema = {
       patch: {
         tags: ["Assets"],
         summary: "Update asset PM settings",
+        description: "Manual nextPmDueAt sets the planned anchor for the next regular occurrence; the stored effective due date applies existing blackout shifting.",
         parameters: [
           { name: "assetId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -1429,6 +2145,47 @@ const openApiSpec: OpenApiSchema = {
           },
           "404": {
             description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/assets/{assetId}/skip-next-pm": {
+      post: {
+        tags: ["Assets"],
+        summary: "Skip the next planned asset PM occurrence",
+        parameters: [
+          { name: "assetId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/SkipNextPmRequest" } },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "409": {
+            description: "The requested occurrence changed or is protected by active or approval-stage work",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },
@@ -1498,6 +2255,7 @@ const openApiSpec: OpenApiSchema = {
       get: {
         tags: ["Tasks"],
         summary: "List tasks",
+        description: "Checklist totals/counts prefer the frozen submitted checklist definition when a PM task snapshot exists; otherwise they use the current live template.",
         parameters: [
           { name: "status", in: "query", required: false, schema: { type: "string" } },
           { name: "assigned", in: "query", required: false, schema: { type: "string", enum: ["me", "unassigned", "any"], default: "any" } },
@@ -1538,6 +2296,37 @@ const openApiSpec: OpenApiSchema = {
         },
       },
     },
+    "/api/tasks/{taskId}": {
+      get: {
+        tags: ["Tasks"],
+        summary: "Get task detail",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/TaskDetailResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
     "/api/tasks/pm-now": {
       post: {
         tags: ["Tasks"],
@@ -1567,6 +2356,10 @@ const openApiSpec: OpenApiSchema = {
           },
           "404": {
             description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "409": {
+            description: "Broken assets cannot receive new PM work",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
           "500": {
@@ -1712,6 +2505,8 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Assign/unassign a task",
+        description:
+          "Managers can assign or reassign tasks. Submitted PM tasks are locked until they are returned for revision, and this request does not change lifecycle status.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -1742,6 +2537,43 @@ const openApiSpec: OpenApiSchema = {
             description: "Not found",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
+          "409": {
+            description: "Submitted PM tasks cannot be reassigned until they are returned for revision",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/{taskId}/claim": {
+      post: {
+        tags: ["Tasks"],
+        summary: "Claim a role-queued PM task",
+        description:
+          "An eligible technician exclusively claims a PM task that is still assigned to a role queue. Repeat claims by the current owner return claimed=false.",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/TaskClaimResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "409": {
+            description: "Task is no longer claimable, was already claimed, or is locked after submission",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
         },
       },
     },
@@ -1769,52 +2601,59 @@ const openApiSpec: OpenApiSchema = {
             description: "Not found",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
-        },
-        "/api/tasks/{taskId}/draft": {
-          get: {
-            tags: ["Tasks"],
-            summary: "Get my draft checklist entries for task",
-            parameters: [
-              { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
-            ],
-            responses: {
-              "200": { description: "OK" },
-              "400": { description: "Invalid request" },
-              "403": { description: "Forbidden" },
-              "404": { description: "Not found" },
-            },
-            security: [{ bearerAuth: [] }],
-          },
-          patch: {
-            tags: ["Tasks"],
-            summary: "Save my draft checklist entries for task",
-            parameters: [
-              { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
-            ],
-            requestBody: { required: true },
-            responses: {
-              "200": { description: "OK" },
-              "400": { description: "Invalid request" },
-              "403": { description: "Forbidden" },
-              "404": { description: "Not found" },
-            },
-            security: [{ bearerAuth: [] }],
-          },
-          delete: {
-            tags: ["Tasks"],
-            summary: "Clear my draft checklist entries for task",
-            parameters: [
-              { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
-            ],
-            responses: {
-              "200": { description: "OK" },
-              "400": { description: "Invalid request" },
-              "403": { description: "Forbidden" },
-              "404": { description: "Not found" },
-            },
-            security: [{ bearerAuth: [] }],
+          "409": {
+            description: "Broken-asset PM tasks are cancelled and cannot be started",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },
+      },
+    },
+    "/api/tasks/{taskId}/draft": {
+      get: {
+        tags: ["Tasks"],
+        summary: "Get my draft checklist entries for task",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": { description: "OK" },
+          "400": { description: "Invalid request" },
+          "403": { description: "Forbidden" },
+          "404": { description: "Not found" },
+          "409": { description: "Submitted PM tasks are locked for draft editing" },
+        },
+        security: [{ bearerAuth: [] }],
+      },
+      patch: {
+        tags: ["Tasks"],
+        summary: "Save my draft checklist entries for task",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: { required: true },
+        responses: {
+          "200": { description: "OK" },
+          "400": { description: "Invalid request" },
+          "403": { description: "Forbidden" },
+          "404": { description: "Not found" },
+          "409": { description: "Submitted PM tasks are locked for draft editing" },
+        },
+        security: [{ bearerAuth: [] }],
+      },
+      delete: {
+        tags: ["Tasks"],
+        summary: "Clear my draft checklist entries for task",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": { description: "OK" },
+          "400": { description: "Invalid request" },
+          "403": { description: "Forbidden" },
+          "404": { description: "Not found" },
+          "409": { description: "Submitted PM tasks are locked for draft editing" },
+        },
+        security: [{ bearerAuth: [] }],
       },
     },
     "/api/tasks/{taskId}/pause": {
@@ -1839,6 +2678,10 @@ const openApiSpec: OpenApiSchema = {
           },
           "404": {
             description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "409": {
+            description: "Broken-asset PM tasks are cancelled and cannot be paused",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },
@@ -1868,6 +2711,10 @@ const openApiSpec: OpenApiSchema = {
             description: "Not found",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
+          "409": {
+            description: "Broken-asset PM tasks are cancelled and cannot be resumed",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
         },
       },
     },
@@ -1893,6 +2740,41 @@ const openApiSpec: OpenApiSchema = {
           },
           "404": {
             description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/{taskId}/reopen": {
+      post: {
+        tags: ["Tasks"],
+        summary: "Reopen a cancelled task",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "409": {
+            description: "Broken-asset PM tasks stay cancelled until the asset is no longer broken",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },
@@ -1934,6 +2816,10 @@ const openApiSpec: OpenApiSchema = {
             description: "Not found",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
+          "409": {
+            description: "Broken-asset PM tasks are cancelled and cannot be completed",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
         },
       },
     },
@@ -1941,6 +2827,8 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Submit task for approval",
+        description:
+          "For PM tasks, the first successful technician submission captures a frozen checklist snapshot that later detail, review, export, and resubmission flows continue to use. Any open PM work session is closed at the submitted timestamp so review waiting time is not counted as active execution time.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -1980,6 +2868,10 @@ const openApiSpec: OpenApiSchema = {
           },
           "404": {
             description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "409": {
+            description: "Broken-asset PM tasks are cancelled and cannot be submitted",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },
@@ -2047,23 +2939,26 @@ const openApiSpec: OpenApiSchema = {
         },
       },
     },
-    "/api/tasks/{taskId}/reject-approval": {
+    "/api/tasks/{taskId}/revise-approval": {
       post: {
         tags: ["Tasks"],
-        summary: "Reject approval",
+        summary: "Revise approval",
+        description: "Return the submitted PM task for correction. A nonblank reason is required.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
         requestBody: {
-          required: false,
+          required: true,
           content: {
             "application/json": {
               schema: {
                 type: "object",
                 properties: {
-                  reason: { type: "string" },
+                  reason: { type: "string", minLength: 1, maxLength: 1024 },
                   reopenTask: { type: "boolean" },
                 },
+                required: ["reason"],
+                additionalProperties: false,
               },
             },
           },
@@ -2072,6 +2967,58 @@ const openApiSpec: OpenApiSchema = {
           "200": {
             description: "OK",
             content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } },
+          },
+          "400": {
+            description: "Invalid request",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "403": {
+            description: "Forbidden",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+          },
+        },
+      },
+    },
+    "/api/tasks/{taskId}/reject-approval": {
+      post: {
+        tags: ["Tasks"],
+        summary: "Reject approval",
+        description:
+          "Reject the submitted PM task and create or reuse one linked replacement PM task for the repeated work. The original rejected task keeps its history, results, evidence, and work time.",
+        parameters: [
+          { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  reason: { type: "string", minLength: 1, maxLength: 1024 },
+                  reopenTask: {
+                    type: "boolean",
+                    description: "Must be omitted or false; rejected PM work does not reopen the same task.",
+                  },
+                },
+                required: ["reason"],
+                additionalProperties: false,
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/RejectApprovalResponse" } } },
           },
           "400": {
             description: "Invalid request",
@@ -2327,6 +3274,181 @@ const openApiSpec: OpenApiSchema = {
         },
       },
     },
+    "/api/system/logs": {
+      get: {
+        tags: ["System"],
+        summary: "List system log entries",
+        parameters: [
+          { name: "page", in: "query", required: false, schema: { type: "integer", default: 1, minimum: 1 } },
+          { name: "pageSize", in: "query", required: false, schema: { type: "integer", default: 50, minimum: 1, maximum: 200 } },
+          { name: "level", in: "query", required: false, schema: { type: "string", maxLength: 16 } },
+        ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/SystemLogsResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/dashboard/overview": {
+      get: {
+        tags: ["Dashboard"],
+        summary: "Get PM dashboard overview",
+        description:
+          "Returns the desktop dashboard overview. Due/upcoming/overdue counts and the compliance trend are PM-only and use UTC `ScheduledDueAt` windows; cancelled tasks are excluded from those PM KPI aggregates.",
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/DashboardOverviewResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/reports/overdue": {
+      get: {
+        tags: ["Reports"],
+        summary: "List current overdue tasks",
+        description:
+          "Returns unfinished, uncancelled tasks whose UTC `ScheduledDueAt` is earlier than the request time. Asset and facility contexts are both included; category filtering applies only to asset-backed tasks.",
+        parameters: [
+          { name: "page", in: "query", required: false, schema: { type: "integer", default: 1, minimum: 1 } },
+          { name: "pageSize", in: "query", required: false, schema: { type: "integer", default: 50, minimum: 1, maximum: 200 } },
+          { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "categoryId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "maintenanceType", in: "query", required: false, schema: { type: "string", enum: ["PM", "CM", "all"], default: "PM" } },
+        ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OverdueReportResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/reports/overdue/export.csv": {
+      get: {
+        tags: ["Reports"],
+        summary: "Export current overdue tasks as CSV",
+        description:
+          "Exports the same overdue population as `GET /api/reports/overdue`, including asset or facility context columns.",
+        parameters: [
+          { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "categoryId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "maintenanceType", in: "query", required: false, schema: { type: "string", enum: ["PM", "CM", "all"], default: "PM" } },
+        ],
+        responses: {
+          "200": { description: "CSV export", content: { "text/csv": { schema: { type: "string", format: "binary" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/reports/compliance": {
+      get: {
+        tags: ["Reports"],
+        summary: "Get compliance summary",
+        description:
+          "Uses UTC `ScheduledDueAt` between `from` and `to` as the denominator, excludes cancelled tasks from the denominator, applies location to asset or facility context, and applies `approvedOnly=true` only to the completion numerators. `currentlyOverdue` is evaluated at request time against unfinished, uncancelled tasks in the same filtered window.",
+        parameters: [
+          { name: "from", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "to", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "categoryId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "maintenanceType", in: "query", required: false, schema: { type: "string", enum: ["PM", "CM", "all"], default: "PM" } },
+          { name: "approvedOnly", in: "query", required: false, schema: { type: "string", enum: ["true", "false"] } },
+        ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/ComplianceReportResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/reports/compliance/export.csv": {
+      get: {
+        tags: ["Reports"],
+        summary: "Export compliance summary as CSV",
+        parameters: [
+          { name: "from", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "to", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "categoryId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "maintenanceType", in: "query", required: false, schema: { type: "string", enum: ["PM", "CM", "all"], default: "PM" } },
+          { name: "approvedOnly", in: "query", required: false, schema: { type: "string", enum: ["true", "false"] } },
+        ],
+        responses: {
+          "200": { description: "CSV export", content: { "text/csv": { schema: { type: "string", format: "binary" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/reports/cm/metrics": {
+      get: {
+        tags: ["Reports"],
+        summary: "Get corrective maintenance metrics",
+        description:
+          "Returns corrective maintenance breakdowns filtered by UTC `ReportedAt` between `from` and `to`. MTTR is the average reported-to-completed duration (`ReportedAt` to `CompletedAt`), not downtime interval duration and not technician active labor time.",
+        parameters: [
+          { name: "from", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "to", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "categoryId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/CmMetricsResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/reports/cm/metrics/export.csv": {
+      get: {
+        tags: ["Reports"],
+        summary: "Export corrective maintenance metrics as CSV",
+        parameters: [
+          { name: "from", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "to", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "categoryId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": { description: "CSV export", content: { "text/csv": { schema: { type: "string", format: "binary" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/reports/system-logs/export.csv": {
+      get: {
+        tags: ["Reports"],
+        summary: "Export system logs as CSV",
+        parameters: [
+          { name: "from", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "to", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+          { name: "level", in: "query", required: false, schema: { type: "string", maxLength: 16 } },
+          { name: "maxRows", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 20000 } },
+        ],
+        responses: {
+          "200": { description: "CSV export", content: { "text/csv": { schema: { type: "string", format: "binary" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/reports/assets-without-pm/export.csv": {
+      get: {
+        tags: ["Reports"],
+        summary: "Export assets without PM coverage as CSV",
+        parameters: [
+          { name: "locationId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          { name: "categoryId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: {
+          "200": { description: "CSV export", content: { "text/csv": { schema: { type: "string", format: "binary" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
     "/api/system/users": {
       get: {
         tags: ["System"],
@@ -2407,12 +3529,15 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Work Orders"],
         summary: "Create a CM work order",
+        description:
+          "Creates a new CM work order or reuses the existing one when the same failed PM finding already has a linked work order.",
         requestBody: {
           required: true,
           content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderCreateRequest" } } },
         },
         responses: {
-          "201": { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/IdResponse" } } } },
+          "200": { description: "Existing linked work order reused", content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderCreateResponse" } } } },
+          "201": { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderCreateResponse" } } } },
           "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
@@ -2489,7 +3614,7 @@ const openApiSpec: OpenApiSchema = {
     "/api/work-orders/{taskId}/complete": {
       post: {
         tags: ["Work Orders"],
-        summary: "Complete work order",
+        summary: "Submit repair completion for review",
         parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
         requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderCompleteRequest" } } } },
         responses: {
@@ -2498,6 +3623,38 @@ const openApiSpec: OpenApiSchema = {
           "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "409": { description: "Invalid state", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/verify-close": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Verify repair and close work order",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "409": { description: "Invalid state", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/return-for-correction": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Return work order to technician for correction",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderReturnForCorrectionRequest" } } } },
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "409": { description: "Invalid state", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
         },
       },
     },
@@ -2517,13 +3674,47 @@ const openApiSpec: OpenApiSchema = {
     "/api/work-orders/{taskId}/close-downtime": {
       post: {
         tags: ["Work Orders"],
-        summary: "Close current downtime",
+        summary: "Record equipment restoration",
         parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        requestBody: { required: false, content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderRestorationRequest" } } } },
         responses: {
           "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
           "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "409": { description: "Invalid state", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/reopen-downtime": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Reopen downtime on the same work order",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        requestBody: { required: false, content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderReopenDowntimeRequest" } } } },
+        responses: {
+          "200": { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/OkResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "403": { description: "Forbidden", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "409": { description: "Invalid state", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
+    "/api/work-orders/{taskId}/report-recurrence": {
+      post: {
+        tags: ["Work Orders"],
+        summary: "Create a linked recurrence work order after closure",
+        parameters: [ { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } } ],
+        requestBody: { required: false, content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderReportRecurrenceRequest" } } } },
+        responses: {
+          "201": { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/WorkOrderCreateResponse" } } } },
+          "400": { description: "Invalid request", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "401": { description: "Unauthorized", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "404": { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+          "409": { description: "Invalid state", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
         },
       },
     },

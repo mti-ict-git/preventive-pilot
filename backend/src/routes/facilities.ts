@@ -1,7 +1,19 @@
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
+import { writeAuditLog } from "../db/auditLog.js";
+import { resolvePmAssignment } from "../db/pmAssignment.js";
 import { getDb } from "../db/mssql.js";
+import {
+  advancePmOccurrenceAnchor,
+  applyPmBlackout,
+  createPmTaskForOccurrence,
+  findReusablePmTask,
+  isProtectedPmOccurrenceTask,
+  loadFacilityPmScheduleContext,
+  recordPmSkippedOccurrence,
+  reconcilePmScheduleContext,
+} from "../db/pmSchedulingPolicy.js";
 import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireAnyRole, requireManager } from "../middleware/requireRole.js";
@@ -49,6 +61,11 @@ const FacilityPmSettingsSchema = z
     nextPmDueAt: z.string().datetime().nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "No updates" });
+
+const SkipNextPmSchema = z.object({
+  plannedDueAt: z.string().datetime(),
+  reason: z.string().trim().min(1).max(1024),
+});
 
 const PM_NOW_IDEMPOTENCY_WINDOW_SETTING_KEY = "pm.now.idempotencyWindowMinutes";
 
@@ -151,6 +168,7 @@ facilitiesRouter.get("/", async (req, res) => {
         "  s.PMEnabled AS PMEnabled,",
         "  s.DefaultTemplateId AS DefaultTemplateId,",
         "  COALESCE(h.LastCompletedAt, s.LastPMCompletedAt) AS LastPMCompletedAt,",
+        "  COALESCE(s.NextPlannedPMDueAt, s.NextPMDueAt) AS NextPlannedPMDueAt,",
         "  s.NextPMDueAt AS NextPMDueAt",
         "FROM pm.Facilities f",
         "LEFT JOIN pm.Locations l ON l.LocationId = f.LocationId",
@@ -192,6 +210,7 @@ facilitiesRouter.get("/", async (req, res) => {
         enabled: row.PMEnabled ?? null,
         defaultTemplateId: row.DefaultTemplateId ?? null,
         lastCompletedAt: row.LastPMCompletedAt ?? null,
+        nextPlannedDueAt: row.NextPlannedPMDueAt ?? null,
         nextDueAt: row.NextPMDueAt ?? null,
       },
     })),
@@ -257,6 +276,7 @@ facilitiesRouter.get("/:facilityId", async (req, res) => {
         "  s.PMEnabled AS PMEnabled,",
         "  s.DefaultTemplateId AS DefaultTemplateId,",
         "  COALESCE(h.LastCompletedAt, s.LastPMCompletedAt) AS LastPMCompletedAt,",
+        "  COALESCE(s.NextPlannedPMDueAt, s.NextPMDueAt) AS NextPlannedPMDueAt,",
         "  s.NextPMDueAt AS NextPMDueAt",
         "FROM pm.Facilities f",
         "LEFT JOIN pm.Locations l ON l.LocationId = f.LocationId",
@@ -288,6 +308,7 @@ facilitiesRouter.get("/:facilityId", async (req, res) => {
       enabled: row.PMEnabled ?? null,
       defaultTemplateId: row.DefaultTemplateId ?? null,
       lastCompletedAt: row.LastPMCompletedAt ?? null,
+      nextPlannedDueAt: row.NextPlannedPMDueAt ?? null,
       nextDueAt: row.NextPMDueAt ?? null,
     },
   });
@@ -376,12 +397,21 @@ facilitiesRouter.put("/:facilityId/pm-settings", requireManager, async (req, res
   const pmEnabledBit = pmEnabledValue === undefined ? null : pmEnabledValue ? 1 : 0;
 
   const db = await getDb();
+  const nextPlannedDueAt = parsed.data.nextPmDueAt ? new Date(parsed.data.nextPmDueAt) : null;
+  const nextDueAt = nextPlannedDueAt
+    ? await applyPmBlackout({
+        executor: db,
+        plannedDueAt: nextPlannedDueAt,
+      })
+    : null;
+  const resetDueDates = parsed.data.defaultTemplateId !== undefined && parsed.data.nextPmDueAt === undefined;
   const result = await db
     .request()
     .input("facilityId", sql.UniqueIdentifier, facilityId)
     .input("pmEnabled", sql.Bit, pmEnabledBit)
     .input("defaultTemplateId", sql.UniqueIdentifier, parsed.data.defaultTemplateId ?? null)
-    .input("nextPmDueAt", sql.DateTime2(0), parsed.data.nextPmDueAt ?? null)
+    .input("nextPlannedPmDueAt", sql.DateTime2(0), resetDueDates ? null : nextPlannedDueAt)
+    .input("nextPmDueAt", sql.DateTime2(0), resetDueDates ? null : nextDueAt)
     .query(
       [
         "MERGE pm.FacilityPMSettings WITH (HOLDLOCK) AS target",
@@ -391,11 +421,12 @@ facilitiesRouter.put("/:facilityId/pm-settings", requireManager, async (req, res
         "  UPDATE SET",
         "    PMEnabled = COALESCE(@pmEnabled, PMEnabled),",
         "    DefaultTemplateId = @defaultTemplateId,",
+        "    NextPlannedPMDueAt = @nextPlannedPmDueAt,",
         "    NextPMDueAt = @nextPmDueAt,",
         "    UpdatedAt = sysutcdatetime()",
         "WHEN NOT MATCHED THEN",
-        "  INSERT (FacilityId, PMEnabled, DefaultTemplateId, NextPMDueAt)",
-        "  VALUES (@facilityId, COALESCE(@pmEnabled, 1), @defaultTemplateId, @nextPmDueAt);",
+        "  INSERT (FacilityId, PMEnabled, DefaultTemplateId, NextPlannedPMDueAt, NextPMDueAt)",
+        "  VALUES (@facilityId, COALESCE(@pmEnabled, 1), @defaultTemplateId, @nextPlannedPmDueAt, @nextPmDueAt);",
       ].join("\n"),
     );
 
@@ -525,128 +556,170 @@ facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) =>
     });
     return;
   }
-
-  const idempotencyWindowMinutes = await loadPmNowIdempotencyWindowMinutes();
-  const existingResult = await db
-    .request()
-    .input("facilityId", sql.UniqueIdentifier, facilityId)
-    .input("templateId", sql.UniqueIdentifier, templateId)
-    .input("windowMinutes", sql.Int, idempotencyWindowMinutes)
-    .query(
-      [
-        "DECLARE @now datetime2(0) = sysutcdatetime();",
-        "SELECT TOP (1)",
-        "  TaskId",
-        "FROM pm.PMTasks",
-        "WHERE FacilityId = @facilityId",
-        "  AND TemplateId = @templateId",
-        "  AND MaintenanceType = N'PM'",
-        "  AND CompletedAt IS NULL",
-        "  AND CancelledAt IS NULL",
-        "  AND ScheduledDueAt >= dateadd(minute, -@windowMinutes, @now)",
-        "  AND ScheduledDueAt <= @now",
-        "ORDER BY ScheduledDueAt DESC",
-      ].join("\n"),
-    );
-  const existingRow = existingResult.recordset[0] as Record<string, unknown> | undefined;
-  const existingTaskId = typeof existingRow?.TaskId === "string" ? existingRow.TaskId : null;
-  if (existingTaskId) {
-    res.status(409).json({
-      message: "PM Now already created recently",
-      code: "PM_NOW_DUPLICATE",
-      details: [
-        {
-          field: "facilityId",
-          issue: "PM Now already created recently",
-        },
-      ],
-      id: existingTaskId,
-    });
+  const context = await loadFacilityPmScheduleContext({
+    executor: db,
+    facilityId,
+  });
+  if (!context) {
+    res.status(400).json({ message: "Invalid request" });
     return;
   }
 
-  const locationIdValue = facilityRow.LocationId;
-
-  const assignmentResult = await db
-    .request()
-    .input(
-      "categoryId",
-      sql.UniqueIdentifier,
-      null,
-    )
-    .input(
-      "locationId",
-      sql.UniqueIdentifier,
-      typeof locationIdValue === "string" ? locationIdValue : null,
-    )
-    .input("assetStatus", sql.NVarChar(64), null)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  AssignToUserId,",
-        "  AssignToRoleId",
-        "FROM pm.AssignmentRules",
-        "WHERE",
-        "  IsActive = 1",
-        "  AND (CategoryId IS NULL OR CategoryId = @categoryId)",
-        "  AND (LocationId IS NULL OR LocationId = @locationId)",
-        "  AND (AssetStatus IS NULL OR AssetStatus = @assetStatus)",
-        "  AND (EffectiveFrom IS NULL OR EffectiveFrom <= sysutcdatetime())",
-        "  AND (EffectiveTo IS NULL OR EffectiveTo >= sysutcdatetime())",
-        "ORDER BY Priority ASC, UpdatedAt DESC",
-      ].join("\n"),
-    );
-
-  const assignmentRow = assignmentResult.recordset[0] as Record<string, unknown> | undefined;
-  const assignToUserIdValue = assignmentRow?.AssignToUserId ?? null;
-  const assignToRoleIdValue = assignmentRow?.AssignToRoleId ?? null;
-
-  let assignedToUserId: string | null =
-    typeof assignToUserIdValue === "string" ? assignToUserIdValue : null;
-  let assignedToRoleId: string | null =
-    typeof assignToRoleIdValue === "string" ? assignToRoleIdValue : null;
-
-  if (!assignedToUserId && !assignedToRoleId) {
-    const requiredRoleIdValue = (facilityRow as Record<string, unknown>).RequiredRoleId;
-    const requiredRoleId =
-      typeof requiredRoleIdValue === "string" ? requiredRoleIdValue : null;
-    assignedToRoleId = requiredRoleId;
+  const occurrence = await reconcilePmScheduleContext({
+    executor: db,
+    context,
+  });
+  if (!occurrence) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
   }
 
-  const insertResult = await db
-    .request()
-    .input("facilityId", sql.UniqueIdentifier, facilityId)
-    .input("templateId", sql.UniqueIdentifier, templateId)
-    .input("assignedToUserId", sql.UniqueIdentifier, assignedToUserId)
-    .input("assignedToRoleId", sql.UniqueIdentifier, assignedToRoleId)
-    .query(
-      [
-        "DECLARE @now datetime2(0) = sysutcdatetime();",
-        "DECLARE @taskNumber nvarchar(32) = CONCAT(",
-        "  N'PM-FAC-',",
-        "  FORMAT(@now, 'yyyyMMdd'),",
-        "  N'-',",
-        "  RIGHT(CONVERT(varchar(36), NEWID()), 8)",
-        ");",
-        "INSERT INTO pm.PMTasks (",
-        "  TaskNumber, AssetId, FacilityId, TemplateId, ScheduledDueAt, AssignedToUserId, AssignedToRoleId, Status",
-        ")",
-        "OUTPUT inserted.TaskId AS TaskId",
-        "VALUES (",
-        "  @taskNumber, NULL, @facilityId, @templateId, @now, @assignedToUserId, @assignedToRoleId, N'open'",
-        ");",
-      ].join("\n"),
-    );
+  const reusableTask = await findReusablePmTask({
+    executor: db,
+    context,
+    currentPlannedDueAt: occurrence.plannedDueAt,
+  });
+  if (reusableTask) {
+    res.status(200).json({ id: reusableTask.taskId, reused: true });
+    return;
+  }
 
-  const insertedRow = insertResult.recordset[0] as Record<string, unknown> | undefined;
-  const taskId = typeof insertedRow?.TaskId === "string" ? insertedRow.TaskId : null;
+  const assignment = await resolvePmAssignment({
+    executor: db,
+    templateId,
+    categoryId: null,
+    locationId: context.locationId,
+    assetStatus: null,
+    requiredRoleId: context.requiredRoleId,
+  });
+  const taskId = await createPmTaskForOccurrence({
+    executor: db,
+    context,
+    occurrence,
+    assignedToUserId: assignment.assignToUserId,
+    assignedToRoleId: assignment.assignToRoleId,
+  });
   if (!taskId) {
     res.status(500).json({ message: "Failed to create facility PM Now task" });
     return;
   }
 
-  res.status(201).json({ id: taskId });
+  res.status(201).json({ id: taskId, reused: false });
 });
+
+facilitiesRouter.post(
+  "/:facilityId/skip-next-pm",
+  requireAnyRole(["Supervisor", "Admin", "Superadmin"]),
+  async (req, res) => {
+    const facilityId = req.params.facilityId;
+    if (!z.string().uuid().safeParse(facilityId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const parsed = SkipNextPmSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const requestedPlannedDueAt = new Date(parsed.data.plannedDueAt);
+    const db = await getDb();
+    const tx = new sql.Transaction(db);
+    await tx.begin();
+    try {
+      const context = await loadFacilityPmScheduleContext({
+        executor: tx,
+        facilityId,
+      });
+      if (!context) {
+        res.status(404).json({ message: "Not found" });
+        await tx.rollback();
+        return;
+      }
+
+      const occurrence = await reconcilePmScheduleContext({
+        executor: tx,
+        context,
+      });
+      if (!occurrence) {
+        res.status(400).json({ message: "Invalid state" });
+        await tx.rollback();
+        return;
+      }
+
+      if (occurrence.plannedDueAt.getTime() !== requestedPlannedDueAt.getTime()) {
+        res.status(409).json({ message: "Occurrence changed" });
+        await tx.rollback();
+        return;
+      }
+
+      if (occurrence.task && isProtectedPmOccurrenceTask(occurrence.task)) {
+        res.status(409).json({ message: "Invalid state" });
+        await tx.rollback();
+        return;
+      }
+
+      if (occurrence.task && occurrence.task.cancelledAt === null && occurrence.task.completedAt === null) {
+        await tx
+          .request()
+          .input("taskId", sql.UniqueIdentifier, occurrence.task.taskId)
+          .input("userId", sql.UniqueIdentifier, req.user.sub)
+          .input("reason", sql.NVarChar(1024), parsed.data.reason)
+          .query(
+            [
+              "UPDATE pm.PMTasks",
+              "SET",
+              "  Status = N'cancelled',",
+              "  CancelledAt = sysutcdatetime(),",
+              "  CancelledByUserId = @userId,",
+              "  CancelledReason = @reason",
+              "WHERE TaskId = @taskId",
+              "  AND CompletedAt IS NULL",
+              "  AND CancelledAt IS NULL",
+            ].join("\n"),
+          );
+      }
+
+      await recordPmSkippedOccurrence({
+        executor: tx,
+        context,
+        plannedDueAt: occurrence.plannedDueAt,
+        effectiveDueAt: occurrence.scheduledDueAt,
+        taskId: occurrence.task?.taskId ?? null,
+        skippedByUserId: req.user.sub,
+        skipReason: parsed.data.reason,
+      });
+      await advancePmOccurrenceAnchor({
+        executor: tx,
+        context,
+        fulfilledPlannedDueAt: occurrence.plannedDueAt,
+      });
+
+      await writeAuditLog({
+        executor: tx,
+        actorUserId: req.user.sub,
+        action: "pm.skip-next",
+        entityType: "facility",
+        entityId: facilityId,
+        metadata: {
+          templateId: context.templateId,
+          plannedDueAt: occurrence.plannedDueAt.toISOString(),
+          taskId: occurrence.task?.taskId ?? null,
+          reason: parsed.data.reason,
+        },
+        ipAddress: typeof req.ip === "string" ? req.ip : null,
+        userAgent: req.get("user-agent") ?? null,
+      });
+
+      await tx.commit();
+      res.json({ ok: true });
+    } catch (err) {
+      await tx.rollback().catch(() => undefined);
+      throw err;
+    }
+  },
+);
 
 facilitiesRouter.post("/:facilityId/clone", requireFacilityAdmin, async (req, res) => {
   const facilityId = req.params.facilityId;

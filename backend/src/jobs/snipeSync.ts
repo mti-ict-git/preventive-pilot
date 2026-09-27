@@ -1,6 +1,11 @@
 import sql from "mssql";
 import { env } from "../config/env.js";
+import { writeAuditLog } from "../db/auditLog.js";
 import { getDb } from "../db/mssql.js";
+import {
+  BROKEN_ASSET_AUTO_CANCELLATION_REASON,
+  cancelPmTasksForBrokenAsset,
+} from "../db/taskBrokenAssetPolicy.js";
 import { writeSystemLog } from "./systemLog.js";
 
 type SnipeListResponse<T> = {
@@ -448,7 +453,7 @@ const upsertAssets = async (
     const imagePath = typeof a.image === "string" && a.image.trim() ? a.image.trim() : null;
     const downloadedImage = await downloadAssetImage(imageBaseUrl, imagePath);
 
-    await db
+    const upsertResult = await db
       .request()
       .input("snipeAssetId", sql.Int, a.id)
       .input("assetTag", sql.NVarChar(64), assetTag)
@@ -499,9 +504,38 @@ const upsertAssets = async (
           "  )",
           "  VALUES (",
           "    @snipeAssetId, @assetTag, @name, @manufacturer, @model, @serialNumber, @categoryId, @locationId, @assetStatus, @assignedToText, @assetResponsibility, @assetOperationalStatus, @notes, @imageUrl, @imageData, @imageContentType, @imageFileName, 0, sysutcdatetime()",
-          "  );",
+          "  )",
+          "OUTPUT inserted.AssetId AS AssetId;",
         ].join("\n"),
       );
+    const assetId =
+      typeof (upsertResult.recordset[0] as { AssetId?: unknown } | undefined)?.AssetId === "string"
+        ? ((upsertResult.recordset[0] as { AssetId: string }).AssetId as string)
+        : null;
+
+    if (operationalStatus === "broken" && assetId) {
+      const cancelledTaskIds = await cancelPmTasksForBrokenAsset({
+        executor: db,
+        assetId,
+      });
+      for (const taskId of cancelledTaskIds) {
+        await writeAuditLog({
+          actorUserId: null,
+          action: "task.cancel.asset-broken",
+          entityType: "task",
+          entityId: taskId,
+          metadata: {
+            reason: BROKEN_ASSET_AUTO_CANCELLATION_REASON,
+            source: "snipe-sync",
+            assetId,
+            snipeAssetId: a.id,
+          },
+          ipAddress: null,
+          userAgent: null,
+        });
+      }
+    }
+
     processed += 1;
 
     if (runId && processed % 200 === 0) {

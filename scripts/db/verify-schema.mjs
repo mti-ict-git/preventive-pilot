@@ -53,6 +53,8 @@ const expectedTables = [
   "BlackoutWindows",
   "PMSchedules",
   "PMTasks",
+  "PMMissedOccurrences",
+  "PMSkippedOccurrences",
   "PMTaskChecklistResults",
   "PMTaskChecklistSnapshots",
   "PMTaskEvidence",

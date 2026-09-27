@@ -6,9 +6,9 @@ This is a static inventory of literal Express route registrations. It does not v
 
 The OpenAPI baseline preserves the embedded contract rather than inventing schemas for uncovered operations. Missing descriptions are tracked as Q-01 in [open questions](open-questions-and-challenges.md). A passing parity check does not mean full API coverage.
 
-- Implemented operations found: **134**
-- Documented operations: **65**
-- Implemented operations absent from the contract: **69**
+- Implemented operations found: **141**
+- Documented operations: **90**
+- Implemented operations absent from the contract: **51**
 - Contract operations without a matching literal route: **0**
 
 ## Implemented operations missing from OpenAPI
@@ -17,7 +17,6 @@ The OpenAPI baseline preserves the embedded contract rather than inventing schem
 | --- | --- |
 | `DELETE /api/notifications/channels/{channelId}` | `backend/src/routes/notifications.ts` |
 | `DELETE /api/tasks/{taskId}` | `backend/src/routes/tasks.ts` |
-| `DELETE /api/tasks/{taskId}/draft` | `backend/src/routes/tasks.ts` |
 | `DELETE /api/templates/{templateId}` | `backend/src/routes/templates.ts` |
 | `DELETE /api/work-orders/{taskId}` | `backend/src/routes/workOrders.ts` |
 | `GET /api/app-updates/download` | `backend/src/routes/appUpdates.ts` |
@@ -25,19 +24,9 @@ The OpenAPI baseline preserves the embedded contract rather than inventing schem
 | `GET /api/app-updates/policy` | `backend/src/routes/appUpdates.ts` |
 | `GET /api/assets/{assetId}/history` | `backend/src/routes/assets.ts` |
 | `GET /api/auth/me/preferences` | `backend/src/routes/auth.ts` |
-| `GET /api/dashboard/overview` | `backend/src/routes/dashboard.ts` |
 | `GET /api/docs.json` | `backend/src/index.ts` |
 | `GET /api/facilities/{facilityId}` | `backend/src/routes/facilities.ts` |
-| `GET /api/reports/assets-without-pm/export.csv` | `backend/src/routes/reports.ts` |
-| `GET /api/reports/cm/metrics` | `backend/src/routes/reports.ts` |
-| `GET /api/reports/cm/metrics/export.csv` | `backend/src/routes/reports.ts` |
-| `GET /api/reports/compliance` | `backend/src/routes/reports.ts` |
-| `GET /api/reports/compliance/export.csv` | `backend/src/routes/reports.ts` |
-| `GET /api/reports/overdue` | `backend/src/routes/reports.ts` |
-| `GET /api/reports/overdue/export.csv` | `backend/src/routes/reports.ts` |
-| `GET /api/reports/system-logs/export.csv` | `backend/src/routes/reports.ts` |
 | `GET /api/system/ldap/search` | `backend/src/routes/system.ts` |
-| `GET /api/system/logs` | `backend/src/routes/system.ts` |
 | `GET /api/system/microsoft-graph-settings` | `backend/src/routes/system.ts` |
 | `GET /api/system/pm-settings` | `backend/src/routes/system.ts` |
 | `GET /api/system/snipeit-settings` | `backend/src/routes/system.ts` |
@@ -49,15 +38,11 @@ The OpenAPI baseline preserves the embedded contract rather than inventing schem
 | `GET /api/tasks/approvals` | `backend/src/routes/tasks.ts` |
 | `GET /api/tasks/my-outstanding-counts` | `backend/src/routes/tasks.ts` |
 | `GET /api/tasks/status-counts` | `backend/src/routes/tasks.ts` |
-| `GET /api/tasks/{taskId}` | `backend/src/routes/tasks.ts` |
-| `GET /api/tasks/{taskId}/draft` | `backend/src/routes/tasks.ts` |
 | `GET /api/templates` | `backend/src/routes/templates.ts` |
 | `GET /api/templates/{templateId}` | `backend/src/routes/templates.ts` |
-| `PATCH /api/tasks/{taskId}/draft` | `backend/src/routes/tasks.ts` |
 | `POST /api/app-updates/report` | `backend/src/routes/appUpdates.ts` |
 | `POST /api/devices/push-test` | `backend/src/routes/devices.ts` |
 | `POST /api/devices/register` | `backend/src/routes/devices.ts` |
-| `POST /api/facilities/{facilityId}/pm-now` | `backend/src/routes/facilities.ts` |
 | `POST /api/system/evidence-import/run` | `backend/src/routes/system.ts` |
 | `POST /api/system/jobs/{jobName}/run` | `backend/src/routes/system.ts` |
 | `POST /api/system/microsoft-graph-settings/test` | `backend/src/routes/system.ts` |
@@ -69,14 +54,11 @@ The OpenAPI baseline preserves the embedded contract rather than inventing schem
 | `POST /api/tasks/bulk-assign-unassigned` | `backend/src/routes/tasks.ts` |
 | `POST /api/tasks/{taskId}/checklist-items/{templateChecklistItemId}/evidence/upload` | `backend/src/routes/tasks.ts` |
 | `POST /api/tasks/{taskId}/evidence/upload` | `backend/src/routes/tasks.ts` |
-| `POST /api/tasks/{taskId}/reopen` | `backend/src/routes/tasks.ts` |
-| `POST /api/tasks/{taskId}/revise-approval` | `backend/src/routes/tasks.ts` |
 | `POST /api/tasks/{taskId}/superadmin-update-checklist` | `backend/src/routes/tasks.ts` |
 | `POST /api/templates` | `backend/src/routes/templates.ts` |
 | `POST /api/work-orders/{taskId}/resolution` | `backend/src/routes/workOrders.ts` |
 | `PUT /api/app-updates/policy` | `backend/src/routes/appUpdates.ts` |
 | `PUT /api/auth/me/preferences` | `backend/src/routes/auth.ts` |
-| `PUT /api/facilities/{facilityId}/pm-settings` | `backend/src/routes/facilities.ts` |
 | `PUT /api/system/microsoft-graph-settings` | `backend/src/routes/system.ts` |
 | `PUT /api/system/pm-settings` | `backend/src/routes/system.ts` |
 | `PUT /api/system/snipeit-settings` | `backend/src/routes/system.ts` |

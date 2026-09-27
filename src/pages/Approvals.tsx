@@ -140,7 +140,7 @@ const Approvals = () => {
   const rejectMutation = useMutation({
     mutationFn: async () => {
       if (!rejectTaskId) throw new Error("No task selected");
-      return apiRejectTaskApproval({ taskId: rejectTaskId, reason: rejectReason.trim() ? rejectReason.trim() : null, reopenTask: false });
+      return apiRejectTaskApproval({ taskId: rejectTaskId, reason: rejectReason.trim(), reopenTask: false });
     },
     onSuccess: async () => {
       setRejectDialogOpen(false);
@@ -161,7 +161,7 @@ const Approvals = () => {
       }
       return apiReviseTaskApproval({
         taskId: reviseTaskId,
-        reason: reviseReason.trim() ? reviseReason.trim() : null,
+        reason: reviseReason.trim(),
         reopenTask: false,
       });
     },
@@ -522,9 +522,12 @@ const Approvals = () => {
           <div className="space-y-3">
             <Label>Reason</Label>
             <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} className="bg-muted/50" />
+            <p className="text-xs text-muted-foreground">
+              Reject creates a new linked replacement PM task and preserves the rejected submission history.
+            </p>
             <div className="flex items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
-              <Button variant="destructive" onClick={() => rejectMutation.mutate()} disabled={rejectMutation.isPending}>Confirm Reject</Button>
+              <Button variant="destructive" onClick={() => rejectMutation.mutate()} disabled={rejectMutation.isPending || rejectReason.trim().length === 0}>Confirm Reject</Button>
             </div>
           </div>
         </DialogContent>
@@ -547,7 +550,7 @@ const Approvals = () => {
               <Button variant="outline" onClick={() => setReviseDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={() => reviseMutation.mutate()} disabled={reviseMutation.isPending}>
+              <Button onClick={() => reviseMutation.mutate()} disabled={reviseMutation.isPending || reviseReason.trim().length === 0}>
                 Confirm Revise
               </Button>
             </div>

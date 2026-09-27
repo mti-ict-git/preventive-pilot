@@ -3,7 +3,35 @@ import { z } from "zod";
 import sql from "mssql";
 import fs from "node:fs";
 import path from "node:path";
+import { resolvePmAssignment } from "../db/pmAssignment.js";
 import { getDb } from "../db/mssql.js";
+import { writeAuditLog } from "../db/auditLog.js";
+import {
+  canClaimRoleTask,
+  canModifyAssignedTask,
+  isManagerUser,
+  isTaskAssignmentLocked,
+  managerRoles,
+} from "../db/taskOwnership.js";
+import {
+  BROKEN_ASSET_AUTO_CANCELLATION_REASON,
+  cancelPmTasksForBrokenAsset,
+  isBrokenAssetTaskState,
+  loadBrokenAssetTaskState,
+} from "../db/taskBrokenAssetPolicy.js";
+import {
+  createPmTaskForOccurrence,
+  finalizePmOccurrenceCompletion,
+  findReusablePmTask,
+  loadAssetPmScheduleContext,
+  loadPmScheduleContextByTask,
+  reconcilePmScheduleContext,
+} from "../db/pmSchedulingPolicy.js";
+import {
+  closeOpenTaskWorkSession,
+  ensureTaskWorkSessionStarted,
+  getTaskWorkSessionSummary,
+} from "../db/taskWorkSessions.js";
 import { env } from "../config/env.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole.js";
@@ -79,7 +107,6 @@ const AssignSchema = z
     assignedToUserId: z.string().uuid().nullable().optional(),
     assignedToRoleId: z.string().uuid().nullable().optional(),
     priority: z.string().max(16).optional(),
-    status: z.string().max(32).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "No updates" });
 
@@ -145,36 +172,7 @@ const PmNowSchema = z.object({
   assetId: z.string().uuid(),
 });
 
-const managerRoles = ["Superadmin", "Admin", "Supervisor"] as const;
 const requireManager = requireAnyRole(managerRoles);
-
-const PM_NOW_IDEMPOTENCY_WINDOW_SETTING_KEY = "pm.now.idempotencyWindowMinutes";
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null;
-};
-
-const getSqlErrorNumber = (err: unknown): number | null => {
-  if (!isRecord(err)) return null;
-
-  const directNumber = err.number;
-  if (typeof directNumber === "number") return directNumber;
-
-  const originalError = err.originalError;
-  if (isRecord(originalError) && typeof originalError.number === "number") return originalError.number;
-
-  const precedingErrors = err.precedingErrors;
-  if (Array.isArray(precedingErrors)) {
-    const first = precedingErrors[0];
-    if (isRecord(first) && typeof first.number === "number") return first.number;
-  }
-
-  return null;
-};
-
-const isInvalidObjectNameError = (err: unknown): boolean => {
-  return getSqlErrorNumber(err) === 208;
-};
 
 const rollbackQuietly = async (tx: sql.Transaction): Promise<void> => {
   try {
@@ -197,74 +195,13 @@ const checklistDefinitionNoteForSource = (source: TaskChecklistDefinitionSource)
   return null;
 };
 
-const parsePmNowIdempotencyWindowMinutes = (valueJson: string | null): number | null => {
-  if (!valueJson || !valueJson.trim()) return null;
-  try {
-    const parsed: unknown = JSON.parse(valueJson);
-    const validated = z.number().int().min(1).max(1440).safeParse(parsed);
-    if (!validated.success) return null;
-    return validated.data;
-  } catch {
-    return null;
-  }
-};
+const isApprovalWaitingState = (approvalStatus: string | null): boolean =>
+  approvalStatus === "PendingSupervisor" ||
+  approvalStatus === "PendingSuperadmin" ||
+  approvalStatus === "Approved";
 
-const loadPmNowIdempotencyWindowMinutes = async (): Promise<number> => {
-  try {
-    const db = await getDb();
-    const result = await db
-      .request()
-      .input("settingKey", sql.NVarChar(128), PM_NOW_IDEMPOTENCY_WINDOW_SETTING_KEY)
-      .query(
-        [
-          "SELECT TOP (1)",
-          "  SettingValueJson",
-          "FROM pm.SystemSettings",
-          "WHERE SettingKey = @settingKey",
-        ].join("\n"),
-      );
-    const row = result.recordset[0] as Record<string, unknown> | undefined;
-    const valueJson = typeof row?.SettingValueJson === "string" ? row.SettingValueJson : null;
-    return parsePmNowIdempotencyWindowMinutes(valueJson) ?? env.PM_NOW_IDEMPOTENCY_WINDOW_MINUTES;
-  } catch (err: unknown) {
-    if (isInvalidObjectNameError(err)) {
-      return env.PM_NOW_IDEMPOTENCY_WINDOW_MINUTES;
-    }
-    throw err;
-  }
-};
-
-const writeAuditLog = async (input: {
-  actorUserId: string;
-  action: string;
-  entityType: string;
-  entityId: string | null;
-  metadata: Record<string, unknown>;
-  ipAddress: string | null;
-  userAgent: string | null;
-}): Promise<void> => {
-  const db = await getDb();
-  const metadata = JSON.stringify(input.metadata);
-  await db
-    .request()
-    .input("actorUserId", sql.UniqueIdentifier, input.actorUserId)
-    .input("action", sql.NVarChar(128), input.action)
-    .input("entityType", sql.NVarChar(128), input.entityType)
-    .input("entityId", sql.UniqueIdentifier, input.entityId)
-    .input("metadata", sql.NVarChar(sql.MAX), metadata)
-    .input("ipAddress", sql.NVarChar(64), input.ipAddress)
-    .input("userAgent", sql.NVarChar(512), input.userAgent)
-    .query(
-      [
-        "INSERT INTO pm.AuditLog (",
-        "  ActorUserId, Action, EntityType, EntityId, Metadata, IpAddress, UserAgent",
-        ")",
-        "VALUES (",
-        "  @actorUserId, @action, @entityType, @entityId, @metadata, @ipAddress, @userAgent",
-        ")",
-      ].join("\n"),
-    );
-};
+const isClosedTaskStatus = (status: string | null): boolean =>
+  status === "completed" || status === "cancelled";
 
 type InspectionChecklistRow = {
   itemText: string;
@@ -784,19 +721,87 @@ const getTaskStorageContext = async (taskId: string): Promise<TaskStorageContext
 type TaskAccessRow = {
   AssignedToUserId: string | null;
   AssignedToRoleName: string | null;
-};
-
-const canModifyTask = (userId: string, userRoles: readonly string[], task: TaskAccessRow): boolean => {
-	if (userRoles.some((r) => (managerRoles as readonly string[]).includes(r))) return true;
-	if (task.AssignedToUserId && task.AssignedToUserId === userId) return true;
-	if (task.AssignedToRoleName && userRoles.includes(task.AssignedToRoleName)) return true;
-	return false;
+  ApprovalStatus?: string | null;
+  MaintenanceType?: string | null;
 };
 
 const isSuperadmin = (roles: readonly string[]): boolean => roles.includes("Superadmin");
 
-const isApprovalLockedForEditing = (approvalStatus: string | null): boolean =>
-  approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin" || approvalStatus === "Approved";
+const autoCancelBrokenAssetTasks = async (input: {
+  executor: { request(): sql.Request };
+  assetId: string;
+  source: string;
+  initiatedByUserId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+}): Promise<string[]> => {
+  const cancelledTaskIds = await cancelPmTasksForBrokenAsset({
+    executor: input.executor,
+    assetId: input.assetId,
+  });
+
+  for (const cancelledTaskId of cancelledTaskIds) {
+    await writeAuditLog({
+      executor: input.executor,
+      actorUserId: null,
+      action: "task.cancel.asset-broken",
+      entityType: "task",
+      entityId: cancelledTaskId,
+      metadata: {
+        reason: BROKEN_ASSET_AUTO_CANCELLATION_REASON,
+        source: input.source,
+        assetId: input.assetId,
+        initiatedByUserId: input.initiatedByUserId,
+      },
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    });
+  }
+
+  return cancelledTaskIds;
+};
+
+const respondBrokenAssetTaskAction = (res: express.Response, actionLabel: string): void => {
+  res.status(409).json({
+    message: "Task unavailable",
+    code: "ASSET_BROKEN",
+    details: [
+      {
+        field: "taskId",
+        issue: `Cannot ${actionLabel} a PM task for a broken asset`,
+      },
+    ],
+  });
+};
+
+const ensureTaskActionAllowedForBrokenAsset = async (input: {
+  executor: { request(): sql.Request };
+  taskId: string;
+  actionLabel: string;
+  initiatedByUserId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  res: express.Response;
+}): Promise<boolean> => {
+  const state = await loadBrokenAssetTaskState({
+    executor: input.executor,
+    taskId: input.taskId,
+  });
+  if (!isBrokenAssetTaskState(state) || !state?.assetId) {
+    return true;
+  }
+
+  await autoCancelBrokenAssetTasks({
+    executor: input.executor,
+    assetId: state.assetId,
+    source: input.actionLabel,
+    initiatedByUserId: input.initiatedByUserId,
+    ipAddress: input.ipAddress,
+    userAgent: input.userAgent,
+  });
+  respondBrokenAssetTaskAction(input.res, input.actionLabel);
+  return false;
+};
 
 type ChecklistOutcomeLabel = "skip" | "pass" | "fail" | "done";
 
@@ -1378,6 +1383,7 @@ tasksRouter.get("/", async (req, res) => {
         "  loc.Name AS LocationName,",
         "  t.TemplateId AS TemplateId,",
         "  tpl.Name AS TemplateName,",
+        "  t.PlannedDueAt AS PlannedDueAt,",
         "  t.ScheduledDueAt AS ScheduledDueAt,",
         "  t.Status AS Status,",
         "  t.Priority AS Priority,",
@@ -1400,6 +1406,7 @@ tasksRouter.get("/", async (req, res) => {
         "  t.AssignedToRoleId AS AssignedToRoleId,",
         "  ar.Name AS AssignedToRoleName,",
         "  t.CreatedAt AS CreatedAt,",
+        "  t.PlannedDueAt AS PlannedDueAt,",
         "  t.StartedAt AS StartedAt,",
         "  t.CompletedAt AS CompletedAt,",
         "  CASE",
@@ -1479,6 +1486,7 @@ tasksRouter.get("/", async (req, res) => {
         "      AND (",
         "        t.AssignedToUserId = @userId",
         "        OR (",
+        "          t.AssignedToUserId IS NULL",
         "          t.AssignedToRoleId IS NOT NULL",
         "          AND EXISTS (",
         "            SELECT 1",
@@ -1504,6 +1512,7 @@ tasksRouter.get("/", async (req, res) => {
       taskNumber: r.TaskNumber,
       status: r.Status,
       priority: r.Priority,
+      plannedDueAt: r.PlannedDueAt,
       scheduledDueAt: r.ScheduledDueAt,
       createdAt: r.CreatedAt,
       startedAt: r.StartedAt,
@@ -1607,6 +1616,7 @@ tasksRouter.get("/status-counts", async (req, res) => {
         "      AND (",
         "        t.AssignedToUserId = @userId",
         "        OR (",
+        "          t.AssignedToUserId IS NULL",
         "          t.AssignedToRoleId IS NOT NULL",
         "          AND EXISTS (",
         "            SELECT 1",
@@ -1651,6 +1661,7 @@ tasksRouter.get("/my-outstanding-counts", async (req, res) => {
         "  AND (",
         "    t.AssignedToUserId = @userId",
         "    OR (",
+        "      t.AssignedToUserId IS NULL",
         "      t.AssignedToRoleId IS NOT NULL",
         "      AND EXISTS (",
         "        SELECT 1",
@@ -1707,6 +1718,7 @@ tasksRouter.get(
           "  t.MaintenanceType AS MaintenanceType,",
           "  t.Status AS Status,",
           "  t.Priority AS Priority,",
+          "  t.PlannedDueAt AS PlannedDueAt,",
           "  t.ScheduledDueAt AS ScheduledDueAt,",
           "  t.CreatedAt AS CreatedAt,",
           "  t.StartedAt AS StartedAt,",
@@ -1753,6 +1765,7 @@ tasksRouter.get(
         maintenanceType: r.MaintenanceType,
         status: r.Status,
         priority: r.Priority,
+        plannedDueAt: r.PlannedDueAt,
         scheduledDueAt: r.ScheduledDueAt,
         createdAt: r.CreatedAt,
         startedAt: r.StartedAt,
@@ -1814,6 +1827,7 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
         "SELECT TOP (1)",
         "  a.AssetId AS AssetId,",
         "  a.AssetStatus AS AssetStatus,",
+        "  a.AssetOperationalStatus AS AssetOperationalStatus,",
         "  a.CategoryId AS CategoryId,",
         "  a.LocationId AS LocationId,",
         "  s.PMEnabled AS PMEnabled,",
@@ -1864,6 +1878,22 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
     return;
   }
 
+  const assetOperationalStatus =
+    typeof assetRow.AssetOperationalStatus === "string" ? assetRow.AssetOperationalStatus : null;
+  if (assetOperationalStatus === "broken") {
+    res.status(409).json({
+      message: "Task unavailable",
+      code: "ASSET_BROKEN",
+      details: [
+        {
+          field: "assetId",
+          issue: "Cannot create PM work for a broken asset",
+        },
+      ],
+    });
+    return;
+  }
+
   const templateIdValue = assetRow.DefaultTemplateId ?? assetRow.TemplateId;
   const templateId = typeof templateIdValue === "string" ? templateIdValue : null;
   const templateIsActiveValue = assetRow.TemplateIsActive;
@@ -1887,115 +1917,50 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
     });
     return;
   }
-
-  const idempotencyWindowMinutes = await loadPmNowIdempotencyWindowMinutes();
-  const existingResult = await db
-    .request()
-    .input("assetId", sql.UniqueIdentifier, parsed.data.assetId)
-    .input("templateId", sql.UniqueIdentifier, templateId)
-    .input("windowMinutes", sql.Int, idempotencyWindowMinutes)
-    .query(
-      [
-        "DECLARE @now datetime2(0) = sysutcdatetime();",
-        "SELECT TOP (1)",
-        "  TaskId",
-        "FROM pm.PMTasks",
-        "WHERE AssetId = @assetId",
-        "  AND TemplateId = @templateId",
-        "  AND MaintenanceType = N'PM'",
-        "  AND CompletedAt IS NULL",
-        "  AND CancelledAt IS NULL",
-        "  AND ScheduledDueAt >= dateadd(minute, -@windowMinutes, @now)",
-        "  AND ScheduledDueAt <= @now",
-        "ORDER BY ScheduledDueAt DESC",
-      ].join("\n"),
-    );
-  const existingRow = existingResult.recordset[0] as Record<string, unknown> | undefined;
-  const existingTaskId = typeof existingRow?.TaskId === "string" ? existingRow.TaskId : null;
-  if (existingTaskId) {
-    res.status(409).json({
-      message: "PM Now already created recently",
-      code: "PM_NOW_DUPLICATE",
-      details: [
-        {
-          field: "assetId",
-          issue: "PM Now already created recently",
-        },
-      ],
-      id: existingTaskId,
-    });
+  const context = await loadAssetPmScheduleContext({
+    executor: db,
+    assetId: parsed.data.assetId,
+  });
+  if (!context) {
+    res.status(400).json({ message: "Invalid request" });
     return;
   }
 
-  const categoryIdValue = assetRow.CategoryId;
-  const locationIdValue = assetRow.LocationId;
-  const assetStatusValue = assetRow.AssetStatus;
-
-  const assignmentResult = await db
-    .request()
-    .input("categoryId", sql.UniqueIdentifier, typeof categoryIdValue === "string" ? categoryIdValue : null)
-    .input("locationId", sql.UniqueIdentifier, typeof locationIdValue === "string" ? locationIdValue : null)
-    .input("assetStatus", sql.NVarChar(64), typeof assetStatusValue === "string" ? assetStatusValue : null)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  AssignToUserId,",
-        "  AssignToRoleId",
-        "FROM pm.AssignmentRules",
-        "WHERE",
-        "  IsActive = 1",
-        "  AND (CategoryId IS NULL OR CategoryId = @categoryId)",
-        "  AND (LocationId IS NULL OR LocationId = @locationId)",
-        "  AND (AssetStatus IS NULL OR AssetStatus = @assetStatus)",
-        "  AND (EffectiveFrom IS NULL OR EffectiveFrom <= sysutcdatetime())",
-        "  AND (EffectiveTo IS NULL OR EffectiveTo >= sysutcdatetime())",
-        "ORDER BY Priority ASC, UpdatedAt DESC",
-      ].join("\n"),
-    );
-
-  const assignmentRow = assignmentResult.recordset[0] as Record<string, unknown> | undefined;
-  const assignToUserIdValue = assignmentRow?.AssignToUserId ?? null;
-  const assignToRoleIdValue = assignmentRow?.AssignToRoleId ?? null;
-
-  let assignedToUserId: string | null =
-    typeof assignToUserIdValue === "string" ? assignToUserIdValue : null;
-  let assignedToRoleId: string | null =
-    typeof assignToRoleIdValue === "string" ? assignToRoleIdValue : null;
-
-  if (!assignedToUserId && !assignedToRoleId) {
-    const requiredRoleIdValue = (assetRow as Record<string, unknown>).RequiredRoleId;
-    const requiredRoleId =
-      typeof requiredRoleIdValue === "string" ? requiredRoleIdValue : null;
-    assignedToRoleId = requiredRoleId;
+  const occurrence = await reconcilePmScheduleContext({
+    executor: db,
+    context,
+  });
+  if (!occurrence) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
   }
 
-  const insertResult = await db
-    .request()
-    .input("assetId", sql.UniqueIdentifier, parsed.data.assetId)
-    .input("templateId", sql.UniqueIdentifier, templateId)
-    .input("assignedToUserId", sql.UniqueIdentifier, assignedToUserId)
-    .input("assignedToRoleId", sql.UniqueIdentifier, assignedToRoleId)
-    .query(
-      [
-        "DECLARE @now datetime2(0) = sysutcdatetime();",
-        "DECLARE @taskNumber nvarchar(32) = CONCAT(",
-        "  N'PM-NOW-',",
-        "  FORMAT(@now, 'yyyyMMdd'),",
-        "  N'-',",
-        "  RIGHT(CONVERT(varchar(36), NEWID()), 8)",
-        ");",
-        "INSERT INTO pm.PMTasks (",
-        "  TaskNumber, AssetId, TemplateId, ScheduledDueAt, AssignedToUserId, AssignedToRoleId, Status",
-        ")",
-        "OUTPUT inserted.TaskId AS TaskId",
-        "VALUES (",
-        "  @taskNumber, @assetId, @templateId, @now, @assignedToUserId, @assignedToRoleId, N'open'",
-        ");",
-      ].join("\n"),
-    );
+  const reusableTask = await findReusablePmTask({
+    executor: db,
+    context,
+    currentPlannedDueAt: occurrence.plannedDueAt,
+  });
+  if (reusableTask) {
+    res.status(200).json({ id: reusableTask.taskId, reused: true });
+    return;
+  }
 
-  const insertedRow = insertResult.recordset[0] as Record<string, unknown> | undefined;
-  const taskId = typeof insertedRow?.TaskId === "string" ? insertedRow.TaskId : null;
+  const assignment = await resolvePmAssignment({
+    executor: db,
+    templateId: templateId,
+    categoryId: context.categoryId,
+    locationId: context.locationId,
+    assetStatus: context.assetStatus,
+    requiredRoleId: context.requiredRoleId,
+  });
+
+  const taskId = await createPmTaskForOccurrence({
+    executor: db,
+    context,
+    occurrence,
+    assignedToUserId: assignment.assignToUserId,
+    assignedToRoleId: assignment.assignToRoleId,
+  });
   if (!taskId) {
     res.status(500).json({ message: "Failed to create PM Now task" });
     return;
@@ -2224,13 +2189,19 @@ tasksRouter.delete("/evidence/:evidenceId", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
 
   const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
-  if (isApprovalLockedForEditing(approvalStatus) && !isSuperadmin(req.user.roles)) {
+  if (
+    isTaskAssignmentLocked({ maintenanceType: "PM", approvalStatus }) &&
+    !isSuperadmin(req.user.roles)
+  ) {
     res.status(400).json({ message: "Invalid state" });
     return;
   }
@@ -2288,13 +2259,19 @@ tasksRouter.delete("/checklist-evidence/:checklistEvidenceId", async (req, res) 
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
 
   const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
-  if (isApprovalLockedForEditing(approvalStatus) && !isSuperadmin(req.user.roles)) {
+  if (
+    isTaskAssignmentLocked({ maintenanceType: "PM", approvalStatus }) &&
+    !isSuperadmin(req.user.roles)
+  ) {
     res.status(400).json({ message: "Invalid state" });
     return;
   }
@@ -2358,7 +2335,10 @@ tasksRouter.post(
       return;
     }
 
-    if (!canModifyTask(req.user.sub, req.user.roles, ctx.access)) {
+    if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+      assignedToUserId: ctx.access.AssignedToUserId,
+      assignedToRoleName: ctx.access.AssignedToRoleName,
+    })) {
       res.status(403).json({ message: "Forbidden" });
       return;
     }
@@ -2378,7 +2358,10 @@ tasksRouter.post(
 
     const statusRow = statusResult.recordset[0] as Record<string, unknown> | undefined;
     const approvalStatus = typeof statusRow?.ApprovalStatus === "string" ? statusRow.ApprovalStatus : null;
-    if (isApprovalLockedForEditing(approvalStatus) && !isSuperadmin(req.user.roles)) {
+    if (
+      isTaskAssignmentLocked({ maintenanceType: "PM", approvalStatus }) &&
+      !isSuperadmin(req.user.roles)
+    ) {
       res.status(400).json({ message: "Invalid state" });
       return;
     }
@@ -2492,7 +2475,10 @@ tasksRouter.post(
       return;
     }
 
-    if (!canModifyTask(req.user.sub, req.user.roles, ctx.access)) {
+    if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+      assignedToUserId: ctx.access.AssignedToUserId,
+      assignedToRoleName: ctx.access.AssignedToRoleName,
+    })) {
       res.status(403).json({ message: "Forbidden" });
       return;
     }
@@ -2512,7 +2498,10 @@ tasksRouter.post(
 
     const statusRow = statusResult.recordset[0] as Record<string, unknown> | undefined;
     const approvalStatus = typeof statusRow?.ApprovalStatus === "string" ? statusRow.ApprovalStatus : null;
-    if (isApprovalLockedForEditing(approvalStatus) && !isSuperadmin(req.user.roles)) {
+    if (
+      isTaskAssignmentLocked({ maintenanceType: "PM", approvalStatus }) &&
+      !isSuperadmin(req.user.roles)
+    ) {
       res.status(400).json({ message: "Invalid state" });
       return;
     }
@@ -2668,7 +2657,8 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         "  xu.Username AS CancelledByUsername,",
         "  xu.DisplayName AS CancelledByDisplayName,",
         "  t.CancelledReason AS CancelledReason,",
-        "  t.ForceCompleted AS ForceCompleted",
+        "  t.ForceCompleted AS ForceCompleted,",
+        "  t.FulfilledPlannedDueAt AS FulfilledPlannedDueAt",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
         "LEFT JOIN pm.Facilities fac ON fac.FacilityId = t.FacilityId",
@@ -2933,6 +2923,11 @@ tasksRouter.get( "/:taskId", async (req, res) => {
 
   remarksHistory.push(...auditRemarks);
 
+  const workSessionSummary =
+    taskRow.MaintenanceType === "PM"
+      ? await getTaskWorkSessionSummary({ executor: db, taskId })
+      : null;
+
   res.json({
     id: taskRow.TaskId,
     taskNumber: taskRow.TaskNumber,
@@ -2982,6 +2977,14 @@ tasksRouter.get( "/:taskId", async (req, res) => {
         }
       : null,
     revisionNote: (taskRow.RevisionNote as string | null) ?? null,
+    workSessionSummary: workSessionSummary
+      ? {
+          totalSeconds: workSessionSummary.totalSeconds,
+          sessionCount: workSessionSummary.sessionCount,
+          activeSessionStartedAt: workSessionSummary.activeSessionStartedAt?.toISOString?.() ?? null,
+        }
+      : null,
+    plannedDueAt: taskRow.PlannedDueAt,
     scheduledDueAt: taskRow.ScheduledDueAt,
     createdAt: taskRow.CreatedAt,
     startedAt: taskRow.StartedAt,
@@ -3004,6 +3007,7 @@ tasksRouter.get( "/:taskId", async (req, res) => {
     cancelledReason: (taskRow.CancelledReason as string | null) ?? null,
     remarksHistory,
     forceCompleted: taskRow.ForceCompleted,
+    fulfilledPlannedDueAt: taskRow.FulfilledPlannedDueAt ?? null,
     asset: {
       id: assetId,
       assetTag,
@@ -3352,7 +3356,10 @@ tasksRouter.delete("/:taskId", requireManager, async (req, res) => {
       AssignedToUserId: (taskRow.AssignedToUserId as string | null) ?? null,
       AssignedToRoleName: (taskRow.AssignedToRoleName as string | null) ?? null,
     };
-    if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+      assignedToUserId: accessRow.AssignedToUserId,
+      assignedToRoleName: accessRow.AssignedToRoleName,
+    })) {
       await tx.rollback();
       res.status(403).json({ message: "Forbidden" });
       return;
@@ -3420,126 +3427,288 @@ tasksRouter.post("/:taskId/assign", requireManager, async (req, res) => {
   const hasAssignedToUserId = Object.prototype.hasOwnProperty.call(parsed.data, "assignedToUserId");
   const hasAssignedToRoleId = Object.prototype.hasOwnProperty.call(parsed.data, "assignedToRoleId");
   const hasPriority = Object.prototype.hasOwnProperty.call(parsed.data, "priority");
-  const hasStatus = Object.prototype.hasOwnProperty.call(parsed.data, "status");
 
   const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const beforeResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  AssignedToUserId,",
+          "  AssignedToRoleId,",
+          "  Priority,",
+          "  Status,",
+          "  ApprovalStatus,",
+          "  MaintenanceType",
+          "FROM pm.PMTasks",
+          "WHERE TaskId = @taskId",
+        ].join("\n"),
+      );
 
-  const beforeResult = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  AssignedToUserId,",
-        "  AssignedToRoleId,",
-        "  Priority,",
-        "  Status",
-        "FROM pm.PMTasks",
-        "WHERE TaskId = @taskId",
-      ].join("\n"),
-    );
+    const beforeRow = beforeResult.recordset[0] as
+      | {
+          AssignedToUserId?: string | null;
+          AssignedToRoleId?: string | null;
+          Priority?: string | null;
+          Status?: string | null;
+          ApprovalStatus?: string | null;
+          MaintenanceType?: string | null;
+        }
+      | undefined;
+    if (!beforeRow) {
+      await tx.rollback();
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
 
-  const beforeRow = beforeResult.recordset[0] as
-    | {
-        AssignedToUserId?: string | null;
-        AssignedToRoleId?: string | null;
-        Priority?: string | null;
-        Status?: string | null;
+    if (
+      isTaskAssignmentLocked({
+        maintenanceType: typeof beforeRow.MaintenanceType === "string" ? beforeRow.MaintenanceType : null,
+        approvalStatus: typeof beforeRow.ApprovalStatus === "string" ? beforeRow.ApprovalStatus : null,
+      })
+    ) {
+      await tx.rollback();
+      res.status(409).json({ message: "Submitted PM tasks cannot be reassigned until they are returned for revision." });
+      return;
+    }
+
+    const updated = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("hasAssignedToUserId", sql.Bit, hasAssignedToUserId ? 1 : 0)
+      .input("assignedToUserId", sql.UniqueIdentifier, parsed.data.assignedToUserId ?? null)
+      .input("hasAssignedToRoleId", sql.Bit, hasAssignedToRoleId ? 1 : 0)
+      .input("assignedToRoleId", sql.UniqueIdentifier, parsed.data.assignedToRoleId ?? null)
+      .input("hasPriority", sql.Bit, hasPriority ? 1 : 0)
+      .input("priority", sql.NVarChar(16), parsed.data.priority ?? null)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  AssignedToUserId = CASE WHEN @hasAssignedToUserId = 1 THEN @assignedToUserId ELSE AssignedToUserId END,",
+          "  AssignedToRoleId = CASE WHEN @hasAssignedToRoleId = 1 THEN @assignedToRoleId ELSE AssignedToRoleId END,",
+          "  Priority = CASE WHEN @hasPriority = 1 THEN @priority ELSE Priority END",
+          "WHERE TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    if (updated.rowsAffected[0] === 0) {
+      await tx.rollback();
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+
+    const afterResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  AssignedToUserId,",
+          "  AssignedToRoleId,",
+          "  Priority,",
+          "  Status",
+          "FROM pm.PMTasks",
+          "WHERE TaskId = @taskId",
+        ].join("\n"),
+      );
+
+    const afterRow = afterResult.recordset[0] as
+      | {
+          AssignedToUserId?: string | null;
+          AssignedToRoleId?: string | null;
+          Priority?: string | null;
+          Status?: string | null;
+        }
+      | undefined;
+
+    await writeAuditLog({
+      executor: tx,
+      actorUserId: req.user.sub,
+      action: "task.assign",
+      entityType: "task",
+      entityId: taskId,
+      metadata: {
+        updates: parsed.data,
+        before: {
+          assignedToUserId: beforeRow.AssignedToUserId ?? null,
+          assignedToRoleId: beforeRow.AssignedToRoleId ?? null,
+          priority: beforeRow.Priority ?? null,
+          status: beforeRow.Status ?? null,
+        },
+        after: {
+          assignedToUserId: afterRow?.AssignedToUserId ?? null,
+          assignedToRoleId: afterRow?.AssignedToRoleId ?? null,
+          priority: afterRow?.Priority ?? null,
+          status: afterRow?.Status ?? null,
+        },
+      },
+      ipAddress: typeof req.ip === "string" ? req.ip : null,
+      userAgent: req.get("user-agent") ?? null,
+    });
+
+    await tx.commit();
+
+    const assignedUserBefore = beforeRow.AssignedToUserId ?? null;
+    const assignedUserAfter = afterRow?.AssignedToUserId ?? null;
+    if (assignedUserAfter && assignedUserAfter !== assignedUserBefore) {
+      await enqueueTaskAssignedNotifications(taskId);
+      try {
+        await runJobNow("notifications");
+      } catch {
+        // ignore
       }
-    | undefined;
-  if (!beforeRow) {
-    res.status(404).json({ message: "Not found" });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
+});
+
+tasksRouter.post("/:taskId/claim", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
     return;
   }
 
-  const updated = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .input("hasAssignedToUserId", sql.Bit, hasAssignedToUserId ? 1 : 0)
-    .input("assignedToUserId", sql.UniqueIdentifier, parsed.data.assignedToUserId ?? null)
-    .input("hasAssignedToRoleId", sql.Bit, hasAssignedToRoleId ? 1 : 0)
-    .input("assignedToRoleId", sql.UniqueIdentifier, parsed.data.assignedToRoleId ?? null)
-    .input("hasPriority", sql.Bit, hasPriority ? 1 : 0)
-    .input("priority", sql.NVarChar(16), parsed.data.priority ?? null)
-    .input("hasStatus", sql.Bit, hasStatus ? 1 : 0)
-    .input("status", sql.NVarChar(32), parsed.data.status ?? null)
-    .query(
-      [
-        "UPDATE pm.PMTasks",
-        "SET",
-        "  AssignedToUserId = CASE WHEN @hasAssignedToUserId = 1 THEN @assignedToUserId ELSE AssignedToUserId END,",
-        "  AssignedToRoleId = CASE WHEN @hasAssignedToRoleId = 1 THEN @assignedToRoleId ELSE AssignedToRoleId END,",
-        "  Priority = CASE WHEN @hasPriority = 1 THEN @priority ELSE Priority END,",
-        "  Status = CASE WHEN @hasStatus = 1 THEN @status ELSE Status END",
-        "WHERE TaskId = @taskId",
-      ].join("\n"),
-    );
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const rolesCsv = req.user.roles.join(",");
+    const beforeResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.MaintenanceType AS MaintenanceType,",
+          "  t.Status AS Status,",
+          "  t.ApprovalStatus AS ApprovalStatus,",
+          "  t.AssignedToUserId AS AssignedToUserId,",
+          "  t.AssignedToRoleId AS AssignedToRoleId,",
+          "  r.Name AS AssignedToRoleName",
+          "FROM pm.PMTasks t",
+          "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+          "WHERE t.TaskId = @taskId",
+        ].join("\n"),
+      );
 
-  if (updated.rowsAffected[0] === 0) {
-    res.status(404).json({ message: "Not found" });
-    return;
-  }
+    const beforeRow = beforeResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!beforeRow) {
+      await tx.rollback();
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
 
-  const afterResult = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  AssignedToUserId,",
-        "  AssignedToRoleId,",
-        "  Priority,",
-        "  Status",
-        "FROM pm.PMTasks",
-        "WHERE TaskId = @taskId",
-      ].join("\n"),
-    );
+    const maintenanceType = typeof beforeRow.MaintenanceType === "string" ? beforeRow.MaintenanceType : null;
+    const status = typeof beforeRow.Status === "string" ? beforeRow.Status : null;
+    const approvalStatus = typeof beforeRow.ApprovalStatus === "string" ? beforeRow.ApprovalStatus : null;
+    const assignedToUserId = typeof beforeRow.AssignedToUserId === "string" ? beforeRow.AssignedToUserId : null;
+    const assignedToRoleName = typeof beforeRow.AssignedToRoleName === "string" ? beforeRow.AssignedToRoleName : null;
 
-  const afterRow = afterResult.recordset[0] as
-    | {
-        AssignedToUserId?: string | null;
-        AssignedToRoleId?: string | null;
-        Priority?: string | null;
-        Status?: string | null;
-      }
-    | undefined;
+    if (maintenanceType !== "PM") {
+      await tx.rollback();
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
 
-  await writeAuditLog({
-    actorUserId: req.user.sub,
-    action: "task.assign",
-    entityType: "task",
-    entityId: taskId,
-    metadata: {
-      updates: parsed.data,
-      before: {
-        assignedToUserId: beforeRow.AssignedToUserId ?? null,
-        assignedToRoleId: beforeRow.AssignedToRoleId ?? null,
-        priority: beforeRow.Priority ?? null,
-        status: beforeRow.Status ?? null,
+    if (status === "completed" || status === "cancelled") {
+      await tx.rollback();
+      res.status(409).json({ message: "Task is no longer claimable" });
+      return;
+    }
+
+    if (isTaskAssignmentLocked({ maintenanceType, approvalStatus })) {
+      await tx.rollback();
+      res.status(409).json({ message: "Submitted PM tasks cannot be claimed until they are returned for revision." });
+      return;
+    }
+
+    if (assignedToUserId === req.user.sub) {
+      await tx.rollback();
+      res.json({ ok: true, claimed: false });
+      return;
+    }
+
+    if (assignedToUserId && assignedToUserId !== req.user.sub) {
+      await tx.rollback();
+      res.status(409).json({ message: "Task was already claimed by another technician." });
+      return;
+    }
+
+    if (!canClaimRoleTask(req.user.sub, req.user.roles, { assignedToUserId, assignedToRoleName })) {
+      await tx.rollback();
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+
+    const updated = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("userId", sql.UniqueIdentifier, req.user.sub)
+      .input("rolesCsv", sql.NVarChar(1024), rolesCsv)
+      .query(
+        [
+          "UPDATE t",
+          "SET t.AssignedToUserId = @userId",
+          "FROM pm.PMTasks t",
+          "WHERE t.TaskId = @taskId",
+          "  AND t.MaintenanceType = N'PM'",
+          "  AND t.AssignedToUserId IS NULL",
+          "  AND t.AssignedToRoleId IS NOT NULL",
+          "  AND t.Status NOT IN (N'completed', N'cancelled')",
+          "  AND ISNULL(t.ApprovalStatus, N'None') NOT IN (N'PendingSupervisor', N'PendingSuperadmin', N'Approved')",
+          "  AND EXISTS (",
+          "    SELECT 1",
+          "    FROM pm.Roles r",
+          "    WHERE r.RoleId = t.AssignedToRoleId",
+          "      AND r.Name IN (SELECT value FROM string_split(@rolesCsv, ','))",
+          "  );",
+        ].join("\n"),
+      );
+
+    if (updated.rowsAffected[0] === 0) {
+      await tx.rollback();
+      res.status(409).json({ message: "Task was already claimed by another technician." });
+      return;
+    }
+
+    await writeAuditLog({
+      executor: tx,
+      actorUserId: req.user.sub,
+      action: "task.claim",
+      entityType: "task",
+      entityId: taskId,
+      metadata: {
+        previousAssignedToUserId: assignedToUserId,
+        assignedToRoleName,
       },
-      after: {
-        assignedToUserId: afterRow?.AssignedToUserId ?? null,
-        assignedToRoleId: afterRow?.AssignedToRoleId ?? null,
-        priority: afterRow?.Priority ?? null,
-        status: afterRow?.Status ?? null,
-      },
-    },
-    ipAddress: typeof req.ip === "string" ? req.ip : null,
-    userAgent: req.get("user-agent") ?? null,
-  });
+      ipAddress: typeof req.ip === "string" ? req.ip : null,
+      userAgent: req.get("user-agent") ?? null,
+    });
 
-  const assignedUserBefore = beforeRow.AssignedToUserId ?? null;
-  const assignedUserAfter = afterRow?.AssignedToUserId ?? null;
-  if (assignedUserAfter && assignedUserAfter !== assignedUserBefore) {
+    await tx.commit();
+
     await enqueueTaskAssignedNotifications(taskId);
     try {
       await runJobNow("notifications");
     } catch {
       // ignore
     }
-  }
 
-  res.json({ ok: true });
+    res.json({ ok: true, claimed: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
 });
 
 tasksRouter.post("/bulk-assign-unassigned", requireManager, async (req, res) => {
@@ -3572,6 +3741,10 @@ tasksRouter.post("/bulk-assign-unassigned", requireManager, async (req, res) => 
         "  AND AssignedToRoleId IS NULL",
         "  AND CompletedAt IS NULL",
         "  AND CancelledAt IS NULL",
+        "  AND (",
+        "    MaintenanceType <> N'PM'",
+        "    OR ISNULL(ApprovalStatus, N'None') NOT IN (N'PendingSupervisor', N'PendingSuperadmin', N'Approved')",
+        "  )",
         "  AND (@dueFrom IS NULL OR ScheduledDueAt >= @dueFrom)",
         "  AND (@dueTo IS NULL OR ScheduledDueAt <= @dueTo);",
         "SELECT @@ROWCOUNT AS UpdatedCount;",
@@ -3614,7 +3787,9 @@ tasksRouter.post("/:taskId/pause", async (req, res) => {
     .query(
       [
         "SELECT TOP (1)",
+        "  t.Status AS Status,",
         "  t.AssignedToUserId AS AssignedToUserId,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
         "  r.Name AS AssignedToRoleName",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
@@ -3632,25 +3807,71 @@ tasksRouter.post("/:taskId/pause", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
+  const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+  const status = typeof row.Status === "string" ? row.Status.toLowerCase() : null;
+  if (isApprovalWaitingState(approvalStatus)) {
+    res.status(409).json({ message: "Submitted PM tasks cannot be paused until they are returned for revision." });
+    return;
+  }
+  if (isClosedTaskStatus(status)) {
+    res.status(409).json({ message: "Invalid state" });
+    return;
+  }
 
-  await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "UPDATE pm.PMTasks",
-        "SET",
-        "  StartedAt = COALESCE(StartedAt, sysutcdatetime()),",
-        "  Status = CASE WHEN Status IN (N'completed', N'cancelled') THEN Status ELSE N'paused' END",
-        "WHERE TaskId = @taskId",
-      ].join("\n"),
-    );
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    if (
+      !(await ensureTaskActionAllowedForBrokenAsset({
+      executor: tx,
+      taskId,
+      actionLabel: "pause",
+      initiatedByUserId: req.user.sub,
+      ipAddress: typeof req.ip === "string" ? req.ip : null,
+      userAgent: req.get("user-agent") ?? null,
+      res,
+    }))
+  ) {
+      await rollbackQuietly(tx);
+      return;
+    }
 
-  res.json({ ok: true });
+    const actionAt = new Date();
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("actionAt", sql.DateTime2(0), actionAt)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  StartedAt = COALESCE(StartedAt, @actionAt),",
+          "  Status = N'paused'",
+          "WHERE TaskId = @taskId",
+            "  AND Status NOT IN (N'completed', N'cancelled')",
+        ].join("\n"),
+      );
+
+    await closeOpenTaskWorkSession({
+      executor: tx,
+      taskId,
+      userId: req.user.sub,
+      endedAt: actionAt,
+    });
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await rollbackQuietly(tx);
+    throw err;
+  }
 });
 
 tasksRouter.post("/:taskId/start", async (req, res) => {
@@ -3667,6 +3888,8 @@ tasksRouter.post("/:taskId/start", async (req, res) => {
     .query(
       [
         "SELECT TOP (1)",
+        "  t.Status AS Status,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
         "  t.AssignedToUserId AS AssignedToUserId,",
         "  r.Name AS AssignedToRoleName",
         "FROM pm.PMTasks t",
@@ -3685,25 +3908,72 @@ tasksRouter.post("/:taskId/start", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
 
-  await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "UPDATE pm.PMTasks",
-        "SET",
-        "  StartedAt = COALESCE(StartedAt, sysutcdatetime()),",
-        "  Status = CASE WHEN Status IN (N'completed', N'cancelled') THEN Status ELSE N'in_progress' END",
-        "WHERE TaskId = @taskId",
-      ].join("\n"),
-    );
+  const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+  const status = typeof row.Status === "string" ? row.Status.toLowerCase() : null;
+  if (isApprovalWaitingState(approvalStatus)) {
+    res.status(409).json({ message: "Submitted PM tasks cannot be started until they are returned for revision." });
+    return;
+  }
+  if (isClosedTaskStatus(status)) {
+    res.status(409).json({ message: "Invalid state" });
+    return;
+  }
 
-  res.json({ ok: true });
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    if (
+      !(await ensureTaskActionAllowedForBrokenAsset({
+      executor: tx,
+      taskId,
+      actionLabel: "start",
+      initiatedByUserId: req.user.sub,
+      ipAddress: typeof req.ip === "string" ? req.ip : null,
+      userAgent: req.get("user-agent") ?? null,
+      res,
+    }))
+  ) {
+      await rollbackQuietly(tx);
+      return;
+    }
+
+    const actionAt = new Date();
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("actionAt", sql.DateTime2(0), actionAt)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  StartedAt = COALESCE(StartedAt, @actionAt),",
+          "  Status = N'in_progress'",
+          "WHERE TaskId = @taskId",
+          "  AND Status NOT IN (N'completed', N'cancelled')",
+        ].join("\n"),
+      );
+
+    await ensureTaskWorkSessionStarted({
+      executor: tx,
+      taskId,
+      userId: req.user.sub,
+      startedAt: actionAt,
+    });
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await rollbackQuietly(tx);
+    throw err;
+  }
 });
 
 tasksRouter.post("/:taskId/cancel", async (req, res) => {
@@ -3744,7 +4014,10 @@ tasksRouter.post("/:taskId/cancel", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
@@ -3765,6 +4038,12 @@ tasksRouter.post("/:taskId/cancel", async (req, res) => {
         "WHERE TaskId = @taskId",
       ].join("\n"),
     );
+
+  await closeOpenTaskWorkSession({
+    executor: db,
+    taskId,
+    userId: req.user.sub,
+  });
 
   await writeAuditLog({
     actorUserId: req.user.sub,
@@ -3795,7 +4074,8 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
     .query(
       [
         "SELECT TOP (1)",
-        "  Status",
+        "  Status,",
+        "  MaintenanceType",
         "FROM pm.PMTasks",
         "WHERE TaskId = @taskId",
       ].join("\n"),
@@ -3807,9 +4087,29 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
     return;
   }
 
+  const maintenanceType = typeof row.MaintenanceType === "string" ? row.MaintenanceType : null;
+  if (maintenanceType !== "PM") {
+    res.status(409).json({ message: "Use the corrective-maintenance work order routes for CM tasks." });
+    return;
+  }
+
   const status = typeof row.Status === "string" ? row.Status.toLowerCase() : null;
   if (status !== "cancelled") {
     res.status(400).json({ message: "Only cancelled tasks can be reopened" });
+    return;
+  }
+
+  if (
+    !(await ensureTaskActionAllowedForBrokenAsset({
+      executor: db,
+      taskId,
+      actionLabel: "reopen",
+      initiatedByUserId: req.user.sub,
+      ipAddress: typeof req.ip === "string" ? req.ip : null,
+      userAgent: req.get("user-agent") ?? null,
+      res,
+    }))
+  ) {
     return;
   }
 
@@ -3854,6 +4154,8 @@ tasksRouter.post("/:taskId/resume", async (req, res) => {
     .query(
       [
         "SELECT TOP (1)",
+        "  t.Status AS Status,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
         "  t.AssignedToUserId AS AssignedToUserId,",
         "  r.Name AS AssignedToRoleName",
         "FROM pm.PMTasks t",
@@ -3872,25 +4174,72 @@ tasksRouter.post("/:taskId/resume", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
 
-  await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "UPDATE pm.PMTasks",
-        "SET",
-        "  StartedAt = COALESCE(StartedAt, sysutcdatetime()),",
-        "  Status = CASE WHEN Status IN (N'completed', N'cancelled') THEN Status ELSE N'in_progress' END",
-        "WHERE TaskId = @taskId",
-      ].join("\n"),
-    );
+  const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+  const status = typeof row.Status === "string" ? row.Status.toLowerCase() : null;
+  if (isApprovalWaitingState(approvalStatus)) {
+    res.status(409).json({ message: "Submitted PM tasks cannot be resumed until they are returned for revision." });
+    return;
+  }
+  if (isClosedTaskStatus(status)) {
+    res.status(409).json({ message: "Invalid state" });
+    return;
+  }
 
-  res.json({ ok: true });
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    if (
+      !(await ensureTaskActionAllowedForBrokenAsset({
+      executor: tx,
+      taskId,
+      actionLabel: "resume",
+      initiatedByUserId: req.user.sub,
+      ipAddress: typeof req.ip === "string" ? req.ip : null,
+      userAgent: req.get("user-agent") ?? null,
+      res,
+    }))
+  ) {
+      await rollbackQuietly(tx);
+      return;
+    }
+
+    const actionAt = new Date();
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("actionAt", sql.DateTime2(0), actionAt)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  StartedAt = COALESCE(StartedAt, @actionAt),",
+          "  Status = N'in_progress'",
+          "WHERE TaskId = @taskId",
+          "  AND Status NOT IN (N'completed', N'cancelled')",
+        ].join("\n"),
+      );
+
+    await ensureTaskWorkSessionStarted({
+      executor: tx,
+      taskId,
+      userId: req.user.sub,
+      startedAt: actionAt,
+    });
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await rollbackQuietly(tx);
+    throw err;
+  }
 });
 
 tasksRouter.post("/:taskId/complete", async (req, res) => {
@@ -3919,6 +4268,8 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
           "  t.TaskId AS TaskId,",
           "  t.AssetId AS AssetId,",
           "  t.TemplateId AS TemplateId,",
+          "  t.PlannedDueAt AS PlannedDueAt,",
+          "  t.MaintenanceType AS MaintenanceType,",
           "  t.AssignedToUserId AS AssignedToUserId,",
           "  r.Name AS AssignedToRoleName,",
           "  t.ApprovalStatus AS ApprovalStatus,",
@@ -3937,25 +4288,46 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       await tx.rollback();
       return;
     }
+    if (row.MaintenanceType !== "PM") {
+      res.status(409).json({ message: "Use the corrective-maintenance work order routes for CM tasks." });
+      await tx.rollback();
+      return;
+    }
 
     const accessRow: TaskAccessRow = {
       AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
       AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
     };
-    if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+      assignedToUserId: accessRow.AssignedToUserId,
+      assignedToRoleName: accessRow.AssignedToRoleName,
+    })) {
       res.status(403).json({ message: "Forbidden" });
       await tx.rollback();
       return;
     }
 
-		const isManagerUser = req.user.roles.some((role) =>
-			(managerRoles as readonly string[]).includes(role),
-		);
-		if (!isManagerUser) {
+    const actingManager = isManagerUser(req.user.roles);
+    if (!actingManager) {
 			res.status(403).json({ message: "Forbidden" });
 			await tx.rollback();
 			return;
-		}
+    }
+
+    if (
+      !(await ensureTaskActionAllowedForBrokenAsset({
+        executor: tx,
+        taskId,
+        actionLabel: "complete",
+        initiatedByUserId: req.user.sub,
+        ipAddress: typeof req.ip === "string" ? req.ip : null,
+        userAgent: req.get("user-agent") ?? null,
+        res,
+      }))
+    ) {
+      await tx.rollback();
+      return;
+    }
 
     const checklistDefinition = await loadTaskChecklistDefinition({
       executor: tx,
@@ -4017,8 +4389,8 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
     let useBackdated = false;
 
     if (hasCustomCompletedAt) {
-      const isManagerUser = req.user.roles.some((role) => (managerRoles as readonly string[]).includes(role));
-      if (!isManagerUser) {
+      const actingManager = isManagerUser(req.user.roles);
+      if (!actingManager) {
         res.status(403).json({ message: "Forbidden" });
         await tx.rollback();
         return;
@@ -4055,8 +4427,30 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
     }
 
     const completedAtDate = effectiveCompletedAt ?? new Date();
+    await closeOpenTaskWorkSession({
+      executor: tx,
+      taskId,
+      userId: req.user.sub,
+      endedAt: completedAtDate,
+    });
+    const scheduleContext = await loadPmScheduleContextByTask({
+      executor: tx,
+      taskId,
+    });
+    const currentOccurrence =
+      scheduleContext === null
+        ? null
+        : await reconcilePmScheduleContext({
+            executor: tx,
+            context: scheduleContext,
+            now: completedAtDate,
+          });
+    const fulfilledPlannedDueAt =
+      currentOccurrence?.plannedDueAt ??
+      (row.PlannedDueAt instanceof Date ? row.PlannedDueAt : null) ??
+      completedAtDate;
 
-    await tx
+    const completeUpdateResult = await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
@@ -4065,6 +4459,7 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       .input("isBackdated", sql.Bit, useBackdated ? 1 : 0)
       .input("backdateReason", sql.NVarChar(1024), useBackdated ? parsed.data.backdateReason ?? null : null)
       .input("technicianName", sql.NVarChar(256), parsed.data.technicianName ?? null)
+      .input("fulfilledPlannedDueAt", sql.DateTime2(0), fulfilledPlannedDueAt)
       .query(
         [
           "UPDATE pm.PMTasks",
@@ -4077,10 +4472,18 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
           "  IsBackdated = @isBackdated,",
           "  BackdateReason = @backdateReason,",
           "  TechnicianName = @technicianName,",
+          "  FulfilledPlannedDueAt = COALESCE(FulfilledPlannedDueAt, @fulfilledPlannedDueAt),",
           "  DataEntryAt = COALESCE(DataEntryAt, sysutcdatetime())",
           "WHERE TaskId = @taskId",
+          "  AND CancelledAt IS NULL",
         ].join("\n"),
       );
+
+    if ((completeUpdateResult.rowsAffected?.[0] ?? 0) === 0) {
+      res.status(409).json({ message: "Invalid state" });
+      await tx.rollback();
+      return;
+    }
 
     for (const item of parsed.data.checklistResults) {
       await tx
@@ -4109,29 +4512,14 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
         );
     }
 
-    const intervalDays = Number(row.IntervalDays);
-    await tx
-      .request()
-      .input("assetId", sql.UniqueIdentifier, row.AssetId as string)
-      .input("intervalDays", sql.Int, Number.isFinite(intervalDays) ? intervalDays : 0)
-      .input("completedAt", sql.DateTime2(0), completedAtDate)
-      .query(
-        [
-          "UPDATE pm.AssetPMSettings",
-          "SET",
-          "  LastPMCompletedAt = @completedAt,",
-          "  NextPMDueAt = CASE",
-          "    WHEN @intervalDays <= 0 THEN NextPMDueAt",
-          "    WHEN @intervalDays = 30 THEN dateadd(month, 1, @completedAt)",
-          "    WHEN @intervalDays = 90 THEN dateadd(month, 3, @completedAt)",
-          "    WHEN @intervalDays = 180 THEN dateadd(month, 6, @completedAt)",
-          "    WHEN @intervalDays = 365 THEN dateadd(year, 1, @completedAt)",
-          "    ELSE dateadd(day, @intervalDays, @completedAt)",
-          "  END,",
-          "  UpdatedAt = sysutcdatetime()",
-          "WHERE AssetId = @assetId",
-        ].join("\n"),
-      );
+    if (scheduleContext && currentOccurrence) {
+      await finalizePmOccurrenceCompletion({
+        executor: tx,
+        context: scheduleContext,
+        fulfilledPlannedDueAt: currentOccurrence.plannedDueAt,
+        completedAt: completedAtDate,
+      });
+    }
 
     await tx.commit();
     res.json({ ok: true });
@@ -4170,7 +4558,10 @@ tasksRouter.get("/:taskId/draft", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
@@ -4231,6 +4622,7 @@ tasksRouter.patch("/:taskId/draft", async (req, res) => {
         "SELECT TOP (1)",
         "  t.Status AS Status,",
         "  t.AssignedToUserId AS AssignedToUserId,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
         "  r.Name AS AssignedToRoleName",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
@@ -4246,13 +4638,24 @@ tasksRouter.patch("/:taskId/draft", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
   const status = typeof row.Status === "string" ? (row.Status as string) : null;
+  const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
   if (status === "completed" || status === "cancelled") {
     res.status(400).json({ message: "Invalid state" });
+    return;
+  }
+  if (
+    isTaskAssignmentLocked({ maintenanceType: "PM", approvalStatus }) &&
+    !isSuperadmin(req.user.roles)
+  ) {
+    res.status(409).json({ message: "Submitted PM tasks are locked for draft editing." });
     return;
   }
 
@@ -4334,6 +4737,7 @@ tasksRouter.delete("/:taskId/draft", async (req, res) => {
       [
         "SELECT TOP (1)",
         "  t.AssignedToUserId AS AssignedToUserId,",
+        "  t.ApprovalStatus AS ApprovalStatus,",
         "  r.Name AS AssignedToRoleName",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
@@ -4349,8 +4753,19 @@ tasksRouter.delete("/:taskId/draft", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+  if (
+    isTaskAssignmentLocked({ maintenanceType: "PM", approvalStatus }) &&
+    !isSuperadmin(req.user.roles)
+  ) {
+    res.status(409).json({ message: "Submitted PM tasks are locked for draft editing." });
     return;
   }
 
@@ -4379,12 +4794,12 @@ tasksRouter.delete("/:taskId/draft", async (req, res) => {
 });
 
 const RejectApprovalSchema = z.object({
-  reason: z.string().max(1024).optional(),
+  reason: z.string().trim().min(1).max(1024),
   reopenTask: z.boolean().optional(),
 });
 
 const ReviseApprovalSchema = z.object({
-  reason: z.string().max(1024).optional(),
+  reason: z.string().trim().min(1).max(1024),
   reopenTask: z.boolean().optional(),
 });
 
@@ -4414,6 +4829,7 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
           "  t.AssignedToUserId AS AssignedToUserId,",
           "  r.Name AS AssignedToRoleName,",
           "  t.ApprovalStatus AS ApprovalStatus,",
+          "  t.MaintenanceType AS MaintenanceType,",
           "  t.TemplateId AS TemplateId",
           "FROM pm.PMTasks t",
           "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
@@ -4432,8 +4848,16 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
       AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
       AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
     };
-    if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+      assignedToUserId: accessRow.AssignedToUserId,
+      assignedToRoleName: accessRow.AssignedToRoleName,
+    })) {
       res.status(403).json({ message: "Forbidden" });
+      await tx.rollback();
+      return;
+    }
+    if (row.MaintenanceType !== "PM") {
+      res.status(409).json({ message: "Use the corrective-maintenance work order routes for CM tasks." });
       await tx.rollback();
       return;
     }
@@ -4441,6 +4865,21 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
     const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : "None";
     if (approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin" || approvalStatus === "Approved") {
       res.status(400).json({ message: "Invalid state" });
+      await tx.rollback();
+      return;
+    }
+
+    if (
+      !(await ensureTaskActionAllowedForBrokenAsset({
+        executor: tx,
+        taskId,
+        actionLabel: "submit for approval",
+        initiatedByUserId: req.user.sub,
+        ipAddress: typeof req.ip === "string" ? req.ip : null,
+        userAgent: req.get("user-agent") ?? null,
+        res,
+      }))
+    ) {
       await tx.rollback();
       return;
     }
@@ -4502,8 +4941,9 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
       throw err;
     }
 
+    const submittedAt = new Date();
     if (parsed.data.checklistResults.length > 0) {
-      const completedAtDate = new Date();
+      const completedAtDate = submittedAt;
       for (const item of parsed.data.checklistResults) {
         await tx
           .request()
@@ -4532,20 +4972,35 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
       }
     }
 
-    await tx
+    await closeOpenTaskWorkSession({
+      executor: tx,
+      taskId,
+      userId: req.user.sub,
+      endedAt: submittedAt,
+    });
+
+    const submitUpdateResult = await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .input("userId", sql.UniqueIdentifier, req.user.sub)
+        .input("submittedAt", sql.DateTime2(0), submittedAt)
       .query(
         [
           "UPDATE pm.PMTasks",
           "SET",
-          "  TechnicianCompletedAt = COALESCE(TechnicianCompletedAt, sysutcdatetime()),",
+          "  TechnicianCompletedAt = COALESCE(TechnicianCompletedAt, @submittedAt),",
           "  TechnicianCompletedByUserId = COALESCE(TechnicianCompletedByUserId, @userId),",
           "  ApprovalStatus = N'PendingSupervisor'",
           "WHERE TaskId = @taskId",
+          "  AND CancelledAt IS NULL",
         ].join("\n"),
       );
+
+    if ((submitUpdateResult.rowsAffected?.[0] ?? 0) === 0) {
+      res.status(409).json({ message: "Invalid state" });
+      await tx.rollback();
+      return;
+    }
 
     await tx.commit();
   } catch (err) {
@@ -4751,7 +5206,8 @@ tasksRouter.post(
       .query(
         [
           "SELECT TOP (1)",
-          "  t.ApprovalStatus AS ApprovalStatus",
+          "  t.ApprovalStatus AS ApprovalStatus,",
+          "  t.MaintenanceType AS MaintenanceType",
           "FROM pm.PMTasks t",
           "WHERE t.TaskId = @taskId",
         ].join("\n"),
@@ -4763,6 +5219,10 @@ tasksRouter.post(
       return;
     }
 
+    if (row.MaintenanceType !== "PM") {
+      res.status(409).json({ message: "Use the corrective-maintenance work order routes for CM tasks." });
+      return;
+    }
     const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
     if (approvalStatus !== "PendingSupervisor") {
       res.status(400).json({ message: "Invalid state" });
@@ -4815,6 +5275,8 @@ tasksRouter.post(
             "  t.TaskId AS TaskId,",
             "  t.AssetId AS AssetId,",
             "  t.TemplateId AS TemplateId,",
+            "  t.PlannedDueAt AS PlannedDueAt,",
+            "  t.MaintenanceType AS MaintenanceType,",
             "  t.ApprovalStatus AS ApprovalStatus,",
             "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
             "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,",
@@ -4828,6 +5290,11 @@ tasksRouter.post(
       const row = infoResult.recordset[0] as Record<string, unknown> | undefined;
       if (!row) {
         res.status(404).json({ message: "Not found" });
+        await tx.rollback();
+        return;
+      }
+      if (row.MaintenanceType !== "PM") {
+        res.status(409).json({ message: "Use the corrective-maintenance work order routes for CM tasks." });
         await tx.rollback();
         return;
       }
@@ -4848,7 +5315,22 @@ tasksRouter.post(
             : null;
 
       const finalCompletedAt = technicianCompletedAt ?? new Date();
-      const intervalDays = Number(row.IntervalDays);
+      const scheduleContext = await loadPmScheduleContextByTask({
+        executor: tx,
+        taskId,
+      });
+      const currentOccurrence =
+        scheduleContext === null
+          ? null
+          : await reconcilePmScheduleContext({
+              executor: tx,
+              context: scheduleContext,
+              now: finalCompletedAt,
+            });
+      const fulfilledPlannedDueAt =
+        currentOccurrence?.plannedDueAt ??
+        (row.PlannedDueAt instanceof Date ? row.PlannedDueAt : null) ??
+        finalCompletedAt;
 
       await tx
         .request()
@@ -4856,6 +5338,7 @@ tasksRouter.post(
         .input("userId", sql.UniqueIdentifier, req.user.sub)
         .input("finalCompletedAt", sql.DateTime2(0), finalCompletedAt)
         .input("technicianUserId", sql.UniqueIdentifier, (row.TechnicianCompletedByUserId as string | null) ?? null)
+        .input("fulfilledPlannedDueAt", sql.DateTime2(0), fulfilledPlannedDueAt)
         .query(
           [
             "UPDATE pm.PMTasks",
@@ -4866,33 +5349,27 @@ tasksRouter.post(
             "  Status = N'completed',",
             "  CompletedAt = COALESCE(CompletedAt, @finalCompletedAt),",
             "  CompletedByUserId = COALESCE(CompletedByUserId, @technicianUserId),",
+            "  FulfilledPlannedDueAt = COALESCE(FulfilledPlannedDueAt, @fulfilledPlannedDueAt),",
             "  DataEntryAt = COALESCE(DataEntryAt, sysutcdatetime())",
             "WHERE TaskId = @taskId",
           ].join("\n"),
         );
 
-      await tx
-        .request()
-        .input("assetId", sql.UniqueIdentifier, row.AssetId as string)
-        .input("intervalDays", sql.Int, Number.isFinite(intervalDays) ? intervalDays : 0)
-        .input("completedAt", sql.DateTime2(0), finalCompletedAt)
-        .query(
-          [
-            "UPDATE pm.AssetPMSettings",
-            "SET",
-            "  LastPMCompletedAt = @completedAt,",
-            "  NextPMDueAt = CASE",
-            "    WHEN @intervalDays <= 0 THEN NextPMDueAt",
-            "    WHEN @intervalDays = 30 THEN dateadd(month, 1, @completedAt)",
-            "    WHEN @intervalDays = 90 THEN dateadd(month, 3, @completedAt)",
-            "    WHEN @intervalDays = 180 THEN dateadd(month, 6, @completedAt)",
-            "    WHEN @intervalDays = 365 THEN dateadd(year, 1, @completedAt)",
-            "    ELSE dateadd(day, @intervalDays, @completedAt)",
-            "  END,",
-            "  UpdatedAt = sysutcdatetime()",
-            "WHERE AssetId = @assetId",
-          ].join("\n"),
-        );
+      await closeOpenTaskWorkSession({
+        executor: tx,
+        taskId,
+        userId: req.user.sub,
+        endedAt: finalCompletedAt,
+      });
+
+      if (scheduleContext && currentOccurrence) {
+        await finalizePmOccurrenceCompletion({
+          executor: tx,
+          context: scheduleContext,
+          fulfilledPlannedDueAt: currentOccurrence.plannedDueAt,
+          completedAt: finalCompletedAt,
+        });
+      }
 
       await tx.commit();
       await enqueueTaskApprovalNotifications(taskId, "task_approved", "superadmin");
@@ -4924,92 +5401,113 @@ tasksRouter.post(
     }
 
     const db = await getDb();
-    const statusResult = await db
+    const tx = new sql.Transaction(db);
+    await tx.begin();
+    try {
+      const statusResult = await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .query(
         [
           "SELECT TOP (1)",
-          "  t.ApprovalStatus AS ApprovalStatus",
+          "  t.ApprovalStatus AS ApprovalStatus,",
+          "  t.MaintenanceType AS MaintenanceType",
           "FROM pm.PMTasks t",
           "WHERE t.TaskId = @taskId",
         ].join("\n"),
       );
 
-    const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
-    if (!row) {
-      res.status(404).json({ message: "Not found" });
-      return;
-    }
+      const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
+      if (!row) {
+        res.status(404).json({ message: "Not found" });
+        await rollbackQuietly(tx);
+        return;
+      }
+      if (row.MaintenanceType !== "PM") {
+        res.status(409).json({ message: "Use the corrective-maintenance work order routes for CM tasks." });
+        await rollbackQuietly(tx);
+        return;
+      }
 
-    const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
-    if (approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin") {
-      res.status(400).json({ message: "Invalid state" });
-      return;
-    }
-    const nextStatus = approvalStatus === "PendingSupervisor" ? "None" : "PendingSupervisor";
+      const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+      if (approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin") {
+        res.status(400).json({ message: "Invalid state" });
+        await rollbackQuietly(tx);
+        return;
+      }
+      const nextStatus = approvalStatus === "PendingSupervisor" ? "None" : "PendingSupervisor";
+      const reason = parsed.data.reason.trim();
+      const revisedAt = new Date();
 
-    if (approvalStatus === "PendingSupervisor") {
-      await db
+      if (approvalStatus === "PendingSupervisor") {
+        await tx
+          .request()
+          .input("taskId", sql.UniqueIdentifier, taskId)
+          .query(
+            [
+              "UPDATE pm.PMTasks",
+              "SET",
+              "  ApprovalStatus = N'None'",
+              "WHERE TaskId = @taskId",
+            ].join("\n"),
+          );
+      } else {
+        await tx
+          .request()
+          .input("taskId", sql.UniqueIdentifier, taskId)
+          .query(
+            [
+              "UPDATE pm.PMTasks",
+              "SET",
+              "  ApprovalStatus = N'PendingSupervisor',",
+              "  SupervisorApprovedAt = NULL,",
+              "  SupervisorApprovedByUserId = NULL",
+              "WHERE TaskId = @taskId",
+            ].join("\n"),
+          );
+      }
+
+      if (parsed.data.reopenTask) {
+        await tx
+          .request()
+          .input("taskId", sql.UniqueIdentifier, taskId)
+          .query(
+            [
+              "UPDATE pm.PMTasks",
+              "SET",
+              "  Status = CASE WHEN Status IN (N'completed', N'cancelled') THEN Status ELSE N'open' END",
+              "WHERE TaskId = @taskId",
+            ].join("\n"),
+          );
+      }
+
+      await closeOpenTaskWorkSession({
+        executor: tx,
+        taskId,
+        userId: req.user.sub,
+        endedAt: revisedAt,
+      });
+
+      await tx
         .request()
         .input("taskId", sql.UniqueIdentifier, taskId)
+        .input("userId", sql.UniqueIdentifier, req.user.sub)
+        .input("note", sql.NVarChar(1024), reason)
+        .input("revisedAt", sql.DateTime2(0), revisedAt)
         .query(
           [
             "UPDATE pm.PMTasks",
             "SET",
-            "  ApprovalStatus = N'None'",
+            "  RevisedAt = @revisedAt,",
+            "  RevisedByUserId = @userId,",
+            "  RevisionNote = @note,",
+            "  RejectedAt = NULL,",
+            "  RejectedByUserId = NULL,",
+            "  RejectionReason = NULL",
             "WHERE TaskId = @taskId",
           ].join("\n"),
         );
-    } else {
-      await db
-        .request()
-        .input("taskId", sql.UniqueIdentifier, taskId)
-        .query(
-          [
-            "UPDATE pm.PMTasks",
-            "SET",
-            "  ApprovalStatus = N'PendingSupervisor',",
-            "  SupervisorApprovedAt = NULL,",
-            "  SupervisorApprovedByUserId = NULL",
-            "WHERE TaskId = @taskId",
-          ].join("\n"),
-        );
-    }
-
-    if (parsed.data.reopenTask) {
-      await db
-        .request()
-        .input("taskId", sql.UniqueIdentifier, taskId)
-        .query(
-          [
-            "UPDATE pm.PMTasks",
-            "SET",
-            "  Status = CASE WHEN Status IN (N'completed', N'cancelled') THEN Status ELSE N'in_progress' END",
-            "WHERE TaskId = @taskId",
-          ].join("\n"),
-        );
-    }
-
-    const reason = parsed.data.reason ?? null;
-    await db
-      .request()
-      .input("taskId", sql.UniqueIdentifier, taskId)
-      .input("userId", sql.UniqueIdentifier, req.user.sub)
-      .input("note", sql.NVarChar(1024), (reason ?? null) as string | null)
-      .query(
-        [
-          "UPDATE pm.PMTasks",
-          "SET",
-          "  RevisedAt = sysutcdatetime(),",
-          "  RevisedByUserId = @userId,",
-          "  RevisionNote = @note,",
-          "  RejectedAt = NULL,",
-          "  RejectedByUserId = NULL,",
-          "  RejectionReason = NULL",
-          "WHERE TaskId = @taskId",
-        ].join("\n"),
-      );
+      await tx.commit();
     await writeAuditLog({
       actorUserId: req.user.sub,
       action: "approval_revised",
@@ -5018,7 +5516,7 @@ tasksRouter.post(
       metadata: {
         fromStatus: approvalStatus,
         toStatus: nextStatus,
-        reason: reason ?? null,
+        reason,
       },
       ipAddress: req.ip ?? null,
       userAgent: req.headers["user-agent"] ?? null,
@@ -5029,7 +5527,11 @@ tasksRouter.post(
       await runJobNow("notifications");
     } catch {}
 
-    res.json({ ok: true });
+      res.json({ ok: true });
+    } catch (err) {
+      await rollbackQuietly(tx);
+      throw err;
+    }
   },
 );
 
@@ -5049,81 +5551,156 @@ tasksRouter.post(
       return;
     }
 
+    if (parsed.data.reopenTask) {
+      res.status(400).json({ message: "Rejected PM work creates a replacement task instead of reopening the same task." });
+      return;
+    }
+
     const db = await getDb();
-    const statusResult = await db
+    const tx = new sql.Transaction(db);
+    await tx.begin();
+    try {
+      const statusResult = await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .query(
         [
           "SELECT TOP (1)",
-          "  t.ApprovalStatus AS ApprovalStatus",
+          "  t.ApprovalStatus AS ApprovalStatus,",
+          "  t.MaintenanceType AS MaintenanceType,",
+          "  t.AssetId AS AssetId,",
+          "  t.FacilityId AS FacilityId,",
+          "  t.TemplateId AS TemplateId,",
+          "  t.PlannedDueAt AS PlannedDueAt,",
+          "  t.ScheduledDueAt AS ScheduledDueAt,",
+          "  t.Priority AS Priority,",
+          "  t.AssignedToUserId AS AssignedToUserId,",
+          "  t.AssignedToRoleId AS AssignedToRoleId",
           "FROM pm.PMTasks t",
           "WHERE t.TaskId = @taskId",
         ].join("\n"),
       );
 
-    const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
-    if (!row) {
-      res.status(404).json({ message: "Not found" });
-      return;
-    }
+      const row = statusResult.recordset[0] as Record<string, unknown> | undefined;
+      if (!row) {
+        res.status(404).json({ message: "Not found" });
+        await rollbackQuietly(tx);
+        return;
+      }
+      if (row.MaintenanceType !== "PM") {
+        res.status(409).json({ message: "Use the corrective-maintenance work order routes for CM tasks." });
+        await rollbackQuietly(tx);
+        return;
+      }
 
-    const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
-    if (approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin") {
-      res.status(400).json({ message: "Invalid state" });
-      return;
-    }
+      const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
+      if (approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin") {
+        res.status(400).json({ message: "Invalid state" });
+        await rollbackQuietly(tx);
+        return;
+      }
 
-    await db
-      .request()
-      .input("taskId", sql.UniqueIdentifier, taskId)
-      .input("userId", sql.UniqueIdentifier, req.user.sub)
-      .input("reason", sql.NVarChar(1024), (parsed.data.reason ?? null) as string | null)
-      .query(
-        [
-          "UPDATE pm.PMTasks",
-          "SET",
-          "  ApprovalStatus = N'Rejected',",
-          "  RejectedAt = sysutcdatetime(),",
-          "  RejectedByUserId = @userId,",
-          "  RejectionReason = @reason",
-          "WHERE TaskId = @taskId",
-        ].join("\n"),
-      );
+      const reason = parsed.data.reason.trim();
+      const rejectedAt = new Date();
+      await closeOpenTaskWorkSession({
+        executor: tx,
+        taskId,
+        userId: req.user.sub,
+        endedAt: rejectedAt,
+      });
 
-    if (parsed.data.reopenTask) {
-      await db
+      await tx
         .request()
         .input("taskId", sql.UniqueIdentifier, taskId)
+        .input("userId", sql.UniqueIdentifier, req.user.sub)
+        .input("reason", sql.NVarChar(1024), reason)
+        .input("rejectedAt", sql.DateTime2(0), rejectedAt)
         .query(
           [
             "UPDATE pm.PMTasks",
             "SET",
-            "  Status = CASE WHEN Status IN (N'completed', N'cancelled') THEN Status ELSE N'in_progress' END",
+            "  ApprovalStatus = N'Rejected',",
+            "  RejectedAt = @rejectedAt,",
+            "  RejectedByUserId = @userId,",
+            "  RejectionReason = @reason",
             "WHERE TaskId = @taskId",
           ].join("\n"),
         );
-    }
 
-    const reason = parsed.data.reason ?? null;
-    if (reason && reason.trim().length > 0) {
+      let replacementTaskId: string | null = null;
+      const existingReplacement = await tx
+        .request()
+        .input("sourceTaskId", sql.UniqueIdentifier, taskId)
+        .query(
+          [
+            "SELECT TOP (1)",
+            "  TaskId AS TaskId",
+            "FROM pm.PMTasks",
+            "WHERE MaintenanceType = N'PM'",
+            "  AND SourceTaskId = @sourceTaskId",
+            "ORDER BY CreatedAt DESC",
+          ].join("\n"),
+        );
+      const existingRow = existingReplacement.recordset[0] as Record<string, unknown> | undefined;
+      if (existingRow && typeof existingRow.TaskId === "string") {
+        replacementTaskId = existingRow.TaskId;
+      } else {
+        const replacementInsert = await tx
+          .request()
+          .input("sourceTaskId", sql.UniqueIdentifier, taskId)
+          .input("assetId", sql.UniqueIdentifier, (row.AssetId as string | null) ?? null)
+          .input("facilityId", sql.UniqueIdentifier, (row.FacilityId as string | null) ?? null)
+          .input("templateId", sql.UniqueIdentifier, row.TemplateId as string)
+          .input("plannedDueAt", sql.DateTime2(0), row.PlannedDueAt as Date)
+          .input("scheduledDueAt", sql.DateTime2(0), row.ScheduledDueAt as Date)
+          .input("priority", sql.NVarChar(16), (row.Priority as string | null) ?? "medium")
+          .input("assignedToUserId", sql.UniqueIdentifier, (row.AssignedToUserId as string | null) ?? null)
+          .input("assignedToRoleId", sql.UniqueIdentifier, (row.AssignedToRoleId as string | null) ?? null)
+          .query(
+            [
+              "DECLARE @taskNumber nvarchar(32) = CONCAT(",
+              "  N'PM-RWK-',",
+              "  FORMAT(sysutcdatetime(), 'yyyyMMdd'),",
+              "  N'-',",
+              "  RIGHT(CONVERT(varchar(36), NEWID()), 8)",
+              ");",
+              "INSERT INTO pm.PMTasks (",
+              "  TaskNumber, AssetId, FacilityId, TemplateId, PlannedDueAt, ScheduledDueAt,",
+              "  AssignedToUserId, AssignedToRoleId, Status, Priority, SourceTaskId",
+              ")",
+              "OUTPUT inserted.TaskId AS TaskId",
+              "VALUES (",
+              "  @taskNumber, @assetId, @facilityId, @templateId, @plannedDueAt, @scheduledDueAt,",
+              "  @assignedToUserId, @assignedToRoleId, N'open', @priority, @sourceTaskId",
+              ");",
+            ].join("\n"),
+          );
+        const inserted = replacementInsert.recordset[0] as Record<string, unknown> | undefined;
+        replacementTaskId = typeof inserted?.TaskId === "string" ? inserted.TaskId : null;
+      }
+
+      await tx.commit();
+
       await writeAuditLog({
         actorUserId: req.user.sub,
         action: "approval_rejected",
         entityType: "PMTask",
         entityId: taskId,
-        metadata: { reason },
+        metadata: { reason, replacementTaskId },
         ipAddress: req.ip ?? null,
         userAgent: req.headers["user-agent"] ?? null,
       });
-    }
 
     const stage = approvalStatus === "PendingSupervisor" ? "supervisor" : "superadmin";
     await enqueueTaskApprovalNotifications(taskId, "task_rejected", stage);
     try {
       await runJobNow("notifications");
     } catch {}
-    res.json({ ok: true });
+      res.json({ ok: true, replacementTaskId });
+    } catch (err) {
+      await rollbackQuietly(tx);
+      throw err;
+    }
   },
 );
 
@@ -5166,7 +5743,10 @@ tasksRouter.post("/:taskId/evidence", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }

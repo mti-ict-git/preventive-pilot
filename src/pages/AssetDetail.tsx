@@ -66,6 +66,7 @@ import {
   apiListTemplates,
   apiPatchAssetPm,
   apiCreatePmNowTask,
+  apiSkipAssetNextPm,
   apiRecalculateSchedules,
   apiDeleteTask,
   type BlackoutWindow,
@@ -315,6 +316,40 @@ const AssetDetail = () => {
     },
   });
 
+  const skipNextPmMutation = useMutation({
+    mutationFn: async () => {
+      if (!assetId) throw new Error("Missing assetId");
+      const plannedDueAt = assetQuery.data?.pm.nextPlannedDueAt ?? null;
+      if (!plannedDueAt) {
+        throw new Error("No planned PM occurrence is available to skip.");
+      }
+      const reason = window.prompt("Enter the skip reason");
+      if (reason === null) return;
+      const trimmedReason = reason.trim();
+      if (!trimmedReason) {
+        throw new Error("Skip reason is required.");
+      }
+      return apiSkipAssetNextPm({
+        assetId,
+        plannedDueAt,
+        reason: trimmedReason,
+      });
+    },
+    onSuccess: async () => {
+      if (!assetId) return;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["asset", assetId] }),
+        queryClient.invalidateQueries({ queryKey: ["assets"] }),
+        queryClient.invalidateQueries({ queryKey: ["tasks", "upcoming", assetId, assetQuery.data?.pm.defaultTemplateId] }),
+      ]);
+      toast({ title: "PM occurrence skipped", description: "The next planned PM occurrence was skipped." });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : "Failed to skip the next PM occurrence";
+      toast({ title: "Action failed", description: message, variant: "destructive" });
+    },
+  });
+
   const asset = assetQuery.data;
   const canManage = isManager();
   const pmEnabled = asset?.pm.enabled === true;
@@ -381,6 +416,7 @@ const AssetDetail = () => {
       : snipeItBaseUrl;
 
   const assetImageUrl = asset?.imageUrl ?? null;
+  const isBrokenAsset = asset?.assetOperationalStatus === "broken";
 
   const categoryId = asset?.category.id ?? null;
   const allTemplates = templatesQuery.data?.items ?? EMPTY_TEMPLATES;
@@ -953,6 +989,7 @@ const AssetDetail = () => {
                 disabled={
                   !canManage ||
                   !pmEnabled ||
+                  isBrokenAsset ||
                   !asset?.pm.defaultTemplateId ||
                   recalcPmMutation.isPending ||
                   pmNowStartMutation.isPending
@@ -961,6 +998,15 @@ const AssetDetail = () => {
               >
                 <Activity className="w-4 h-4" />
                 PM Now
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={!canManage || !asset?.pm.nextPlannedDueAt || skipNextPmMutation.isPending}
+                onClick={() => skipNextPmMutation.mutate()}
+              >
+                <Clock className="w-4 h-4" />
+                Skip Next PM
               </Button>
               <Button
                 variant="outline"
@@ -1009,7 +1055,7 @@ const AssetDetail = () => {
                 <Clock className="w-5 h-5 text-accent" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Next PM</p>
+                <p className="text-sm text-muted-foreground">Next Effective PM</p>
                 <p className="text-lg font-semibold text-foreground">
                   {asset.pm.nextDueAt ? new Date(asset.pm.nextDueAt).toLocaleDateString() : "—"}
                 </p>
@@ -1028,8 +1074,10 @@ const AssetDetail = () => {
                 <CheckCircle className="w-5 h-5 text-success" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">PM Completed</p>
-                <p className="text-lg font-semibold text-foreground">—</p>
+                <p className="text-sm text-muted-foreground">Next Planned PM</p>
+                <p className="text-lg font-semibold text-foreground">
+                  {asset.pm.nextPlannedDueAt ? new Date(asset.pm.nextPlannedDueAt).toLocaleDateString() : "—"}
+                </p>
               </div>
             </div>
           </motion.div>
@@ -1182,7 +1230,14 @@ const AssetDetail = () => {
                     </div>
 
                     <div className="flex justify-between items-center py-2 border-b border-border last:border-0">
-                      <span className="text-muted-foreground">Next Scheduled</span>
+                      <span className="text-muted-foreground">Next Planned</span>
+                      <span className="font-medium text-foreground">
+                        {asset.pm.nextPlannedDueAt ? new Date(asset.pm.nextPlannedDueAt).toLocaleDateString() : "—"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                      <span className="text-muted-foreground">Next Effective</span>
                       <span className="font-medium text-foreground">
                         {asset.pm.nextDueAt ? new Date(asset.pm.nextDueAt).toLocaleDateString() : "—"}
                       </span>

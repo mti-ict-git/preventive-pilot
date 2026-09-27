@@ -41,6 +41,7 @@ import {
   apiDownloadChecklistEvidence,
   apiDownloadEvidence,
   apiAssignTask,
+  apiClaimTask,
   apiGetLookups,
   apiListAssignableUsers,
   ApiError,
@@ -219,6 +220,21 @@ const Tasks = () => {
     },
   });
 
+  const claimMutation = useMutation({
+    mutationFn: (taskId: string) => apiClaimTask(taskId),
+    onSuccess: async () => {
+      toast({ title: "Task claimed" });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      await statsQuery.refetch();
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed";
+      toast({ title: "Claim failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const currentUserId = getJwtClaims()?.sub ?? null;
+
   type UiStatus = "upcoming" | "in_progress" | "due_today" | "overdue" | "completed" | "cancelled";
 
   const getUiStatus = (task: TaskListItem, now: Date): UiStatus => {
@@ -325,6 +341,20 @@ const Tasks = () => {
 								? 50
 								: 0;
 				const isAssigned = Boolean(task.assignedTo.userId || task.assignedTo.roleId);
+                                const assignmentLocked =
+                                        task.maintenanceType === "PM" &&
+                                        ((task.approvalStatus ?? "None") === "PendingSupervisor" ||
+                                                (task.approvalStatus ?? "None") === "PendingSuperadmin" ||
+                                                (task.approvalStatus ?? "None") === "Approved");
+                                const canClaim =
+                                        task.maintenanceType === "PM" &&
+                                        task.assignedTo.userId === null &&
+                                        currentUserId !== null &&
+                                        Boolean(task.assignedTo.roleName) &&
+                                        hasRole(task.assignedTo.roleName ?? "") &&
+                                        !assignmentLocked &&
+                                        task.status !== "completed" &&
+                                        task.status !== "cancelled";
 				return {
 					id: task.id,
 					displayId: task.taskNumber,
@@ -340,6 +370,8 @@ const Tasks = () => {
 					checklistComplete: task.checklistCompleted,
 					checklistTotal: task.checklistTotal,
 					isAssigned,
+                                        assignmentLocked,
+                                        canClaim,
 					approvalStatus: task.approvalStatus ?? "None",
 				};
 			})
@@ -356,7 +388,7 @@ const Tasks = () => {
 					task.assetName.toLowerCase().includes(q)
 				);
 			});
-	}, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter]);
+        }, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter, currentUserId]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -571,12 +603,26 @@ const Tasks = () => {
                                   type="button"
                                   variant="outline"
                                   size="sm"
+                                  disabled={task.assignmentLocked}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     openAssignDialogFor(task.taskId);
                                   }}
                                 >
                                   {task.isAssigned ? "Reassign" : "Assign"}
+                                </Button>
+                              ) : task.canClaim ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={claimMutation.isPending}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    claimMutation.mutate(task.taskId);
+                                  }}
+                                >
+                                  Claim
                                 </Button>
                               ) : null}
                             </div>
@@ -802,6 +848,12 @@ export const TaskDetailDialog = (props: {
   onStarted: () => Promise<void>;
   onCompleted?: () => Promise<void> | void;
 }) => {
+  const formatDurationLabel = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
   const checklistDraftStorageKey = (id: string): string => `pm-web.checklistDraft.${id}`;
   const checklistDraftSavedAtStorageKey = (id: string): string => `pm-web.checklistDraftSavedAt.${id}`;
   const parseChecklistDraft = (
@@ -890,6 +942,25 @@ export const TaskDetailDialog = (props: {
     onError: (err: unknown) => {
       toast({
         title: "Failed to pause task",
+        description: err instanceof Error ? err.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const claimMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId) throw new Error("No task selected");
+      return apiClaimTask(props.taskId);
+    },
+    onSuccess: async () => {
+      await taskQuery.refetch();
+      await props.onStarted();
+      toast({ title: "Task claimed" });
+    },
+    onError: (err: unknown) => {
+      toast({
+        title: "Failed to claim task",
         description: err instanceof Error ? err.message : "Request failed",
         variant: "destructive",
       });
@@ -1064,17 +1135,15 @@ export const TaskDetailDialog = (props: {
 
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
-  const [rejectReopen, setRejectReopen] = useState(false);
 
   const rejectApprovalMutation = useMutation({
     mutationFn: async () => {
       if (!props.taskId) throw new Error("No task selected");
-      return apiRejectTaskApproval({ taskId: props.taskId, reason: rejectReason.trim() ? rejectReason.trim() : null, reopenTask: rejectReopen });
+      return apiRejectTaskApproval({ taskId: props.taskId, reason: rejectReason.trim() ? rejectReason.trim() : null, reopenTask: false });
     },
     onSuccess: async () => {
       setRejectDialogOpen(false);
       setRejectReason("");
-      setRejectReopen(false);
       await taskQuery.refetch();
       toast({ title: "Approval rejected" });
     },
@@ -1098,16 +1167,27 @@ export const TaskDetailDialog = (props: {
   const canModify =
     isManager() ||
     (!!task?.assignedTo.userId && task.assignedTo.userId === myUserId) ||
-    (!!task?.assignedTo.roleName && hasRole(task.assignedTo.roleName));
-  const canStart = normalizedStatus === "open" || normalizedStatus === "scheduled";
-	const canPause = normalizedStatus === "in_progress";
-	const canResume = normalizedStatus === "paused";
-	const canCancel = normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
+    (!task?.assignedTo.userId && !!task?.assignedTo.roleName && hasRole(task.assignedTo.roleName));
+  const canClaim =
+    task?.maintenanceType === "PM" &&
+    !task?.assignedTo.userId &&
+    !!task?.assignedTo.roleName &&
+    hasRole(task.assignedTo.roleName) &&
+    task?.approvalStatus !== "PendingSupervisor" &&
+    task?.approvalStatus !== "PendingSuperadmin" &&
+    task?.approvalStatus !== "Approved" &&
+    normalizedStatus !== "completed" &&
+    normalizedStatus !== "cancelled";
+  const canStart = canModify && (normalizedStatus === "open" || normalizedStatus === "scheduled");
+        const canPause = canModify && normalizedStatus === "in_progress";
+        const canResume = canModify && normalizedStatus === "paused";
+        const canCancel = canModify && normalizedStatus !== null && normalizedStatus !== "completed" && normalizedStatus !== "cancelled";
 	const approvalStatus = task?.approvalStatus ?? "None";
 	const isPmWithActiveApproval =
 		task?.maintenanceType === "PM" &&
 		(approvalStatus === "PendingSupervisor" || approvalStatus === "PendingSuperadmin" || approvalStatus === "Approved");
 	const canComplete =
+                canModify &&
 		normalizedStatus !== null &&
 		normalizedStatus !== "completed" &&
 		normalizedStatus !== "cancelled" &&
@@ -1120,6 +1200,7 @@ export const TaskDetailDialog = (props: {
     canModify;
 
   const canSubmitForApproval =
+    canModify &&
     task?.maintenanceType === "PM" &&
     approvalStatus !== "PendingSupervisor" &&
     approvalStatus !== "PendingSuperadmin" &&
@@ -1243,6 +1324,13 @@ export const TaskDetailDialog = (props: {
     { kind: "task" | "checklist"; evidenceId: string; templateChecklistItemId?: string }
   | null>(null);
   const [reportBreakdownOpen, setReportBreakdownOpen] = useState(false);
+  const [reportBreakdownSource, setReportBreakdownSource] = useState<{
+    sourceTaskId?: string;
+    sourceTemplateChecklistItemId?: string;
+    initialSymptom?: string;
+    title?: string;
+    submitLabel?: string;
+  } | null>(null);
 
   const closePreview = useCallback(() => {
     setPreviewOpen(false);
@@ -1612,6 +1700,14 @@ export const TaskDetailDialog = (props: {
               <Button
                 size="sm"
                 variant="outline"
+                disabled={!task || claimMutation.isPending || !canClaim}
+                onClick={() => claimMutation.mutate()}
+              >
+                Claim
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 disabled={!task || startMutation.isPending || !canStart}
                 onClick={() => startMutation.mutate()}
               >
@@ -1645,7 +1741,10 @@ export const TaskDetailDialog = (props: {
               size="sm"
               variant="outline"
               disabled={!task}
-              onClick={() => setReportBreakdownOpen(true)}
+              onClick={() => {
+                setReportBreakdownSource(null);
+                setReportBreakdownOpen(true);
+              }}
               className="gap-2"
             >
               <Wrench className="w-4 h-4" />
@@ -1855,6 +1954,19 @@ export const TaskDetailDialog = (props: {
                       {task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned"}
                     </p>
                     <div className="grid grid-cols-12 gap-2 mt-3">
+                      {task.maintenanceType === "PM" ? (
+                        <div className="col-span-12 md:col-span-4">
+                          <p className="text-xs text-muted-foreground">Active Work Time</p>
+                          <p className="text-sm text-foreground mt-1">
+                            {task.workSessionSummary ? formatDurationLabel(task.workSessionSummary.totalSeconds) : "0m"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {task.workSessionSummary?.activeSessionStartedAt
+                              ? `Running since ${format(parseISO(task.workSessionSummary.activeSessionStartedAt), "yyyy-MM-dd HH:mm")}`
+                              : `${task.workSessionSummary?.sessionCount ?? 0} sessions`}
+                          </p>
+                        </div>
+                      ) : null}
                       <div className="col-span-12 md:col-span-4">
                         <p className="text-xs text-muted-foreground">Technician Completed</p>
                         <p className="text-sm text-foreground mt-1">
@@ -1921,6 +2033,13 @@ export const TaskDetailDialog = (props: {
                   {checklistDefinitionLabel ? (
                     <div className="mb-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
                       <p className="text-xs text-muted-foreground">{checklistDefinitionLabel}</p>
+                    </div>
+                  ) : null}
+                  {draftSavedAt ? (
+                    <div className="mb-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+                      <p className="text-xs text-muted-foreground">
+                        Draft last saved at {format(parseISO(draftSavedAt), "yyyy-MM-dd HH:mm")}
+                      </p>
                     </div>
                   ) : null}
                   <div className="space-y-2">
@@ -2022,6 +2141,32 @@ export const TaskDetailDialog = (props: {
                                 className="mt-1 bg-muted/50"
                               />
                           </div>
+
+                          {task.maintenanceType === "PM" &&
+                          (checklistDraft[item.id]?.outcome ?? item.result?.outcome ?? null) === 2 ? (
+                            <div className="mt-3 flex justify-end">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-2"
+                                onClick={() => {
+                                  const findingNotes = (checklistDraft[item.id]?.notes ?? "").trim();
+                                  const symptomParts = [item.itemText.trim(), findingNotes].filter((value) => value.length > 0);
+                                  setReportBreakdownSource({
+                                    sourceTaskId: task.id,
+                                    sourceTemplateChecklistItemId: item.id,
+                                    initialSymptom: symptomParts.join(" - "),
+                                    title: "Create Work Order From Failed Finding",
+                                    submitLabel: "Create Work Order",
+                                  });
+                                  setReportBreakdownOpen(true);
+                                }}
+                              >
+                                <Wrench className="w-4 h-4" />
+                                Create Work Order For This Finding
+                              </Button>
+                            </div>
+                          ) : null}
 
                           {item.enableAttachment ? (
                             <div className="mt-3">
@@ -2407,18 +2552,17 @@ export const TaskDetailDialog = (props: {
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>Reason (optional)</Label>
+            <Label>Reason</Label>
             <Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="mt-1" />
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="reject-reopen" checked={rejectReopen} onCheckedChange={(v) => setRejectReopen(v === true)} />
-            <Label htmlFor="reject-reopen">Reopen task</Label>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Reject creates a new linked replacement PM task. The current submitted task stays rejected for history.
+          </p>
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
             <Button
               variant="destructive"
-              disabled={rejectApprovalMutation.isPending}
+              disabled={rejectApprovalMutation.isPending || rejectReason.trim().length === 0}
               onClick={() => rejectApprovalMutation.mutate()}
             >
               Confirm Reject
@@ -2429,10 +2573,18 @@ export const TaskDetailDialog = (props: {
     </Dialog>
     <ReportBreakdownDialog
       open={reportBreakdownOpen}
-      onOpenChange={setReportBreakdownOpen}
+      onOpenChange={(open) => {
+        setReportBreakdownOpen(open);
+        if (!open) setReportBreakdownSource(null);
+      }}
       assetId={task && !task.facility ? task.asset.id : undefined}
       facilityId={task?.facility?.id ?? undefined}
       templateId={task?.template.id}
+      sourceTaskId={reportBreakdownSource?.sourceTaskId}
+      sourceTemplateChecklistItemId={reportBreakdownSource?.sourceTemplateChecklistItemId}
+      initialSymptom={reportBreakdownSource?.initialSymptom}
+      title={reportBreakdownSource?.title}
+      submitLabel={reportBreakdownSource?.submitLabel}
     />
   </>);
 };

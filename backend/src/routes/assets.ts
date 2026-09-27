@@ -1,9 +1,18 @@
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
+import { writeAuditLog } from "../db/auditLog.js";
+import {
+  advancePmOccurrenceAnchor,
+  applyPmBlackout,
+  isProtectedPmOccurrenceTask,
+  loadAssetPmScheduleContext,
+  recordPmSkippedOccurrence,
+  reconcilePmScheduleContext,
+} from "../db/pmSchedulingPolicy.js";
 import { getDb } from "../db/mssql.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { requireManager } from "../middleware/requireRole.js";
+import { requireAnyRole, requireManager } from "../middleware/requireRole.js";
 
 const parseBoolean = (value: unknown): boolean | null => {
   if (value === undefined || value === null) return null;
@@ -48,6 +57,11 @@ const UpdatePmSchema = z
 const BulkSetPmEnabledSchema = z.object({
   assetIds: z.array(z.string().uuid()).min(1).max(500),
   pmEnabled: z.boolean(),
+});
+
+const SkipNextPmSchema = z.object({
+  plannedDueAt: z.string().datetime(),
+  reason: z.string().trim().min(1).max(1024),
 });
 
 const BulkSetPmTemplateSchema = z.object({
@@ -121,7 +135,25 @@ assetsRouter.get("/", async (req, res) => {
       "  CASE",
       "    WHEN ISNULL(s.PMEnabled, 0) = 0 THEN NULL",
       "    ELSE COALESCE(",
+      "      s.NextPlannedPMDueAt,",
       "      s.NextPMDueAt,",
+      "      CASE",
+        "        WHEN t.TemplateId IS NULL THEN NULL",
+        "        WHEN t.IsActive = 0 THEN NULL",
+        "        WHEN t.IntervalDays <= 0 THEN NULL",
+        "        WHEN t.IntervalDays = 30 THEN dateadd(month, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        WHEN t.IntervalDays = 90 THEN dateadd(month, 3, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        WHEN t.IntervalDays = 180 THEN dateadd(month, 6, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        WHEN t.IntervalDays = 365 THEN dateadd(year, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+      "        ELSE dateadd(day, t.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+      "      END",
+      "    )",
+      "  END AS NextPlannedPMDueAt,",
+      "  CASE",
+      "    WHEN ISNULL(s.PMEnabled, 0) = 0 THEN NULL",
+      "    ELSE COALESCE(",
+      "      s.NextPMDueAt,",
+      "      s.NextPlannedPMDueAt,",
       "      CASE",
         "        WHEN t.TemplateId IS NULL THEN NULL",
         "        WHEN t.IsActive = 0 THEN NULL",
@@ -206,6 +238,7 @@ assetsRouter.get("/", async (req, res) => {
         enabled: r.PMEnabled ?? null,
         defaultTemplateId: r.DefaultTemplateId ?? null,
         lastCompletedAt: r.LastPMCompletedAt ?? null,
+        nextPlannedDueAt: r.NextPlannedPMDueAt ?? null,
         nextDueAt: r.NextPMDueAt ?? null,
       },
     })),
@@ -279,6 +312,120 @@ assetsRouter.post("/pm/bulk", requireManager, async (req, res) => {
   }
 });
 
+assetsRouter.post(
+  "/:assetId/skip-next-pm",
+  requireAnyRole(["Supervisor", "Admin", "Superadmin"]),
+  async (req, res) => {
+    const assetId = req.params.assetId;
+    if (!z.string().uuid().safeParse(assetId).success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const parsed = SkipNextPmSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ message: "Invalid request" });
+      return;
+    }
+
+    const requestedPlannedDueAt = new Date(parsed.data.plannedDueAt);
+    const db = await getDb();
+    const tx = new sql.Transaction(db);
+    await tx.begin();
+    try {
+      const context = await loadAssetPmScheduleContext({
+        executor: tx,
+        assetId,
+      });
+      if (!context) {
+        res.status(404).json({ message: "Not found" });
+        await tx.rollback();
+        return;
+      }
+
+      const occurrence = await reconcilePmScheduleContext({
+        executor: tx,
+        context,
+      });
+      if (!occurrence) {
+        res.status(400).json({ message: "Invalid state" });
+        await tx.rollback();
+        return;
+      }
+
+      if (occurrence.plannedDueAt.getTime() !== requestedPlannedDueAt.getTime()) {
+        res.status(409).json({ message: "Occurrence changed" });
+        await tx.rollback();
+        return;
+      }
+
+      if (occurrence.task && isProtectedPmOccurrenceTask(occurrence.task)) {
+        res.status(409).json({ message: "Invalid state" });
+        await tx.rollback();
+        return;
+      }
+
+      if (occurrence.task && occurrence.task.cancelledAt === null && occurrence.task.completedAt === null) {
+        await tx
+          .request()
+          .input("taskId", sql.UniqueIdentifier, occurrence.task.taskId)
+          .input("userId", sql.UniqueIdentifier, req.user.sub)
+          .input("reason", sql.NVarChar(1024), parsed.data.reason)
+          .query(
+            [
+              "UPDATE pm.PMTasks",
+              "SET",
+              "  Status = N'cancelled',",
+              "  CancelledAt = sysutcdatetime(),",
+              "  CancelledByUserId = @userId,",
+              "  CancelledReason = @reason",
+              "WHERE TaskId = @taskId",
+              "  AND CompletedAt IS NULL",
+              "  AND CancelledAt IS NULL",
+            ].join("\n"),
+          );
+      }
+
+      await recordPmSkippedOccurrence({
+        executor: tx,
+        context,
+        plannedDueAt: occurrence.plannedDueAt,
+        effectiveDueAt: occurrence.scheduledDueAt,
+        taskId: occurrence.task?.taskId ?? null,
+        skippedByUserId: req.user.sub,
+        skipReason: parsed.data.reason,
+      });
+      await advancePmOccurrenceAnchor({
+        executor: tx,
+        context,
+        fulfilledPlannedDueAt: occurrence.plannedDueAt,
+      });
+
+      await writeAuditLog({
+        executor: tx,
+        actorUserId: req.user.sub,
+        action: "pm.skip-next",
+        entityType: "asset",
+        entityId: assetId,
+        metadata: {
+          templateId: context.templateId,
+          plannedDueAt: occurrence.plannedDueAt.toISOString(),
+          taskId: occurrence.task?.taskId ?? null,
+          reason: parsed.data.reason,
+        },
+        ipAddress: typeof req.ip === "string" ? req.ip : null,
+        userAgent: req.get("user-agent") ?? null,
+      });
+
+      await tx.commit();
+      res.json({ ok: true });
+    } catch (err) {
+      await tx.rollback().catch(() => undefined);
+      throw err;
+    }
+  },
+);
+
 assetsRouter.post("/pm/bulk/template", requireManager, async (req, res) => {
   const parsed = BulkSetPmTemplateSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -349,6 +496,7 @@ assetsRouter.post("/pm/bulk/template", requireManager, async (req, res) => {
         "WHEN MATCHED THEN",
         "  UPDATE SET",
         "    DefaultTemplateId = @defaultTemplateId,",
+        "    NextPlannedPMDueAt = NULL,",
         "    NextPMDueAt = NULL,",
         "    UpdatedAt = sysutcdatetime()",
         "WHEN NOT MATCHED THEN",
@@ -454,7 +602,25 @@ assetsRouter.get("/:assetId", async (req, res) => {
       "  CASE",
       "    WHEN ISNULL(s.PMEnabled, 0) = 0 THEN NULL",
       "    ELSE COALESCE(",
+      "      s.NextPlannedPMDueAt,",
       "      s.NextPMDueAt,",
+      "      CASE",
+        "        WHEN t.TemplateId IS NULL THEN NULL",
+        "        WHEN t.IsActive = 0 THEN NULL",
+        "        WHEN t.IntervalDays <= 0 THEN NULL",
+        "        WHEN t.IntervalDays = 30 THEN dateadd(month, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        WHEN t.IntervalDays = 90 THEN dateadd(month, 3, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        WHEN t.IntervalDays = 180 THEN dateadd(month, 6, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        WHEN t.IntervalDays = 365 THEN dateadd(year, 1, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+        "        ELSE dateadd(day, t.IntervalDays, COALESCE(h.LastCompletedAt, s.LastPMCompletedAt, sysutcdatetime()))",
+      "      END",
+      "    )",
+      "  END AS NextPlannedPMDueAt,",
+      "  CASE",
+      "    WHEN ISNULL(s.PMEnabled, 0) = 0 THEN NULL",
+      "    ELSE COALESCE(",
+      "      s.NextPMDueAt,",
+      "      s.NextPlannedPMDueAt,",
       "      CASE",
         "        WHEN t.TemplateId IS NULL THEN NULL",
         "        WHEN t.IsActive = 0 THEN NULL",
@@ -515,6 +681,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
       enabled: row.PMEnabled ?? null,
       defaultTemplateId: row.DefaultTemplateId ?? null,
       lastCompletedAt: row.LastPMCompletedAt ?? null,
+      nextPlannedDueAt: row.NextPlannedPMDueAt ?? null,
       nextDueAt: row.NextPMDueAt ?? null,
     },
   });
@@ -730,7 +897,21 @@ assetsRouter.patch("/:assetId/pm", requireManager, async (req, res) => {
       .input("hasDefaultTemplateId", sql.Bit, hasDefaultTemplateId ? 1 : 0)
       .input("defaultTemplateId", sql.UniqueIdentifier, parsed.data.defaultTemplateId ?? null)
       .input("hasNextPmDueAt", sql.Bit, hasNextPmDueAt ? 1 : 0)
-      .input("nextPmDueAt", sql.DateTime2(0), parsed.data.nextPmDueAt ?? null)
+      .input(
+        "nextPlannedPmDueAt",
+        sql.DateTime2(0),
+        parsed.data.nextPmDueAt ? new Date(parsed.data.nextPmDueAt) : null,
+      )
+      .input(
+        "nextPmDueAt",
+        sql.DateTime2(0),
+        parsed.data.nextPmDueAt
+          ? await applyPmBlackout({
+              executor: tx,
+              plannedDueAt: new Date(parsed.data.nextPmDueAt),
+            })
+          : null,
+      )
       .query(
         [
           "MERGE pm.AssetPMSettings WITH (HOLDLOCK) AS target",
@@ -740,14 +921,16 @@ assetsRouter.patch("/:assetId/pm", requireManager, async (req, res) => {
           "  UPDATE SET",
           "    PMEnabled = COALESCE(@pmEnabled, target.PMEnabled),",
           "    DefaultTemplateId = CASE WHEN @hasDefaultTemplateId = 1 THEN @defaultTemplateId ELSE target.DefaultTemplateId END,",
-          "    NextPMDueAt = CASE WHEN @hasNextPmDueAt = 1 THEN @nextPmDueAt ELSE target.NextPMDueAt END,",
+          "    NextPlannedPMDueAt = CASE WHEN @hasNextPmDueAt = 1 THEN @nextPlannedPmDueAt ELSE CASE WHEN @hasDefaultTemplateId = 1 THEN NULL ELSE target.NextPlannedPMDueAt END END,",
+          "    NextPMDueAt = CASE WHEN @hasNextPmDueAt = 1 THEN @nextPmDueAt ELSE CASE WHEN @hasDefaultTemplateId = 1 THEN NULL ELSE target.NextPMDueAt END END,",
           "    UpdatedAt = sysutcdatetime()",
           "WHEN NOT MATCHED THEN",
-          "  INSERT (AssetId, PMEnabled, DefaultTemplateId, NextPMDueAt)",
+          "  INSERT (AssetId, PMEnabled, DefaultTemplateId, NextPlannedPMDueAt, NextPMDueAt)",
           "  VALUES (",
           "    @assetId,",
           "    COALESCE(@pmEnabled, 0),",
           "    @defaultTemplateId,",
+          "    @nextPlannedPmDueAt,",
           "    @nextPmDueAt",
           "  );",
         ].join("\n"),

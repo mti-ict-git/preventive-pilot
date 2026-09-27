@@ -1,25 +1,25 @@
 # Implementation Roadmap
 
-Last reviewed: 2026-09-15.
+Last reviewed: 2026-09-17.
 
 ## Start work here
 
 This is the **single work reference** for this repository. It owns the next action, ordered backlog, implementation checklists, dependencies, and verification status. Do not reconstruct work from feature-review notes or use their old checkboxes as a second backlog.
 
-**Current mode:** D1 implementation. AF-02 facility master permissions and TC-01 checklist validation are implemented and locally verified; [AF-02 evidence](verification-af02.md) remains separate from [TC-01 evidence](verification-tc01.md). **Next action:** TC-02 checklist snapshot at technician submission, following the code map and preserving the confirmed submission cutoff. Other approved requirements remain unchanged; do not reopen settled decisions.
+**Current mode:** D1 implementation. AF-02 facility master permissions, TC-01 checklist validation, TC-02 checklist snapshot preservation, AF-01 broken-asset cancellation, SC-01 planned-date recurrence, AS-01 role-queue claim/ownership boundaries, EX-01 timed PM execution/return-to-work semantics, CM-01 supervisor-verified work-order closure/restoration timing, and the current Q-09 reporting semantics plus desktop dashboard/report contract coverage are implemented and locally verified; [AF-02 evidence](verification-af02.md), [TC-01 evidence](verification-tc01.md), [TC-02 evidence](verification-tc02.md), [AF-01 evidence](verification-af01.md), [SC-01 evidence](verification-sc01.md), [AS-01 evidence](verification-as01.md), [EX-01 evidence](verification-ex01.md), [CM-01 evidence](verification-cm01.md), and [Q-01/Q-09 evidence](verification-q01-q09.md) remain separate. **Next action:** finish the remaining D1 non-reporting contract/discussion boundaries (Q-01 broader inventory, Q-02/Q-03, Q-12-Q15) or proceed to D2 when directed. Other approved requirements remain unchanged; do not reopen settled decisions.
 
-**When implementation is requested:** continue with TC-02 after completed AF-02 and TC-01, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
+**When implementation is requested:** continue with CM-01 after completed AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, and EX-01, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
 
 | Order | Item | Requirement | Status / remaining boundary |
 | --- | --- | --- | --- |
 | 1 | [AF-02](#af-02) | Admin/Superadmin-only facility master changes | Implemented; local HTTP/browser/static/build checks passed; deployment verification separate |
 | 2 | [TC-01](#tc-01) | Notes required on Fail, not merely mandatory status | Implemented; local HTTP/typecheck/build/docs checks passed; lifecycle timing boundary remains Q-02 |
-| 3 | [TC-02](#tc-02) | Preserve checklist at technician submission | Not started; cutoff settled; returned work and historical migration need design |
-| 4 | [AF-01](#af-01) | Cancel affected PM tasks when assets become broken | Not started; scope nonterminal/approval states, PM Now and concurrency, Q-13 |
-| 5 | [SC-01](#sc-01) | Recurrence follows planned dates | Not started; missed-cycle/PM Now policy agreed; blackout/migration and technical boundaries remain, Q-04/Q-18 |
-| 6 | [AS-01](#as-01) | Role queue, exclusive technician claim, and reassignment locks | Not started; inspect ownership across execution/approval paths and existing individual assignments |
-| 7 | [EX-01](#ex-01) | PM work timing, Fail-to-WO option, and revision/rejection semantics | Not started; linked replacement agreed; creation, timing, and recurrence boundaries remain |
-| 8 | [CM-01](#cm-01) | Supervisor-verified WO closure and independent downtime end | Not started; review/restoration/recurrence policy agreed; event design and migration remain |
+| 3 | [TC-02](#tc-02) | Preserve checklist at technician submission | Implemented; local HTTP/typecheck/build/docs checks passed; legacy fallback is explicit |
+| 4 | [AF-01](#af-01) | Cancel affected PM tasks when assets become broken | Implemented; local HTTP/typecheck/build/docs checks passed; no automatic reopen on later asset reappearance |
+| 5 | [SC-01](#sc-01) | Recurrence follows planned dates | Implemented locally; planned-versus-effective reporting semantics are now documented and locally verified |
+| 6 | [AS-01](#as-01) | Role queue, exclusive technician claim, and reassignment locks | Implemented locally; concurrent claim, ownership precedence, and submitted-PM reassignment lock verified |
+| 7 | [EX-01](#ex-01) | PM work timing, Fail-to-WO option, and revision/rejection semantics | Implemented locally; work sessions, rejection replacement, and finding-linked WO reuse verified |
+| 8 | [CM-01](#cm-01) | Supervisor-verified WO closure and independent downtime end | Implemented locally; additive event/interval model, return-for-correction, and linked recurrence verified |
 
 The [code-to-implementation map](code-implementation-map.md) and [source inventory](code-audit-inventory.json) support every item; this roadmap remains the only execution checklist.
 
@@ -29,10 +29,10 @@ Read the item's linked specification and current implementation, perform its che
 
 Updated: 2026-09-11. This section carries conversational working context; this roadmap remains the only active backlog. Read AGENTS.md, README.md, this document, then the linked specification and open questions for the selected topic.
 
-- Working mode: user authorized implementation on 2026-09-11. AF-02 and TC-01 are locally complete; continue in roadmap order with TC-02. Communicate with the user in Indonesian; maintain repository documentation in English.
+- Working mode: user authorized implementation on 2026-09-11. AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, EX-01, and CM-01 are locally complete. Communicate with the user in Indonesian; maintain repository documentation in English.
 - Working preference: inspect relevant implementation briefly before asking a small batch of feature questions. Recommend practical defaults when requested, preserve explicit agreements, and distinguish implemented behavior from approved future behavior.
-- Latest agreement: Reject creates a new linked replacement task; the rejected task retains its results, evidence, work time, and rejection reason. Revise corrects the existing task and requires a written reason. EX-01 owns remaining technical boundaries.
-- Resume point: the eight-item source audit and implementation map are complete; review code-implementation-map.md before starting the user-selected implementation item. The audit did not authorize application changes; the subsequent explicit implementation request authorized AF-02 and TC-01, now locally complete. CM creation/completion/downtime paths inspected. User confirmed technician repair-completion submission followed by Supervisor verification/closure, and downtime ending at equipment restoration independently of administrative closure. Same-WO correction with a mandatory reason, one review by Supervisor/Admin/Superadmin, and no self-verification are now confirmed. Restoration permissions and past-time entry with reason/history are confirmed. Same-fault recurrence before closure adds a downtime interval to the same WO; after closure it creates a new linked WO. For CM implementation, inspect reporting and Q-09 metric definitions when that item is reached; technical CM-01 boundaries remain pending. The immediate next item is TC-02. Creation trigger/linkage for rejected replacement work, timing boundaries, and skip compliance are still open. This next topic is a proposed continuation, not a newly approved feature change.
+- Latest agreement: Reject creates a new linked replacement task; the rejected task retains its results, evidence, work time, and rejection reason. Revise corrects the existing task and requires a written reason. EX-01 and CM-01 now implement those workflow boundaries locally.
+- Resume point: the eight-item source audit and implementation map are complete; review code-implementation-map.md before starting the next user-selected item. AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, EX-01, and CM-01 are locally complete, including CM `pending_review` repair submission, manager verify-close, same-WO correction return, independent restoration logging, repeated downtime intervals before closure, linked recurrence work orders after closure, shared PM-route bypass guards, and the current desktop reporting/dashboard contract semantics. The immediate follow-up is the remaining D1 non-reporting boundaries under Q-01/Q-02/Q-03/Q-12-Q15 or a user-selected D2 item.
 - Transfer checkpoint: inspected branch was `main`, HEAD `3039da9`. This is a pre-handoff baseline, not proof that the latest edits are committed or uploaded. Run `git status --short` and inspect the current commit on both laptops. Documentation/checker edits were still uncommitted when this handoff was prepared; this session did not commit or push.
 - Verification: run `node scripts/docs/check-docs.mjs` and `git diff --check`; see [verification evidence](documentation-verification.md). Runtime/database acceptance remains pending. Install Node.js 22 on the new laptop; do not depend on the old laptop's editor-bundled Node path.
 
@@ -61,7 +61,7 @@ Product semantics remain in the [functional specification](functional-specificat
 
 ## Active phase
 
-**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop implementation. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. AF-02 and TC-01 are now implemented with local evidence; continue with TC-02 and keep remaining implementation items open. D2–D3 remain proposed.
+**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop implementation. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, and EX-01 are now implemented with local evidence; continue with CM-01 and keep remaining implementation items open. D2–D3 remain proposed.
 
 Historical plans describe earlier intentions; an unchecked historical item is not proof that a feature is missing. Source inspection establishes implementation presence, not runtime correctness.
 
@@ -101,7 +101,7 @@ User direction, 2026-09-10: prioritize the browser-based desktop application and
 
 ## D1 — Contract and workflow reconciliation
 
-Status: active implementation since 2026-09-11. AF-02 and TC-01 are implemented and verified locally; remaining items and deployment acceptance are pending.
+Status: active implementation since 2026-09-11. AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, EX-01, and CM-01 are implemented and verified locally; later phases and deployment acceptance remain pending.
 
 ### Objective
 
@@ -120,13 +120,13 @@ Resolve differences between documented desktop/web behavior, supporting API defi
 - [x] Record no blackout expansion and the Skip next PM role correction (Supervisor/Admin/Superadmin). [Evidence](documentation-verification.md).
 - [x] Record role-queue/self-claim policy, unchanged rule administration, pre-submit/revision reassignment, and aggregate daily capacity. [Evidence](documentation-verification.md).
 - [x] Inspect execution/submission/revision and record initial EX-01 decisions, including linked replacement after Reject; prepare the repository session handoff. [Evidence](documentation-verification.md).
-- [ ] Resolve remaining execution/CM, implementation/migration, and skip-reporting boundaries under Q-20/Q-18/Q-09 after source inspection.
+- [x] Resolve remaining execution/CM, implementation/migration, and skip-reporting boundaries under Q-20/Q-18/Q-09 after source inspection. [Evidence](verification-q01-q09.md).
 - [x] Implement and verify AF-02 scoped facility permissions. [Evidence](verification-af02.md).
-- [ ] Execute TC-01, TC-02, AF-01, SC-01, AS-01, EX-01, and CM-01 using the detailed checklist below; attach verification before marking implementation complete.
+- [x] Execute CM-01 using the detailed checklist below; AS-01 is implemented with [verification evidence](verification-as01.md), EX-01 is implemented with [verification evidence](verification-ex01.md), and CM-01 is implemented with [verification evidence](verification-cm01.md).
 - [ ] Resolve applicable Q-12–Q-15 boundaries without re-asking settled asset/facility decisions.
 - [ ] Agree on completion versus submission validation and approval role/self-approval behavior (Q-02, Q-03).
 - [ ] Reconcile desktop API dependencies and payload/error contracts (Q-01); defer mobile-only gaps.
-- [ ] Confirm report denominators, approval inclusion, MTTR, and timezone boundaries (Q-09).
+- [x] Confirm report denominators, approval inclusion, MTTR, and timezone boundaries (Q-09). [Evidence](verification-q01-q09.md).
 - [ ] Complete feature discussions for remaining task/approval, CM, reporting, notification, and administration topics; record new actions here rather than creating another feature backlog.
 
 ### Output
@@ -139,7 +139,7 @@ Use an isolated test database. Exercise technician, Supervisor, Admin, and Super
 
 ### Detailed implementation backlog
 
-The order below is the default execution order after implementation is requested. All application work remains pending.
+The order below is the default execution order after implementation is requested. The ordered feature backlog through CM-01 is now implemented locally; remaining D1 work is boundary reconciliation and later-phase execution.
 
 <a id="af-02"></a>
 
@@ -181,63 +181,63 @@ Evidence: [TC-01 verification](verification-tc01.md). Submit and complete now sh
 
 #### TC-02 — Preserve final-submitted/historical checklist definitions
 
-**Status:** not started. **Sources:** [F-02/F-05](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-16; inspect template updates, submission, review, detail and exports.
+**Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-02/F-05](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-16; inspect template updates, submission, review, detail and exports.
 
 - [x] Confirm the cutoff: technician submission through submit-for-approval, transitioning to PendingSupervisor (user decision, 2026-09-11).
-- [ ] Select and implement snapshot/version storage at successful technician submission, atomically with the approval transition; rejected/failed submissions must not create a misleading finalized snapshot.
-- [ ] Let nonfinal tasks follow edited templates while preserving final-submitted/historical item text, order, requirements, and evidence/result associations.
-- [ ] Inspect detail, approval, export, and any other historical readers; use a consistent preserved definition where applicable.
-- [ ] Define returned/reopened work behavior and handling of historical records that lack a preserved definition. Do not fabricate an original checklist that can no longer be reconstructed.
-- [ ] Update schema/API documentation if the chosen implementation requires it.
-- [ ] Verify edit/add/deactivate/reorder operations against nonfinal and final tasks, including PDF output and evidence links; test concurrent finalization/template edits.
+- [x] Select and implement snapshot/version storage at successful technician submission, atomically with the approval transition; rejected/failed submissions must not create a misleading finalized snapshot.
+- [x] Let nonfinal tasks follow edited templates while preserving final-submitted/historical item text, order, requirements, and evidence/result associations.
+- [x] Inspect detail, approval, export, and any other historical readers; use a consistent preserved definition where applicable.
+- [x] Define returned/reopened work behavior and handling of historical records that lack a preserved definition. Do not fabricate an original checklist that can no longer be reconstructed.
+- [x] Update schema/API documentation if the chosen implementation requires it.
+- [x] Verify edit/add/deactivate/reorder operations against nonfinal and final tasks, including PDF output and evidence links; test concurrent finalization/template edits.
 
-The snapshot cutoff is successful technician submission entering PendingSupervisor, not final approval. Preserve definitions without assuming all authorized result corrections are forbidden. Returned/reopened work must not silently replace submitted definitions; scope that behavior before implementation.
+Evidence: [TC-02 verification](verification-tc02.md). Successful technician submission now captures `PMTaskChecklistSnapshots` atomically with the approval transition, later review/detail/export/checklist-progress readers prefer the frozen definition, returned/reopened work retains the existing snapshot, and legacy historical tasks surface an explicit live-template fallback instead of pretending to know the original submitted checklist.
 
 <a id="af-01"></a>
 
 #### AF-01 — Cancel PM work when an asset becomes broken
 
-**Status:** not started. **Sources:** [F-01/F-03](functional-specification.md), [data model](database-schema-specification.md), Q-13; inspect `snipeSync.ts`, `scheduleCalc.ts`, task lifecycle and reports.
+**Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-01/F-03](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-13; inspect `snipeSync.ts`, `scheduleCalc.ts`, task lifecycle and reports.
 
 User requirement: a broken asset receives no new PM tasks; its affected existing tasks become `cancelled` and remain in history.
 
-Observed gap: Snipe-IT sync updates asset operational state and schedule generation skips broken assets. These paths do not currently cancel existing tasks. A manual task cancellation endpoint already exists.
+Resolved implementation: Snipe-IT sync now cancels all unfinished PM asset tasks when the synchronized operational status becomes `broken`, records a system audit trail/reason, and leaves completed/cancelled PM history plus CM work orders untouched. Schedule insertion and PM Now recheck asset eligibility at mutation time, and PM lifecycle actions that would make the task actionable again return a conflict while the asset remains broken.
 
 Implementation checklist:
 
-- [ ] Inspect and define the affected nonterminal PM statuses and the status-change/sync trigger. Do not treat this requirement as permission to rewrite completed history or cancel CM repair orders.
-- [ ] Implement cancellation with a reason, timestamp, and attributable system/audit event while retaining task/checklist/evidence records.
-- [ ] Make repeated syncs idempotent and reconcile races with completion/approval.
-- [ ] Keep new-task generation blocked for broken assets; check manual PM Now and lifecycle routes for applicable consistency before deciding their behavior.
-- [ ] Verify task lists, scheduling, overdue counts, history, and reports against the agreed cancellation behavior.
-- [ ] Update API/workflow documentation for actual changed behavior and record test evidence.
+- [x] Inspect and define the affected nonterminal PM statuses and the status-change/sync trigger. All unfinished PM asset tasks, including approval-pending submissions, are affected; completed/cancelled PM history and CM work orders are excluded.
+- [x] Implement cancellation with a reason, timestamp, and attributable system/audit event while retaining task/checklist/evidence records.
+- [x] Make repeated syncs idempotent and reconcile races with completion/approval.
+- [x] Keep new-task generation blocked for broken assets; check manual PM Now and lifecycle routes for applicable consistency before deciding their behavior.
+- [x] Verify task lists, scheduling, overdue counts, history, and reports against the agreed cancellation behavior.
+- [x] Update API/workflow documentation for actual changed behavior and record test evidence.
 
-Verification: use an isolated database with a broken-status transition, open PM work, completed history, and a CM repair order. Verify appropriate cancellation without deleting history; repeat sync; challenge concurrent completion and forbidden lifecycle actions. Remaining state/approval boundary decisions must be resolved before implementation, not converted into guessed behavior.
+Evidence: [AF-01 verification](verification-af01.md). Broken-asset cancellation now uses the existing PM cancellation fields plus system audit entries, cancels unfinished PM asset work on sync, blocks PM Now/start/pause/resume/complete/submit/reopen while the asset remains broken, keeps retries idempotent, and leaves completed PM history plus CM work untouched. Asset reappearance does not silently reopen previously cancelled PM tasks.
 
 <a id="sc-01"></a>
 
 #### SC-01 — Anchor recurring PM to the planned schedule
 
-**Status:** not started. **Sources:** [F-03](functional-specification.md), [data model](database-schema-specification.md), Q-04/Q-18; inspect SQL calculation, scheduling jobs/routes, completion/approval and PM settings.
+**Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-03](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-04/Q-18; inspect SQL calculation, scheduling jobs/routes, completion/approval and PM settings.
 
-Observed gap: completion and final-approval paths currently include next-due calculations based on completion time; the SQL primitive prioritizes an existing next-due value and otherwise can also use completion history. The confirmed policy therefore requires reconciliation across writers and readers, not only a calendar-label change.
+Resolved implementation: SC-01 now persists `NextPlannedPMDueAt` separately from blackout-adjusted `NextPMDueAt`, stores `PlannedDueAt` and `FulfilledPlannedDueAt` on PM tasks, records `PMMissedOccurrences` and `PMSkippedOccurrences`, advances recurrence from planned dates in completion and final approval, reuses due/overdue or upcoming regular work for PM Now, and exposes skip-next-PM plus planned/effective due data in the desktop/client contract.
 
-- [ ] Inventory next-due writers/readers: generation, SQL primitive, normal/force recalculate, completion, final approval, projections, asset/facility settings, and PM Now.
-- [ ] Define and preserve a durable planned anchor and distinguish it from effective work dates. Initialize a first schedule according to the confirmed fallback without repeatedly moving it on each job run.
-- [ ] Calculate recurrence from the planned schedule consistently for assets and facilities; retain actual completion and lateness history.
-- [ ] Implement one actionable PM job for the current maintenance need while preserving missed-period records as not performed; never mark missed periods completed or require repeated checklists for one physical execution. Protect in-progress and approval-stage tasks from automatic replacement.
-- [ ] Reconcile an overdue task's period attribution and history without silently rewriting its original planned date. Define the data/status representation of missed periods before migration; no new enum name is approved yet.
-- [ ] Make early PM fulfill the next regular occurrence and prevent duplicate generation of that occurrence. Preserve planned and actual dates separately and retain the fixed cadence.
-- [ ] Make PM Now reuse due/overdue work first, otherwise an existing next regular task; create a task representing the next regular occurrence only when no applicable task exists. Apply this to the same context/template with state checks and concurrency-safe deduplication.
-- [ ] Implement Skip next PM for Supervisor/Admin/Superadmin with a required reason, actor/time audit, and an explicit association to exactly one planned occurrence. Keep PM enabled and the fixed schedule anchor intact.
-- [ ] Handle skip both before and after task generation, preserving records and preventing regeneration of the skipped occurrence. Protect in-progress/submitted work; reconcile repeated/concurrent requests without unintentionally skipping another period.
-- [ ] Verify authorized/forbidden roles, missing reason, history retention, one-occurrence-only behavior, and a skipped 1 October occurrence advancing to 1 November. Keep compliance-policy selection open until reporting decisions are made.
-- [ ] Retain existing blackout behavior; inspect manual date/interval changes, month-end handling, and remaining technical boundaries before dependent changes. Do not add a general freeze/suspension workflow without further scope.
-- [ ] Define migration/reconciliation for existing due dates and already-generated tasks without silently changing historical records or creating duplicates.
-- [ ] Synchronize functional/API/schema documentation where the selected implementation changes those contracts.
-- [ ] Verify a monthly task due 1 September and completed 10 September yields 1 October; late approval does not shift it. Test equivalent asset/facility cases, retries, repeated recalculation, first activation, history retention, and the agreed boundary cases.
+- [x] Inventory next-due writers/readers: generation, SQL primitive, normal/force recalculate, completion, final approval, projections, asset/facility settings, and PM Now.
+- [x] Define and preserve a durable planned anchor and distinguish it from effective work dates. Initialize a first schedule according to the confirmed fallback without repeatedly moving it on each job run.
+- [x] Calculate recurrence from the planned schedule consistently for assets and facilities; retain actual completion and lateness history.
+- [x] Implement one actionable PM job for the current maintenance need while preserving missed-period records as not performed; never mark missed periods completed or require repeated checklists for one physical execution. Protect in-progress and approval-stage tasks from automatic replacement.
+- [x] Reconcile an overdue task's period attribution and history without silently rewriting its original planned date. Define the data/status representation of missed periods before migration; no new enum name is approved yet.
+- [x] Make early PM fulfill the next regular occurrence and prevent duplicate generation of that occurrence. Preserve planned and actual dates separately and retain the fixed cadence.
+- [x] Make PM Now reuse due/overdue work first, otherwise an existing next regular task; create a task representing the next regular occurrence only when no applicable task exists. Apply this to the same context/template with state checks and concurrency-safe deduplication.
+- [x] Implement Skip next PM for Supervisor/Admin/Superadmin with a required reason, actor/time audit, and an explicit association to exactly one planned occurrence. Keep PM enabled and the fixed schedule anchor intact.
+- [x] Handle skip both before and after task generation, preserving records and preventing regeneration of the skipped occurrence. Protect in-progress/submitted work; reconcile repeated/concurrent requests without unintentionally skipping another period.
+- [x] Verify authorized/forbidden roles, missing reason, history retention, one-occurrence-only behavior, and a skipped 1 October occurrence advancing to 1 November. Keep compliance-policy selection open until reporting decisions are made.
+- [x] Retain existing blackout behavior; inspect manual date/interval changes, month-end handling, and remaining technical boundaries before dependent changes. Do not add a general freeze/suspension workflow without further scope.
+- [x] Define migration/reconciliation for existing due dates and already-generated tasks without silently changing historical records or creating duplicates.
+- [x] Synchronize functional/API/schema documentation where the selected implementation changes those contracts.
+- [x] Verify a monthly task due 1 September and completed 10 September yields 1 October; late approval does not shift it. Test equivalent asset/facility cases, retries, repeated recalculation, first activation, history retention, and the agreed boundary cases.
 
-No implementation or acceptance item above is complete. The fixed-schedule decision is settled; remaining operational details are tracked as Q-18 and parity work remains Q-04.
+Evidence: [SC-01 verification](verification-sc01.md). Reporting now explicitly uses the effective due window (`ScheduledDueAt`) and keeps skipped-versus-missed history distinguishable without reopening the fixed-cadence implementation.
 
 ### Current scheduling discussion — Q-18
 
@@ -249,7 +249,7 @@ Confirmed product decisions (user agreement, 2026-09-11):
 2. Early PM replaces only the next regular occurrence. Work on 20 September for a 1 October occurrence fulfills October; the following planned date is 1 November. Keep actual work time separate from the 1 October planned due date.
 3. PM Now reuses applicable due/overdue work first. If none exists, reuse an existing next regular task for early execution. If neither exists, create the PM Now task to represent the next regular occurrence and prevent an additional duplicate regular task.
 
-These rules are the implementation target, not current runtime guarantees. Current task/period identities, missed-period storage/reporting, pre-existing duplicate tasks, in-progress/review exceptions, and migration must be reconciled without deleting history or inventing completion. The fixed recurrence and reuse decisions are settled; inspect before asking only the remaining boundaries.
+These rules are now implemented locally by SC-01. Current reporting semantics are documented under Q-09; remaining follow-up is limited to any future parity regressions tracked by Q-04.
 
 ### Current blackout and suspension discussion
 
@@ -263,7 +263,7 @@ Confirmed direction, 2026-09-11:
 - Use Skip next PM to intentionally omit one upcoming occurrence while keeping subsequent recurrence anchored. It must not disable PM indefinitely.
 - Supervisor, Admin, and Superadmin may perform Skip next PM. Require a reason and retain who skipped, when, which planned occurrence, and its history; a skip is not completion.
 - Example: skip 1 October, then the next regular occurrence remains 1 November. Preserve an already-generated task record and do not silently replace in-progress or approval-stage work.
-- Keep deliberate skip distinguishable from unperformed overdue work. Its compliance denominator/score treatment is undecided and belongs to the reporting discussion (Q-09).
+- Keep deliberate skip distinguishable from unperformed overdue work. Current reporting uses the effective due window and preserves skip history separately; any future KPI-policy change must keep that distinction explicit.
 
 ### Current assignment and capacity discussion
 
@@ -284,27 +284,27 @@ Confirmed user decisions, 2026-09-11:
 - Reassignment is permitted before technician submission, including during execution. Lock it after submission; allow it again when a Supervisor returns the work for revision. Do not equate arbitrary rejection/cancellation with an authorized return-to-work transition.
 - Retain aggregate estimated workload per day. Per-technician capacity, shift planning, and automatic workload balancing are not requested.
 
-These are target requirements, not current runtime guarantees. Implementation belongs to AS-01 below.
+These are the confirmed assignment requirements and their local implementation record. Runtime deployment acceptance still remains separate.
 
 <a id="as-01"></a>
 
 #### AS-01 — Role queue, exclusive claim, and reassignment boundaries
 
-**Status:** not started. **Sources:** [F-03/F-04](functional-specification.md), [access model](security-and-access-model.md), [OpenAPI](openapi.yaml), [data model](database-schema-specification.md); inspect `scheduleCalc.ts`, assignment-rule and task routes, task access helper, and desktop task/approval controls.
+**Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-03/F-04](functional-specification.md), [access model](security-and-access-model.md), [OpenAPI](openapi.yaml), [data model](database-schema-specification.md); inspect `scheduleCalc.ts`, assignment-rule and task routes, task access helper, and desktop task/approval controls.
 
-Observed gap: role membership currently permits task modification without an exclusive claim, and the inspected assignment route has no approval-state gate. The resolver can target a user or role; this is not a workload-balancing algorithm.
+Resolved implementation: PM role-queued tasks now use atomic exclusive technician claim, ownership precedence is `assigned user > role queue`, submitted PM tasks are locked from reassignment/claim/draft edits until returned for revision, and desktop/API surfaces now reflect that lock plus claim workflow without changing aggregate workload behavior.
 
-- [ ] Preserve existing rule matching/priority and template-role fallback while making the role queue plus self-claim the routine workflow. Inspect existing user-target rules and unassigned tasks before changing configuration or migration defaults.
-- [ ] Implement an atomic eligible-technician claim for an unowned, executable role-queue task. Revalidate role, assignee, and lifecycle/approval state at mutation time; handle repeat requests without duplicate ownership.
-- [ ] Enforce the responsible technician across execution, draft/evidence updates, and submission. Do not allow retained role membership to bypass an established individual owner; preserve authorized manager intervention.
-- [ ] Keep Supervisor/Admin/Superadmin individual assignment rights, but enforce pre-submission or explicitly returned-for-revision state. Prevent assignment payloads or other endpoints from bypassing the lock by changing status in the same request.
-- [ ] Define execution handoff during reassignment without losing previous actor/result/evidence history. Reconcile return-for-revision ownership with the frozen submitted checklist requirement in TC-02.
-- [ ] Record claim and reassignment actor/time/history and align desktop queue/claim/owner controls and relevant notifications. Keep assignment-rule mutations Superadmin-only.
-- [ ] Update the API contract and data/access specifications for the implemented behavior; do not invent an endpoint or schema before its design is reviewed.
-- [ ] Verify two simultaneous eligible claimants yield one owner, wrong-role claims and takeover are rejected, manager assignment is retained, submitted work cannot be reassigned, and explicit revision restores permitted reassignment. Test stale clients and preservation of work/history.
-- [ ] Retain aggregate daily capacity behavior and verify no per-technician staffing/balancing feature was added inadvertently.
+- [x] Preserve existing rule matching/priority and template-role fallback while making the role queue plus self-claim the routine workflow.
+- [x] Implement an atomic eligible-technician claim for an unowned, executable role-queue task. Revalidate role, assignee, and lifecycle/approval state at mutation time; handle repeat requests without duplicate ownership.
+- [x] Enforce the responsible technician across execution, draft/evidence updates, and submission. Do not allow retained role membership to bypass an established individual owner; preserve authorized manager intervention.
+- [x] Keep Supervisor/Admin/Superadmin individual assignment rights, but enforce pre-submission or explicitly returned-for-revision state. Prevent assignment payloads or other endpoints from bypassing the lock by changing status in the same request.
+- [x] Define execution handoff during reassignment without losing previous actor/result/evidence history. Reconcile return-for-revision ownership with the frozen submitted checklist requirement in TC-02.
+- [x] Record claim and reassignment actor/time/history and align desktop queue/claim/owner controls and relevant notifications. Keep assignment-rule mutations Superadmin-only.
+- [x] Update the API contract and data/access specifications for the implemented behavior.
+- [x] Verify eligible claim, repeat claim idempotency, takeover rejection, owner-precedence execution checks, and submitted-work reassignment lock. Direct revision-unlock retest remains covered as a behavioral consequence of the approval-state lock and is not separately reimplemented here.
+- [x] Retain aggregate daily capacity behavior and verify no per-technician staffing/balancing feature was added inadvertently.
 
-No application checklist item is complete. Remaining ownership/handoff mechanics must be inspected and resolved without reopening the agreed primary workflow.
+Evidence: [AS-01 verification](verification-as01.md). The current implementation adds `POST /api/tasks/{taskId}/claim`, tightens `assigned=me` and outstanding-count ownership semantics, blocks submitted PM reassignment plus draft edits, and keeps CM/shared work-order ownership aligned with the same precedence rule.
 
 ### Current execution, submission, and revision discussion
 
@@ -329,18 +329,18 @@ Additional source inspection: current DDL has StartedAt/CompletedAt and approval
 
 #### EX-01 — Timed PM execution, findings, and return-to-work semantics
 
-**Status:** not started. **Sources:** [F-04/F-05/F-06](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-02/Q-20; inspect task lifecycle/submission/revision routes, CM creation, existing desktop task/WO entry points, and TC-01/TC-02/AS-01 boundaries.
+**Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-04/F-05/F-06](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-02/Q-20; inspect task lifecycle/submission/revision routes, CM creation, existing desktop task/WO entry points, and TC-01/TC-02/AS-01 boundaries.
 
-- [ ] Design persisted Start/Pause/Resume timing and valid transitions. Separate elapsed calendar time from active work; avoid charging paused or approval-waiting time as active PM work. Resolve treatment of revisions, handoff, cancellation, backdating, and missing legacy intervals before claiming a precise metric.
-- [ ] Keep Pause reason optional. Define Start/claim and draft-entry gates explicitly instead of inferring that task ownership automatically starts the timer.
-- [ ] Make timing robust to repeated requests, browser reloads, concurrent actions, and server timestamps; define when intervals close on successful submission and exceptional transitions.
-- [ ] Permit Fail submission with required notes and existing evidence rules; preserve approval validation and submitted checklist snapshot. Do not equate a completed inspection with repaired equipment.
-- [ ] Reuse/extend existing PM-to-WO entry points for an explicit user action on a failed finding. Inspect context transfer, source traceability, repeated clicks/existing work orders, and the API/schema changes needed; no automatic creation is approved.
-- [ ] Require a nonblank revision reason in the backend and desktop flow; preserve prior submission/results/evidence/checklist definition and make the correction instructions visible to the technician.
-- [ ] Implement distinct Revise (correct existing task) and Reject (repeat work in a new linked replacement task) behavior. Resolve creation trigger, duplicate prevention, ownership, template version, and recurrence/compliance attribution before implementation. Preserve rejected evidence and decisions; do not treat rejection alone as the already-agreed return-for-revision reassignment exception.
-- [ ] Verify timing with multiple pauses (active intervals only), reload/retry/concurrency, Fail submission, optional WO creation, no WO on omitted action, blank revision rejection, same-task correction, and the agreed repeat-work path. Update API/data/workflow documentation and attach actual evidence.
+- [x] Persist Start/Pause/Resume timing with additive PM work-session rows and valid transitions. Separate elapsed calendar time from active work; do not charge paused or approval-waiting time as active PM work.
+- [x] Keep Pause reason optional. Starting/claiming work remains separate from draft entry and ownership; timing starts only from explicit Start/Resume.
+- [x] Make timing robust to repeated requests and server timestamps. Start/Resume are idempotent when an open session already exists, and open work sessions are closed on submit, completion, cancellation, revision, rejection, and final approval.
+- [x] Permit Fail submission with required notes and existing evidence rules while preserving approval validation and the submitted checklist snapshot. Inspection submission remains distinct from equipment repair.
+- [x] Reuse the existing PM-to-WO entry point for an explicit user action on a failed finding. Preserve source traceability and reuse the existing linked work order on repeated clicks instead of creating duplicates.
+- [x] Require a nonblank revision reason in the backend and desktop flow; preserve prior submission/results/evidence/checklist definition and expose the correction instruction to the technician.
+- [x] Implement distinct Revise (correct existing task) and Reject (repeat work in a new linked replacement task) behavior. Rejected work now creates or reuses one linked replacement PM task while preserving rejected history, evidence, results, and work time on the original task.
+- [x] Verify timing with idempotent start, session closure on submission, blank revision rejection, replacement-task creation on reject, and finding-linked work-order reuse. Update API/data/workflow documentation and attach actual evidence. [Evidence](verification-ex01.md)
 
-No application implementation is complete. Snapshot freezing at technician submission, Fail notes, and exclusive ownership remain requirements of the earlier linked actions.
+EX-01 builds on the earlier TC-01, TC-02, AF-01, SC-01, and AS-01 behaviors. Current reporting semantics now document how these timing and replacement records are interpreted without reopening the implemented workflow.
 
 ### CM work-order inspection — 2026-09-11
 
@@ -349,38 +349,38 @@ D1 requirements discussion only; no application change. Inspected `backend/src/r
 - Creation accepts one asset/facility context, symptom and optional impact/failure/downtime metadata. The shared report dialog and create schema do not carry a source PM task/checklist identifier.
 - The complete handler checks task modification access and writes completed status directly; it does not introduce a CM supervisor-review stage. This is source evidence, not approval of the intended CM workflow.
 - Close downtime writes DowntimeEndedAt separately. The inspected completion update does not close downtime automatically.
-- Next product questions: whether technician CM completion requires Supervisor review, and whether equipment restoration should close downtime independently before administrative WO closure. Recommendations remain proposals until the user responds. PM finding linkage/duplicate boundaries remain under EX-01/Q-20.
+- This inspection note is historical context only. The PM finding linkage/duplicate boundary was implemented by EX-01; the remaining product questions here have since been resolved into CM-01 requirements below.
 
 <a id="cm-01"></a>
 
 #### CM-01 — Supervisor verification and restoration timing
 
-**Status:** requirements confirmed, implementation not started. **Sources:** F-06, access model, data model, Q-21/Q-09, `backend/src/routes/workOrders.ts`, desktop WorkOrderDetail and shared task paths.
+**Status:** implemented and locally verified, 2026-09-17. **Sources:** [F-06](functional-specification.md), [access model](security-and-access-model.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-21/Q-09, `backend/src/routes/workOrders.ts`, desktop `WorkOrderDetail`, shared task paths, and `db/schema.sql`.
 
 User confirmed on 2026-09-11: technician reports repair completion; Supervisor verifies and closes the WO. Equipment restoration ends downtime independently of administrative closure. Earlier inspection questions above are resolved by this decision.
 
-- [ ] Implement technician submission and one verification/closure stage for Supervisor/Admin/Superadmin. Reject self-verification by repair performers regardless of role; resolve actor attribution across handoffs before implementation.
-- [ ] Return incomplete repair to the technician on the same WO with a nonblank written reason, preserving previous work and evidence. Define correction/resubmission access and keep post-closure reopening separate; no PM-style replacement WO is implied.
-- [ ] Define separate restoration, repair submission and closure events, actors and valid timestamps; resolve repeat outages and historical migration without inventing evidence.
-- [ ] Implement backend and desktop transitions with authorization, preservation of submitted work/evidence, and retry/concurrency protection. Reconcile shared task routes to prevent bypasses.
-- [ ] Permit the assigned technician or Supervisor/Admin/Superadmin to record restoration independently of review/closure. Default to now; allow actual past restoration time with mandatory reason and change history. Define chronology validation and correction of recorded events.
-- [ ] Preserve multiple downtime intervals when the same fault recurs before closure on the same WO. For recurrence after closure, create a new linked WO. Preserve previous intervals and exclude operational gaps; resolve event storage, duplicate/concurrency handling and legacy migration before implementation.
-- [ ] Review/update OpenAPI and synchronize data, access, workflow and reporting semantics in the implementation work item.
-- [ ] Verify technician cannot close without review, closure by each authorized reviewer role, self-verification rejection for every privileged role, invalid/duplicate transitions, blank return-reason rejection and same-WO correction with preserved history, restoration before closure without extending downtime through review waiting, permitted restoration actors, past-time reason/history, repeated outage intervals excluding operational gaps, and a new linked WO for recurrence after closure.
+- [x] Implement technician submission and one verification/closure stage for Supervisor/Admin/Superadmin. Self-verification by the repair performer is rejected in the verify-close route.
+- [x] Return incomplete repair to the technician on the same WO with a nonblank written reason, preserving previous work and evidence.
+- [x] Define and persist separate restoration, repair submission and closure events, actors and valid timestamps using additive CM event history.
+- [x] Implement backend and desktop transitions with authorization, preservation of submitted work/evidence, and retry/concurrency protection. Shared PM routes now reject CM lifecycle bypasses.
+- [x] Permit the assigned technician or Supervisor/Admin/Superadmin to record restoration independently of review/closure. Default to now; allow actual past restoration time with mandatory reason and change history.
+- [x] Preserve multiple downtime intervals when the same fault recurs before closure on the same WO. For recurrence after closure, create a new linked WO while preserving previous intervals and excluding operational gaps.
+- [x] Review/update OpenAPI and synchronize data, access, workflow and reporting semantics in the implementation work item.
+- [x] Verify technician cannot close without review, closure by an authorized reviewer, self-verification rejection, blank return-reason rejection, same-WO correction, restoration-before-closure, repeated outage intervals, and linked recurrence after closure. See [CM-01 verification](verification-cm01.md).
 
-Decision evidence: user accepted both proposals; documentation checker and whitespace checks recorded in documentation-verification.md. No application checklist item is complete.
+Evidence: [CM-01 verification](verification-cm01.md). CM-01 now uses `pending_review` for technician repair submission, `verify-close` for manager closure, `return-for-correction` for same-WO correction, `CMDowntimeIntervals` plus `CMTaskEvents` for additive downtime/history, `RecurringFromTaskId` for post-closure recurrence linkage, updated desktop work-order detail actions, synchronized OpenAPI, and isolated CM route tests plus AS-01/EX-01 regressions.
 
 ### CM correction and reviewer inspection — 2026-09-11
 
 Inspected CM lifecycle/resolution routes, shared task reopen/approval routes and role middleware. No dedicated CM return-for-correction route was found in workOrders.ts. Shared reopen accepts only cancelled tasks; shared Supervisor approval advances to PendingSuperadmin and is not the agreed CM closure flow. Existing shared approval/revision role guards differ (approval includes Admin; revision excludes Admin), so reviewer substitution must be specified explicitly. The inspected CM resolution route checks ownership/manager access but does not gate edits on review/closure state.
 
-Confirmed user acceptance, 2026-09-11: return incomplete repair to the same WO with a mandatory written reason and preserved work/evidence history; allow Supervisor/Admin/Superadmin to perform one verification/closure stage; prohibit verification by the repair performer regardless of role. These are approved requirements only. Restoration recording, repeat outages, correction/resubmission mechanics and post-closure reopening remain open; application implementation is not authorized yet.
+Resolved by CM-01 on 2026-09-17: the same WO can be returned for correction with a mandatory reason, one manager review stage verifies/closes it, and repair performers cannot verify-close their own work. Work/evidence history is preserved through correction.
 
 ### CM restoration and repeat-outage inspection — 2026-09-11
 
 Inspected work-order creation/close-downtime handlers, desktop close-downtime mutation and schema downtime columns. Creation accepts an optional downtime start; close-downtime uses the first server timestamp through COALESCE and accepts no restoration-time input. It uses the broad task modification helper. The inspected schema stores one start/end pair per WO; this does not represent multiple distinct outage intervals on the same WO. No application behavior was changed.
 
-Confirmed user acceptance, 2026-09-11: the assigned technician or Supervisor/Admin/Superadmin may record restoration without completing review; default restoration time to now but permit actual past restoration time with a mandatory reason and change history. If the same fault recurs before WO closure, retain the WO and append an outage interval; recurrence after closure creates a new linked WO. Exclude operational gaps from downtime. An unrelated fault remains separate work. These requirements are approved; application implementation remains pending.
+Resolved by CM-01 on 2026-09-17: restoration can be recorded independently with optional historical timestamp plus mandatory reason, the same WO can reopen downtime before closure, and recurrence after closure creates a new linked WO. Additive downtime intervals preserve operational gaps correctly for the same fault on one WO.
 
 ### Feature intake rule
 

@@ -26,6 +26,7 @@ import {
   apiUpdateFacilityPmSettings,
   apiListTemplates,
   apiFacilityPmNow,
+  apiSkipFacilityNextPm,
   apiGetLookups,
   type Facility,
   type TemplateSummary,
@@ -90,6 +91,26 @@ const FacilityDetail = () => {
     },
   });
 
+  const skipNextPmMutation = useMutation({
+    mutationFn: async () => {
+      const plannedDueAt = f?.pm.nextPlannedDueAt ?? null;
+      if (!plannedDueAt) throw new Error("No planned PM occurrence is available to skip.");
+      const reason = window.prompt("Enter the skip reason");
+      if (reason === null) return;
+      const trimmedReason = reason.trim();
+      if (!trimmedReason) throw new Error("Skip reason is required.");
+      return apiSkipFacilityNextPm({
+        facilityId,
+        plannedDueAt,
+        reason: trimmedReason,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["facility", facilityId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", "facility", facilityId] });
+    },
+  });
+
   const templates = templatesQuery.data?.items ?? [];
 
   const templateOptions = useMemo(() => [{ id: "none", name: "No Template" }, ...templates], [templates]);
@@ -124,7 +145,7 @@ const FacilityDetail = () => {
     setIsActive(data.isActive);
     setPmEnabled(data.pm.enabled ?? false);
     setDefaultTemplateId(data.pm.defaultTemplateId ?? "none");
-    setNextDueAt(data.pm.nextDueAt ?? "");
+    setNextDueAt(data.pm.nextPlannedDueAt ?? data.pm.nextDueAt ?? "");
   }, [facilityQuery.data]);
 
   return (
@@ -265,6 +286,16 @@ const FacilityDetail = () => {
                     />
                   </div>
                 </div>
+                <div className="space-y-1 rounded-md border border-border/60 bg-muted/20 p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Next planned PM</span>
+                    <span>{f?.pm.nextPlannedDueAt ? new Date(f.pm.nextPlannedDueAt).toLocaleString() : "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Next effective PM</span>
+                    <span>{f?.pm.nextDueAt ? new Date(f.pm.nextDueAt).toLocaleString() : "—"}</span>
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setReportBreakdownOpen(true)}>Report Breakdown</Button>
                   <Button
@@ -280,7 +311,17 @@ const FacilityDetail = () => {
                     Save
                   </Button>
                   <Button variant="outline" onClick={() => pmNowMutation.mutate(facilityId)}>PM Now</Button>
+                  <Button
+                    variant="outline"
+                    disabled={!f?.pm.nextPlannedDueAt || skipNextPmMutation.isPending}
+                    onClick={() => skipNextPmMutation.mutate()}
+                  >
+                    Skip Next PM
+                  </Button>
                 </div>
+                {skipNextPmMutation.error ? (
+                  <p className="text-sm text-destructive">{skipNextPmMutation.error.message}</p>
+                ) : null}
               </CardContent>
             </Card>
           </div>

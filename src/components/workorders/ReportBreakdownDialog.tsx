@@ -15,9 +15,25 @@ type ReportBreakdownDialogProps = {
   assetId?: string;
   facilityId?: string;
   templateId?: string | null;
+  sourceTaskId?: string;
+  sourceTemplateChecklistItemId?: string;
+  initialSymptom?: string;
+  title?: string;
+  submitLabel?: string;
 };
 
-const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templateId }: ReportBreakdownDialogProps) => {
+const ReportBreakdownDialog = ({
+  open,
+  onOpenChange,
+  assetId,
+  facilityId,
+  templateId,
+  sourceTaskId,
+  sourceTemplateChecklistItemId,
+  initialSymptom,
+  title,
+  submitLabel,
+}: ReportBreakdownDialogProps) => {
   const navigate = useNavigate();
   const [symptom, setSymptom] = useState("");
   const [impactLevel, setImpactLevel] = useState<"normal" | "high" | "critical" | "">("");
@@ -49,6 +65,11 @@ const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templa
     }
   }, [open, activeChannels, reportedChannelSelect]);
 
+  useEffect(() => {
+    if (!open) return;
+    setSymptom(initialSymptom ?? "");
+  }, [open, initialSymptom]);
+
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!symptom.trim()) throw new Error("Enter symptom");
@@ -63,11 +84,16 @@ const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templa
         failureCode: failureCode.trim() || undefined,
         downtimeStartedAt: downtimeStartedAt ? new Date(downtimeStartedAt).toISOString() : undefined,
         reportedChannel: channelValue || undefined,
+        sourceTaskId,
+        sourceTemplateChecklistItemId,
       };
       return apiCreateWorkOrder(payload);
     },
     onSuccess: async (res) => {
-      toast({ title: "Breakdown reported", description: `Work Order ${res.id} created` });
+      toast({
+        title: res.created ? "Work order created" : "Existing work order reused",
+        description: `Work Order ${res.id}`,
+      });
       setSymptom("");
       setImpactLevel("");
       setFailureCategory("");
@@ -87,7 +113,7 @@ const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templa
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Report Breakdown</DialogTitle>
+          <DialogTitle>{title ?? "Report Breakdown"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -145,7 +171,9 @@ const ReportBreakdownDialog = ({ open, onOpenChange, assetId, facilityId, templa
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={createMutation.isPending}>Cancel</Button>
-            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !symptom.trim()}>Submit</Button>
+            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !symptom.trim()}>
+              {submitLabel ?? "Submit"}
+            </Button>
           </div>
         </div>
       </DialogContent>

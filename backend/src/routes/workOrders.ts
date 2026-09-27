@@ -2,13 +2,14 @@ import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
 import { getDb } from "../db/mssql.js";
+import { writeAuditLog } from "../db/auditLog.js";
+import { canModifyAssignedTask, isManagerUser, managerRoles } from "../db/taskOwnership.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireAnyRole, requireSuperadmin } from "../middleware/requireRole.js";
 import fs from "node:fs";
 import path from "node:path";
 import { env } from "../config/env.js";
 
-const managerRoles = ["Superadmin", "Admin", "Supervisor"] as const;
 const requireManager = requireAnyRole(managerRoles);
 
 type TaskAccessRow = {
@@ -24,46 +25,6 @@ const resolveStoredFileAbs = (storageRootAbs: string, storagePath: string): stri
   return resolved;
 };
 
-const canModifyTask = (userId: string, userRoles: readonly string[], task: TaskAccessRow): boolean => {
-	if (userRoles.some((r) => (managerRoles as readonly string[]).includes(r))) return true;
-	if (task.AssignedToUserId && task.AssignedToUserId === userId) return true;
-	if (task.AssignedToRoleName && userRoles.includes(task.AssignedToRoleName)) return true;
-	if (!task.AssignedToUserId && !task.AssignedToRoleName && userRoles.some((r) => r !== "Viewer")) return true;
-	return false;
-};
-
-const writeAuditLog = async (input: {
-  actorUserId: string;
-  action: string;
-  entityType: string;
-  entityId: string | null;
-  metadata: Record<string, unknown>;
-  ipAddress: string | null;
-  userAgent: string | null;
-}): Promise<void> => {
-  const db = await getDb();
-  const metadata = JSON.stringify(input.metadata);
-  await db
-    .request()
-    .input("actorUserId", sql.UniqueIdentifier, input.actorUserId)
-    .input("action", sql.NVarChar(128), input.action)
-    .input("entityType", sql.NVarChar(128), input.entityType)
-    .input("entityId", sql.UniqueIdentifier, input.entityId)
-    .input("metadata", sql.NVarChar(sql.MAX), metadata)
-    .input("ipAddress", sql.NVarChar(64), input.ipAddress)
-    .input("userAgent", sql.NVarChar(512), input.userAgent)
-    .query(
-      [
-        "INSERT INTO pm.AuditLog (",
-        "  ActorUserId, Action, EntityType, EntityId, Metadata, IpAddress, UserAgent",
-        ")",
-        "VALUES (",
-        "  @actorUserId, @action, @entityType, @entityId, @metadata, @ipAddress, @userAgent",
-        ")",
-      ].join("\n"),
-    );
-};
-
 const WorkOrderCreateSchema = z
   .object({
     assetId: z.string().uuid().optional(),
@@ -75,10 +36,24 @@ const WorkOrderCreateSchema = z
     failureCode: z.string().max(64).optional(),
     downtimeStartedAt: z.string().datetime().optional(),
     reportedChannel: z.string().max(32).optional(),
+    sourceTaskId: z.string().uuid().optional(),
+    sourceTemplateChecklistItemId: z.string().uuid().optional(),
   })
-  .refine((d) => Boolean(d.assetId) !== Boolean(d.facilityId), {
-    message: "Either assetId or facilityId is required",
-    path: ["assetId"],
+  .superRefine((d, ctx) => {
+    if (Boolean(d.assetId) === Boolean(d.facilityId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Either assetId or facilityId is required",
+        path: ["assetId"],
+      });
+    }
+    if (Boolean(d.sourceTaskId) !== Boolean(d.sourceTemplateChecklistItemId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Source task and finding item must be provided together",
+        path: ["sourceTaskId"],
+      });
+    }
   });
 
 const WorkOrderListQuerySchema = z.object({
@@ -111,6 +86,103 @@ const WorkOrderAssignSchema = z
 const WorkOrderUpdateImpactSchema = z.object({
   impactLevel: z.enum(["normal", "high", "critical"]),
 });
+
+const WorkOrderReturnForCorrectionSchema = z.object({
+  reason: z.string().trim().min(1).max(1024),
+});
+
+const WorkOrderRestorationSchema = z.object({
+  restoredAt: z.string().datetime().optional(),
+  reason: z.string().trim().max(1024).optional(),
+});
+
+const WorkOrderReopenDowntimeSchema = z.object({
+  downtimeStartedAt: z.string().datetime().optional(),
+  reason: z.string().trim().max(1024).optional(),
+});
+
+const WorkOrderRepeatFaultSchema = z.object({
+  downtimeStartedAt: z.string().datetime().optional(),
+  reportedChannel: z.string().trim().max(32).optional(),
+  reason: z.string().trim().max(1024).optional(),
+});
+
+type CmAccessRow = {
+  TaskId: string;
+  Status: string;
+  AssignedToUserId: string | null;
+  AssignedToRoleName: string | null;
+  TechnicianCompletedByUserId: string | null;
+  MaintenanceType: string;
+};
+
+const loadCmAccessRow = async (
+  executor: { request(): sql.Request },
+  taskId: string,
+): Promise<CmAccessRow | null> => {
+  const result = await executor
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT TOP (1)",
+        "  t.TaskId AS TaskId,",
+        "  t.Status AS Status,",
+        "  t.AssignedToUserId AS AssignedToUserId,",
+        "  r.Name AS AssignedToRoleName,",
+        "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,",
+        "  t.MaintenanceType AS MaintenanceType",
+        "FROM pm.PMTasks t",
+        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
+        "WHERE t.TaskId = @taskId",
+      ].join("\n"),
+    );
+
+  const row = result.recordset[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    TaskId: String(row.TaskId),
+    Status: typeof row.Status === "string" ? row.Status : "open",
+    AssignedToUserId: typeof row.AssignedToUserId === "string" ? row.AssignedToUserId : null,
+    AssignedToRoleName: typeof row.AssignedToRoleName === "string" ? row.AssignedToRoleName : null,
+    TechnicianCompletedByUserId:
+      typeof row.TechnicianCompletedByUserId === "string" ? row.TechnicianCompletedByUserId : null,
+    MaintenanceType: typeof row.MaintenanceType === "string" ? row.MaintenanceType : "",
+  };
+};
+
+const isTerminalCmStatus = (status: string | null | undefined): boolean =>
+  status === "completed" || status === "cancelled";
+
+const appendCmEvent = async (input: {
+  executor: { request(): sql.Request };
+  taskId: string;
+  eventType: "reported" | "repair_submitted" | "returned_for_correction" | "verified_closed" | "restoration_recorded" | "downtime_reopened" | "repeat_fault_linked";
+  occurredAt: Date;
+  actorUserId: string | null;
+  reason?: string | null;
+  notes?: string | null;
+  metadataJson?: string | null;
+}) => {
+  await input.executor
+    .request()
+    .input("taskId", sql.UniqueIdentifier, input.taskId)
+    .input("eventType", sql.NVarChar(32), input.eventType)
+    .input("occurredAt", sql.DateTime2(0), input.occurredAt)
+    .input("actorUserId", sql.UniqueIdentifier, input.actorUserId)
+    .input("reason", sql.NVarChar(1024), input.reason ?? null)
+    .input("notes", sql.NVarChar(2048), input.notes ?? null)
+    .input("metadataJson", sql.NVarChar(sql.MAX), input.metadataJson ?? null)
+    .query(
+      [
+        "INSERT INTO pm.CMTaskEvents (",
+        "  TaskId, EventType, OccurredAt, ActorUserId, Reason, Notes, MetadataJson",
+        ") VALUES (",
+        "  @taskId, @eventType, @occurredAt, @actorUserId, @reason, @notes, @metadataJson",
+        ");",
+      ].join("\n"),
+    );
+};
 
 export const workOrdersRouter = Router();
 workOrdersRouter.use(requireAuth);
@@ -196,6 +268,82 @@ workOrdersRouter.post("/", async (req, res) => {
   const failureCategory = parsed.data.failureCategory ?? null;
   const failureCode = parsed.data.failureCode ?? null;
   const reportedChannel = parsed.data.reportedChannel ?? "web";
+  const sourceTaskId = parsed.data.sourceTaskId ?? null;
+  const sourceTemplateChecklistItemId = parsed.data.sourceTemplateChecklistItemId ?? null;
+
+  if (sourceTaskId && sourceTemplateChecklistItemId) {
+    const sourceFindingResult = await db
+      .request()
+      .input("sourceTaskId", sql.UniqueIdentifier, sourceTaskId)
+      .input("sourceTemplateChecklistItemId", sql.UniqueIdentifier, sourceTemplateChecklistItemId)
+      .input("userId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  t.AssetId AS SourceAssetId,",
+          "  t.FacilityId AS SourceFacilityId,",
+          "  t.TemplateId AS SourceTemplateId,",
+          "  COALESCE(s.ItemText, i.ItemText) AS SourceItemText,",
+          "  r.Outcome AS ResultOutcome,",
+          "  d.Outcome AS DraftOutcome",
+          "FROM pm.PMTasks t",
+          "LEFT JOIN pm.PMTaskChecklistResults r",
+          "  ON r.TaskId = t.TaskId AND r.TemplateChecklistItemId = @sourceTemplateChecklistItemId",
+          "LEFT JOIN pm.TaskDrafts d",
+          "  ON d.TaskId = t.TaskId",
+          " AND d.TemplateChecklistItemId = @sourceTemplateChecklistItemId",
+          " AND d.SavedByUserId = @userId",
+          "LEFT JOIN pm.PMTaskChecklistSnapshots s",
+          "  ON s.TaskId = t.TaskId AND s.TemplateChecklistItemId = @sourceTemplateChecklistItemId",
+          "LEFT JOIN pm.PMTemplateChecklistItems i",
+          "  ON i.TemplateChecklistItemId = @sourceTemplateChecklistItemId",
+          "WHERE t.TaskId = @sourceTaskId",
+          "  AND t.MaintenanceType = N'PM'",
+        ].join("\n"),
+      );
+
+    const sourceRow = sourceFindingResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!sourceRow) {
+      res.status(400).json({ message: "Invalid source finding" });
+      return;
+    }
+
+    const sameAsset =
+      (sourceRow.SourceAssetId as string | null) === assetId &&
+      (sourceRow.SourceFacilityId as string | null) === facilityId;
+    if (!sameAsset) {
+      res.status(400).json({ message: "Source finding does not match the selected asset or facility" });
+      return;
+    }
+
+    const resultOutcome = Number(sourceRow.ResultOutcome ?? -1);
+    const draftOutcome = Number(sourceRow.DraftOutcome ?? -1);
+    if (resultOutcome !== 2 && draftOutcome !== 2) {
+      res.status(400).json({ message: "Only failed PM findings can create a work order" });
+      return;
+    }
+
+    const existingResult = await db
+      .request()
+      .input("sourceTaskId", sql.UniqueIdentifier, sourceTaskId)
+      .input("sourceTemplateChecklistItemId", sql.UniqueIdentifier, sourceTemplateChecklistItemId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  TaskId AS TaskId",
+          "FROM pm.PMTasks",
+          "WHERE MaintenanceType = N'CM'",
+          "  AND SourceTaskId = @sourceTaskId",
+          "  AND SourceTemplateChecklistItemId = @sourceTemplateChecklistItemId",
+          "ORDER BY CreatedAt DESC",
+        ].join("\n"),
+      );
+    const existingRow = existingResult.recordset[0] as Record<string, unknown> | undefined;
+    if (existingRow && typeof existingRow.TaskId === "string") {
+      res.json({ id: existingRow.TaskId, created: false });
+      return;
+    }
+  }
 
   const insertResult = await db
     .request()
@@ -209,6 +357,8 @@ workOrdersRouter.post("/", async (req, res) => {
     .input("downtimeStartedAt", sql.DateTime2(0), downtimeStartedAt)
     .input("reportedByUserId", sql.UniqueIdentifier, req.user.sub)
     .input("reportedChannel", sql.NVarChar(32), reportedChannel)
+    .input("sourceTaskId", sql.UniqueIdentifier, sourceTaskId)
+    .input("sourceTemplateChecklistItemId", sql.UniqueIdentifier, sourceTemplateChecklistItemId)
     .query(
       [
         "DECLARE @now datetime2(0) = sysutcdatetime();",
@@ -221,13 +371,13 @@ workOrdersRouter.post("/", async (req, res) => {
         "INSERT INTO pm.PMTasks (",
         "  TaskNumber, AssetId, FacilityId, TemplateId, ScheduledDueAt, Status, MaintenanceType,",
         "  Symptom, ImpactLevel, FailureCategory, FailureCode, DowntimeStartedAt,",
-        "  ReportedByUserId, ReportedAt, ReportedChannel",
+        "  ReportedByUserId, ReportedAt, ReportedChannel, SourceTaskId, SourceTemplateChecklistItemId",
         ")",
         "OUTPUT inserted.TaskId AS TaskId",
         "VALUES (",
         "  @taskNumber, @assetId, @facilityId, @templateId, @now, N'open', N'CM',",
         "  @symptom, @impactLevel, @failureCategory, @failureCode, @downtimeStartedAt,",
-        "  @reportedByUserId, @now, @reportedChannel",
+        "  @reportedByUserId, @now, @reportedChannel, @sourceTaskId, @sourceTemplateChecklistItemId",
         ");",
       ].join("\n"),
     );
@@ -238,6 +388,33 @@ workOrdersRouter.post("/", async (req, res) => {
     res.status(500).json({ message: "Failed to create work order" });
     return;
   }
+
+  if (downtimeStartedAt) {
+    await db
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("startedAt", sql.DateTime2(0), downtimeStartedAt)
+      .input("startedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .query(
+        [
+          "INSERT INTO pm.CMDowntimeIntervals (TaskId, StartedAt, StartedByUserId)",
+          "VALUES (@taskId, @startedAt, @startedByUserId);",
+        ].join("\n"),
+      );
+  }
+
+  await appendCmEvent({
+    executor: db,
+    taskId,
+    eventType: "reported",
+    occurredAt: new Date(),
+    actorUserId: req.user.sub,
+    notes: parsed.data.symptom,
+    metadataJson:
+      sourceTaskId || sourceTemplateChecklistItemId
+        ? JSON.stringify({ sourceTaskId, sourceTemplateChecklistItemId })
+        : null,
+  });
 
   await writeAuditLog({
     actorUserId: req.user.sub,
@@ -254,12 +431,14 @@ workOrdersRouter.post("/", async (req, res) => {
       failureCode,
       downtimeStartedAt,
       reportedChannel,
+      sourceTaskId,
+      sourceTemplateChecklistItemId,
     },
     ipAddress: typeof req.ip === "string" ? req.ip : null,
     userAgent: req.get("user-agent") ?? null,
   });
 
-  res.status(201).json({ id: taskId });
+  res.status(201).json({ id: taskId, created: true });
 });
 
 workOrdersRouter.get("/", async (req, res) => {
@@ -360,6 +539,7 @@ workOrdersRouter.get("/", async (req, res) => {
         "      AND (",
         "        t.AssignedToUserId = @userId",
         "        OR (",
+        "          t.AssignedToUserId IS NULL",
         "          t.AssignedToRoleId IS NOT NULL",
         "          AND EXISTS (",
         "            SELECT 1",
@@ -467,10 +647,19 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
         "  ar.Name AS AssignedToRoleName,",
         "  t.CreatedAt AS CreatedAt,",
         "  t.StartedAt AS StartedAt,",
+        "  t.TechnicianCompletedAt AS RepairSubmittedAt,",
+        "  t.TechnicianCompletedByUserId AS RepairSubmittedByUserId,",
+        "  su.Username AS RepairSubmittedByUsername,",
+        "  su.DisplayName AS RepairSubmittedByDisplayName,",
         "  t.CompletedAt AS CompletedAt,",
         "  t.CompletedByUserId AS CompletedByUserId,",
         "  cu.Username AS CompletedByUsername,",
         "  cu.DisplayName AS CompletedByDisplayName,",
+        "  t.RejectedAt AS ReturnedAt,",
+        "  t.RejectedByUserId AS ReturnedByUserId,",
+        "  ru.Username AS ReturnedByUsername,",
+        "  ru.DisplayName AS ReturnedByDisplayName,",
+        "  t.RejectionReason AS ReturnReason,",
         "  t.CancelledAt AS CancelledAt,",
         "  t.CancelledByUserId AS CancelledByUserId,",
         "  xu.Username AS CancelledByUsername,",
@@ -486,6 +675,7 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
         "  t.ReportedByUserId AS ReportedByUserId,",
         "  rby.Username AS ReportedByUsername,",
         "  rby.DisplayName AS ReportedByDisplayName,",
+        "  t.RecurringFromTaskId AS RecurringFromTaskId,",
         "  t.ResolutionNotes AS ResolutionNotes",
         "FROM pm.PMTasks t",
         "LEFT JOIN pm.Assets a ON a.AssetId = t.AssetId",
@@ -493,7 +683,9 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
         "INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
         "LEFT JOIN pm.Users au ON au.UserId = t.AssignedToUserId",
         "LEFT JOIN pm.Roles ar ON ar.RoleId = t.AssignedToRoleId",
+        "LEFT JOIN pm.Users su ON su.UserId = t.TechnicianCompletedByUserId",
         "LEFT JOIN pm.Users cu ON cu.UserId = t.CompletedByUserId",
+        "LEFT JOIN pm.Users ru ON ru.UserId = t.RejectedByUserId",
         "LEFT JOIN pm.Users xu ON xu.UserId = t.CancelledByUserId",
         "LEFT JOIN pm.Users rby ON rby.UserId = t.ReportedByUserId",
         "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'CM'",
@@ -506,6 +698,85 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
     return;
   }
 
+  const intervalsResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT",
+        "  i.CMDowntimeIntervalId AS CMDowntimeIntervalId,",
+        "  i.StartedAt AS StartedAt,",
+        "  i.StartedReason AS StartedReason,",
+        "  i.EndedAt AS EndedAt,",
+        "  i.EndReason AS EndReason,",
+        "  i.StartedByUserId AS StartedByUserId,",
+        "  su.Username AS StartedByUsername,",
+        "  su.DisplayName AS StartedByDisplayName,",
+        "  i.EndedByUserId AS EndedByUserId,",
+        "  eu.Username AS EndedByUsername,",
+        "  eu.DisplayName AS EndedByDisplayName",
+        "FROM pm.CMDowntimeIntervals i",
+        "LEFT JOIN pm.Users su ON su.UserId = i.StartedByUserId",
+        "LEFT JOIN pm.Users eu ON eu.UserId = i.EndedByUserId",
+        "WHERE i.TaskId = @taskId",
+        "ORDER BY i.StartedAt ASC, i.CreatedAt ASC",
+      ].join("\n"),
+    );
+  const intervalRows = intervalsResult.recordset as Array<Record<string, unknown>>;
+  const downtimeIntervals = intervalRows.map((intervalRow) => ({
+    id: intervalRow.CMDowntimeIntervalId,
+    startedAt: intervalRow.StartedAt,
+    startedReason: intervalRow.StartedReason ?? null,
+    startedBy: intervalRow.StartedByUserId
+      ? {
+          userId: intervalRow.StartedByUserId,
+          username: intervalRow.StartedByUsername,
+          displayName: intervalRow.StartedByDisplayName,
+        }
+      : null,
+    endedAt: intervalRow.EndedAt ?? null,
+    endReason: intervalRow.EndReason ?? null,
+    endedBy: intervalRow.EndedByUserId
+      ? {
+          userId: intervalRow.EndedByUserId,
+          username: intervalRow.EndedByUsername,
+          displayName: intervalRow.EndedByDisplayName,
+        }
+      : null,
+  }));
+  const nowMs = Date.now();
+  const downtimeTotalSeconds = Math.floor(
+    downtimeIntervals.reduce((sum, interval) => {
+      const startedMs = interval.startedAt ? new Date(String(interval.startedAt)).getTime() : Number.NaN;
+      const endedMs = interval.endedAt ? new Date(String(interval.endedAt)).getTime() : nowMs;
+      if (Number.isNaN(startedMs) || Number.isNaN(endedMs) || endedMs < startedMs) return sum;
+      return sum + Math.floor((endedMs - startedMs) / 1000);
+    }, 0),
+  );
+
+  const historyResult = await db
+    .request()
+    .input("taskId", sql.UniqueIdentifier, taskId)
+    .query(
+      [
+        "SELECT",
+        "  e.CMTaskEventId AS CMTaskEventId,",
+        "  e.EventType AS EventType,",
+        "  e.OccurredAt AS OccurredAt,",
+        "  e.Reason AS Reason,",
+        "  e.Notes AS Notes,",
+        "  e.MetadataJson AS MetadataJson,",
+        "  e.ActorUserId AS ActorUserId,",
+        "  u.Username AS ActorUsername,",
+        "  u.DisplayName AS ActorDisplayName",
+        "FROM pm.CMTaskEvents e",
+        "LEFT JOIN pm.Users u ON u.UserId = e.ActorUserId",
+        "WHERE e.TaskId = @taskId",
+        "ORDER BY e.OccurredAt DESC, e.CreatedAt DESC",
+      ].join("\n"),
+    );
+  const historyRows = historyResult.recordset as Array<Record<string, unknown>>;
+
   res.json({
     id: row.TaskId,
     taskNumber: row.TaskNumber,
@@ -514,6 +785,14 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
     scheduledDueAt: row.ScheduledDueAt,
     createdAt: row.CreatedAt,
     startedAt: row.StartedAt,
+    repairSubmittedAt: row.RepairSubmittedAt ?? null,
+    repairSubmittedBy: row.RepairSubmittedByUserId
+      ? {
+          userId: row.RepairSubmittedByUserId,
+          username: row.RepairSubmittedByUsername,
+          displayName: row.RepairSubmittedByDisplayName,
+        }
+      : null,
     completedAt: row.CompletedAt,
     cancelledAt: row.CancelledAt,
     symptom: row.Symptom,
@@ -522,6 +801,8 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
     failureCode: row.FailureCode,
     downtimeStartedAt: row.DowntimeStartedAt,
     downtimeEndedAt: row.DowntimeEndedAt,
+    downtimeTotalSeconds,
+    downtimeIntervals,
     reportedAt: row.ReportedAt,
     reportedChannel: row.ReportedChannel,
     reportedBy: row.ReportedByUserId
@@ -551,9 +832,30 @@ workOrdersRouter.get("/:taskId", async (req, res) => {
     completedBy: row.CompletedByUserId
       ? { userId: row.CompletedByUserId, username: row.CompletedByUsername, displayName: row.CompletedByDisplayName }
       : null,
+    returnedAt: row.ReturnedAt ?? null,
+    returnedBy: row.ReturnedByUserId
+      ? { userId: row.ReturnedByUserId, username: row.ReturnedByUsername, displayName: row.ReturnedByDisplayName }
+      : null,
+    returnReason: row.ReturnReason ?? null,
     cancelledBy: row.CancelledByUserId
       ? { userId: row.CancelledByUserId, username: row.CancelledByUsername, displayName: row.CancelledByDisplayName }
       : null,
+    recurringFromTaskId: row.RecurringFromTaskId ?? null,
+    history: historyRows.map((historyRow) => ({
+      id: historyRow.CMTaskEventId,
+      type: historyRow.EventType,
+      occurredAt: historyRow.OccurredAt,
+      reason: historyRow.Reason ?? null,
+      notes: historyRow.Notes ?? null,
+      metadataJson: historyRow.MetadataJson ?? null,
+      actor: historyRow.ActorUserId
+        ? {
+            userId: historyRow.ActorUserId,
+            username: historyRow.ActorUsername,
+            displayName: historyRow.ActorDisplayName,
+          }
+        : null,
+    })),
     resolutionNotes: row.ResolutionNotes ?? null,
   });
 });
@@ -657,30 +959,20 @@ workOrdersRouter.post("/:taskId/start", async (req, res) => {
     return;
   }
   const db = await getDb();
-  const access = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  t.AssignedToUserId AS AssignedToUserId,",
-        "  r.Name AS AssignedToRoleName",
-        "FROM pm.PMTasks t",
-        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
-        "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'CM'",
-      ].join("\n"),
-    );
-  const row = access.recordset[0] as Record<string, unknown> | undefined;
-  if (!row) {
+  const accessRow = await loadCmAccessRow(db, taskId);
+  if (!accessRow || accessRow.MaintenanceType !== "CM") {
     res.status(404).json({ message: "Not found" });
     return;
   }
-  const accessRow: TaskAccessRow = {
-    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
-    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
-  };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  if (accessRow.Status !== "open") {
+    res.status(409).json({ message: "Invalid state" });
     return;
   }
   await db
@@ -705,30 +997,20 @@ workOrdersRouter.post("/:taskId/pause", async (req, res) => {
     return;
   }
   const db = await getDb();
-  const access = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  t.AssignedToUserId AS AssignedToUserId,",
-        "  r.Name AS AssignedToRoleName",
-        "FROM pm.PMTasks t",
-        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
-        "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'CM'",
-      ].join("\n"),
-    );
-  const row = access.recordset[0] as Record<string, unknown> | undefined;
-  if (!row) {
+  const accessRow = await loadCmAccessRow(db, taskId);
+  if (!accessRow || accessRow.MaintenanceType !== "CM") {
     res.status(404).json({ message: "Not found" });
     return;
   }
-  const accessRow: TaskAccessRow = {
-    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
-    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
-  };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  if (accessRow.Status !== "in_progress") {
+    res.status(409).json({ message: "Invalid state" });
     return;
   }
   await db
@@ -753,30 +1035,20 @@ workOrdersRouter.post("/:taskId/resume", async (req, res) => {
     return;
   }
   const db = await getDb();
-  const access = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  t.AssignedToUserId AS AssignedToUserId,",
-        "  r.Name AS AssignedToRoleName",
-        "FROM pm.PMTasks t",
-        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
-        "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'CM'",
-      ].join("\n"),
-    );
-  const row = access.recordset[0] as Record<string, unknown> | undefined;
-  if (!row) {
+  const accessRow = await loadCmAccessRow(db, taskId);
+  if (!accessRow || accessRow.MaintenanceType !== "CM") {
     res.status(404).json({ message: "Not found" });
     return;
   }
-  const accessRow: TaskAccessRow = {
-    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
-    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
-  };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  if (accessRow.Status !== "paused") {
+    res.status(409).json({ message: "Invalid state" });
     return;
   }
   await db
@@ -852,6 +1124,8 @@ workOrdersRouter.delete("/:taskId", requireSuperadmin, async (req, res) => {
       .input("taskId", sql.UniqueIdentifier, taskId)
       .query(
         [
+          "DELETE FROM pm.CMTaskEvents WHERE TaskId = @taskId;",
+          "DELETE FROM pm.CMDowntimeIntervals WHERE TaskId = @taskId;",
           "DELETE FROM pm.PMTaskEvidence WHERE TaskId = @taskId;",
           "DELETE FROM pm.PMTaskChecklistEvidence WHERE TaskId = @taskId;",
           "DELETE FROM pm.PMTaskChecklistResults WHERE TaskId = @taskId;",
@@ -938,6 +1212,7 @@ workOrdersRouter.post("/:taskId/complete", async (req, res) => {
           "SELECT TOP (1)",
           "  t.TaskId AS TaskId,",
           "  t.TemplateId AS TemplateId,",
+          "  t.Status AS Status,",
           "  t.AssignedToUserId AS AssignedToUserId,",
           "  r.Name AS AssignedToRoleName",
           "FROM pm.PMTasks t",
@@ -957,8 +1232,23 @@ workOrdersRouter.post("/:taskId/complete", async (req, res) => {
       AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
       AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
     };
-    if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+    if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+      assignedToUserId: accessRow.AssignedToUserId,
+      assignedToRoleName: accessRow.AssignedToRoleName,
+    })) {
       res.status(403).json({ message: "Forbidden" });
+      await tx.rollback();
+      return;
+    }
+
+    const currentStatus = typeof row.Status === "string" ? row.Status : null;
+    if (currentStatus === "pending_review") {
+      res.status(409).json({ message: "Repair is already pending review" });
+      await tx.rollback();
+      return;
+    }
+    if (isTerminalCmStatus(currentStatus)) {
+      res.status(409).json({ message: "Invalid state" });
       await tx.rollback();
       return;
     }
@@ -1058,8 +1348,8 @@ workOrdersRouter.post("/:taskId/complete", async (req, res) => {
     let useBackdated = false;
 
     if (hasCustomCompletedAt) {
-      const isManagerUser = req.user.roles.some((role) => (managerRoles as readonly string[]).includes(role));
-      if (!isManagerUser) {
+      const actingManager = isManagerUser(req.user.roles);
+      if (!actingManager) {
         res.status(403).json({ message: "Forbidden" });
         await tx.rollback();
         return;
@@ -1107,10 +1397,15 @@ workOrdersRouter.post("/:taskId/complete", async (req, res) => {
         [
           "UPDATE pm.PMTasks",
           "SET",
-          "  Status = N'completed',",
+          "  Status = N'pending_review',",
           "  StartedAt = COALESCE(StartedAt, @completedAt),",
-          "  CompletedAt = @completedAt,",
-          "  CompletedByUserId = @completedByUserId,",
+          "  TechnicianCompletedAt = @completedAt,",
+          "  TechnicianCompletedByUserId = @completedByUserId,",
+          "  CompletedAt = NULL,",
+          "  CompletedByUserId = NULL,",
+          "  RejectedAt = NULL,",
+          "  RejectedByUserId = NULL,",
+          "  RejectionReason = NULL,",
           "  ForceCompleted = @forceCompleted,",
           "  IsBackdated = @isBackdated,",
           "  BackdateReason = @backdateReason,",
@@ -1146,6 +1441,182 @@ workOrdersRouter.post("/:taskId/complete", async (req, res) => {
           ].join("\n"),
         );
     }
+
+    await appendCmEvent({
+      executor: tx,
+      taskId,
+      eventType: "repair_submitted",
+      occurredAt: completedAtDate,
+      actorUserId: req.user.sub,
+      reason: useBackdated ? parsed.data.backdateReason ?? null : null,
+      notes: parsed.data.technicianName ?? null,
+      metadataJson: JSON.stringify({
+        checklistResultsCount: parsed.data.checklistResults.length,
+        forceCompleted: parsed.data.forceCompleted === true,
+        isBackdated: useBackdated,
+      }),
+    });
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
+});
+
+workOrdersRouter.post("/:taskId/verify-close", requireManager, async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const accessRow = await loadCmAccessRow(tx, taskId);
+    if (!accessRow || accessRow.MaintenanceType !== "CM") {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+    if (accessRow.Status !== "pending_review") {
+      res.status(409).json({ message: "Work order is not pending review" });
+      await tx.rollback();
+      return;
+    }
+    if (accessRow.TechnicianCompletedByUserId && accessRow.TechnicianCompletedByUserId === req.user.sub) {
+      res.status(403).json({ message: "Repair performers cannot verify their own work order" });
+      await tx.rollback();
+      return;
+    }
+
+    const openIntervalResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1) CMDowntimeIntervalId",
+          "FROM pm.CMDowntimeIntervals",
+          "WHERE TaskId = @taskId AND EndedAt IS NULL",
+        ].join("\n"),
+      );
+    if ((openIntervalResult.recordset?.length ?? 0) > 0) {
+      res.status(409).json({ message: "Record restoration before closing the work order" });
+      await tx.rollback();
+      return;
+    }
+
+    const verifiedAt = new Date();
+    const updated = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("completedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .input("completedAt", sql.DateTime2(0), verifiedAt)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  Status = N'completed',",
+          "  CompletedAt = @completedAt,",
+          "  CompletedByUserId = @completedByUserId,",
+          "  DataEntryAt = COALESCE(DataEntryAt, sysutcdatetime())",
+          "WHERE TaskId = @taskId",
+          "  AND MaintenanceType = N'CM'",
+          "  AND Status = N'pending_review'",
+        ].join("\n"),
+      );
+    if ((updated.rowsAffected?.[0] ?? 0) === 0) {
+      res.status(409).json({ message: "Invalid state" });
+      await tx.rollback();
+      return;
+    }
+
+    await appendCmEvent({
+      executor: tx,
+      taskId,
+      eventType: "verified_closed",
+      occurredAt: verifiedAt,
+      actorUserId: req.user.sub,
+    });
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
+});
+
+workOrdersRouter.post("/:taskId/return-for-correction", requireManager, async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const parsed = WorkOrderReturnForCorrectionSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const accessRow = await loadCmAccessRow(tx, taskId);
+    if (!accessRow || accessRow.MaintenanceType !== "CM") {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+    if (accessRow.Status !== "pending_review") {
+      res.status(409).json({ message: "Work order is not pending review" });
+      await tx.rollback();
+      return;
+    }
+
+    const returnedAt = new Date();
+    const reason = parsed.data.reason.trim();
+    const updated = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("rejectedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .input("rejectedAt", sql.DateTime2(0), returnedAt)
+      .input("reason", sql.NVarChar(1024), reason)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  Status = N'open',",
+          "  RejectedAt = @rejectedAt,",
+          "  RejectedByUserId = @rejectedByUserId,",
+          "  RejectionReason = @reason,",
+          "  CompletedAt = NULL,",
+          "  CompletedByUserId = NULL,",
+          "  DataEntryAt = COALESCE(DataEntryAt, sysutcdatetime())",
+          "WHERE TaskId = @taskId",
+          "  AND MaintenanceType = N'CM'",
+          "  AND Status = N'pending_review'",
+        ].join("\n"),
+      );
+    if ((updated.rowsAffected?.[0] ?? 0) === 0) {
+      res.status(409).json({ message: "Invalid state" });
+      await tx.rollback();
+      return;
+    }
+
+    await appendCmEvent({
+      executor: tx,
+      taskId,
+      eventType: "returned_for_correction",
+      occurredAt: returnedAt,
+      actorUserId: req.user.sub,
+      reason,
+    });
 
     await tx.commit();
     res.json({ ok: true });
@@ -1184,7 +1655,10 @@ workOrdersRouter.post("/:taskId/cancel", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
@@ -1211,45 +1685,405 @@ workOrdersRouter.post("/:taskId/close-downtime", async (req, res) => {
     res.status(400).json({ message: "Invalid request" });
     return;
   }
+  const parsed = WorkOrderRestorationSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
   const db = await getDb();
-  const access = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  t.AssignedToUserId AS AssignedToUserId,",
-        "  r.Name AS AssignedToRoleName",
-        "FROM pm.PMTasks t",
-        "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
-        "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'CM'",
-      ].join("\n"),
-    );
-  const row = access.recordset[0] as Record<string, unknown> | undefined;
-  if (!row) {
-    res.status(404).json({ message: "Not found" });
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const accessRow = await loadCmAccessRow(tx, taskId);
+    if (!accessRow || accessRow.MaintenanceType !== "CM") {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+    if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+      assignedToUserId: accessRow.AssignedToUserId,
+      assignedToRoleName: accessRow.AssignedToRoleName,
+    })) {
+      res.status(403).json({ message: "Forbidden" });
+      await tx.rollback();
+      return;
+    }
+    if (isTerminalCmStatus(accessRow.Status)) {
+      res.status(409).json({ message: "Invalid state" });
+      await tx.rollback();
+      return;
+    }
+
+    const intervalResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  CMDowntimeIntervalId AS CMDowntimeIntervalId,",
+          "  StartedAt AS StartedAt",
+          "FROM pm.CMDowntimeIntervals",
+          "WHERE TaskId = @taskId AND EndedAt IS NULL",
+          "ORDER BY StartedAt DESC, CreatedAt DESC",
+        ].join("\n"),
+      );
+    const intervalRow = intervalResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!intervalRow) {
+      res.status(409).json({ message: "There is no active downtime interval to restore" });
+      await tx.rollback();
+      return;
+    }
+
+    const restoredAtRaw = parsed.data.restoredAt?.trim() ?? "";
+    const hasCustomRestoredAt = restoredAtRaw.length > 0;
+    const restoredAt = hasCustomRestoredAt ? new Date(restoredAtRaw) : new Date();
+    if (Number.isNaN(restoredAt.getTime())) {
+      res.status(400).json({ message: "Invalid restoration date" });
+      await tx.rollback();
+      return;
+    }
+    if (restoredAt.getTime() > Date.now()) {
+      res.status(400).json({ message: "Restoration date cannot be in the future" });
+      await tx.rollback();
+      return;
+    }
+    const startedAtValue = intervalRow.StartedAt instanceof Date ? intervalRow.StartedAt : new Date(String(intervalRow.StartedAt));
+    if (Number.isNaN(startedAtValue.getTime()) || restoredAt.getTime() < startedAtValue.getTime()) {
+      res.status(400).json({ message: "Restoration date cannot be earlier than downtime start" });
+      await tx.rollback();
+      return;
+    }
+    const reason = parsed.data.reason?.trim() ?? "";
+    if (hasCustomRestoredAt && reason.length === 0) {
+      res.status(400).json({ message: "Reason is required when setting a restoration date" });
+      await tx.rollback();
+      return;
+    }
+
+    await tx
+      .request()
+      .input("intervalId", sql.UniqueIdentifier, String(intervalRow.CMDowntimeIntervalId))
+      .input("endedAt", sql.DateTime2(0), restoredAt)
+      .input("endedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .input("endReason", sql.NVarChar(1024), reason.length > 0 ? reason : null)
+      .query(
+        [
+          "UPDATE pm.CMDowntimeIntervals",
+          "SET",
+          "  EndedAt = @endedAt,",
+          "  EndedByUserId = @endedByUserId,",
+          "  EndReason = @endReason,",
+          "  UpdatedAt = sysutcdatetime()",
+          "WHERE CMDowntimeIntervalId = @intervalId",
+          "  AND EndedAt IS NULL",
+        ].join("\n"),
+      );
+
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("endedAt", sql.DateTime2(0), restoredAt)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET DowntimeEndedAt = @endedAt",
+          "WHERE TaskId = @taskId AND MaintenanceType = N'CM'",
+        ].join("\n"),
+      );
+
+    await appendCmEvent({
+      executor: tx,
+      taskId,
+      eventType: "restoration_recorded",
+      occurredAt: restoredAt,
+      actorUserId: req.user.sub,
+      reason: reason.length > 0 ? reason : null,
+    });
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
+});
+
+workOrdersRouter.post("/:taskId/reopen-downtime", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
     return;
   }
-  const accessRow: TaskAccessRow = {
-    AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
-    AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
-  };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
-    res.status(403).json({ message: "Forbidden" });
+
+  const parsed = WorkOrderReopenDowntimeSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
     return;
   }
-  await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "UPDATE pm.PMTasks",
-        "SET",
-        "  DowntimeEndedAt = COALESCE(DowntimeEndedAt, sysutcdatetime())",
-        "WHERE TaskId = @taskId AND MaintenanceType = N'CM'",
-      ].join("\n"),
-    );
-  res.json({ ok: true });
+
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const accessRow = await loadCmAccessRow(tx, taskId);
+    if (!accessRow || accessRow.MaintenanceType !== "CM") {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+    if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+      assignedToUserId: accessRow.AssignedToUserId,
+      assignedToRoleName: accessRow.AssignedToRoleName,
+    })) {
+      res.status(403).json({ message: "Forbidden" });
+      await tx.rollback();
+      return;
+    }
+    if (isTerminalCmStatus(accessRow.Status)) {
+      res.status(409).json({ message: "Create a new linked work order after closure or cancellation" });
+      await tx.rollback();
+      return;
+    }
+
+    const openIntervalResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1) CMDowntimeIntervalId",
+          "FROM pm.CMDowntimeIntervals",
+          "WHERE TaskId = @taskId AND EndedAt IS NULL",
+        ].join("\n"),
+      );
+    if ((openIntervalResult.recordset?.length ?? 0) > 0) {
+      res.status(409).json({ message: "Downtime is already active" });
+      await tx.rollback();
+      return;
+    }
+
+    const startedAtRaw = parsed.data.downtimeStartedAt?.trim() ?? "";
+    const hasCustomStartedAt = startedAtRaw.length > 0;
+    const startedAt = hasCustomStartedAt ? new Date(startedAtRaw) : new Date();
+    if (Number.isNaN(startedAt.getTime())) {
+      res.status(400).json({ message: "Invalid downtime start date" });
+      await tx.rollback();
+      return;
+    }
+    if (startedAt.getTime() > Date.now()) {
+      res.status(400).json({ message: "Downtime start date cannot be in the future" });
+      await tx.rollback();
+      return;
+    }
+    const reason = parsed.data.reason?.trim() ?? "";
+    if (hasCustomStartedAt && reason.length === 0) {
+      res.status(400).json({ message: "Reason is required when setting a downtime start date" });
+      await tx.rollback();
+      return;
+    }
+
+    const latestEndedResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1) EndedAt AS EndedAt",
+          "FROM pm.CMDowntimeIntervals",
+          "WHERE TaskId = @taskId AND EndedAt IS NOT NULL",
+          "ORDER BY EndedAt DESC, UpdatedAt DESC",
+        ].join("\n"),
+      );
+    const latestEndedAtValue = latestEndedResult.recordset[0]?.EndedAt as Date | string | null | undefined;
+    const latestEndedAt =
+      latestEndedAtValue instanceof Date
+        ? latestEndedAtValue
+        : typeof latestEndedAtValue === "string"
+          ? new Date(latestEndedAtValue)
+          : null;
+    if (latestEndedAt && !Number.isNaN(latestEndedAt.getTime()) && startedAt.getTime() < latestEndedAt.getTime()) {
+      res.status(400).json({ message: "Downtime cannot restart before the last restoration time" });
+      await tx.rollback();
+      return;
+    }
+
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("startedAt", sql.DateTime2(0), startedAt)
+      .input("startedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .input("startedReason", sql.NVarChar(1024), reason.length > 0 ? reason : null)
+      .query(
+        [
+          "INSERT INTO pm.CMDowntimeIntervals (TaskId, StartedAt, StartedByUserId, StartedReason)",
+          "VALUES (@taskId, @startedAt, @startedByUserId, @startedReason);",
+        ].join("\n"),
+      );
+
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .input("startedAt", sql.DateTime2(0), startedAt)
+      .query(
+        [
+          "UPDATE pm.PMTasks",
+          "SET",
+          "  DowntimeStartedAt = COALESCE(DowntimeStartedAt, @startedAt),",
+          "  DowntimeEndedAt = NULL,",
+          "  Status = CASE WHEN Status IN (N'pending_review', N'paused') THEN N'open' ELSE Status END",
+          "WHERE TaskId = @taskId AND MaintenanceType = N'CM'",
+        ].join("\n"),
+      );
+
+    await appendCmEvent({
+      executor: tx,
+      taskId,
+      eventType: "downtime_reopened",
+      occurredAt: startedAt,
+      actorUserId: req.user.sub,
+      reason: reason.length > 0 ? reason : null,
+    });
+
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
+});
+
+workOrdersRouter.post("/:taskId/report-recurrence", async (req, res) => {
+  const taskId = req.params.taskId;
+  if (!z.string().uuid().safeParse(taskId).success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const parsed = WorkOrderRepeatFaultSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Invalid request" });
+    return;
+  }
+
+  const db = await getDb();
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const sourceResult = await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "SELECT TOP (1)",
+          "  TaskId, AssetId, FacilityId, TemplateId, Symptom, ImpactLevel, FailureCategory, FailureCode, Status",
+          "FROM pm.PMTasks",
+          "WHERE TaskId = @taskId AND MaintenanceType = N'CM'",
+        ].join("\n"),
+      );
+    const sourceRow = sourceResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!sourceRow) {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+    if (sourceRow.Status !== "completed") {
+      res.status(409).json({ message: "Use the same work order until it is closed" });
+      await tx.rollback();
+      return;
+    }
+
+    const downtimeStartedAtRaw = parsed.data.downtimeStartedAt?.trim() ?? "";
+    const downtimeStartedAt = downtimeStartedAtRaw ? new Date(downtimeStartedAtRaw) : new Date();
+    if (Number.isNaN(downtimeStartedAt.getTime())) {
+      res.status(400).json({ message: "Invalid downtime start date" });
+      await tx.rollback();
+      return;
+    }
+    if (downtimeStartedAt.getTime() > Date.now()) {
+      res.status(400).json({ message: "Downtime start date cannot be in the future" });
+      await tx.rollback();
+      return;
+    }
+
+    const insertResult = await tx
+      .request()
+      .input("assetId", sql.UniqueIdentifier, (sourceRow.AssetId as string | null) ?? null)
+      .input("facilityId", sql.UniqueIdentifier, (sourceRow.FacilityId as string | null) ?? null)
+      .input("templateId", sql.UniqueIdentifier, String(sourceRow.TemplateId))
+      .input("symptom", sql.NVarChar(1024), (sourceRow.Symptom as string | null) ?? null)
+      .input("impactLevel", sql.NVarChar(32), (sourceRow.ImpactLevel as string | null) ?? null)
+      .input("failureCategory", sql.NVarChar(64), (sourceRow.FailureCategory as string | null) ?? null)
+      .input("failureCode", sql.NVarChar(64), (sourceRow.FailureCode as string | null) ?? null)
+      .input("downtimeStartedAt", sql.DateTime2(0), downtimeStartedAt)
+      .input("reportedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .input("reportedChannel", sql.NVarChar(32), parsed.data.reportedChannel?.trim() || "web")
+      .input("recurringFromTaskId", sql.UniqueIdentifier, taskId)
+      .query(
+        [
+          "DECLARE @now datetime2(0) = sysutcdatetime();",
+          "DECLARE @taskNumber nvarchar(32) = CONCAT(",
+          "  N'WO-',",
+          "  FORMAT(@now, 'yyyyMMdd'),",
+          "  N'-',",
+          "  RIGHT(CONVERT(varchar(36), NEWID()), 8)",
+          ");",
+          "INSERT INTO pm.PMTasks (",
+          "  TaskNumber, AssetId, FacilityId, TemplateId, ScheduledDueAt, Status, MaintenanceType,",
+          "  Symptom, ImpactLevel, FailureCategory, FailureCode, DowntimeStartedAt,",
+          "  ReportedByUserId, ReportedAt, ReportedChannel, RecurringFromTaskId",
+          ")",
+          "OUTPUT inserted.TaskId AS TaskId",
+          "VALUES (",
+          "  @taskNumber, @assetId, @facilityId, @templateId, @now, N'open', N'CM',",
+          "  @symptom, @impactLevel, @failureCategory, @failureCode, @downtimeStartedAt,",
+          "  @reportedByUserId, @now, @reportedChannel, @recurringFromTaskId",
+          ");",
+        ].join("\n"),
+      );
+    const insertedTaskId = insertResult.recordset[0]?.TaskId as string | undefined;
+    if (!insertedTaskId) {
+      res.status(500).json({ message: "Failed to create work order" });
+      await tx.rollback();
+      return;
+    }
+
+    const reason = parsed.data.reason?.trim() ?? "";
+    await tx
+      .request()
+      .input("taskId", sql.UniqueIdentifier, insertedTaskId)
+      .input("startedAt", sql.DateTime2(0), downtimeStartedAt)
+      .input("startedByUserId", sql.UniqueIdentifier, req.user.sub)
+      .input("startedReason", sql.NVarChar(1024), reason.length > 0 ? reason : null)
+      .query(
+        [
+          "INSERT INTO pm.CMDowntimeIntervals (TaskId, StartedAt, StartedByUserId, StartedReason)",
+          "VALUES (@taskId, @startedAt, @startedByUserId, @startedReason);",
+        ].join("\n"),
+      );
+
+    await appendCmEvent({
+      executor: tx,
+      taskId: insertedTaskId,
+      eventType: "reported",
+      occurredAt: downtimeStartedAt,
+      actorUserId: req.user.sub,
+      notes: (sourceRow.Symptom as string | null) ?? null,
+    });
+    await appendCmEvent({
+      executor: tx,
+      taskId,
+      eventType: "repeat_fault_linked",
+      occurredAt: downtimeStartedAt,
+      actorUserId: req.user.sub,
+      reason: reason.length > 0 ? reason : null,
+      metadataJson: JSON.stringify({ linkedTaskId: insertedTaskId }),
+    });
+
+    await tx.commit();
+    res.status(201).json({ id: insertedTaskId, created: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    throw err;
+  }
 });
 
 workOrdersRouter.post("/:taskId/resolution", async (req, res) => {
@@ -1288,7 +2122,10 @@ workOrdersRouter.post("/:taskId/resolution", async (req, res) => {
     AssignedToUserId: (row.AssignedToUserId as string | null) ?? null,
     AssignedToRoleName: (row.AssignedToRoleName as string | null) ?? null,
   };
-  if (!canModifyTask(req.user.sub, req.user.roles, accessRow)) {
+  if (!canModifyAssignedTask(req.user.sub, req.user.roles, {
+    assignedToUserId: accessRow.AssignedToUserId,
+    assignedToRoleName: accessRow.AssignedToRoleName,
+  })) {
     res.status(403).json({ message: "Forbidden" });
     return;
   }

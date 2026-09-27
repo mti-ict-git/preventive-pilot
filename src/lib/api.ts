@@ -173,6 +173,7 @@ export type Asset = {
     enabled: boolean | null;
     defaultTemplateId: string | null;
     lastCompletedAt: string | null;
+    nextPlannedDueAt: string | null;
     nextDueAt: string | null;
   };
 };
@@ -219,6 +220,7 @@ export type Facility = {
     enabled: boolean | null;
     defaultTemplateId: string | null;
     lastCompletedAt: string | null;
+    nextPlannedDueAt: string | null;
     nextDueAt: string | null;
   };
 };
@@ -284,6 +286,18 @@ export const apiFacilityPmNow = async (facilityId: string): Promise<{ id: string
   return apiFetchJson<{ id: string }>(`/api/facilities/${facilityId}/pm-now`, { method: "POST" });
 };
 
+export const apiSkipFacilityNextPm = async (input: {
+  facilityId: string;
+  plannedDueAt: string;
+  reason: string;
+}): Promise<{ ok: true }> => {
+  const { facilityId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/facilities/${facilityId}/skip-next-pm`, {
+    method: "POST",
+    body,
+  });
+};
+
 export const apiCloneFacility = async (input: {
   facilityId: string;
   name?: string;
@@ -313,6 +327,18 @@ export const apiPatchAssetPm = async (input: {
   });
 };
 
+export const apiSkipAssetNextPm = async (input: {
+  assetId: string;
+  plannedDueAt: string;
+  reason: string;
+}): Promise<{ ok: true }> => {
+  const { assetId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/assets/${assetId}/skip-next-pm`, {
+    method: "POST",
+    body,
+  });
+};
+
 export const apiBulkSetAssetPmEnabled = async (input: {
   assetIds: string[];
   pmEnabled: boolean;
@@ -336,8 +362,10 @@ export const apiBulkSetAssetPmTemplate = async (input: {
 export type TaskListItem = {
   id: string;
   taskNumber: string;
+  maintenanceType: "PM" | "CM";
   status: string;
   priority: string;
+  plannedDueAt: string;
   scheduledDueAt: string;
   createdAt: string;
   startedAt: string | null;
@@ -491,6 +519,7 @@ export type TaskDetail = {
   maintenanceType: "PM" | "CM";
   status: string;
   priority: string;
+  plannedDueAt: string;
   scheduledDueAt: string;
   createdAt: string;
   startedAt: string | null;
@@ -500,6 +529,7 @@ export type TaskDetail = {
   cancelledBy: TaskUserRef | null;
   cancelledReason: string | null;
   forceCompleted: boolean | null;
+  fulfilledPlannedDueAt?: string | null;
   approvalStatus: string | null;
   technicianCompletedAt: string | null;
   technicianCompletedBy: TaskUserRef | null;
@@ -513,6 +543,11 @@ export type TaskDetail = {
   revisedAt: string | null;
   revisedBy: TaskUserRef | null;
   revisionNote: string | null;
+  workSessionSummary: {
+    totalSeconds: number;
+    sessionCount: number;
+    activeSessionStartedAt: string | null;
+  } | null;
   remarksHistory?: Array<{
     label: string;
     note: string | null;
@@ -617,12 +652,17 @@ export const apiAssignTask = async (input: {
   assignedToUserId?: string | null;
   assignedToRoleId?: string | null;
   priority?: string;
-  status?: string;
 }): Promise<{ ok: true }> => {
   const { taskId, ...body } = input;
   return apiFetchJson<{ ok: true }>(`/api/tasks/${taskId}/assign`, {
     method: "POST",
     body,
+  });
+};
+
+export const apiClaimTask = async (taskId: string): Promise<{ ok: true; claimed: boolean }> => {
+  return apiFetchJson<{ ok: true; claimed: boolean }>(`/api/tasks/${taskId}/claim`, {
+    method: "POST",
   });
 };
 
@@ -778,8 +818,10 @@ export const apiCreateWorkOrder = async (input: {
   failureCode?: string;
   downtimeStartedAt?: string;
   reportedChannel?: string;
-}): Promise<{ id: string }> => {
-  return apiFetchJson<{ id: string }>(`/api/work-orders`, { method: "POST", body: input });
+  sourceTaskId?: string;
+  sourceTemplateChecklistItemId?: string;
+}): Promise<{ id: string; created: boolean }> => {
+  return apiFetchJson<{ id: string; created: boolean }>(`/api/work-orders`, { method: "POST", body: input });
 };
 
 export type WorkOrderDetail = {
@@ -790,6 +832,8 @@ export type WorkOrderDetail = {
   scheduledDueAt: string | null;
   createdAt: string;
   startedAt: string | null;
+  repairSubmittedAt: string | null;
+  repairSubmittedBy: TaskUserRef | null;
   completedAt: string | null;
   cancelledAt: string | null;
   symptom: string | null;
@@ -798,6 +842,16 @@ export type WorkOrderDetail = {
   failureCode: string | null;
   downtimeStartedAt: string | null;
   downtimeEndedAt: string | null;
+  downtimeTotalSeconds: number;
+  downtimeIntervals: Array<{
+    id: string;
+    startedAt: string;
+    startedReason: string | null;
+    startedBy: TaskUserRef | null;
+    endedAt: string | null;
+    endReason: string | null;
+    endedBy: TaskUserRef | null;
+  }>;
   reportedAt: string | null;
   reportedChannel: string | null;
   reportedBy: TaskUserRef | null;
@@ -812,7 +866,20 @@ export type WorkOrderDetail = {
     roleName: string | null;
   };
   completedBy: TaskUserRef | null;
+  returnedAt: string | null;
+  returnedBy: TaskUserRef | null;
+  returnReason: string | null;
   cancelledBy: TaskUserRef | null;
+  recurringFromTaskId: string | null;
+  history: Array<{
+    id: string;
+    type: string;
+    occurredAt: string;
+    reason: string | null;
+    notes: string | null;
+    metadataJson: string | null;
+    actor: TaskUserRef | null;
+  }>;
   resolutionNotes: string | null;
 };
 
@@ -846,8 +913,13 @@ export const apiCancelWorkOrder = async (taskId: string): Promise<{ ok: true }> 
   return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/cancel`, { method: "POST" });
 };
 
-export const apiCloseDowntime = async (taskId: string): Promise<{ ok: true }> => {
-  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/close-downtime`, { method: "POST" });
+export const apiCloseDowntime = async (input: {
+  taskId: string;
+  restoredAt?: string;
+  reason?: string;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/close-downtime`, { method: "POST", body });
 };
 
 export const apiCompleteWorkOrder = async (input: {
@@ -860,6 +932,40 @@ export const apiCompleteWorkOrder = async (input: {
 }): Promise<{ ok: true }> => {
   const { taskId, ...body } = input;
   return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/complete`, { method: "POST", body });
+};
+
+export const apiVerifyCloseWorkOrder = async (taskId: string): Promise<{ ok: true }> => {
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/verify-close`, { method: "POST" });
+};
+
+export const apiReturnWorkOrderForCorrection = async (input: {
+  taskId: string;
+  reason: string;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/return-for-correction`, { method: "POST", body });
+};
+
+export const apiReopenWorkOrderDowntime = async (input: {
+  taskId: string;
+  downtimeStartedAt?: string;
+  reason?: string;
+}): Promise<{ ok: true }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ ok: true }>(`/api/work-orders/${taskId}/reopen-downtime`, { method: "POST", body });
+};
+
+export const apiReportWorkOrderRecurrence = async (input: {
+  taskId: string;
+  downtimeStartedAt?: string;
+  reportedChannel?: string;
+  reason?: string;
+}): Promise<{ id: string; created: boolean }> => {
+  const { taskId, ...body } = input;
+  return apiFetchJson<{ id: string; created: boolean }>(`/api/work-orders/${taskId}/report-recurrence`, {
+    method: "POST",
+    body,
+  });
 };
 
 export const apiUpdateWorkOrderResolution = async (input: {
@@ -1100,13 +1206,19 @@ export type OverdueReportItem = {
   scheduledDueAt: string;
   status: string;
   priority: string;
+  contextType: "asset" | "facility";
   asset: {
     id: string;
     assetTag: string;
     name: string;
     location: { id: string; name: string | null } | null;
     category: { id: string; name: string | null } | null;
-  };
+  } | null;
+  facility: {
+    id: string;
+    name: string | null;
+    location: { id: string; name: string | null } | null;
+  } | null;
   template: { id: string; name: string };
 };
 
@@ -1457,12 +1569,14 @@ export const apiGetSchedulingDayEvents = async (input: {
 
 export const apiRecalculateSchedules = async (input: {
   assetId?: string;
+  facilityId?: string;
   force?: boolean;
 }): Promise<{ updated: number }> => {
   return apiFetchJson<{ updated: number }>("/api/scheduling/recalculate", {
     method: "POST",
     body: {
       assetId: input.assetId,
+      facilityId: input.facilityId,
       force: Boolean(input.force),
     },
   });

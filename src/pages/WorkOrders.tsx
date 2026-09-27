@@ -24,6 +24,7 @@ const statusBadge = (status: string): { label: string; color: string; icon: Reac
   const s = status.toLowerCase();
   if (s === "completed") return { label: "Completed", color: "bg-success/20 text-success border-success/30", icon: CheckCircle };
   if (s === "in_progress") return { label: "In Progress", color: "bg-primary/20 text-primary border-primary/30", icon: Wrench };
+  if (s === "pending_review") return { label: "Pending Review", color: "bg-warning/20 text-warning border-warning/30", icon: Clock };
   if (s === "cancelled") return { label: "Cancelled", color: "bg-muted/40 text-muted-foreground border-muted/60", icon: AlertTriangle };
   if (s === "overdue") return { label: "Overdue", color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertTriangle };
   return { label: "Open", color: "bg-accent/20 text-accent border-accent/30", icon: Clock };
@@ -127,6 +128,7 @@ const WorkOrders = () => {
                     <SelectItem value="__all__">All</SelectItem>
                     <SelectItem value="open">Open</SelectItem>
                     <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="pending_review">Pending Review</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
                     <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>

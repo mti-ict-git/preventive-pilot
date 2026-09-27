@@ -1,5 +1,4 @@
 import { Router } from "express";
-import sql from "mssql";
 import { getDb } from "../db/mssql.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
@@ -24,6 +23,7 @@ dashboardRouter.get("/overview", async (_req, res) => {
       "    FROM pm.PMTasks t",
       "    WHERE t.CompletedAt IS NULL",
       "      AND t.CancelledAt IS NULL",
+      "      AND t.MaintenanceType = N'PM'",
       "      AND t.ScheduledDueAt >= dateadd(day, datediff(day, 0, sysutcdatetime()), 0)",
       "      AND t.ScheduledDueAt < dateadd(day, 1, dateadd(day, datediff(day, 0, sysutcdatetime()), 0))",
       "  ) AS DueTodayCount,",
@@ -32,6 +32,7 @@ dashboardRouter.get("/overview", async (_req, res) => {
       "    FROM pm.PMTasks t",
       "    WHERE t.CompletedAt IS NULL",
       "      AND t.CancelledAt IS NULL",
+      "      AND t.MaintenanceType = N'PM'",
       "      AND t.ScheduledDueAt < sysutcdatetime()",
       "  ) AS OverdueCount,",
       "  (",
@@ -39,6 +40,7 @@ dashboardRouter.get("/overview", async (_req, res) => {
       "    FROM pm.PMTasks t",
       "    WHERE t.CompletedAt IS NULL",
       "      AND t.CancelledAt IS NULL",
+      "      AND t.MaintenanceType = N'PM'",
       "      AND t.ScheduledDueAt >= sysutcdatetime()",
       "      AND t.ScheduledDueAt < dateadd(day, 7, sysutcdatetime())",
       "  ) AS Upcoming7DaysCount",
@@ -72,6 +74,8 @@ dashboardRouter.get("/overview", async (_req, res) => {
       "LEFT JOIN pm.PMTasks t",
       "  ON t.ScheduledDueAt >= m.MonthStart",
       "  AND t.ScheduledDueAt < m.MonthEnd",
+      "  AND t.MaintenanceType = N'PM'",
+      "  AND t.CancelledAt IS NULL",
       "GROUP BY m.MonthStart, m.MonthEnd",
       "ORDER BY m.MonthStart ASC",
     ].join("\n"),
@@ -99,7 +103,8 @@ dashboardRouter.get("/overview", async (_req, res) => {
       "FROM pm.PMTasks t",
       "INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
       "LEFT JOIN pm.AssetCategories c ON c.CategoryId = a.CategoryId",
-      "WHERE t.CompletedAt IS NULL",
+      "WHERE t.MaintenanceType = N'PM'",
+      "  AND t.CompletedAt IS NULL",
       "  AND t.CancelledAt IS NULL",
       "  AND t.ScheduledDueAt < sysutcdatetime()",
       "GROUP BY ISNULL(c.Name, N'Uncategorized')",
@@ -123,7 +128,8 @@ dashboardRouter.get("/overview", async (_req, res) => {
       "    MIN(t.ScheduledDueAt) AS EarliestDueAt",
       "  FROM pm.PMTasks t",
       "  INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
-      "  WHERE t.CompletedAt IS NULL",
+      "  WHERE t.MaintenanceType = N'PM'",
+      "    AND t.CompletedAt IS NULL",
       "    AND t.CancelledAt IS NULL",
       "    AND t.ScheduledDueAt < sysutcdatetime()",
       "  GROUP BY a.AssetId, a.AssetTag, a.Name",
@@ -164,6 +170,7 @@ dashboardRouter.get("/overview", async (_req, res) => {
       "LEFT JOIN pm.Users u ON u.UserId = t.AssignedToUserId",
       "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
       "WHERE t.CancelledAt IS NULL",
+      "  AND t.MaintenanceType = N'PM'",
       "ORDER BY t.CreatedAt DESC",
     ].join("\n"),
   );

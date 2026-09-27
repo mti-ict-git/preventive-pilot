@@ -18,6 +18,12 @@
     "ngrok:gist-watch": "node scripts/ngrok/gist-watcher.mjs",
     "git:force-main": "node scripts/git/force-main-to-commit.mjs",
     "test:facilities": "node --test scripts/tests/facility-permissions.test.mjs",
+    "test:af01": "node --test scripts/tests/task-broken-asset-cancellation.test.mjs",
+    "test:as01": "node --test scripts/tests/task-assignment-policy.test.mjs",
+    "test:cm01": "node --test scripts/tests/work-order-cm01.test.mjs",
+    "test:ex01": "node --test scripts/tests/task-execution-policy.test.mjs",
+    "test:q01q09": "node --test scripts/tests/reporting-contract-policy.test.mjs",
+    "test:sc01": "node --test scripts/tests/pm-scheduling-policy.test.mjs",
     "test:tc01": "node --test scripts/tests/task-checklist-validation.test.mjs",
     "test:tc02": "node --test scripts/tests/task-checklist-snapshot.test.mjs"
   },
