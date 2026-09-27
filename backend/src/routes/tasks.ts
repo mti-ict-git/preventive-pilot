@@ -4803,6 +4803,8 @@ const ReviseApprovalSchema = z.object({
   reopenTask: z.boolean().optional(),
 });
 
+const PM_OWN_WORK_REVIEW_FORBIDDEN_MESSAGE = "PM performers cannot review their own submitted task.";
+
 tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) {
@@ -5043,7 +5045,8 @@ tasksRouter.post(
         [
           "SELECT TOP (1)",
           "  t.ApprovalStatus AS ApprovalStatus,",
-          "  t.MaintenanceType AS MaintenanceType",
+          "  t.MaintenanceType AS MaintenanceType,",
+          "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId",
           "FROM pm.PMTasks t",
           "WHERE t.TaskId = @taskId",
         ].join("\n"),
@@ -5069,6 +5072,11 @@ tasksRouter.post(
         await tx.rollback();
         return;
       }
+    if ((row.TechnicianCompletedByUserId as string | null) === req.user.sub) {
+      res.status(403).json({ message: PM_OWN_WORK_REVIEW_FORBIDDEN_MESSAGE });
+      await tx.rollback();
+      return;
+    }
 
       const taskTemplateResult = await tx
         .request()
@@ -5207,7 +5215,8 @@ tasksRouter.post(
         [
           "SELECT TOP (1)",
           "  t.ApprovalStatus AS ApprovalStatus,",
-          "  t.MaintenanceType AS MaintenanceType",
+          "  t.MaintenanceType AS MaintenanceType,",
+          "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId",
           "FROM pm.PMTasks t",
           "WHERE t.TaskId = @taskId",
         ].join("\n"),
@@ -5226,6 +5235,10 @@ tasksRouter.post(
     const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
     if (approvalStatus !== "PendingSupervisor") {
       res.status(400).json({ message: "Invalid state" });
+      return;
+    }
+    if ((row.TechnicianCompletedByUserId as string | null) === req.user.sub) {
+      res.status(403).json({ message: PM_OWN_WORK_REVIEW_FORBIDDEN_MESSAGE });
       return;
     }
 
@@ -5302,6 +5315,11 @@ tasksRouter.post(
       const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
       if (approvalStatus !== "PendingSuperadmin") {
         res.status(400).json({ message: "Invalid state" });
+        await tx.rollback();
+        return;
+      }
+      if ((row.TechnicianCompletedByUserId as string | null) === req.user.sub) {
+        res.status(403).json({ message: PM_OWN_WORK_REVIEW_FORBIDDEN_MESSAGE });
         await tx.rollback();
         return;
       }
@@ -5411,7 +5429,8 @@ tasksRouter.post(
         [
           "SELECT TOP (1)",
           "  t.ApprovalStatus AS ApprovalStatus,",
-          "  t.MaintenanceType AS MaintenanceType",
+          "  t.MaintenanceType AS MaintenanceType,",
+          "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId",
           "FROM pm.PMTasks t",
           "WHERE t.TaskId = @taskId",
         ].join("\n"),
@@ -5432,6 +5451,11 @@ tasksRouter.post(
       const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
       if (approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin") {
         res.status(400).json({ message: "Invalid state" });
+        await rollbackQuietly(tx);
+        return;
+      }
+      if ((row.TechnicianCompletedByUserId as string | null) === req.user.sub) {
+        res.status(403).json({ message: PM_OWN_WORK_REVIEW_FORBIDDEN_MESSAGE });
         await rollbackQuietly(tx);
         return;
       }
@@ -5575,7 +5599,8 @@ tasksRouter.post(
           "  t.ScheduledDueAt AS ScheduledDueAt,",
           "  t.Priority AS Priority,",
           "  t.AssignedToUserId AS AssignedToUserId,",
-          "  t.AssignedToRoleId AS AssignedToRoleId",
+          "  t.AssignedToRoleId AS AssignedToRoleId,",
+          "  t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId",
           "FROM pm.PMTasks t",
           "WHERE t.TaskId = @taskId",
         ].join("\n"),
@@ -5596,6 +5621,11 @@ tasksRouter.post(
       const approvalStatus = typeof row.ApprovalStatus === "string" ? row.ApprovalStatus : null;
       if (approvalStatus !== "PendingSupervisor" && approvalStatus !== "PendingSuperadmin") {
         res.status(400).json({ message: "Invalid state" });
+        await rollbackQuietly(tx);
+        return;
+      }
+      if ((row.TechnicianCompletedByUserId as string | null) === req.user.sub) {
+        res.status(403).json({ message: PM_OWN_WORK_REVIEW_FORBIDDEN_MESSAGE });
         await rollbackQuietly(tx);
         return;
       }

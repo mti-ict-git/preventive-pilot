@@ -305,6 +305,81 @@ export function createHarness() {
 
           if (
             query.includes('FROM pm.PMTasks t') &&
+            query.includes('t.TaskId AS TaskId,') &&
+            query.includes('t.AssetId AS AssetId,') &&
+            query.includes('t.TemplateId AS TemplateId,') &&
+            query.includes('t.TechnicianCompletedAt AS TechnicianCompletedAt,') &&
+            query.includes('t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,') &&
+            query.includes('tpl.IntervalDays AS IntervalDays')
+          ) {
+            return {
+              recordset: [
+                {
+                  TaskId: fixtureTaskId,
+                  AssetId: fixtureAssetId,
+                  TemplateId: fixtureTemplateId,
+                  PlannedDueAt: new Date('2026-09-16T08:00:00Z'),
+                  MaintenanceType: maintenanceType,
+                  ApprovalStatus: approvalStatus,
+                  TechnicianCompletedAt: technicianCompletedByUserId ? new Date('2026-09-16T09:00:00Z') : null,
+                  TechnicianCompletedByUserId: technicianCompletedByUserId,
+                  IntervalDays: 30,
+                },
+              ],
+              rowsAffected: [],
+            };
+          }
+
+          if (
+            query.includes('FROM pm.PMTasks t') &&
+            query.includes('t.ApprovalStatus AS ApprovalStatus,') &&
+            query.includes('t.AssetId AS AssetId,') &&
+            query.includes('t.PlannedDueAt AS PlannedDueAt,') &&
+            query.includes('t.AssignedToRoleId AS AssignedToRoleId,') &&
+            query.includes('t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId')
+          ) {
+            return {
+              recordset: [
+                {
+                  ApprovalStatus: approvalStatus,
+                  MaintenanceType: maintenanceType,
+                  AssetId: fixtureAssetId,
+                  FacilityId: null,
+                  TemplateId: fixtureTemplateId,
+                  PlannedDueAt: new Date('2026-09-16T08:00:00Z'),
+                  ScheduledDueAt: new Date('2026-09-16T08:00:00Z'),
+                  Priority: 'medium',
+                  AssignedToUserId: assignedToUserId,
+                  AssignedToRoleId: assignedToRoleId,
+                  TechnicianCompletedByUserId: technicianCompletedByUserId,
+                },
+              ],
+              rowsAffected: [],
+            };
+          }
+
+          if (
+            query.includes('FROM pm.PMTasks t') &&
+            query.includes('t.ApprovalStatus AS ApprovalStatus') &&
+            query.includes('t.MaintenanceType AS MaintenanceType') &&
+            query.includes('t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId') &&
+            !query.includes('t.AssetId AS AssetId') &&
+            !query.includes('t.TemplateId AS TemplateId')
+          ) {
+            return {
+              recordset: [
+                {
+                  ApprovalStatus: approvalStatus,
+                  MaintenanceType: maintenanceType,
+                  TechnicianCompletedByUserId: technicianCompletedByUserId,
+                },
+              ],
+              rowsAffected: [],
+            };
+          }
+
+          if (
+            query.includes('FROM pm.PMTasks t') &&
             query.includes('t.ApprovalStatus AS ApprovalStatus') &&
             query.includes('t.MaintenanceType AS MaintenanceType') &&
             !query.includes('AssignedToUserId AS AssignedToUserId') &&
@@ -402,7 +477,8 @@ export function createHarness() {
             query.includes('MaintenanceType') &&
             query.includes('AssignedToUserId') &&
             query.includes('AssignedToRoleId') &&
-            query.includes('WHERE TaskId = @taskId')
+            query.includes('WHERE TaskId = @taskId') &&
+            !query.includes('t.AssetId AS AssetId,')
           ) {
             return {
               recordset: [
@@ -503,29 +579,7 @@ export function createHarness() {
                   Priority: 'medium',
                   AssignedToUserId: assignedToUserId,
                   AssignedToRoleId: assignedToRoleId,
-                },
-              ],
-              rowsAffected: [],
-            };
-          }
-
-          if (
-            query.includes('FROM pm.PMTasks t') &&
-            query.includes('t.TechnicianCompletedAt AS TechnicianCompletedAt') &&
-            query.includes('tpl.IntervalDays AS IntervalDays')
-          ) {
-            return {
-              recordset: [
-                {
-                  TaskId: fixtureTaskId,
-                  AssetId: fixtureAssetId,
-                  TemplateId: fixtureTemplateId,
-                  PlannedDueAt: new Date('2026-09-16T08:00:00Z'),
-                  MaintenanceType: maintenanceType,
-                  ApprovalStatus: approvalStatus,
-                  TechnicianCompletedAt: technicianCompletedByUserId ? new Date('2026-09-16T09:00:00Z') : null,
                   TechnicianCompletedByUserId: technicianCompletedByUserId,
-                  IntervalDays: 30,
                 },
               ],
               rowsAffected: [],

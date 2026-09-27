@@ -68,6 +68,25 @@ test('Q-02 and current Q-03 PM approval boundaries stay explicit', async t => {
     }
   });
 
+  await t.test('supervisor-stage approval blocks same-user own-work approval', async () => {
+    for (const roles of [['Supervisor'], ['Admin'], ['Superadmin'], ['Technician', 'Supervisor']]) {
+      h.reset({
+        taskStatus: 'in_progress',
+        approvalStatus: 'PendingSupervisor',
+        technicianCompletedByUserId: fixtureUserId,
+      });
+
+      const response = await request(
+        'POST',
+        `/api/tasks/${fixtureTaskId}/approve-by-supervisor`,
+        undefined,
+        h.token(roles),
+      );
+      assert.equal(response.status, 403, `${roles.join(',')}: ${await response.text()}`);
+      assert.equal(h.getState().approvalStatus, 'PendingSupervisor');
+    }
+  });
+
   await t.test('revise-approval rejects Admin but accepts Supervisor and Superadmin', async () => {
     h.reset({ taskStatus: 'in_progress', approvalStatus: 'PendingSupervisor' });
 
@@ -90,6 +109,60 @@ test('Q-02 and current Q-03 PM approval boundaries stay explicit', async t => {
       assert.equal(response.status, 200, `${roles.join(',')}: ${await response.text()}`);
       assert.equal(h.getState().approvalStatus, 'None');
     }
+  });
+
+  await t.test('review actions block same-user PM performers at both approval stages', async () => {
+    h.reset({
+      taskStatus: 'in_progress',
+      approvalStatus: 'PendingSupervisor',
+      technicianCompletedByUserId: fixtureUserId,
+    });
+    const reviseSupervisor = await request(
+      'POST',
+      `/api/tasks/${fixtureTaskId}/revise-approval`,
+      { reason: 'Need correction', reopenTask: false },
+      h.token(['Supervisor']),
+    );
+    assert.equal(reviseSupervisor.status, 403, await reviseSupervisor.text());
+
+    h.reset({
+      taskStatus: 'in_progress',
+      approvalStatus: 'PendingSupervisor',
+      technicianCompletedByUserId: fixtureUserId,
+    });
+    const rejectSupervisor = await request(
+      'POST',
+      `/api/tasks/${fixtureTaskId}/reject-approval`,
+      { reason: 'Need rework' },
+      h.token(['Supervisor']),
+    );
+    assert.equal(rejectSupervisor.status, 403, await rejectSupervisor.text());
+
+    h.reset({
+      taskStatus: 'in_progress',
+      approvalStatus: 'PendingSuperadmin',
+      technicianCompletedByUserId: fixtureUserId,
+    });
+    const reviseSuperadmin = await request(
+      'POST',
+      `/api/tasks/${fixtureTaskId}/revise-approval`,
+      { reason: 'Need correction', reopenTask: false },
+      h.token(['Superadmin']),
+    );
+    assert.equal(reviseSuperadmin.status, 403, await reviseSuperadmin.text());
+
+    h.reset({
+      taskStatus: 'in_progress',
+      approvalStatus: 'PendingSuperadmin',
+      technicianCompletedByUserId: fixtureUserId,
+    });
+    const rejectSuperadmin = await request(
+      'POST',
+      `/api/tasks/${fixtureTaskId}/reject-approval`,
+      { reason: 'Need rework' },
+      h.token(['Superadmin']),
+    );
+    assert.equal(rejectSuperadmin.status, 403, await rejectSuperadmin.text());
   });
 
   await t.test('final approval route rejects non-Superadmin reviewers', async () => {

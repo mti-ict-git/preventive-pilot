@@ -2881,6 +2881,8 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Approve by supervisor",
+        description:
+          "Moves a PM task from `PendingSupervisor` to `PendingSuperadmin`. The reviewer must not be the same user who submitted the PM work for approval.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -2912,6 +2914,8 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Approve by superadmin",
+        description:
+          "Final PM approval step. Only Superadmin may call it, and the reviewer must not be the same user who submitted the PM work for approval.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -2943,7 +2947,8 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Revise approval",
-        description: "Return the submitted PM task for correction. A nonblank reason is required.",
+        description:
+          "Return the submitted PM task for correction. A nonblank reason is required, and the reviewer must not be the same user who submitted the PM work for approval.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -2992,7 +2997,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["Tasks"],
         summary: "Reject approval",
         description:
-          "Reject the submitted PM task and create or reuse one linked replacement PM task for the repeated work. The original rejected task keeps its history, results, evidence, and work time.",
+          "Reject the submitted PM task and create or reuse one linked replacement PM task for the repeated work. The original rejected task keeps its history, results, evidence, and work time. The reviewer must not be the same user who submitted the PM work for approval.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],

@@ -115,12 +115,12 @@ Revision is a separate action and can reopen work; its exact reset behavior must
 | --- | --- |
 | `complete` | Sets lifecycle completion fields after validation; not equivalent to final approval |
 | `submit-for-approval` | Applies the PM checklist validation baseline, writes technician trail and `PendingSupervisor`; the handler does not itself set lifecycle `Status = completed` |
-| `approve-by-supervisor` | Requires `PendingSupervisor`; allows Supervisor, Admin, or Superadmin; moves to `PendingSuperadmin` |
-| `approve-by-superadmin` | Requires `PendingSuperadmin`; Superadmin only; sets `Approved`, lifecycle completion, and closes any open PM work session |
-| `revise-approval` | Separate correction path with Supervisor/Superadmin route guard; requires a nonblank written reason and closes any open PM work session |
-| `reject-approval` | Requires a nonblank written reason, preserves the rejected task history, and creates or reuses one linked replacement PM task instead of reopening the same task |
+| `approve-by-supervisor` | Requires `PendingSupervisor`; allows Supervisor, Admin, or Superadmin; moves to `PendingSuperadmin`; the reviewer must not be the same user who submitted the PM work |
+| `approve-by-superadmin` | Requires `PendingSuperadmin`; Superadmin only; sets `Approved`, lifecycle completion, and closes any open PM work session; the reviewer must not be the same user who submitted the PM work |
+| `revise-approval` | Separate correction path with Supervisor/Superadmin route guard; requires a nonblank written reason, closes any open PM work session, and blocks same-user reviewer/performer combinations |
+| `reject-approval` | Requires a nonblank written reason, preserves the rejected task history, creates or reuses one linked replacement PM task instead of reopening the same task, and blocks same-user reviewer/performer combinations |
 
-The web Approvals page provides review queues. Task detail and PDF export expose sign-off information. Historical statements that submission always marks lifecycle completion are superseded by this distinction. Q-02 verification now confirms that repeated `submit-for-approval` attempts are rejected once the task is already waiting for approval. PM checklist validation at submission is aligned with completion. EX-01 now also closes active PM work sessions on submission and final approval so review waiting time is not counted as active execution time. PM own-work/self-approval policy and facility finalization still require D1 verification (Q-03–Q-04).
+The web Approvals page provides review queues. Task detail and PDF export expose sign-off information. Historical statements that submission always marks lifecycle completion are superseded by this distinction. Q-02 verification now confirms that repeated `submit-for-approval` attempts are rejected once the task is already waiting for approval. PM checklist validation at submission is aligned with completion. EX-01 now also closes active PM work sessions on submission and final approval so review waiting time is not counted as active execution time. Q-03 is now implemented locally: PM performers cannot review their own submitted task during supervisor approval, revision, rejection, or final approval. Facility finalization remains under Q-04.
 
 Acceptance: test each actor and valid/invalid transition, repeated submission, required evidence, returned work, own-work approval policy, and facility/asset finalization. Do not count source inspection as acceptance.
 
