@@ -115,3 +115,64 @@ Use [.env.example](../.env.example) as a placeholder-only configuration template
 `node scripts/db/verify-schema.mjs --source-only` needs no live database. `npm run db:verify` reads the configured live database and rejects missing objects or checked column/flag mismatches. For an explicitly approved SQL host with create-database privileges, `node scripts/db/verify-disposable.mjs --run <configured-server>` creates and drops its own unique database to test clean/repeated/upgrade application; it never applies the full schema to the configured operational database.
 
 [Current D2 evidence](verification-d2-environment.md) distinguishes successful schema and local build checks from pending fresh-checkout/Docker/browser/restore acceptance. Do not describe the application as deployed or recoverable based on these checks alone.
+
+
+## Reset one local account password
+
+Run from the repository root using an exact username. The command reads the root `.env` (or `BACKEND_ENV_FILE`) and updates only an existing `local` user's credential hash and password timestamps. It does not create accounts, reset LDAP passwords, change roles, enable disabled users, or revoke existing access/refresh tokens. Confirm the configured database target before running.
+
+For the macOS zsh shell, read the password without echoing it or including it in command history:
+
+```zsh
+read -r -s 'pm_reset_password?New password: '
+printf '\n'
+printf '%s' "$pm_reset_password" | npm --prefix backend run reset-local-password -- --username YOUR_USERNAME --password-stdin
+unset pm_reset_password
+```
+
+Passwords require at least 12 characters and at most 72 UTF-8 bytes (bcrypt limit). The script uses bcrypt cost 12 and parameterized SQL. `--help` does not connect to the database. An unmatched/local-credential-missing account fails without creating a credential or converting a directory account.
+
+Verification on 2026-10-02: two isolated regression tests passed for hash verification, exact local-account filtering, length validation, and missing-account failure; CLI help passed without a database connection. No account reset was executed. OpenAPI reviewed: this is an operator CLI, so HTTP contracts are unchanged.
+
+
+## Production Docker deployment script
+
+Run on the intended Docker host from the release checkout. Requirements: Bash, Python 3, Docker Engine and Compose v2 with `up --wait` support. Use the existing Compose project name; if customized, export `COMPOSE_PROJECT_NAME` consistently. A different checkout directory/project name can create a separate stack or port conflicts.
+
+```sh
+bash scripts/deploy/production.sh --check
+bash scripts/deploy/production.sh --deploy
+```
+
+Default invocation is check-only. Prepare the production root `.env`, SQL schema, database backup/recovery arrangements, existing evidence directory, and Firebase credential file referenced by the base Compose configuration first. The existing base Compose mounts Firebase even when push is unused; the script checks that the mount source is a file. Set `EVIDENCE_STORAGE_HOST_PATH` to existing persistent storage; `EVIDENCE_STORAGE_ROOT` must be omitted or `/app/shared-documents`. This script requires a Linux host with an evidence bind directory that is the exact CIFS mount point; Docker-managed CIFS overlays are not used. Check the jobs setting deliberately: API startup can run enabled jobs and external integrations.
+
+The script validates resolved configuration without printing credentials, verifies the Docker daemon, builds both images, then runs Compose with readiness waiting. The production overlay adds restart policies and process healthchecks. It checks Nginx-to-API routing through `/api/docs.json`. Existing ports remain web 9102 and API 5056; use the host's existing HTTPS reverse proxy/firewall setup. Healthchecks do not prove SQL connectivity, evidence access, public TLS, login or business workflow correctness.
+
+No git pull, schema migration, data reset, volume deletion, or automatic rollback is performed. Build failure stops before container replacement. A failure during startup may leave a partially updated stack: inspect Compose status/logs and use the previously tested release and recovery procedure. This is not a zero-downtime or verified rollback mechanism.
+
+Verification 2026-10-02: shell syntax/help and isolated command-orchestration tests pass for check-only behavior, build-failure stop, deployment ordering, proxy check and partial-LDAP rejection. Docker image build, container startup, production deployment and recovery were not executed. OpenAPI reviewed: no HTTP contract change. The user instruction to defer actual deployment remains in force.
+
+
+### Shared-storage gate before build
+
+The deployment script now requires `CIFS_SHARE_PATH` in `.env` and checks the actual mount source, target and filesystem type with `findmnt`. An existing local directory alone is insufficient. Use a Linux Docker host with `cifs-utils` and `util-linux`; prepare a dedicated directory and a matching `/etc/fstab` entry once. Run on the actual Docker host, not against a remote Docker daemon.
+
+Example `.env` values:
+
+```dotenv
+CIFS_SHARE_PATH=//fileserver/maintenance
+EVIDENCE_STORAGE_HOST_PATH=/mnt/preventive-evidence
+EVIDENCE_STORAGE_ROOT=/app/shared-documents
+```
+
+Example `/etc/fstab` entry (replace server/share and credentials location):
+
+```text
+//fileserver/maintenance /mnt/preventive-evidence cifs credentials=/etc/samba/preventive.credentials,vers=3.0,_netdev,nosuid,nodev 0 0
+```
+
+The credentials file contains `username=...`, `password=...` and optionally `domain=...`; keep it owned by root with mode 600. Configure mount ownership/permissions for the deployment operator and container process as appropriate. The script never writes fstab or credentials. It calls `mount <target>` as root, or `sudo -n mount <target>` otherwise; arrange narrowly scoped privileges in advance. No password is passed on the command line and raw mount errors/options are not printed.
+
+`--check` verifies an existing mount without mounting or writing. If absent it fails with guidance. `--deploy` validates the fstab source/type/target, mounts if needed, revalidates the actual mount, then creates a unique temporary file, writes and reads back data, and deletes that file. Any failure stops before build. The gate runs again after build before replacing containers. Existing mounts are never unmounted or replaced automatically. A successfully mounted share remains mounted even if a later build fails. This host probe does not establish access under every container UID or guarantee availability after deployment; test the application evidence workflow separately.
+
+Verification: `python3 scripts/tests/deploy-share.test.py` checks missing mount in check mode, wrong source, mount success/failure, probe cleanup and access failure with simulated mount commands. `node --test scripts/tests/production-deploy.test.mjs` confirms failed storage validation prevents build. No real share was mounted and no deployment was run.

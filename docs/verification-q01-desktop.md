@@ -6,4 +6,11 @@ Contracts record actual behavior, including preferences replacement, user/role u
 
 `node --test scripts/tests/desktop-contract.test.mjs` passes 14 tests. The harness executes actual routers and auth/role middleware with synthetic SQL and stubbed LDAP, Firebase, jobs and provider fetches. Response checks use the JSON Schema subset of OpenAPI; they do not constitute complete OpenAPI validation or live integration acceptance. No real provider messages were sent.
 
-The task/work-order deletion boundary is now implemented and locally verified: PM-only generic deletion, complete owned-row cleanup, atomic audit and explicit conflicts for incoming history/recurrence references. See [deletion verification](verification-task-deletion.md). Deletion now has live SQL and temporary-storage acceptance through isolated local HTTP routes; Q-01 still retains the 14 remaining contracts and deployed database/storage/provider acceptance; Q-12 mapping remains unresolved.
+The task/work-order deletion boundary is now implemented and locally verified: PM-only generic deletion, complete owned-row cleanup, atomic audit and explicit conflicts for incoming history/recurrence references. See [deletion verification](verification-task-deletion.md). Deletion now has live SQL and temporary-storage acceptance through isolated local HTTP routes; Q-01 still retains the 14 remaining contracts and deployed database/storage/provider acceptance; Q-12 mapping remains deferred by user decision.
+
+
+## PM list SQL correction — 2026-10-02
+
+A reported live SQL parse error exposed missing `AND` operators between unassigned-user and assigned-role predicates in the task list, status counts, and outstanding counts queries. The resulting parser errors included `Incorrect syntax near t` and a downstream `FETCH NEXT` error. All three task predicates were repaired. The new regression check also found and corrected the same missing conjunction in the work-order list query. The previous isolated SQL fixtures did not parse SQL and therefore did not detect this defect.
+
+Added `scripts/tests/task-role-filter-sql.test.mjs` to inspect these ownership conjunctions across task and work-order query fragments. OpenAPI reviewed: request/response/status contracts are unchanged, so no schema update is required. No deployment or database mutation is part of this fix. Live SQL/browser revalidation remains separate.

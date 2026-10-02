@@ -453,3 +453,17 @@ Test loss of connectivity, expired credentials, duplicate actions, absent storag
 
 - [x] Resolve the local documentation-baseline merge with remote checkpoint `6bb0c27`, preserving the current D1 decisions and the local mandatory OpenAPI change-control rules.
   - Evidence: documentation checker passed; merge markers and whitespace checked; no application, backend, or database source changes. See [verification record](documentation-verification.md#repository-merge-reconciliation--2026-09-11). D1 implementation items remain pending.
+
+## Runtime correction — 2026-10-02
+
+Repaired missing ownership-filter SQL conjunctions in PM task list/status/outstanding queries and the CM work-order list. See [contract verification](verification-q01-desktop.md). Prior fixture-based test success did not establish live SQL syntax validity. Deployment remains on hold by user instruction.
+
+## Operator utility — 2026-10-02
+
+Added an existing-local-account password reset CLI at user request. [Usage and isolated verification](deployment-and-environment.md#reset-one-local-account-password). No live account was reset; deployment remains on hold.
+
+## Production deployment utility — 2026-10-02
+
+Added the production Compose overlay and check/deploy script with isolated orchestration verification. See [deployment usage](deployment-and-environment.md#production-docker-deployment-script). Actual Docker build/runtime, database readiness, backup/restore and rollback acceptance remain open in D2. No deployment executed.
+
+Production script follow-up: CIFS source/type/mount validation, optional fstab mount in deploy mode and temporary read/write/delete probes now gate build and container replacement. Isolated tests pass; actual Linux host/share acceptance remains pending.

@@ -541,7 +541,7 @@ workOrdersRouter.get("/", async (req, res) => {
         "        t.AssignedToUserId = @userId",
         "        OR (",
         "          t.AssignedToUserId IS NULL",
-        "          t.AssignedToRoleId IS NOT NULL",
+        "          AND t.AssignedToRoleId IS NOT NULL",
         "          AND EXISTS (",
         "            SELECT 1",
         "            FROM pm.Roles r",
