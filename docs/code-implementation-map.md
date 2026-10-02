@@ -2,7 +2,7 @@
 
 Reviewed: 2026-09-11. Source checkpoint: `b3b11c7`; includes the current uncommitted D1 requirements documentation. Application source was not changed by this audit.
 
-This is a supporting technical map for the [roadmap](implementation-roadmap.md), not a second backlog. The roadmap owns order, acceptance checklists and completion status. This audit originally preceded implementation. AF-02 is now implemented with [local verification](verification-af02.md); the observations below describe the pre-change checkpoint and the remaining seven items stay pending. Findings below come from static source inspection, not executed endpoint/database tests.
+This is a supporting technical map for the [roadmap](implementation-roadmap.md), not a second backlog. The roadmap owns order, acceptance checklists and completion status. This audit originally preceded implementation. All eight mapped items are now implemented locally; see the [current roadmap](implementation-roadmap.md) and its verification links. The observations and work lists below preserve the pre-implementation checkpoint and must not be read as current outstanding work. Findings below come from static source inspection, not executed endpoint/database tests.
 
 ## Coverage and limits
 
@@ -204,3 +204,7 @@ For each implementation item: update its exact contract, add meaningful policy/S
 D2 remains separate: clean setup, migration rehearsal, configuration, backup/restore and release/rollback evidence. D3 remains separate: representative end-to-end PM/CM and integration acceptance. Neither phase is complete because this map exists.
 
 Audit verification: documentation checker, source-path existence and `git diff --check`; source inventory has 126 entries. No application test/build is claimed for a documentation-only audit. The current 71-operation contract gap remains open under Q-01. Remaining product boundaries retain their existing Q IDs; technical recommendations here are not invented user approvals.
+
+### D1 deletion follow-up — 2026-09-27
+
+Manual PM/CM endpoint deletion now has type boundaries, complete owned-row cleanup, atomic auditing and conflicts for independent history/recurrence references; see [verification](verification-task-deletion.md). This closes the manual endpoint slice only; evidence-import replacement and maintenance CLI review remain distinct.

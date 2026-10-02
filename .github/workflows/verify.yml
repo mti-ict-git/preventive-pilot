@@ -1,0 +1,32 @@
+name: Desktop verification
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix backend
+      - run: npm run lint
+      - run: node --test scripts/tests/*.test.mjs
+      - run: npm --prefix backend run typecheck
+      - run: npm --prefix backend run build
+      - run: npx tsc -p tsconfig.app.json --noEmit
+      - run: npx tsc -p tsconfig.node.json --noEmit
+      - run: npm run build
+      - run: node scripts/db/verify-schema.mjs --source-only
+      - run: node scripts/docs/check-docs.mjs

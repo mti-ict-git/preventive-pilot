@@ -1,3 +1,4 @@
+import { validateEnabledPmContext, cancelUnstartedPmTasks, PmEligibilityError } from "../db/pmEligibilityPolicy.js";
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
@@ -328,43 +329,59 @@ facilitiesRouter.put("/:facilityId", requireFacilityAdmin, async (req, res) => {
   }
 
   const db = await getDb();
-  const request = db
-    .request()
-    .input("facilityId", sql.UniqueIdentifier, facilityId)
-    .input("name", sql.NVarChar(256), parsed.data.name ?? null)
-    .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
-    .input("description", sql.NVarChar(1024), parsed.data.description ?? null)
-    .input("hasName", sql.Bit, parsed.data.name !== undefined ? 1 : 0)
-    .input("hasLocation", sql.Bit, parsed.data.locationId !== undefined ? 1 : 0)
-    .input("hasDescription", sql.Bit, parsed.data.description !== undefined ? 1 : 0);
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const request = tx
+      .request()
+      .input("facilityId", sql.UniqueIdentifier, facilityId)
+      .input("name", sql.NVarChar(256), parsed.data.name ?? null)
+      .input("locationId", sql.UniqueIdentifier, parsed.data.locationId ?? null)
+      .input("description", sql.NVarChar(1024), parsed.data.description ?? null)
+      .input("hasName", sql.Bit, parsed.data.name !== undefined ? 1 : 0)
+      .input("hasLocation", sql.Bit, parsed.data.locationId !== undefined ? 1 : 0)
+      .input("hasDescription", sql.Bit, parsed.data.description !== undefined ? 1 : 0);
 
-  if (parsed.data.isActive !== undefined) {
-    request.input("isActive", sql.Bit, parsed.data.isActive ? 1 : 0);
-    request.input("hasIsActive", sql.Bit, 1);
-  } else {
-    request.input("isActive", sql.Bit, 0);
-    request.input("hasIsActive", sql.Bit, 0);
+    if (parsed.data.isActive !== undefined) {
+      request.input("isActive", sql.Bit, parsed.data.isActive ? 1 : 0);
+      request.input("hasIsActive", sql.Bit, 1);
+    } else {
+      request.input("isActive", sql.Bit, 0);
+      request.input("hasIsActive", sql.Bit, 0);
+    }
+
+    const result = await request.query(
+      [
+        "UPDATE pm.Facilities",
+        "SET",
+        "  Name = CASE WHEN @hasName = 1 THEN @name ELSE Name END,",
+        "  LocationId = CASE WHEN @hasLocation = 1 THEN @locationId ELSE LocationId END,",
+        "  Description = CASE WHEN @hasDescription = 1 THEN @description ELSE Description END,",
+        "  IsActive = CASE WHEN @hasIsActive = 1 THEN @isActive ELSE IsActive END,",
+        "  UpdatedAt = sysutcdatetime()",
+        "WHERE FacilityId = @facilityId",
+      ].join("\n"),
+    );
+
+    if (result.rowsAffected[0] === 0) {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+
+    if (parsed.data.isActive === false) { await cancelUnstartedPmTasks({ executor: tx, kind: "facility", contextId: facilityId, actorUserId: req.user.sub,
+          reason: "Facility archived", ipAddress: typeof req.ip === "string" ? req.ip : null, userAgent: req.get("user-agent") ?? null }); }
+    else await validateEnabledPmContext(tx, "facility", facilityId);
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    if (err instanceof PmEligibilityError) {
+      res.status(400).json({ message: err.message, code: err.code, details: [{ contextId: err.contextId, field: err.field }] });
+      return;
+    }
+    throw err;
   }
-
-  const result = await request.query(
-    [
-      "UPDATE pm.Facilities",
-      "SET",
-      "  Name = CASE WHEN @hasName = 1 THEN @name ELSE Name END,",
-      "  LocationId = CASE WHEN @hasLocation = 1 THEN @locationId ELSE LocationId END,",
-      "  Description = CASE WHEN @hasDescription = 1 THEN @description ELSE Description END,",
-      "  IsActive = CASE WHEN @hasIsActive = 1 THEN @isActive ELSE IsActive END,",
-      "  UpdatedAt = sysutcdatetime()",
-      "WHERE FacilityId = @facilityId",
-    ].join("\n"),
-  );
-
-  if (result.rowsAffected[0] === 0) {
-    res.status(404).json({ message: "Not found" });
-    return;
-  }
-
-  res.json({ ok: true });
 });
 
 facilitiesRouter.put("/:facilityId/pm-settings", requireManager, async (req, res) => {
@@ -397,45 +414,64 @@ facilitiesRouter.put("/:facilityId/pm-settings", requireManager, async (req, res
   const pmEnabledBit = pmEnabledValue === undefined ? null : pmEnabledValue ? 1 : 0;
 
   const db = await getDb();
-  const nextPlannedDueAt = parsed.data.nextPmDueAt ? new Date(parsed.data.nextPmDueAt) : null;
-  const nextDueAt = nextPlannedDueAt
-    ? await applyPmBlackout({
-        executor: db,
-        plannedDueAt: nextPlannedDueAt,
-      })
-    : null;
-  const resetDueDates = parsed.data.defaultTemplateId !== undefined && parsed.data.nextPmDueAt === undefined;
-  const result = await db
-    .request()
-    .input("facilityId", sql.UniqueIdentifier, facilityId)
-    .input("pmEnabled", sql.Bit, pmEnabledBit)
-    .input("defaultTemplateId", sql.UniqueIdentifier, parsed.data.defaultTemplateId ?? null)
-    .input("nextPlannedPmDueAt", sql.DateTime2(0), resetDueDates ? null : nextPlannedDueAt)
-    .input("nextPmDueAt", sql.DateTime2(0), resetDueDates ? null : nextDueAt)
-    .query(
-      [
-        "MERGE pm.FacilityPMSettings WITH (HOLDLOCK) AS target",
-        "USING (SELECT @facilityId AS FacilityId) AS source",
-        "ON target.FacilityId = source.FacilityId",
-        "WHEN MATCHED THEN",
-        "  UPDATE SET",
-        "    PMEnabled = COALESCE(@pmEnabled, PMEnabled),",
-        "    DefaultTemplateId = @defaultTemplateId,",
-        "    NextPlannedPMDueAt = @nextPlannedPmDueAt,",
-        "    NextPMDueAt = @nextPmDueAt,",
-        "    UpdatedAt = sysutcdatetime()",
-        "WHEN NOT MATCHED THEN",
-        "  INSERT (FacilityId, PMEnabled, DefaultTemplateId, NextPlannedPMDueAt, NextPMDueAt)",
-        "  VALUES (@facilityId, COALESCE(@pmEnabled, 1), @defaultTemplateId, @nextPlannedPmDueAt, @nextPmDueAt);",
-      ].join("\n"),
-    );
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const nextPlannedDueAt = parsed.data.nextPmDueAt ? new Date(parsed.data.nextPmDueAt) : null;
+    const nextDueAt = nextPlannedDueAt
+      ? await applyPmBlackout({
+          executor: tx,
+          plannedDueAt: nextPlannedDueAt,
+        })
+      : null;
+    const hasDefaultTemplateId = parsed.data.defaultTemplateId !== undefined;
+    const hasNextPmDueAt = parsed.data.nextPmDueAt !== undefined;
+    const result = await tx
+      .request()
+      .input("facilityId", sql.UniqueIdentifier, facilityId)
+      .input("pmEnabled", sql.Bit, pmEnabledBit)
+      .input("defaultTemplateId", sql.UniqueIdentifier, parsed.data.defaultTemplateId ?? null)
+      .input("hasDefaultTemplateId", sql.Bit, hasDefaultTemplateId ? 1 : 0)
+      .input("hasNextPmDueAt", sql.Bit, hasNextPmDueAt ? 1 : 0)
+      .input("nextPlannedPmDueAt", sql.DateTime2(0), nextPlannedDueAt)
+      .input("nextPmDueAt", sql.DateTime2(0), nextDueAt)
+      .query(
+        [
+          "MERGE pm.FacilityPMSettings WITH (HOLDLOCK) AS target",
+          "USING (SELECT @facilityId AS FacilityId) AS source",
+          "ON target.FacilityId = source.FacilityId",
+          "WHEN MATCHED THEN",
+          "  UPDATE SET",
+          "    PMEnabled = COALESCE(@pmEnabled, PMEnabled),",
+          "    DefaultTemplateId = CASE WHEN @hasDefaultTemplateId = 1 THEN @defaultTemplateId ELSE target.DefaultTemplateId END,",
+          "    NextPlannedPMDueAt = CASE WHEN @hasNextPmDueAt = 1 THEN @nextPlannedPmDueAt ELSE CASE WHEN @hasDefaultTemplateId = 1 THEN NULL ELSE target.NextPlannedPMDueAt END END,",
+          "    NextPMDueAt = CASE WHEN @hasNextPmDueAt = 1 THEN @nextPmDueAt ELSE CASE WHEN @hasDefaultTemplateId = 1 THEN NULL ELSE target.NextPMDueAt END END,",
+          "    UpdatedAt = sysutcdatetime()",
+          "WHEN NOT MATCHED THEN",
+          "  INSERT (FacilityId, PMEnabled, DefaultTemplateId, NextPlannedPMDueAt, NextPMDueAt)",
+          "  VALUES (@facilityId, COALESCE(@pmEnabled, 1), @defaultTemplateId, @nextPlannedPmDueAt, @nextPmDueAt);",
+        ].join("\n"),
+      );
 
-  if (result.rowsAffected.length === 0) {
-    res.status(500).json({ message: "Failed to update PM settings" });
-    return;
+    if (result.rowsAffected.length === 0) {
+      res.status(500).json({ message: "Failed to update PM settings" });
+      await tx.rollback();
+      return;
+    }
+
+    await validateEnabledPmContext(tx, "facility", facilityId);
+    if (parsed.data.pmEnabled === false) { await cancelUnstartedPmTasks({ executor: tx, kind: "facility", contextId: facilityId, actorUserId: req.user.sub,
+          reason: "PM disabled", ipAddress: typeof req.ip === "string" ? req.ip : null, userAgent: req.get("user-agent") ?? null }); }
+    await tx.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    if (err instanceof PmEligibilityError) {
+      res.status(400).json({ message: err.message, code: err.code, details: [{ contextId: err.contextId, field: err.field }] });
+      return;
+    }
+    throw err;
   }
-
-  res.json({ ok: true });
 });
 
 facilitiesRouter.post("/:facilityId/pm-now", requireManager, async (req, res) => {
@@ -735,124 +771,139 @@ facilitiesRouter.post("/:facilityId/clone", requireFacilityAdmin, async (req, re
   }
 
   const db = await getDb();
-  const sourceResult = await db
-    .request()
-    .input("facilityId", sql.UniqueIdentifier, facilityId)
-    .query(
-      [
-        "SELECT TOP (1)",
-        "  f.Name AS Name,",
-        "  f.LocationId AS LocationId,",
-        "  f.Description AS Description,",
-        "  f.IsActive AS IsActive",
-        "FROM pm.Facilities f",
-        "WHERE f.FacilityId = @facilityId",
-      ].join("\n"),
-    );
-
-  const sourceRow = sourceResult.recordset[0] as Record<string, unknown> | undefined;
-  if (!sourceRow) {
-    res.status(404).json({ message: "Not found" });
-    return;
-  }
-
-  const sourceName = typeof sourceRow.Name === "string" ? sourceRow.Name : "Facility";
-  const locationId = typeof sourceRow.LocationId === "string" ? sourceRow.LocationId : null;
-  const description = typeof sourceRow.Description === "string" ? sourceRow.Description : null;
-  const isActiveValue = sourceRow.IsActive;
-  const isActive = typeof isActiveValue === "boolean" ? isActiveValue : typeof isActiveValue === "number" ? isActiveValue === 1 : true;
-
-  let targetName = parsed.data?.name?.trim();
-  if (!targetName) {
-    let base = `${sourceName} (Copy)`;
-    let suffix = 1;
-    // ensure unique name
-    while (true) {
-      const candidate = suffix === 1 ? base : `${sourceName} (Copy ${suffix})`;
-      const existsResult = await db
-        .request()
-        .input("name", sql.NVarChar(256), candidate)
-        .query(
-          [
-            "SELECT TOP (1) 1 AS One",
-            "FROM pm.Facilities",
-            "WHERE Name = @name",
-          ].join("\n"),
-        );
-      const exists = Boolean(existsResult.recordset[0]);
-      if (!exists) {
-        targetName = candidate;
-        break;
-      }
-      suffix++;
-      if (suffix > 50) {
-        targetName = `${sourceName} (Copy ${Date.now()})`;
-        break;
-      }
-    }
-  }
-
-  const insertResult = await db
-    .request()
-    .input("name", sql.NVarChar(256), targetName)
-    .input("locationId", sql.UniqueIdentifier, locationId)
-    .input("description", sql.NVarChar(1024), description)
-    .input("isActive", sql.Bit, isActive ? 1 : 0)
-    .query(
-      [
-        "INSERT INTO pm.Facilities (",
-        "  Name, LocationId, Description, IsActive",
-        ")",
-        "OUTPUT inserted.FacilityId AS FacilityId",
-        "VALUES (",
-        "  @name, @locationId, @description, @isActive",
-        ")",
-      ].join("\n"),
-    );
-
-  const insertedRow = insertResult.recordset[0] as { FacilityId?: string } | undefined;
-  const newFacilityId = insertedRow?.FacilityId;
-  if (!newFacilityId) {
-    res.status(500).json({ message: "Failed to create facility" });
-    return;
-  }
-
-  const includePm = parsed.data?.includePmSettings ?? true;
-  if (includePm) {
-    const pmResult = await db
+  const tx = new sql.Transaction(db);
+  await tx.begin();
+  try {
+    const sourceResult = await tx
       .request()
       .input("facilityId", sql.UniqueIdentifier, facilityId)
       .query(
         [
           "SELECT TOP (1)",
-          "  PMEnabled,",
-          "  DefaultTemplateId",
-          "FROM pm.FacilityPMSettings",
-          "WHERE FacilityId = @facilityId",
+          "  f.Name AS Name,",
+          "  f.LocationId AS LocationId,",
+          "  f.Description AS Description,",
+          "  f.IsActive AS IsActive",
+          "FROM pm.Facilities f",
+          "WHERE f.FacilityId = @facilityId",
         ].join("\n"),
       );
-    const pmRow = pmResult.recordset[0] as Record<string, unknown> | undefined;
-    const pmEnabledValue = pmRow?.PMEnabled;
-    const pmEnabled = typeof pmEnabledValue === "boolean" ? pmEnabledValue : typeof pmEnabledValue === "number" ? pmEnabledValue === 1 : false;
-    const defaultTemplateIdValue = pmRow?.DefaultTemplateId;
-    const defaultTemplateId = typeof defaultTemplateIdValue === "string" ? defaultTemplateIdValue : null;
 
-    await db
+    const sourceRow = sourceResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!sourceRow) {
+      res.status(404).json({ message: "Not found" });
+      await tx.rollback();
+      return;
+    }
+
+    const sourceName = typeof sourceRow.Name === "string" ? sourceRow.Name : "Facility";
+    const locationId = typeof sourceRow.LocationId === "string" ? sourceRow.LocationId : null;
+    const description = typeof sourceRow.Description === "string" ? sourceRow.Description : null;
+    const isActiveValue = sourceRow.IsActive;
+    const isActive = typeof isActiveValue === "boolean" ? isActiveValue : typeof isActiveValue === "number" ? isActiveValue === 1 : true;
+
+    let targetName = parsed.data?.name?.trim();
+    if (!targetName) {
+      let base = `${sourceName} (Copy)`;
+      let suffix = 1;
+      // ensure unique name
+      while (true) {
+        const candidate = suffix === 1 ? base : `${sourceName} (Copy ${suffix})`;
+        const existsResult = await tx
+          .request()
+          .input("name", sql.NVarChar(256), candidate)
+          .query(
+            [
+              "SELECT TOP (1) 1 AS One",
+              "FROM pm.Facilities",
+              "WHERE Name = @name",
+            ].join("\n"),
+          );
+        const exists = Boolean(existsResult.recordset[0]);
+        if (!exists) {
+          targetName = candidate;
+          break;
+        }
+        suffix++;
+        if (suffix > 50) {
+          targetName = `${sourceName} (Copy ${Date.now()})`;
+          break;
+        }
+      }
+    }
+
+    const insertResult = await tx
       .request()
-      .input("facilityId", sql.UniqueIdentifier, newFacilityId)
-      .input("pmEnabled", sql.Bit, pmEnabled ? 1 : 0)
-      .input("defaultTemplateId", sql.UniqueIdentifier, defaultTemplateId)
+      .input("name", sql.NVarChar(256), targetName)
+      .input("locationId", sql.UniqueIdentifier, locationId)
+      .input("description", sql.NVarChar(1024), description)
+      .input("isActive", sql.Bit, isActive ? 1 : 0)
       .query(
         [
-          "INSERT INTO pm.FacilityPMSettings (",
-          "  FacilityId, PMEnabled, DefaultTemplateId, LastPMCompletedAt, NextPMDueAt",
+          "INSERT INTO pm.Facilities (",
+          "  Name, LocationId, Description, IsActive",
           ")",
+          "OUTPUT inserted.FacilityId AS FacilityId",
           "VALUES (",
-          "  @facilityId, @pmEnabled, @defaultTemplateId, NULL, NULL",
+          "  @name, @locationId, @description, @isActive",
           ")",
         ].join("\n"),
       );
-  }
 
-  res.status(201).json({ id: newFacilityId });
+    const insertedRow = insertResult.recordset[0] as { FacilityId?: string } | undefined;
+    const newFacilityId = insertedRow?.FacilityId;
+    if (!newFacilityId) {
+      res.status(500).json({ message: "Failed to create facility" });
+      await tx.rollback();
+      return;
+    }
+
+    const includePm = parsed.data?.includePmSettings ?? true;
+    if (includePm) {
+      const pmResult = await tx
+        .request()
+        .input("facilityId", sql.UniqueIdentifier, facilityId)
+        .query(
+          [
+            "SELECT TOP (1)",
+            "  PMEnabled,",
+            "  DefaultTemplateId",
+            "FROM pm.FacilityPMSettings",
+            "WHERE FacilityId = @facilityId",
+          ].join("\n"),
+        );
+      const pmRow = pmResult.recordset[0] as Record<string, unknown> | undefined;
+      const pmEnabledValue = pmRow?.PMEnabled;
+      const pmEnabled = typeof pmEnabledValue === "boolean" ? pmEnabledValue : typeof pmEnabledValue === "number" ? pmEnabledValue === 1 : false;
+      const defaultTemplateIdValue = pmRow?.DefaultTemplateId;
+      const defaultTemplateId = typeof defaultTemplateIdValue === "string" ? defaultTemplateIdValue : null;
+
+      await tx
+        .request()
+        .input("facilityId", sql.UniqueIdentifier, newFacilityId)
+        .input("pmEnabled", sql.Bit, pmEnabled ? 1 : 0)
+        .input("defaultTemplateId", sql.UniqueIdentifier, defaultTemplateId)
+        .query(
+          [
+            "INSERT INTO pm.FacilityPMSettings (",
+            "  FacilityId, PMEnabled, DefaultTemplateId, LastPMCompletedAt, NextPMDueAt",
+            ")",
+            "VALUES (",
+            "  @facilityId, @pmEnabled, @defaultTemplateId, NULL, NULL",
+            ")",
+          ].join("\n"),
+        );
+    }
+
+    await validateEnabledPmContext(tx, "facility", newFacilityId);
+    await tx.commit();
+    res.status(201).json({ id: newFacilityId });
+  } catch (err) {
+    await tx.rollback().catch(() => undefined);
+    if (err instanceof PmEligibilityError) {
+      res.status(400).json({ message: err.message, code: err.code, details: [{ contextId: err.contextId, field: err.field }] });
+      return;
+    }
+    throw err;
+  }
 });

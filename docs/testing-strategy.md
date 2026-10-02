@@ -25,6 +25,10 @@ node scripts/docs/check-docs.mjs
 
 Review changes before accepting an export. The exporter preserves embedded schemas and normalizes `servers` to `/`. A parity pass does not prove that Swagger covers all implementation routes or that responses match declared schemas. This is a focused structural check, not a full OpenAPI standards validator.
 
+## Isolated workflow regression
+
+Run `node --test scripts/tests/*.test.mjs` for the complete local suite, including the named `test:*` package scripts. The HTTP harness uses real routers and authorization with synthetic SQL responses; passing tests do not certify SQL Server persistence, schema upgrades, external providers, or deployment. Unexpected fixture queries must be investigated rather than hidden behind blanket success responses. See [2026-09-27 regression verification](verification-d1-regression.md).
+
 ## Static and build checks
 
 From the repository root:
@@ -79,3 +83,11 @@ Use the per-item scenarios in the [technical map](code-implementation-map.md). P
 ## AF-02 executable checks
 
 Run `npm run test:facilities` for the real Express router, JWT and role middleware with an injected deterministic SQL boundary. The harness never imports backend/index.ts or real env configuration. Run `node scripts/tests/facility-browser-fixture.mjs` for an isolated browser fixture on 127.0.0.1:4179. It explicitly uses same-origin fixture APIs; `/__fixture/Admin` and `/__fixture/Supervisor` select synthetic users, `?detail=1` opens detail and `?fail=1` simulates a refused mutation. Only loopback access is needed. These tests do not certify SQL persistence or deployment. See [evidence](verification-af02.md).
+
+D1 deletion regression: `node --test scripts/tests/task-deletion-policy.test.mjs` covers typed PM/CM endpoints, permissions, reference conflicts, all current incoming task FKs, and delete/audit failure rollback with synthetic SQL. See [verification and live acceptance limits](verification-task-deletion.md).
+
+Live deletion preflight on 2026-09-27 found missing EX-01/CM-01 tables and source/recurrence columns. `db:verify` now rejects those omissions. See [live evidence](verification-task-deletion.md); passing local fixture tests does not override this deployment blocker.
+
+The live deletion schema blocker was resolved with the scoped 2026-09-27 migration. The explicit-opt-in runner `scripts/live/task-deletion.mjs` then passed 12 scenario groups against real SQL through loopback HTTP, including rollback, evidence cleanup, reference conflicts and locking. This does not certify the deployed server or storage mount; see [final evidence](verification-task-deletion.md).
+
+Q-14/Q-15 live state-transition runner: `node scripts/live/pm-eligibility.mjs --run <configured-server> <configured-database>`. Nine scenario groups cover asset/facility prerequisites, cancellation/history retention, idempotency, generation SQL, batch rollback, archival and clone rollback. See [evidence and limits](verification-q14-q15.md).

@@ -693,14 +693,31 @@ export const createPmTaskForOccurrence = async (input: {
           : "    TaskNumber, AssetId, FacilityId, TemplateId, PlannedDueAt, ScheduledDueAt, AssignedToUserId, AssignedToRoleId, Status",
         "  )",
         "  OUTPUT inserted.TaskId AS TaskId",
-        "  VALUES (",
+        "  SELECT",
         input.context.kind === "asset"
           ? "    @taskNumber, @contextId, @templateId, @plannedDueAt, @scheduledDueAt, @assignedToUserId, @assignedToRoleId, N'open'"
           : "    @taskNumber, NULL, @contextId, @templateId, @plannedDueAt, @scheduledDueAt, @assignedToUserId, @assignedToRoleId, N'open'",
-        "  );",
+        "  WHERE " + pmContextEligibilitySql(input.context.kind) + ";",
         "END",
       ].join("\n"),
     );
   const row = result.recordset[0] as Record<string, unknown> | undefined;
   return typeof row?.TaskId === "string" ? row.TaskId : null;
+};
+
+// Identifiers are internal constants, never request values. Used at the actual
+// insertion/reopen boundary so stale schedule candidates cannot bypass disable/archive.
+export const pmContextEligibilitySql = (kind: PmContextKind, contextId = "@contextId", templateId = "@templateId"): string => {
+  const asset = kind === "asset";
+  const id = asset ? "AssetId" : "FacilityId";
+  return [
+    "EXISTS (SELECT 1",
+    `FROM pm.${asset ? "Assets" : "Facilities"} c WITH (HOLDLOCK)`,
+    `INNER JOIN pm.${asset ? "Asset" : "Facility"}PMSettings s WITH (HOLDLOCK) ON s.${id} = c.${id}`,
+    "INNER JOIN pm.PMTemplates tpl WITH (HOLDLOCK) ON tpl.TemplateId = s.DefaultTemplateId",
+    `WHERE c.${id} = ${contextId} AND s.DefaultTemplateId = ${templateId}`,
+    "AND c.LocationId IS NOT NULL AND s.PMEnabled = 1 AND tpl.IsActive = 1",
+    asset ? "AND c.IsArchived = 0 AND ISNULL(c.AssetOperationalStatus, N'operational') NOT IN (N'broken', N'archived') AND (tpl.ApplicableCategoryId IS NULL OR tpl.ApplicableCategoryId = c.CategoryId)" : "AND c.IsActive = 1",
+    ")",
+  ].join("\n");
 };

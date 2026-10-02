@@ -6,9 +6,9 @@ Last reviewed: 2026-09-27.
 
 This is the **single work reference** for this repository. It owns the next action, ordered backlog, implementation checklists, dependencies, and verification status. Do not reconstruct work from feature-review notes or use their old checkboxes as a second backlog.
 
-**Current mode:** D1 implementation. AF-02 facility master permissions, TC-01 checklist validation, TC-02 checklist snapshot preservation, AF-01 broken-asset cancellation, SC-01 planned-date recurrence, AS-01 role-queue claim/ownership boundaries, EX-01 timed PM execution/return-to-work semantics, CM-01 supervisor-verified work-order closure/restoration timing, the current Q-09 reporting semantics plus desktop dashboard/report contract coverage, the Q-02 PM submission-versus-completion boundary, and the Q-03 PM maker-checker review policy are implemented and locally verified; [AF-02 evidence](verification-af02.md), [TC-01 evidence](verification-tc01.md), [TC-02 evidence](verification-tc02.md), [AF-01 evidence](verification-af01.md), [SC-01 evidence](verification-sc01.md), [AS-01 evidence](verification-as01.md), [EX-01 evidence](verification-ex01.md), [CM-01 evidence](verification-cm01.md), [Q-01/Q-09 evidence](verification-q01-q09.md), and [Q-02/Q-03 evidence](verification-q02-q03.md) remain separate. **Next action:** continue Q-04 schedule parity, then the remaining Q-01/Q-12-Q15 boundaries. Other approved requirements remain unchanged; do not reopen settled decisions.
+**Current mode:** D2 environment verification, alongside remaining D1 contract discussions. AF-02 facility master permissions, TC-01 checklist validation, TC-02 checklist snapshot preservation, AF-01 broken-asset cancellation, SC-01 planned-date recurrence, AS-01 role-queue claim/ownership boundaries, EX-01 timed PM execution/return-to-work semantics, CM-01 supervisor-verified work-order closure/restoration timing, the current Q-09 reporting semantics plus desktop dashboard/report contract coverage, the Q-02 PM submission-versus-completion boundary, the Q-03 PM maker-checker review policy, and the Q-04 final-approval schedule parity are implemented and locally verified; [AF-02 evidence](verification-af02.md), [TC-01 evidence](verification-tc01.md), [TC-02 evidence](verification-tc02.md), [AF-01 evidence](verification-af01.md), [SC-01 evidence](verification-sc01.md), [AS-01 evidence](verification-as01.md), [EX-01 evidence](verification-ex01.md), [CM-01 evidence](verification-cm01.md), [Q-01/Q-09 evidence](verification-q01-q09.md), [Q-02/Q-03 evidence](verification-q02-q03.md), and [Q-04 evidence](verification-q04.md) remain separate. **Next action:** complete remaining D2 delivery/recovery gates; Q-05 local-only authentication is implemented and locally verified ([evidence](verification-q05.md)); see [D2 evidence](verification-d2-environment.md). Q-12 mapping is deferred; retain current synchronization. Task/work-order deletion boundaries are implemented and verified against live SQL via isolated local HTTP routes (12 scenario groups); see [evidence](verification-task-deletion.md). Q-14/Q-15 are implemented and verified against live SQL through isolated HTTP routes (9 scenario groups); see [policy verification](verification-q14-q15.md). Full local regression passes 149/149 (2026-09-29); backend typecheck/build and lint pass. Desktop OpenAPI coverage is now 127/141, with [contract verification](verification-q01-desktop.md). The 2026-09-27 live schema blocker is resolved by a scoped additive migration; live deletion/rollback/reference/concurrency checks pass. Deployed API/web acceptance remains separate. Preserve settled decisions.
 
-**When implementation is requested:** continue with CM-01 after completed AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, and EX-01, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
+**When implementation is requested:** continue the remaining D1 contract and product boundaries after the locally completed eight-item backlog and Q-02/Q-03/Q-04/Q-09, unless the user selects another item. Follow the order below for the remaining work; resolve only the applicable open boundary before dependent changes. A documentation decision marked complete is not an implemented feature.
 
 | Order | Item | Requirement | Status / remaining boundary |
 | --- | --- | --- | --- |
@@ -32,7 +32,7 @@ Updated: 2026-09-11. This section carries conversational working context; this r
 - Working mode: user authorized implementation on 2026-09-11. AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, EX-01, and CM-01 are locally complete. Communicate with the user in Indonesian; maintain repository documentation in English.
 - Working preference: inspect relevant implementation briefly before asking a small batch of feature questions. Recommend practical defaults when requested, preserve explicit agreements, and distinguish implemented behavior from approved future behavior.
 - Latest agreement: Reject creates a new linked replacement task; the rejected task retains its results, evidence, work time, and rejection reason. Revise corrects the existing task and requires a written reason. EX-01 and CM-01 now implement those workflow boundaries locally.
-- Resume point: the eight-item source audit and implementation map are complete; review code-implementation-map.md before starting the next user-selected item. AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, EX-01, and CM-01 are locally complete, including CM `pending_review` repair submission, manager verify-close, same-WO correction return, independent restoration logging, repeated downtime intervals before closure, linked recurrence work orders after closure, shared PM-route bypass guards, and the current desktop reporting/dashboard contract semantics. The immediate follow-up is the remaining D1 non-reporting boundaries under Q-01/Q-02/Q-03/Q-12-Q15 or a user-selected D2 item.
+- Resume point: the eight-item source audit and implementation map are complete; review code-implementation-map.md before starting the next user-selected item. AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, EX-01, and CM-01 are locally complete, including CM `pending_review` repair submission, manager verify-close, same-WO correction return, independent restoration logging, repeated downtime intervals before closure, linked recurrence work orders after closure, shared PM-route bypass guards, and the current desktop reporting/dashboard contract semantics. Q-14/Q-15 now also pass live SQL state-transition tests via isolated HTTP routes: site/active template required at activation; disabling PM or archiving a facility cancels only unstarted PM. Deletion boundaries now pass isolated local HTTP tests against live SQL after the scoped additive migration: PM/CM separation, owned-row cleanup, atomic audit, and history-reference conflicts. Q-12 mapping is deferred; preserve current synchronization. Immediate follow-up: D2 authentication, delivery and recovery gates, while remaining D1 contract discussions stay tracked. Q-02/Q-03/Q-04 are locally verified.
 - Transfer checkpoint: inspected branch was `main`, HEAD `3039da9`. This is a pre-handoff baseline, not proof that the latest edits are committed or uploaded. Run `git status --short` and inspect the current commit on both laptops. Documentation/checker edits were still uncommitted when this handoff was prepared; this session did not commit or push.
 - Verification: run `node scripts/docs/check-docs.mjs` and `git diff --check`; see [verification evidence](documentation-verification.md). Runtime/database acceptance remains pending. Install Node.js 22 on the new laptop; do not depend on the old laptop's editor-bundled Node path.
 
@@ -61,7 +61,7 @@ Product semantics remain in the [functional specification](functional-specificat
 
 ## Active phase
 
-**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop implementation. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, and EX-01 are now implemented with local evidence; continue with CM-01 and keep remaining implementation items open. D2–D3 remain proposed.
+**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop implementation. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. All eight ordered items through CM-01 are implemented with local evidence. Q-02/Q-03/Q-04/Q-09 are locally verified; remaining D1 contract and product boundaries stay open. D2 is in progress with schema/release-tooling evidence; D3 remains proposed.
 
 Historical plans describe earlier intentions; an unchecked historical item is not proof that a feature is missing. Source inspection establishes implementation presence, not runtime correctness.
 
@@ -113,7 +113,7 @@ Resolve differences between documented desktop/web behavior, supporting API defi
 
 ### Checklist
 
-- [x] Audit and map all eight roadmap items across desktop/backend/SQL/jobs and indirect writers. Evidence: [technical map](code-implementation-map.md), [126-file screening inventory](code-audit-inventory.json), and [verification record](documentation-verification.md#d1--eight-item-code-audit-and-implementation-map-2026-09-11). Static mapping only; implementation remains pending.
+- [x] Audit and map all eight roadmap items across desktop/backend/SQL/jobs and indirect writers. Evidence: [technical map](code-implementation-map.md), [126-file screening inventory](code-audit-inventory.json), and [verification record](documentation-verification.md#d1--eight-item-code-audit-and-implementation-map-2026-09-11). The original map is a pre-implementation source checkpoint; current implementation status is recorded above.
 - [x] Consolidate confirmed asset/facility, template/checklist, and initial scheduling decisions into this roadmap and the functional specification. [Evidence](documentation-verification.md).
 - [x] Replace per-feature work references with historical redirects; this roadmap owns AF-01/AF-02/TC-01/TC-02/SC-01.
 - [x] Record agreed missed-cycle, early-execution, and PM Now reuse policy after source inspection. [Evidence](documentation-verification.md).
@@ -123,10 +123,16 @@ Resolve differences between documented desktop/web behavior, supporting API defi
 - [x] Resolve remaining execution/CM, implementation/migration, and skip-reporting boundaries under Q-20/Q-18/Q-09 after source inspection. [Evidence](verification-q01-q09.md).
 - [x] Implement and verify AF-02 scoped facility permissions. [Evidence](verification-af02.md).
 - [x] Execute CM-01 using the detailed checklist below; AS-01 is implemented with [verification evidence](verification-as01.md), EX-01 is implemented with [verification evidence](verification-ex01.md), and CM-01 is implemented with [verification evidence](verification-cm01.md).
-- [ ] Resolve applicable Q-12–Q-15 boundaries without re-asking settled asset/facility decisions.
+- [x] Repair facility PM partial-update data loss and document omitted-field/explicit-clear semantics. [Evidence](verification-d1-regression.md).
+- [x] Record Q-14/Q-15 product decisions: site and active template required at activation; disabling PM/archiving a facility cancels only unstarted PM tasks (2026-09-27).
+- [x] Implement and verify the Q-14/Q-15 activation/cancellation policy across individual, bulk, clone, generation and reopen paths; see [evidence](verification-q14-q15.md).
+- [x] Record Q-12 deferral confirmed 2026-09-27: retain current synchronization; no asset-to-facility mapping or new filtering. This is a scope decision, not an implemented mapping feature. See [boundary review](d1-boundary-review.md).
 - [x] Verify and record the current PM submission-versus-completion contract, including repeated submission behavior (Q-02). [Evidence](verification-q02-q03.md).
 - [x] Decide and implement PM own-work/self-approval behavior under Q-03; PM review now blocks the performer from reviewing the same submitted PM task. [Evidence](verification-q02-q03.md).
-- [ ] Reconcile desktop API dependencies and payload/error contracts (Q-01); defer mobile-only gaps.
+- [x] Validate final approval schedule recalculation parity across asset and facility PM (Q-04). [Evidence](verification-q04.md).
+- [x] Classify all 51 uncovered API operations by desktop callers: 37 have current desktop references. [Boundary review](d1-boundary-review.md). This is static dependency evidence only.
+- [x] Repair and verify PM/CM deletion boundaries and all current task foreign-key dependencies; see [evidence](verification-task-deletion.md).
+- [ ] Reconcile desktop payload/error contracts (Q-01) using the classified inventory; defer mobile-only gaps.
 - [x] Confirm report denominators, approval inclusion, MTTR, and timezone boundaries (Q-09). [Evidence](verification-q01-q09.md).
 - [ ] Complete feature discussions for remaining task/approval, CM, reporting, notification, and administration topics; record new actions here rather than creating another feature backlog.
 
@@ -389,7 +395,7 @@ For the next feature, inspect implementation briefly, discuss only remaining pro
 
 ## D2 — Reproducible environment and delivery
 
-Status: proposed; not started; depends on applicable D1 decisions.
+Status: in progress since 2026-09-27. Schema source/live inventory and disposable clean/repeat/upgrade checks pass; fresh-checkout delivery and recovery gates remain open. See [evidence](verification-d2-environment.md).
 
 ### Objective
 
@@ -401,9 +407,13 @@ Make desktop/web and backend fresh-checkout setup and deployment reproducible.
 
 ### Checklist
 
-- [ ] Decide whether local-only authentication may start without LDAP configuration (Q-05).
-- [ ] Validate clean setup, repeatable schema application, and expand schema verification coverage (Q-08).
-- [ ] Establish CI commands, environment templates, release evidence, backup/restore ownership, and rollback procedure (Q-10).
+- [x] Allow local-only authentication without LDAP configuration (Q-05, user approved); implementation and isolated configuration/HTTP checks recorded in [evidence](verification-q05.md).
+- [x] Expand schema verification to all source objects and checked column shapes/flags (Q-08). [Evidence](verification-d2-environment.md).
+- [x] Verify clean, repeated and legacy-context-guard schema application on a disposable SQL database; repair the two missing live context guards. [Evidence](verification-d2-environment.md).
+- [x] Verify fresh dependency installation and all build/test commands on a secret-free source snapshot with Node 22.23.3. [Evidence](verification-d2-environment.md).
+- [ ] Verify Docker setup, same-origin routing, browser startup and a remotely fetched release checkout.
+- [x] Add CI commands, safe environment template and Docker build-context exclusions; local validation recorded in [D2 evidence](verification-d2-environment.md).
+- [ ] Execute CI remotely and establish backup/restore ownership, a tested restore and deployment rollback evidence (Q-10).
 
 ### Output
 

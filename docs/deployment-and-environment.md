@@ -6,7 +6,7 @@ Last reviewed: 2026-09-10. Commands below are derived from repository scripts/co
 
 - Node.js and npm. Docker builds currently use Node 22; use a compatible local Node installation and verify its version. No repository-wide `engines` policy is declared.
 - A reachable Microsoft SQL Server database and credentials with appropriate schema/application privileges.
-- Backend configuration, including JWT and the currently mandatory LDAP fields.
+- Backend configuration, including JWT and optional LDAP configuration.
 - Optional integration credentials and storage mounts only for the features being enabled.
 - Android Studio/JDK/Android SDK and the local PM Tech source for Android packaging. Mobile source availability is unresolved (Q-06).
 
@@ -55,8 +55,8 @@ The executable startup schema is [backend/src/config/env.ts](../backend/src/conf
 | Tokens | `JWT_SECRET`, `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN` | Secret required, minimum 16 characters; default lifetimes 8h and 30d |
 | Database | `DB_SERVER`, `DB_DATABASE`, `DB_USER`, `DB_PASSWORD` | Required |
 | Database transport | `DB_PORT`, `DB_ENCRYPT`, `DB_TRUST_SERVER_CERTIFICATE` | Defaults 1433, false, true; choose environment-appropriate transport settings |
-| LDAP connection | `LDAP_URL`, `LDAP_BASE_DN`, `LDAP_BIND_DN`, `LDAP_BIND_PASSWORD` | Required by current startup validation |
-| LDAP search | `LDAP_USER_SEARCH_BASE`, `LDAP_USER_SEARCH_FILTER`, `LDAP_GROUP_SEARCH_BASE`, `LDAP_GROUP_SUPERADMIN` | Required by current startup validation |
+| LDAP connection | `LDAP_URL`, `LDAP_BASE_DN`, `LDAP_BIND_DN`, `LDAP_BIND_PASSWORD` | Required only when any LDAP connection/search field is configured |
+| LDAP search | `LDAP_USER_SEARCH_BASE`, `LDAP_USER_SEARCH_FILTER`, `LDAP_GROUP_SEARCH_BASE`, `LDAP_GROUP_SUPERADMIN` | Required only when any LDAP connection/search field is configured |
 | LDAP timing/TLS | `LDAP_TIMEOUT`, `LDAP_CONNECT_TIMEOUT`, `LDAP_TLS_REJECT_UNAUTHORIZED` | Defaults 5000 ms, 10000 ms, true |
 | Jobs | `JOBS_ENABLED`, `JOB_SNIPE_SYNC_ENABLED`, `JOB_EVIDENCE_IMPORT_ENABLED` | Defaults true, false, false respectively |
 | Job timing | `JOB_SNIPE_SYNC_INTERVAL_MINUTES`, `JOB_SCHEDULE_CALC_INTERVAL_MINUTES`, `JOB_NOTIFICATION_INTERVAL_MINUTES`, `JOB_EVIDENCE_IMPORT_INTERVAL_MINUTES` | Defaults 60, 10, 60, 60 minutes |
@@ -68,7 +68,7 @@ The executable startup schema is [backend/src/config/env.ts](../backend/src/conf
 | Firebase | `FIREBASE_SERVICE_ACCOUNT_PATH`, `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`, `FCM_SERVER_KEY` | Optional push configuration; verify the selected backend delivery path |
 | App updates | `APP_UPDATE_STORAGE_ROOT`, `APP_UPDATE_CONFIG_JSON`, `APP_UPDATE_SIGNING_SECRET`, `APP_UPDATE_TOKEN_TTL_SECONDS` | Optional update configuration; default signed-token lifetime 600 seconds |
 
-LDAP being required by the current parser is a known limitation, not a recommendation to populate fake directory credentials. Resolve Q-05 before claiming a local-only setup path without LDAP configuration.
+For local-only operation, leave all eight LDAP connection/search values absent or empty. Timing/TLS settings alone do not enable LDAP. Partial connection/search configuration fails startup. Configure all eight fields to enable LDAP. Select Local on the login screen or send `provider: "local"`; omitted provider remains `ldap` for compatibility. LDAP login, nonblank directory search, assignment, and profile refresh return 503 with `code: LDAP_NOT_CONFIGURED` when they reach an unconfigured directory operation. Existing authorization and request validation still apply. See [Q-05 verification](verification-q05.md).
 
 For an isolated verification environment, disable jobs until external systems/test recipients and scheduling side effects are intentionally configured. Starting the backend can otherwise start enabled jobs.
 
@@ -107,3 +107,11 @@ The stack builds web and API; it does not provision SQL Server or automatically 
 SMB options are `docker-compose.bind.yml` for an already mounted share and `docker-compose.cifs.yml` for Docker-managed CIFS on a suitable Linux host. Inspect overlay variables before use. PowerShell sets process variables with `$env:NAME = 'value'`; POSIX `NAME=value command` examples are not PowerShell syntax.
 
 Read [operational runbook](operational-runbook.md) for release/health/recovery checks. TLS termination, production domain ownership, backups, and release automation are deployment responsibilities still requiring verified procedures.
+
+## D2 verification commands and release gates — 2026-09-27
+
+Use [.env.example](../.env.example) as a placeholder-only configuration template; provide real values privately. The [CI workflow](../.github/workflows/verify.yml) lists reproducible build/test commands and does not deploy. Runtime secrets and evidence directories are excluded from Docker build context.
+
+`node scripts/db/verify-schema.mjs --source-only` needs no live database. `npm run db:verify` reads the configured live database and rejects missing objects or checked column/flag mismatches. For an explicitly approved SQL host with create-database privileges, `node scripts/db/verify-disposable.mjs --run <configured-server>` creates and drops its own unique database to test clean/repeated/upgrade application; it never applies the full schema to the configured operational database.
+
+[Current D2 evidence](verification-d2-environment.md) distinguishes successful schema and local build checks from pending fresh-checkout/Docker/browser/restore acceptance. Do not describe the application as deployed or recoverable based on these checks alone.

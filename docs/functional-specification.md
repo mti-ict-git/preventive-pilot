@@ -18,21 +18,31 @@ Assets support search, filters, detail, maintenance settings, history, images, a
 
 Facilities support creation, editing, archive, cloning, and PM defaults, including bulk PM operations. They are not Snipe-IT hardware records.
 
+Partial facility PM-setting updates preserve omitted template and due-date fields. Explicit null clears a supplied field; supplying a template without a date resets both due dates for recalculation. A PM enabled/disabled toggle alone does not clear the configured template or schedule dates and cancels only unstarted PM tasks when PM is disabled, as defined below. See [regression verification](verification-d1-regression.md).
+
 Acceptance: maintenance settings persist for the selected context; history retains task/evidence relationships; archived/broken state is reflected in scheduling behavior.
 
 ### User-confirmed scope — 2026-09-11
 
 Snipe-IT is the sole asset master source: create new assets there, then synchronize. PM is passive for synchronized asset master data while owning maintenance configuration and records. AC and electrical panels are excluded from the current maintenance scope; server-specific UPS is classified as a facility. Current sync imports returned Snipe-IT hardware without a special AC/panel filter; this inspection does not establish which categories are present upstream. No sync-filter change is authorized by the maintenance-scope exclusion alone.
 
-Location represents the site and is not expected to change in normal operations. Admin/Superadmin own facility master-data changes; Supervisors communicate needs verbally and cannot create/edit/archive facilities. No in-app facility change-request workflow is required. Closure behavior remains open. Broken assets now receive no new PM work, and unfinished PM asset tasks are automatically cancelled with history retained. AF-01 cancels all unfinished PM asset tasks, including approval-pending submissions, when Snipe-IT synchronization marks the asset `broken`; completed/cancelled history and CM work orders are untouched. PM Now and PM lifecycle actions that would make the task actionable again are rejected while the asset remains broken, and repeated sync/action retries are idempotent. Automatic archival of missing upstream assets does not require admin confirmation; upstream reappearance does not reopen previously cancelled PM tasks automatically.
+Location represents the site and is not expected to change in normal operations. Admin/Superadmin own facility master-data changes; Supervisors communicate needs verbally and cannot create/edit/archive facilities. No in-app facility change-request workflow is required. Facility archival cancels only unstarted PM tasks, as confirmed on 2026-09-27. Broken assets now receive no new PM work, and unfinished PM asset tasks are automatically cancelled with history retained. AF-01 cancels all unfinished PM asset tasks, including approval-pending submissions, when Snipe-IT synchronization marks the asset `broken`; completed/cancelled history and CM work orders are untouched. PM Now and PM lifecycle actions that would make the task actionable again are rejected while the asset remains broken, and repeated sync/action retries are idempotent. Automatic archival of missing upstream assets does not require admin confirmation; upstream reappearance does not reopen previously cancelled PM tasks automatically.
 
-Asset-to-facility mapping is only a possible future capability. No additional prerequisite fields were requested, but exact mandatory-field and exclusion rules remain undecided. The primary daily desktop needs are schedules and PM tasks. See the [answer evaluation](implementation-roadmap.md) for confirmed versus tentative decisions; implementation parity has not yet been tested.
+Asset-to-facility mapping is deferred by user decision on 2026-09-27. Preserve current Snipe-IT synchronization without adding mapping or filtering; revisit only when explicitly requested. On 2026-09-27 the user confirmed that site and an active default template are required when enabling PM for either assets or facilities. Disabling PM or archiving a facility cancels only unstarted PM tasks; started/paused/submitted work and CM work orders remain intact. The primary daily desktop needs are schedules and PM tasks. See the [answer evaluation](implementation-roadmap.md) for confirmed versus tentative decisions; the listed activation/deactivation transitions now have live SQL evidence in [Q-14/Q-15 verification](verification-q14-q15.md), while deployed UI acceptance remains separate.
+
+### PM activation and deactivation — confirmed 2026-09-27
+
+Master data may be saved incomplete while PM is disabled. Enabling PM requires a site and an active default template; asset category compatibility remains enforced. Apply this to individual and bulk settings and to cloning enabled facility settings. An enabled context cannot have its site/default template cleared through these settings routes; disable PM first. Reject invalid batches atomically.
+
+Disabling PM on an asset/facility, or archiving a facility, cancels only PM tasks still open with no StartedAt, no work sessions, no technician submission, and no approval/review/rejection history. Preserve the task, results/evidence, cancellation reason, actor/time and audit record. Started, paused, submitted, completed, cancelled, rejected, and CM work are retained. Re-enabling/reactivating never automatically reopens cancelled work. Broken-asset AF-01 remains the distinct broader cancellation rule.
+
+Implementation and local verification are tracked in the roadmap; this decision alone is not deployment acceptance.
 
 ## F-02 — Templates and checklists
 
 Templates define intervals, applicable category, required assignment role, estimated duration, and ordered checklist items. Attachment enablement controls whether an attachment is offered; attachment requirement controls completion validation. Required items cannot be skipped. Outcomes use `0 = skip`, `1 = pass`, `2 = fail` for pass/fail checklist items; non-pass/fail items display nonzero completion as done.
 
-PM completion and technician submission now share the same checklist-validation baseline for active item membership, mandatory non-skip outcomes, fail notes, explicit notes-on-pass/done flags, and attachment requirements. Submission still does not set lifecycle `Status = completed`; the completion-versus-submission state boundary remains Q-02. Unused template deletion and references must be checked against the route rather than assuming all deletions are soft deletes.
+PM completion and technician submission now share the same checklist-validation baseline for active item membership, mandatory non-skip outcomes, fail notes, explicit notes-on-pass/done flags, and attachment requirements. Submission does not set lifecycle `Status = completed`; this boundary is documented and locally verified under Q-02. Unused template deletion and references must be checked against the route rather than assuming all deletions are soft deletes.
 
 Acceptance: ordering survives save/reload; applicable category restrictions hold; required evidence/notes failures are rejected and explained.
 
@@ -48,7 +58,7 @@ Recurring schedules exist for assets and facilities. The background job calculat
 
 Broken/archived assets and frozen schedule rows are excluded from applicable new-task generation. AF-01 also rechecks asset availability at PM Now creation time and at the schedule-insert boundary so a stale candidate cannot recreate actionable PM work after the asset has already become broken. Existing tasks remain visible. Calendar/day responses can include projected occurrences that are not yet persisted tasks. Estimated duration uses the template value with a 60-minute fallback; the web capacity display uses an eight-hour default threshold. This is a planning display, not proof of per-technician staffing optimization.
 
-`pm.fn_CalculateNextDueAt` is used in scheduling paths. Approval still contains separate next-due logic, so universal calculation parity is not established (Q-04).
+Final PM approval uses the shared scheduling-policy helper for assets and facilities; planned-anchor and blackout parity is locally verified under Q-04. Live SQL acceptance remains separate.
 
 Acceptance: test duplicate requests, frozen rows, broken assets, blackouts, interval boundaries, asset/facility parity, and the distinction between actual and projected work.
 
@@ -57,6 +67,8 @@ Acceptance: test duplicate requests, frozen rows, broken assets, blackouts, inte
 Use one default template per asset/facility. Recurring PM remains anchored to planned due dates: monthly work due 1 September and completed 10 September is next due 1 October. Completion or approval delays must not shift the planned cadence. SC-01 now persists this with separate planned and effective due dates so approval/completion delays do not move the regular anchor.
 
 Retain the existing first-date fallback (current time plus template interval when no date/history exists), 30-day default generation horizon, and Supervisor/Admin/Superadmin planning permissions. See [SC-01](implementation-roadmap.md#sc-01) for implementation and verification. Missed-period and PM Now behavior is defined below. Blackout/manual changes and technical/migration boundaries still require scoped reconciliation before dependent changes.
+
+Q-04 verification now confirms that final PM approval uses the same scheduling-policy path for both asset and facility contexts. Asset and facility completion both advance `NextPlannedPMDueAt` from the fulfilled planned anchor and apply blackout through the same helper logic rather than diverging per context.
 
 ### Missed periods, early PM, and PM Now — agreed 2026-09-11
 
@@ -169,3 +181,13 @@ Source evidence: `src/pages`, `src/lib/api.ts`, `backend/src/routes`, `backend/s
 ## AF-02 implementation evidence — 2026-09-11
 
 Facility creation, master edits/archival/activation and cloning now enforce Admin/Superadmin in the backend and corresponding desktop controls. Supervisor retains PM settings/PM Now rights and read access. See [AF-02 verification](verification-af02.md) for route, browser and static/build evidence and its database/deployment limits. No facility lifecycle or task-cancellation behavior was added by this permission change.
+
+## Task and work-order deletion — D1, 2026-09-27
+
+Manual hard deletion remains available under existing permissions: managers for PM (subject to task access) and Superadmin for CM. The task endpoint accepts PM only; the work-order endpoint accepts CM only. Wrong-type and missing IDs return 404.
+
+Deletion removes the task and its owned checklist results/snapshot, evidence metadata, drafts, work sessions, CM events and downtime intervals in one transaction, together with its audit entry. Incoming source/recurrence links from another task, missed/skipped occurrence history, or notification logs block deletion with 409 `TASK_REFERENCED`. No related task or independent historical record is cascaded or detached. Cancellation remains available where history must be retained. Evidence-file cleanup is best-effort after database commit. See [verification](verification-task-deletion.md).
+
+## Local-only authentication (Q-05)
+
+Local login can operate without LDAP configuration. The existing Local login tab sends `provider: "local"`. LDAP remains available when all eight directory connection/search fields are configured. No automatic credential fallback is performed; omitted API provider retains its LDAP default. Unconfigured LDAP operations return 503 with `LDAP_NOT_CONFIGURED`, after applicable authorization and validation.

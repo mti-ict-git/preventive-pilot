@@ -1,0 +1,8 @@
+
+> vite_react_shadcn_ts@0.0.0 db:verify
+> node scripts/db/verify-schema.mjs
+
+Source inventory: 39 tables, 372 columns, 257 named constraints, 29 explicit indexes
+Live inventory: 39 tables, 373 columns, 258 constraints, 76 indexes including PK/unique constraints
+Verification OK: all source inventory objects and checked column shapes/flags match.
+LIMIT: constraint expressions, FK endpoints, index key/filter definitions, default expressions, data backfills, permissions and operational behavior are not certified.

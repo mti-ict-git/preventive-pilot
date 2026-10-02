@@ -61,8 +61,11 @@ export interface LdapUserProfile {
   isSuperadmin: boolean;
 }
 
-const createClient = () =>
-  new Client({
+const createClient = () => {
+  if (!env.LDAP_URL) {
+    throw Object.assign(new Error("LDAP is not configured"), { code: "LDAP_NOT_CONFIGURED" });
+  }
+  return new Client({
     url: env.LDAP_URL,
     timeout: env.LDAP_TIMEOUT,
     connectTimeout: env.LDAP_CONNECT_TIMEOUT,
@@ -70,6 +73,7 @@ const createClient = () =>
       rejectUnauthorized: env.LDAP_TLS_REJECT_UNAUTHORIZED,
     },
   });
+};
 
 export const authenticateWithLdap = async (
   identifier: string,

@@ -13,6 +13,7 @@ export const fixtureSecondUserId = '12121212-1212-4212-8212-121212121212';
 export const fixtureTaskId = '22222222-2222-4222-8222-222222222222';
 export const fixtureTemplateId = '33333333-3333-4333-8333-333333333333';
 export const fixtureAssetId = '44444444-4444-4444-8444-444444444444';
+export const fixtureFacilityId = '46464646-4646-4466-8466-464646464646';
 export const fixtureTechnicianRoleId = '45454545-4545-4455-8455-454545454545';
 export const mandatoryItemId = '55555555-5555-4555-8555-555555555555';
 export const passNotesItemId = '66666666-6666-4666-8666-666666666666';
@@ -102,7 +103,7 @@ const createSqlStub = txEvents => {
   };
 };
 
-export function createHarness() {
+export function createHarness(overrides = {}) {
   const calls = [];
   const txEvents = [];
   let persistedRoles = [];
@@ -114,6 +115,7 @@ export function createHarness() {
   let approvalStatus = 'None';
   let failMergeForItemId = null;
   let taskStatus = 'in_progress';
+  let rejectStartUpdate = false;
   let maintenanceType = 'PM';
   let assignedToUserId = fixtureUserId;
   let assignedToRoleId = null;
@@ -130,16 +132,22 @@ export function createHarness() {
   let cmEventLog = [];
   let recurringWorkOrderId = null;
   let recurringFromTaskId = null;
+  let contextKind = 'asset';
+  let nextPlannedPmDueAt = new Date('2026-09-16T08:00:00Z');
+  let nextPmDueAt = new Date('2026-09-16T08:00:00Z');
+  let lastPmCompletedAt = null;
+  let blackoutEnd = null;
+  let scheduleAnchorWrites = [];
 
   const buildTaskRow = () => ({
     TaskId: fixtureTaskId,
     TaskNumber: 'PM-0001',
     MaintenanceType: maintenanceType,
-    AssetId: fixtureAssetId,
-    AssetTag: 'AST-001',
-    AssetName: 'Fixture Asset',
-    FacilityId: null,
-    FacilityName: null,
+    AssetId: contextKind === 'asset' ? fixtureAssetId : null,
+    AssetTag: contextKind === 'asset' ? 'AST-001' : null,
+    AssetName: contextKind === 'asset' ? 'Fixture Asset' : null,
+    FacilityId: contextKind === 'facility' ? fixtureFacilityId : null,
+    FacilityName: contextKind === 'facility' ? 'Fixture Facility' : null,
     TemplateId: fixtureTemplateId,
     TemplateName: 'Fixture Template',
     ScheduledDueAt: isoDate('2026-09-16T08:00:00Z'),
@@ -219,6 +227,19 @@ export function createHarness() {
         },
         async query(query) {
           calls.push({ query, inputs: { ...inputs } });
+          if (overrides.query) {
+            const overridden = await overrides.query(query, inputs);
+            if (overridden !== undefined) return overridden;
+          }
+          if (query.includes("UPDATE t") && query.includes("Status = N'open'") && query.includes('AND s.DefaultTemplateId = t.TemplateId')) {
+            if (!pmEnabled || !templateIsActive) return { recordset: [], rowsAffected: [0] };
+            taskStatus = 'open';
+            return { recordset: [], rowsAffected: [1] };
+          }
+          if (rejectStartUpdate && query.includes('UPDATE pm.PMTasks') && query.includes("Status = N'in_progress'")) {
+            return { recordset: [], rowsAffected: [0] };
+          }
+
 
           if (query.includes('FROM pm.UserRoles')) {
             return { recordset: persistedRoles.map(RoleName => ({ RoleName })), rowsAffected: [] };
@@ -226,7 +247,35 @@ export function createHarness() {
 
           if (
             query.includes('FROM pm.PMTasks t') &&
+            query.includes('t.TaskId AS TaskId,') &&
+            query.includes('t.PlannedDueAt AS PlannedDueAt,') &&
+            query.includes('t.ApprovalStatus AS ApprovalStatus,') &&
+            query.includes('t.TechnicianCompletedAt AS TechnicianCompletedAt,') &&
+            query.includes('t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,') &&
+            query.includes('tpl.IntervalDays AS IntervalDays')
+          ) {
+            return {
+              recordset: [
+                {
+                  TaskId: fixtureTaskId,
+                  AssetId: contextKind === 'asset' ? fixtureAssetId : null,
+                  TemplateId: fixtureTemplateId,
+                  PlannedDueAt: new Date('2026-09-16T08:00:00Z'),
+                  MaintenanceType: maintenanceType,
+                  ApprovalStatus: approvalStatus,
+                  TechnicianCompletedAt: technicianCompletedByUserId ? new Date('2026-09-16T09:00:00Z') : null,
+                  TechnicianCompletedByUserId: technicianCompletedByUserId,
+                  IntervalDays: 30,
+                },
+              ],
+              rowsAffected: [],
+            };
+          }
+
+          if (
+            query.includes('FROM pm.PMTasks t') &&
             query.includes('t.TaskId AS TaskId') &&
+            !query.includes('t.TaskNumber AS TaskNumber') &&
             query.includes('t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId') &&
             query.includes('t.MaintenanceType AS MaintenanceType')
           ) {
@@ -309,14 +358,13 @@ export function createHarness() {
             query.includes('t.AssetId AS AssetId,') &&
             query.includes('t.TemplateId AS TemplateId,') &&
             query.includes('t.TechnicianCompletedAt AS TechnicianCompletedAt,') &&
-            query.includes('t.TechnicianCompletedByUserId AS TechnicianCompletedByUserId,') &&
             query.includes('tpl.IntervalDays AS IntervalDays')
           ) {
             return {
               recordset: [
                 {
                   TaskId: fixtureTaskId,
-                  AssetId: fixtureAssetId,
+                  AssetId: contextKind === 'asset' ? fixtureAssetId : null,
                   TemplateId: fixtureTemplateId,
                   PlannedDueAt: new Date('2026-09-16T08:00:00Z'),
                   MaintenanceType: maintenanceType,
@@ -343,8 +391,8 @@ export function createHarness() {
                 {
                   ApprovalStatus: approvalStatus,
                   MaintenanceType: maintenanceType,
-                  AssetId: fixtureAssetId,
-                  FacilityId: null,
+                  AssetId: contextKind === 'asset' ? fixtureAssetId : null,
+                  FacilityId: contextKind === 'facility' ? fixtureFacilityId : null,
                   TemplateId: fixtureTemplateId,
                   PlannedDueAt: new Date('2026-09-16T08:00:00Z'),
                   ScheduledDueAt: new Date('2026-09-16T08:00:00Z'),
@@ -502,7 +550,12 @@ export function createHarness() {
             query.includes('WHERE t.TaskId = @taskId')
           ) {
             return {
-              recordset: [{ AssetId: fixtureAssetId, FacilityId: null }],
+              recordset: [
+                {
+                  AssetId: contextKind === 'asset' ? fixtureAssetId : null,
+                  FacilityId: contextKind === 'facility' ? fixtureFacilityId : null,
+                },
+              ],
               rowsAffected: [],
             };
           }
@@ -645,6 +698,9 @@ export function createHarness() {
             query.includes('s.NextPlannedPMDueAt AS NextPlannedPMDueAt') &&
             query.includes('t.RequiredRoleId AS RequiredRoleId')
           ) {
+            if (contextKind !== 'asset') {
+              return { recordset: [], rowsAffected: [] };
+            }
             return {
               recordset: [
                 {
@@ -654,9 +710,9 @@ export function createHarness() {
                   IntervalDays: 30,
                   TemplateIsActive: 1,
                   IsContextInactive: 0,
-                  NextPlannedPMDueAt: new Date('2026-09-16T08:00:00Z'),
-                  NextPMDueAt: new Date('2026-09-16T08:00:00Z'),
-                  LastPMCompletedAt: null,
+                  NextPlannedPMDueAt: nextPlannedPmDueAt,
+                  NextPMDueAt: nextPmDueAt,
+                  LastPMCompletedAt: lastPmCompletedAt,
                   CategoryId: null,
                   LocationId: null,
                   AssetStatus: 'Ready',
@@ -667,8 +723,37 @@ export function createHarness() {
             };
           }
 
+          if (
+            query.includes('FROM pm.Facilities f') &&
+            query.includes('f.FacilityId AS ContextId,') &&
+            query.includes('s.NextPlannedPMDueAt AS NextPlannedPMDueAt') &&
+            query.includes('t.RequiredRoleId AS RequiredRoleId')
+          ) {
+            if (contextKind !== 'facility') {
+              return { recordset: [], rowsAffected: [] };
+            }
+            return {
+              recordset: [
+                {
+                  ContextId: fixtureFacilityId,
+                  PMEnabled: 1,
+                  TemplateId: fixtureTemplateId,
+                  IntervalDays: 30,
+                  TemplateIsActive: 1,
+                  IsContextActive: 1,
+                  NextPlannedPMDueAt: nextPlannedPmDueAt,
+                  NextPMDueAt: nextPmDueAt,
+                  LastPMCompletedAt: lastPmCompletedAt,
+                  LocationId: null,
+                  RequiredRoleId: null,
+                },
+              ],
+              rowsAffected: [],
+            };
+          }
+
           if (query.includes('FROM pm.BlackoutWindows bw')) {
-            return { recordset: [{ BlackoutEnd: null }], rowsAffected: [] };
+            return { recordset: [{ BlackoutEnd: blackoutEnd }], rowsAffected: [] };
           }
 
           if (
@@ -953,10 +1038,36 @@ export function createHarness() {
           }
 
           if (query.includes('UPDATE pm.AssetPMSettings')) {
+            nextPlannedPmDueAt = inputs.nextPlannedDueAt ?? nextPlannedPmDueAt;
+            nextPmDueAt = inputs.nextDueAt ?? nextPmDueAt;
+            lastPmCompletedAt = inputs.lastPmCompletedAt ?? lastPmCompletedAt;
+            scheduleAnchorWrites.push({
+              kind: 'asset',
+              nextPlannedDueAt: inputs.nextPlannedDueAt ?? null,
+              nextDueAt: inputs.nextDueAt ?? null,
+              lastPmCompletedAt: inputs.lastPmCompletedAt ?? null,
+            });
             return { recordset: [], rowsAffected: [1] };
           }
 
           if (query.includes('MERGE pm.PMSchedules WITH (HOLDLOCK) AS target')) {
+            return { recordset: [], rowsAffected: [1] };
+          }
+
+          if (query.includes('UPDATE pm.FacilityPMSettings')) {
+            nextPlannedPmDueAt = inputs.nextPlannedDueAt ?? nextPlannedPmDueAt;
+            nextPmDueAt = inputs.nextDueAt ?? nextPmDueAt;
+            lastPmCompletedAt = inputs.lastPmCompletedAt ?? lastPmCompletedAt;
+            scheduleAnchorWrites.push({
+              kind: 'facility',
+              nextPlannedDueAt: inputs.nextPlannedDueAt ?? null,
+              nextDueAt: inputs.nextDueAt ?? null,
+              lastPmCompletedAt: inputs.lastPmCompletedAt ?? null,
+            });
+            return { recordset: [], rowsAffected: [1] };
+          }
+
+          if (query.includes('MERGE pm.FacilityPMSchedules WITH (HOLDLOCK) AS target')) {
             return { recordset: [], rowsAffected: [1] };
           }
 
@@ -1060,7 +1171,7 @@ export function createHarness() {
             query.includes('WHERE TaskId = @taskId') &&
             query.includes('Status')
           ) {
-            return { recordset: [{ Status: taskStatus }], rowsAffected: [] };
+            return { recordset: [{ Status: taskStatus, MaintenanceType: maintenanceType }], rowsAffected: [] };
           }
 
           if (
@@ -1213,6 +1324,11 @@ export function createHarness() {
         approvalStatus,
         taskStatus,
         technicianCompletedByUserId,
+        contextKind,
+        nextPlannedPmDueAt,
+        nextPmDueAt,
+        lastPmCompletedAt,
+        scheduleAnchorWrites: scheduleAnchorWrites.map(write => ({ ...write })),
         cmDowntimeIntervals: cmDowntimeIntervals.map(interval => ({ ...interval })),
         cmEventLog: cmEventLog.map(event => ({ ...event })),
         recurringWorkOrderId,
@@ -1232,6 +1348,7 @@ export function createHarness() {
       approvalStatus = options.approvalStatus ?? 'None';
       failMergeForItemId = options.failMergeForItemId ?? null;
       taskStatus = options.taskStatus ?? 'in_progress';
+      rejectStartUpdate = options.rejectStartUpdate ?? false;
       maintenanceType = options.maintenanceType ?? 'PM';
       assignedToUserId = Object.prototype.hasOwnProperty.call(options, 'assignedToUserId')
         ? options.assignedToUserId ?? null
@@ -1264,6 +1381,12 @@ export function createHarness() {
       cmEventLog = (options.cmEventLog ?? []).map(event => ({ ...event }));
       recurringWorkOrderId = options.recurringWorkOrderId ?? null;
       recurringFromTaskId = options.recurringFromTaskId ?? null;
+      contextKind = options.contextKind ?? 'asset';
+      nextPlannedPmDueAt = options.nextPlannedPmDueAt ?? new Date('2026-09-16T08:00:00Z');
+      nextPmDueAt = options.nextPmDueAt ?? new Date('2026-09-16T08:00:00Z');
+      lastPmCompletedAt = options.lastPmCompletedAt ?? null;
+      blackoutEnd = options.blackoutEnd ?? null;
+      scheduleAnchorWrites = (options.scheduleAnchorWrites ?? []).map(write => ({ ...write }));
     },
   };
 }

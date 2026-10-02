@@ -1,3 +1,4 @@
+import { hasTaskDeletionReferences, deleteTaskOwnedRows } from "../db/taskDeletionPolicy.js";
 import express, { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
@@ -21,6 +22,7 @@ import {
 } from "../db/taskBrokenAssetPolicy.js";
 import {
   createPmTaskForOccurrence,
+  pmContextEligibilitySql,
   finalizePmOccurrenceCompletion,
   findReusablePmTask,
   loadAssetPmScheduleContext,
@@ -3296,7 +3298,7 @@ tasksRouter.get("/:taskId/export.pdf", async (req, res) => {
   res.send(Buffer.from(bytes));
 });
 
-tasksRouter.delete("/:taskId", requireManager, async (req, res) => {
+tasksRouter.delete("/:taskId", requireManager, async (req, res, next) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) {
     res.status(400).json({ message: "Invalid request" });
@@ -3304,26 +3306,6 @@ tasksRouter.delete("/:taskId", requireManager, async (req, res) => {
   }
 
   const db = await getDb();
-
-  const storagePathsResult = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "SELECT StoragePath",
-        "FROM pm.PMTaskEvidence",
-        "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
-        "UNION ALL",
-        "SELECT StoragePath",
-        "FROM pm.PMTaskChecklistEvidence",
-        "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
-      ].join("\n"),
-    );
-
-  const storagePathRows = storagePathsResult.recordset as Array<Record<string, unknown>>;
-  const storagePaths: string[] = storagePathRows
-    .map((r) => (typeof r.StoragePath === "string" ? r.StoragePath : null))
-    .filter((v): v is string => v !== null);
 
   const tx = new sql.Transaction(db);
   await tx.begin();
@@ -3339,9 +3321,9 @@ tasksRouter.delete("/:taskId", requireManager, async (req, res) => {
           "  t.TaskNumber AS TaskNumber,",
           "  t.AssignedToUserId AS AssignedToUserId,",
           "  r.Name AS AssignedToRoleName",
-          "FROM pm.PMTasks t",
+          "FROM pm.PMTasks t WITH (XLOCK, HOLDLOCK)",
           "LEFT JOIN pm.Roles r ON r.RoleId = t.AssignedToRoleId",
-          "WHERE t.TaskId = @taskId",
+          "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'PM'",
         ].join("\n"),
       );
 
@@ -3365,24 +3347,39 @@ tasksRouter.delete("/:taskId", requireManager, async (req, res) => {
       return;
     }
 
-    await tx
+    if (await hasTaskDeletionReferences(tx, taskId)) {
+      await tx.rollback();
+      res.status(409).json({ message: "Task is referenced by scheduling, notification history or another task.", code: "TASK_REFERENCED" });
+      return;
+    }
+
+    const storagePathsResult = await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .query(
         [
-          "DELETE FROM pm.PMTaskEvidence WHERE TaskId = @taskId;",
-          "DELETE FROM pm.PMTaskChecklistEvidence WHERE TaskId = @taskId;",
-          "DELETE FROM pm.PMTaskChecklistResults WHERE TaskId = @taskId;",
-          "DELETE FROM pm.PMTasks WHERE TaskId = @taskId;",
+          "SELECT StoragePath",
+          "FROM pm.PMTaskEvidence",
+          "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
+          "UNION ALL",
+          "SELECT StoragePath",
+          "FROM pm.PMTaskChecklistEvidence",
+          "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
         ].join("\n"),
       );
 
-    await tx.commit();
+    const storagePathRows = storagePathsResult.recordset as Array<Record<string, unknown>>;
+    const storagePaths: string[] = storagePathRows
+      .map((r) => (typeof r.StoragePath === "string" ? r.StoragePath : null))
+      .filter((v): v is string => v !== null);
+
+    await deleteTaskOwnedRows(tx, taskId);
 
     const assetId = typeof taskRow.AssetId === "string" ? (taskRow.AssetId as string) : null;
     const taskNumber = typeof taskRow.TaskNumber === "string" ? (taskRow.TaskNumber as string) : null;
 
     await writeAuditLog({
+      executor: tx,
       actorUserId: req.user.sub,
       action: "task.delete",
       entityType: "task",
@@ -3396,6 +3393,8 @@ tasksRouter.delete("/:taskId", requireManager, async (req, res) => {
       userAgent: req.get("user-agent") ?? null,
     });
 
+    await tx.commit();
+
     if (env.EVIDENCE_STORAGE_ROOT && storagePaths.length > 0) {
       for (const storagePath of storagePaths) {
         const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
@@ -3407,7 +3406,7 @@ tasksRouter.delete("/:taskId", requireManager, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     await tx.rollback().catch(() => undefined);
-    throw err;
+    next(err);
   }
 });
 
@@ -3946,7 +3945,7 @@ tasksRouter.post("/:taskId/start", async (req, res) => {
     }
 
     const actionAt = new Date();
-    await tx
+    const started = await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .input("actionAt", sql.DateTime2(0), actionAt)
@@ -3960,6 +3959,12 @@ tasksRouter.post("/:taskId/start", async (req, res) => {
           "  AND Status NOT IN (N'completed', N'cancelled')",
         ].join("\n"),
       );
+
+    if (!started.rowsAffected[0]) {
+      await tx.rollback();
+      res.status(409).json({ message: "Task is no longer actionable." });
+      return;
+    }
 
     await ensureTaskWorkSessionStarted({
       executor: tx,
@@ -4113,19 +4118,26 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
     return;
   }
 
-  await db
+  const reopened = await db
     .request()
     .input("taskId", sql.UniqueIdentifier, taskId)
     .query(
       [
-        "UPDATE pm.PMTasks",
+        "UPDATE t",
         "SET",
         "  Status = N'open',",
         "  CancelledAt = NULL,",
         "  CancelledByUserId = NULL",
-        "WHERE TaskId = @taskId",
+        "FROM pm.PMTasks t",
+        "WHERE t.TaskId = @taskId AND t.Status = N'cancelled'",
+        "AND (" + pmContextEligibilitySql("asset", "t.AssetId", "t.TemplateId") + " OR " + pmContextEligibilitySql("facility", "t.FacilityId", "t.TemplateId") + ")",
       ].join("\n"),
     );
+
+  if (!reopened.rowsAffected[0]) {
+    res.status(409).json({ message: "PM must be enabled with a site and active template on an active context before reopening this task.", code: "PM_CONTEXT_UNAVAILABLE" });
+    return;
+  }
 
   await writeAuditLog({
     actorUserId: req.user.sub,
@@ -4212,7 +4224,7 @@ tasksRouter.post("/:taskId/resume", async (req, res) => {
     }
 
     const actionAt = new Date();
-    await tx
+    const started = await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .input("actionAt", sql.DateTime2(0), actionAt)
@@ -4226,6 +4238,12 @@ tasksRouter.post("/:taskId/resume", async (req, res) => {
           "  AND Status NOT IN (N'completed', N'cancelled')",
         ].join("\n"),
       );
+
+    if (!started.rowsAffected[0]) {
+      await tx.rollback();
+      res.status(409).json({ message: "Task is no longer actionable." });
+      return;
+    }
 
     await ensureTaskWorkSessionStarted({
       executor: tx,

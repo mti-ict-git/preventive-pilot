@@ -7,3 +7,12 @@ backend/dist
 logs
 **/*.tsbuildinfo
 
+
+# Runtime secrets and evidence must not enter image build contexts.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+**/*firebase-adminsdk*.json
+shared-documents

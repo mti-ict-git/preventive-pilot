@@ -89,3 +89,19 @@ Required D2 checks: fresh database application, repeat application, expected col
 CM-01 now distinguishes equipment restoration (downtime end), technician repair-completion submission, and Supervisor/Admin/Superadmin verification/WO closure with additive event history rather than overloading one timestamp pair. Administrative waiting does not extend equipment downtime after restoration. Correction retains the same WO identity and previous work/evidence history, with an attributable mandatory return reason. Repair-performer and reviewer identities remain stored separately so self-verification can be rejected regardless of role.
 
 Confirmed downtime-history requirement, 2026-09-11, now implemented locally by CM-01: preserve multiple outage intervals on the same WO when the same fault recurs before closure. Sum outage durations without counting operational gaps. Recurrence after closure creates a new linked WO; preserve previous WO and interval history. Restoration defaults to current time and supports actual past time with a mandatory reason and change history. Legacy data is backfilled additively from the original single downtime start/end pair into `CMDowntimeIntervals` and `CMTaskEvents`.
+
+## PM activation and deactivation — 2026-09-27
+
+Q-14/Q-15 uses existing context `LocationId`, PM settings, template `IsActive`, task lifecycle fields, `TaskWorkSessions` and audit records. No DDL change is required. Disabling PM/archiving a facility updates only unstarted open PM tasks to cancelled, retaining records and actor/time/reason. Settings validation and cancellation share one transaction; see [local verification](verification-q14-q15.md).
+
+## Manual task deletion — 2026-09-27
+
+No schema migration is required. All 13 current foreign keys into `pm.PMTasks` are covered by `taskDeletionPolicy.ts`: eight task-owned tables are deleted before the parent; two self-reference columns (`SourceTaskId`, `RecurringFromTaskId`), missed/skipped occurrence records and notification logs block deletion. Existing audit rows remain, and a new deletion audit is inserted in the same transaction. The selected parent uses `XLOCK, HOLDLOCK`; incoming reference checks use `UPDLOCK, HOLDLOCK`. Live SQL concurrency acceptance remains separate. See [verification](verification-task-deletion.md).
+
+## Live additive prerequisite rollout — 2026-09-27
+
+The configured `AssetMaintDB` database lacked the EX-01/CM-01 source/recurrence columns and three work-history tables. [The scoped migration](../db/migrations/20260927-task-deletion-prerequisites.sql) copies only those additive definitions and indexes from `db/schema.sql`. It was committed in one SQL transaction with a 30-second request timeout. The initial runner supplied SET options in a separate batch; future runners must put session settings in the same batch as the migration to guarantee their scope. No operational task backfill was run. Live metadata changed from 36 to 39 tables, 62 to 73 foreign keys, and 65 to 76 indexes; `db:verify` now passes. `SchemaInfo` remains version 6: this limited migration does not claim a full-schema rollout or CM historical backfill.
+
+## D2 schema readiness — 2026-09-27
+
+Creation order now places PMTemplates before FacilityPMSettings and MaintenanceType before filtered planned-occurrence indexes. Guarded upgrades restore the task facility FK and exclusive-context check for older databases. A disposable clean/repeat/upgrade test passed; the two missing constraints were added WITH CHECK to the live database after verifying zero violations. The verifier now covers source object inventory and column shapes/flags with explicit definition-level limits. See [evidence](verification-d2-environment.md).

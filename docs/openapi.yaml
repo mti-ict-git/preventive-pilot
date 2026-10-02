@@ -4,7 +4,7 @@ openapi: 3.1.0
 info:
   title: Preventive Pilot API
   version: 1.0.1
-  description: REST API for Preventive Pilot (web + mobile clients). Docs updated 2026-09-17.
+  description: REST API for Preventive Pilot (web + mobile clients). Docs updated 2026-09-27.
 servers:
   - url: /
 components:
@@ -14,6 +14,1441 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    EvidenceImportRunRequest:
+      type: object
+      properties:
+        templateId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        duplicateAction:
+          type: string
+          enum:
+            - skip
+            - replace
+          default: skip
+        maxFiles:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        dryRun:
+          type: boolean
+    CreateLocalUserRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 128
+        displayName:
+          type:
+            - string
+            - "null"
+          maxLength: 256
+        email:
+          type:
+            - string
+            - "null"
+          format: email
+          maxLength: 256
+        phone:
+          type:
+            - string
+            - "null"
+          maxLength: 32
+        password:
+          type: string
+          minLength: 6
+          maxLength: 128
+        roleName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        isActive:
+          type: boolean
+          default: true
+      required:
+        - username
+        - password
+        - roleName
+    AssignLdapUserRequest:
+      type: object
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+          maxLength: 256
+        roleName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        isActive:
+          type: boolean
+          default: true
+      required:
+        - identifier
+        - roleName
+    SnipeItSettingsUpdateRequest:
+      type: object
+      properties:
+        baseUrl:
+          type:
+            - string
+            - "null"
+          maxLength: 512
+        apiToken:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        autoSyncEnabled:
+          type: boolean
+        syncIntervalMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+      required:
+        - baseUrl
+        - autoSyncEnabled
+        - syncIntervalMinutes
+      description: >-
+        String settings are trimmed; blank nullable strings normalize to null. Optional secrets preserve
+        existing values when omitted on settings writes. Test overrides use current values for null/omitted
+        fields.
+    SnipeItSettingsTestRequest:
+      type: object
+      properties:
+        baseUrl:
+          type:
+            - string
+            - "null"
+          maxLength: 512
+        apiToken:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        autoSyncEnabled:
+          type: boolean
+        syncIntervalMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+      description: >-
+        String settings are trimmed; blank nullable strings normalize to null. Optional secrets preserve
+        existing values when omitted on settings writes. Test overrides use current values for null/omitted
+        fields.
+    MicrosoftGraphSettingsUpdateRequest:
+      type: object
+      properties:
+        tenantId:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        clientId:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        clientSecret:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        scope:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          maxItems: 20
+          default: []
+        senderEmail:
+          type:
+            - string
+            - "null"
+          maxLength: 256
+        useLoggedInUserAsSender:
+          type: boolean
+        defaultToRecipients:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          maxItems: 50
+          default: []
+        defaultCcRecipients:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          maxItems: 50
+          default: []
+        defaultBccRecipients:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          maxItems: 50
+          default: []
+        emailSubjectTemplate:
+          type:
+            - string
+            - "null"
+          maxLength: 512
+        emailBodyTemplate:
+          type:
+            - string
+            - "null"
+          maxLength: 20000
+        enabled:
+          type: boolean
+      required:
+        - tenantId
+        - clientId
+        - senderEmail
+        - useLoggedInUserAsSender
+        - emailSubjectTemplate
+        - emailBodyTemplate
+        - enabled
+      description: >-
+        String settings are trimmed; blank nullable strings normalize to null. Optional secrets preserve
+        existing values when omitted on settings writes. Test overrides use current values for null/omitted
+        fields.
+    MicrosoftGraphSettingsTestRequest:
+      type: object
+      properties:
+        tenantId:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        clientId:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        clientSecret:
+          type:
+            - string
+            - "null"
+          maxLength: 2048
+        scope:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          maxItems: 20
+          default: []
+        senderEmail:
+          type:
+            - string
+            - "null"
+          maxLength: 256
+        useLoggedInUserAsSender:
+          type: boolean
+        defaultToRecipients:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          maxItems: 50
+          default: []
+        defaultCcRecipients:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          maxItems: 50
+          default: []
+        defaultBccRecipients:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+          maxItems: 50
+          default: []
+        emailSubjectTemplate:
+          type:
+            - string
+            - "null"
+          maxLength: 512
+        emailBodyTemplate:
+          type:
+            - string
+            - "null"
+          maxLength: 20000
+        enabled:
+          type: boolean
+        sendTestEmail:
+          type: boolean
+      description: >-
+        String settings are trimmed; blank nullable strings normalize to null. Optional secrets preserve
+        existing values when omitted on settings writes. Test overrides use current values for null/omitted
+        fields.
+    AssetsUiSettingsRequest:
+      type: object
+      properties:
+        visibleCategoryIds:
+          type:
+            - array
+            - "null"
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+        excludeInactive:
+          type: boolean
+      required:
+        - visibleCategoryIds
+    LabelDesignerUiSettingsRequest:
+      type: object
+      properties:
+        qrPayloadMode:
+          type: string
+          enum:
+            - assetId
+            - assetTag
+            - snipeItUrl
+        gridColumns:
+          type: integer
+          minimum: 1
+          maximum: 6
+        config:
+          type: object
+          properties:
+            width:
+              type: integer
+              minimum: 10
+              maximum: 200
+            height:
+              type: integer
+              minimum: 10
+              maximum: 200
+            qrSize:
+              type: integer
+              minimum: 5
+              maximum: 200
+            showAssetTag:
+              type: boolean
+            showAssetName:
+              type: boolean
+            showCategory:
+              type: boolean
+            showLocation:
+              type: boolean
+            showCustomText:
+              type: boolean
+            customText:
+              type: string
+              maxLength: 256
+            fontSize:
+              type: integer
+              minimum: 5
+              maximum: 24
+            padding:
+              type: integer
+              minimum: 0
+              maximum: 20
+            borderRadius:
+              type: integer
+              minimum: 0
+              maximum: 20
+            showBorder:
+              type: boolean
+            showLogo:
+              type: boolean
+            orientation:
+              type: string
+              enum:
+                - portrait
+                - landscape
+          required:
+            - width
+            - height
+            - qrSize
+            - showAssetTag
+            - showAssetName
+            - showCategory
+            - showLocation
+            - showCustomText
+            - customText
+            - fontSize
+            - padding
+            - borderRadius
+            - showBorder
+            - showLogo
+            - orientation
+      required:
+        - qrPayloadMode
+        - gridColumns
+        - config
+    WhatsAppSettingsRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        baseUrl:
+          type:
+            - string
+            - "null"
+          maxLength: 512
+        target:
+          type: string
+          enum:
+            - single
+            - group
+        defaultNumber:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        groupId:
+          type:
+            - string
+            - "null"
+          maxLength: 128
+        groupName:
+          type:
+            - string
+            - "null"
+          maxLength: 256
+        mentionNumbers:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+          maxItems: 50
+          default: []
+      required:
+        - enabled
+        - baseUrl
+        - target
+        - defaultNumber
+        - groupId
+        - groupName
+      description: >-
+        String settings are trimmed; blank nullable strings normalize to null. Optional secrets preserve
+        existing values when omitted on settings writes. Test overrides use current values for null/omitted
+        fields.
+    WhatsAppSettingsTestRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        baseUrl:
+          type:
+            - string
+            - "null"
+          maxLength: 512
+        target:
+          type: string
+          enum:
+            - single
+            - group
+        defaultNumber:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        groupId:
+          type:
+            - string
+            - "null"
+          maxLength: 128
+        groupName:
+          type:
+            - string
+            - "null"
+          maxLength: 256
+        mentionNumbers:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+          maxItems: 50
+          default: []
+        sendTestMessage:
+          type: boolean
+      description: >-
+        String settings are trimmed; blank nullable strings normalize to null. Optional secrets preserve
+        existing values when omitted on settings writes. Test overrides use current values for null/omitted
+        fields.
+    PushTestRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 64
+        body:
+          type: string
+          minLength: 1
+          maxLength: 256
+    SnipeItSettingsResponse:
+      type: object
+      properties:
+        baseUrl:
+          type:
+            - string
+            - "null"
+        apiTokenConfigured:
+          type: boolean
+        autoSyncEnabled:
+          type: boolean
+        syncIntervalMinutes:
+          type: integer
+      required:
+        - baseUrl
+        - apiTokenConfigured
+        - autoSyncEnabled
+        - syncIntervalMinutes
+    MicrosoftGraphSettingsResponse:
+      type: object
+      properties:
+        tenantId:
+          type:
+            - string
+            - "null"
+        clientId:
+          type:
+            - string
+            - "null"
+        senderEmail:
+          type:
+            - string
+            - "null"
+        emailSubjectTemplate:
+          type:
+            - string
+            - "null"
+        emailBodyTemplate:
+          type:
+            - string
+            - "null"
+        lastConnectionTestAt:
+          type:
+            - string
+            - "null"
+        clientSecretConfigured:
+          type: boolean
+        useLoggedInUserAsSender:
+          type: boolean
+        enabled:
+          type: boolean
+        scope:
+          type: array
+          items:
+            type: string
+        defaultToRecipients:
+          type: array
+          items:
+            type: string
+        defaultCcRecipients:
+          type: array
+          items:
+            type: string
+        defaultBccRecipients:
+          type: array
+          items:
+            type: string
+      required:
+        - tenantId
+        - clientId
+        - senderEmail
+        - emailSubjectTemplate
+        - emailBodyTemplate
+        - lastConnectionTestAt
+        - clientSecretConfigured
+        - useLoggedInUserAsSender
+        - enabled
+        - scope
+        - defaultToRecipients
+        - defaultCcRecipients
+        - defaultBccRecipients
+    WhatsAppSettingsResponse:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        baseUrl:
+          type:
+            - string
+            - "null"
+        target:
+          type: string
+          enum:
+            - single
+            - group
+        defaultNumber:
+          type:
+            - string
+            - "null"
+        groupId:
+          type:
+            - string
+            - "null"
+        groupName:
+          type:
+            - string
+            - "null"
+        mentionNumbers:
+          type: array
+          items:
+            type: string
+      required:
+        - enabled
+        - baseUrl
+        - target
+        - defaultNumber
+        - groupId
+        - groupName
+        - mentionNumbers
+    AssetsUiSettingsResponse:
+      type: object
+      properties:
+        visibleCategoryIds:
+          type:
+            - array
+            - "null"
+          items:
+            type: string
+            format: uuid
+        excludeInactive:
+          type: boolean
+      required:
+        - visibleCategoryIds
+        - excludeInactive
+    LabelDesignerUiSettingsResponse:
+      type: object
+      properties:
+        qrPayloadMode:
+          type: string
+          enum:
+            - assetId
+            - assetTag
+            - snipeItUrl
+        gridColumns:
+          type: integer
+          minimum: 1
+          maximum: 6
+        config:
+          type: object
+          properties:
+            width:
+              type: integer
+              minimum: 10
+              maximum: 200
+            height:
+              type: integer
+              minimum: 10
+              maximum: 200
+            qrSize:
+              type: integer
+              minimum: 5
+              maximum: 200
+            showAssetTag:
+              type: boolean
+            showAssetName:
+              type: boolean
+            showCategory:
+              type: boolean
+            showLocation:
+              type: boolean
+            showCustomText:
+              type: boolean
+            customText:
+              type: string
+              maxLength: 256
+            fontSize:
+              type: integer
+              minimum: 5
+              maximum: 24
+            padding:
+              type: integer
+              minimum: 0
+              maximum: 20
+            borderRadius:
+              type: integer
+              minimum: 0
+              maximum: 20
+            showBorder:
+              type: boolean
+            showLogo:
+              type: boolean
+            orientation:
+              type: string
+              enum:
+                - portrait
+                - landscape
+          required:
+            - width
+            - height
+            - qrSize
+            - showAssetTag
+            - showAssetName
+            - showCategory
+            - showLocation
+            - showCustomText
+            - customText
+            - fontSize
+            - padding
+            - borderRadius
+            - showBorder
+            - showLogo
+            - orientation
+      required:
+        - qrPayloadMode
+        - gridColumns
+        - config
+    MicrosoftGraphTestResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        accessTokenPresent:
+          type: boolean
+        lastConnectionTestAt:
+          type: string
+          format: date-time
+        testEmailSent:
+          type: boolean
+      required:
+        - ok
+        - accessTokenPresent
+        - lastConnectionTestAt
+        - testEmailSent
+    WhatsAppTestResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        testMessageSent:
+          type: boolean
+      required:
+        - ok
+    SystemStatusResponse:
+      type: object
+      properties:
+        backendTime:
+          type: string
+          format: date-time
+        uptimeSeconds:
+          type: integer
+        database:
+          type: object
+          properties:
+            ok:
+              type: boolean
+          required:
+            - ok
+        jobs:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            scheduleCalcIntervalMinutes:
+              type: integer
+            notificationIntervalMinutes:
+              type: integer
+            snipeSyncEnabled:
+              type: boolean
+            snipeSyncIntervalMinutes:
+              type: integer
+          required:
+            - enabled
+            - scheduleCalcIntervalMinutes
+            - notificationIntervalMinutes
+            - snipeSyncEnabled
+            - snipeSyncIntervalMinutes
+        notifications:
+          type: object
+          properties:
+            msGraph:
+              $ref: "#/components/schemas/MicrosoftGraphSettingsResponse"
+            whatsApp:
+              $ref: "#/components/schemas/WhatsAppSettingsResponse"
+          required:
+            - msGraph
+            - whatsApp
+        snipeIt:
+          type: object
+          properties:
+            configured:
+              type: boolean
+            baseUrl:
+              type:
+                - string
+                - "null"
+            autoSyncEnabled:
+              type: boolean
+            syncIntervalMinutes:
+              type: integer
+            lastRun:
+              anyOf:
+                - type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    startedAt:
+                      type: string
+                      format: date-time
+                    completedAt:
+                      type:
+                        - string
+                        - "null"
+                      format: date-time
+                    status:
+                      type: string
+                    assetsProcessed:
+                      type:
+                        - integer
+                        - "null"
+                    errorMessage:
+                      type:
+                        - string
+                        - "null"
+                  required:
+                    - id
+                    - startedAt
+                    - completedAt
+                    - status
+                    - assetsProcessed
+                    - errorMessage
+                - type: "null"
+          required:
+            - configured
+            - baseUrl
+            - autoSyncEnabled
+            - syncIntervalMinutes
+            - lastRun
+      required:
+        - backendTime
+        - uptimeSeconds
+        - database
+        - jobs
+        - notifications
+        - snipeIt
+    AssignableUsersResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              username:
+                type: string
+              displayName:
+                type:
+                  - string
+                  - "null"
+              email:
+                type:
+                  - string
+                  - "null"
+              phone:
+                type:
+                  - string
+                  - "null"
+              externalProvider:
+                type:
+                  - string
+                  - "null"
+              isActive:
+                type: boolean
+              roles:
+                type: array
+                items:
+                  type: string
+              tasksCompleted:
+                type: integer
+            required:
+              - id
+              - username
+              - displayName
+              - email
+              - phone
+              - externalProvider
+              - isActive
+              - roles
+              - tasksCompleted
+      required:
+        - page
+        - pageSize
+        - total
+        - items
+    LdapSearchResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              username:
+                type: string
+              displayName:
+                type:
+                  - string
+                  - "null"
+              email:
+                type:
+                  - string
+                  - "null"
+              upn:
+                type:
+                  - string
+                  - "null"
+              dn:
+                type: string
+              identifier:
+                type: string
+            required:
+              - username
+              - displayName
+              - email
+              - upn
+              - dn
+              - identifier
+      required:
+        - items
+    EvidenceImportResponse:
+      type: object
+      properties:
+        examined:
+          type: integer
+        importedFiles:
+          type: integer
+        skippedFiles:
+          type: integer
+        errorFiles:
+          type: integer
+        createdTasks:
+          type: integer
+        replacedTasks:
+          type: integer
+        skipReasons:
+          type: object
+          properties:
+            no_date_in_name:
+              type: integer
+            no_asset_key:
+              type: integer
+            asset_not_found:
+              type: integer
+            no_template:
+              type: integer
+            not_regular_file:
+              type: integer
+            duplicate_task:
+              type: integer
+          required: []
+        errorStages:
+          type: object
+          properties:
+            storage_path_escape:
+              type: integer
+            stat_failed:
+              type: integer
+            move_failed:
+              type: integer
+            task_ensure_failed:
+              type: integer
+            db_exception:
+              type: integer
+          required: []
+        skippedSamples:
+          type: array
+          items:
+            type: object
+            properties:
+              fileName:
+                type: string
+              assetKey:
+                type:
+                  - string
+                  - "null"
+              date:
+                type:
+                  - string
+                  - "null"
+              reason:
+                type: string
+                enum:
+                  - no_date_in_name
+                  - no_asset_key
+                  - asset_not_found
+                  - no_template
+                  - not_regular_file
+                  - duplicate_task
+              detail:
+                type:
+                  - string
+                  - "null"
+            required:
+              - fileName
+              - assetKey
+              - date
+              - reason
+              - detail
+        errorSamples:
+          type: array
+          items:
+            type: object
+            properties:
+              fileName:
+                type: string
+              assetKey:
+                type:
+                  - string
+                  - "null"
+              date:
+                type:
+                  - string
+                  - "null"
+              stage:
+                type: string
+                enum:
+                  - storage_path_escape
+                  - stat_failed
+                  - move_failed
+                  - task_ensure_failed
+                  - db_exception
+              error:
+                type:
+                  - string
+                  - "null"
+            required:
+              - fileName
+              - assetKey
+              - date
+              - stage
+              - error
+      required:
+        - examined
+        - importedFiles
+        - skippedFiles
+        - errorFiles
+        - createdTasks
+        - replacedTasks
+        - skipReasons
+        - errorStages
+        - skippedSamples
+        - errorSamples
+    PushTestResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        attempted:
+          type: integer
+        sent:
+          type: integer
+        failed:
+          type: integer
+        configUsed:
+          type: string
+          enum:
+            - firebase-admin
+            - fcm-legacy
+        failures:
+          type: array
+          items:
+            type: object
+            properties:
+              platform:
+                type: string
+              message:
+                type: string
+              code:
+                type:
+                  - string
+                  - "null"
+            required:
+              - platform
+              - message
+              - code
+      required:
+        - ok
+        - attempted
+        - sent
+        - failed
+        - configUsed
+        - failures
+    FacilityDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type:
+            - string
+            - "null"
+        isActive:
+          type: boolean
+        location:
+          anyOf:
+            - $ref: "#/components/schemas/EntityRef"
+            - type: "null"
+        pm:
+          $ref: "#/components/schemas/FacilityPmInfo"
+      required:
+        - id
+        - name
+        - description
+        - isActive
+        - location
+        - pm
+    TemplateChecklistItemRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sortOrder:
+          type: integer
+          minimum: 0
+        itemText:
+          type: string
+          minLength: 1
+          maxLength: 512
+        isMandatory:
+          type: boolean
+          default: true
+        requiresNotes:
+          type: boolean
+          default: false
+        requiresPassFail:
+          type: boolean
+          default: true
+        enableAttachment:
+          type: boolean
+          default: false
+        requiresAttachment:
+          type: boolean
+          default: false
+        isActive:
+          type: boolean
+          default: true
+      required:
+        - sortOrder
+        - itemText
+    TemplateChecklistItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sortOrder:
+          type: integer
+          minimum: 0
+        itemText:
+          type: string
+          minLength: 1
+          maxLength: 512
+        isMandatory:
+          type: boolean
+        requiresNotes:
+          type: boolean
+        requiresPassFail:
+          type: boolean
+        enableAttachment:
+          type: boolean
+        requiresAttachment:
+          type: boolean
+        isActive:
+          type: boolean
+      required:
+        - id
+        - sortOrder
+        - itemText
+        - isMandatory
+        - requiresNotes
+        - requiresPassFail
+        - enableAttachment
+        - requiresAttachment
+        - isActive
+    TemplateCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        description:
+          type:
+            - string
+            - "null"
+          maxLength: 1024
+        intervalDays:
+          type: integer
+          minimum: 1
+        applicableCategoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        estimatedDurationMinutes:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+        requiredRoleId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        isActive:
+          type: boolean
+          default: true
+        checklistItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateChecklistItemRequest"
+          default: []
+      required:
+        - name
+        - intervalDays
+    TemplateUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        description:
+          type:
+            - string
+            - "null"
+          maxLength: 1024
+        intervalDays:
+          type: integer
+          minimum: 1
+        applicableCategoryId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        estimatedDurationMinutes:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+        requiredRoleId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        isActive:
+          type: boolean
+        checklistItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateChecklistItemRequest"
+      description: >-
+        Partial update. Empty object is accepted. Supplied checklistItems replaces the active set: omitted
+        existing IDs are deactivated; omitted checklistItems leaves items unchanged. Version increments on
+        each accepted update.
+    TemplateSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type:
+            - string
+            - "null"
+        intervalDays:
+          type: integer
+        applicableCategory:
+          anyOf:
+            - $ref: "#/components/schemas/EntityRef"
+            - type: "null"
+        estimatedDurationMinutes:
+          type:
+            - integer
+            - "null"
+        requiredRole:
+          anyOf:
+            - $ref: "#/components/schemas/EntityRef"
+            - type: "null"
+        isActive:
+          type: boolean
+        version:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - description
+        - intervalDays
+        - applicableCategory
+        - estimatedDurationMinutes
+        - requiredRole
+        - isActive
+        - version
+        - updatedAt
+    TemplateDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type:
+            - string
+            - "null"
+        intervalDays:
+          type: integer
+        applicableCategory:
+          anyOf:
+            - $ref: "#/components/schemas/EntityRef"
+            - type: "null"
+        estimatedDurationMinutes:
+          type:
+            - integer
+            - "null"
+        requiredRole:
+          anyOf:
+            - $ref: "#/components/schemas/EntityRef"
+            - type: "null"
+        isActive:
+          type: boolean
+        version:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+        checklistItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateChecklistItem"
+      required:
+        - id
+        - name
+        - description
+        - intervalDays
+        - applicableCategory
+        - estimatedDurationMinutes
+        - requiredRole
+        - isActive
+        - version
+        - updatedAt
+        - checklistItems
+    TemplateListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateSummary"
+      required:
+        - items
+    UserPreferences:
+      type: object
+      properties:
+        themeMode:
+          type:
+            - string
+            - "null"
+        themePalette:
+          type:
+            - string
+            - "null"
+      required:
+        - themeMode
+        - themePalette
+    UserPreferencesRequest:
+      type: object
+      properties:
+        themeMode:
+          type:
+            - string
+            - "null"
+          enum:
+            - dark
+            - light
+            - null
+        themePalette:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+          description: Trimmed before storage.
+    BulkAssignUnassignedRequest:
+      type: object
+      properties:
+        assignedToUserId:
+          type: string
+          format: uuid
+        assignedToRoleId:
+          type: string
+          format: uuid
+        dueFrom:
+          type: string
+          description: Date or parseable timestamp; date-only uses UTC 00:00:00 inclusive.
+        dueTo:
+          type: string
+          description: Date or parseable timestamp; date-only uses UTC 23:59:59 inclusive.
+      oneOf:
+        - required:
+            - assignedToUserId
+          not:
+            required:
+              - assignedToRoleId
+        - required:
+            - assignedToRoleId
+          not:
+            required:
+              - assignedToUserId
+    BulkAssignUnassignedResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        updatedCount:
+          type: integer
+      required:
+        - ok
+        - updatedCount
+    WorkOrderResolutionRequest:
+      type: object
+      properties:
+        resolutionNotes:
+          type: string
+          maxLength: 2048
+          description: Trimmed. Empty or omitted value clears the notes.
     EntityRef:
       type: object
       properties:
@@ -2730,6 +4165,1505 @@ tags:
   - name: Notifications
   - name: System
 paths:
+  /api/devices/push-test:
+    post:
+      tags:
+        - Devices
+      summary: Send a push test to current user devices
+      description: >-
+        Every authenticated role. Targets active devices for the current user. Missing push configuration or
+        tokens returns 400. Per-device delivery failures are reported in a 200 response with failed/failures;
+        ok=true does not mean every delivery succeeded.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushTestResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushTestRequest"
+  /api/system/evidence-import/run:
+    post:
+      tags:
+        - System
+      summary: Run evidence import
+      description: >-
+        Admin or Superadmin. Requires configured import/storage roots. Imports files and may create/replace
+        tasks unless dryRun=true. duplicateAction defaults to skip. Schema and storage acceptance remain
+        separate.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceImportResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceImportRunRequest"
+  /api/system/jobs/{jobName}/run:
+    post:
+      tags:
+        - System
+      summary: Run a background job now
+      description: >-
+        Admin or Superadmin. Runs the selected job; snipe-sync requires configuration and uses force mode.
+        Returns 409 when the process already considers that job running. No distributed execution guarantee is
+        implied.
+      parameters:
+        - name: jobName
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - snipe-sync
+              - schedule-calc
+              - notifications
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Job already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/system/ldap/search:
+    get:
+      tags:
+        - System
+      summary: Search LDAP profiles
+      description: >-
+        Admin or Superadmin. query takes precedence over q. Blank search returns an empty list without
+        provider lookup. Default limit is 10.
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 256
+        - name: query
+          in: query
+          schema:
+            type: string
+            maxLength: 256
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LdapSearchResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: >-
+            LDAP is not configured. Local login remains available; omitted login provider still defaults to
+            LDAP.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                  - code
+                properties:
+                  message:
+                    type: string
+                  code:
+                    type: string
+                    enum:
+                      - LDAP_NOT_CONFIGURED
+  /api/system/users/assign-ldap:
+    post:
+      tags:
+        - System
+      summary: Assign a single role to an LDAP user
+      description: >-
+        Admin or Superadmin. Looks up and upserts the LDAP profile, applies active status, and reconciles to
+        the supplied single role. Lookup/assignment failure returns 400.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: >-
+            LDAP is not configured. Local login remains available; omitted login provider still defaults to
+            LDAP.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                  - code
+                properties:
+                  message:
+                    type: string
+                  code:
+                    type: string
+                    enum:
+                      - LDAP_NOT_CONFIGURED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignLdapUserRequest"
+  /api/system/users/local:
+    post:
+      tags:
+        - System
+      summary: Create or replace a local user account
+      description: >-
+        Admin or Superadmin. Upserts by username, sets local provider and credentials, replaces the password
+        and role membership with the submitted role. Creates the named role when absent. Existing usernames
+        are updated, not rejected as duplicates; success is 200.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocalUserRequest"
+  /api/system/users/{userId}/refresh-ldap:
+    post:
+      tags:
+        - System
+      summary: Refresh an LDAP user profile
+      description: >-
+        Admin or Superadmin. Only existing LDAP users; provider failure returns 400. Updates profile fields
+        from LDAP.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: >-
+            LDAP is not configured. Local login remains available; omitted login provider still defaults to
+            LDAP.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                  - code
+                properties:
+                  message:
+                    type: string
+                  code:
+                    type: string
+                    enum:
+                      - LDAP_NOT_CONFIGURED
+  /api/system/users/for-assignment:
+    get:
+      tags:
+        - System
+      summary: List users available for assignment
+      description: >-
+        Supervisor, Admin, or Superadmin. Defaults to active users. tasksCompleted is always zero in this
+        response.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: string
+          description: Defaults to 1; minimum 1.
+        - name: pageSize
+          in: query
+          schema:
+            type: string
+          description: Defaults to 50; clamped to 1-200.
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Matches username, display name, or email.
+        - name: isActive
+          in: query
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+            default: "true"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignableUsersResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/system/whatsapp-settings/test:
+    post:
+      tags:
+        - System
+      summary: Validate WhatsApp configuration or send test message
+      description: >-
+        Admin or Superadmin. Without sendTestMessage=true only requires a configured base URL; does not
+        contact the provider. With the flag enabled, sends to the effective configured number/group. Does not
+        save overrides.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsAppTestResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsAppSettingsTestRequest"
+  /api/system/microsoft-graph-settings/test:
+    post:
+      tags:
+        - System
+      summary: Test and store Microsoft Graph configuration
+      description: >-
+        Admin or Superadmin. Acquires a client-credentials token. Optionally sends email to configured
+        recipients when sendTestEmail=true. On success persists the effective configuration and test
+        timestamp, including supplied overrides. This is not a read-only connection check.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MicrosoftGraphTestResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Required database schema is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MicrosoftGraphSettingsTestRequest"
+  /api/system/snipeit-settings/test:
+    post:
+      tags:
+        - System
+      summary: Test Snipe-IT connection
+      description: >-
+        Admin or Superadmin. Uses optional overrides and requests one hardware record from the upstream API;
+        does not run synchronization.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SnipeItSettingsTestRequest"
+  /api/system/ui-settings/label-designer:
+    get:
+      tags:
+        - System
+      summary: Get label-designer UI settings
+      description: Every authenticated role. Falls back to default settings when no usable stored configuration exists.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelDesignerUiSettingsResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - System
+      summary: Store label-designer UI settings
+      description: Admin or Superadmin. Requires the complete label configuration.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelDesignerUiSettingsResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Required database schema is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LabelDesignerUiSettingsRequest"
+  /api/system/ui-settings/assets:
+    get:
+      tags:
+        - System
+      summary: Get assets UI settings
+      description: Every authenticated role. Falls back to default settings when no usable stored configuration exists.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetsUiSettingsResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - System
+      summary: Store assets UI settings
+      description: Superadmin only. Omitted excludeInactive becomes false.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetsUiSettingsResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Required database schema is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetsUiSettingsRequest"
+  /api/system/whatsapp-settings:
+    get:
+      tags:
+        - System
+      summary: Get WhatsApp configuration
+      description: >-
+        Every authenticated role. Returns effective configuration; token/client-secret values are not
+        returned.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsAppSettingsResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - System
+      summary: Store WhatsApp configuration
+      description: >-
+        Admin or Superadmin. Stores settings and returns effective configuration. Omitted secret retains its
+        current value; other fields follow the request schema. Nullable fields may fall back to environment
+        values when effective configuration is loaded.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsAppSettingsResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Required database schema is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsAppSettingsRequest"
+  /api/system/microsoft-graph-settings:
+    get:
+      tags:
+        - System
+      summary: Get MicrosoftGraph configuration
+      description: >-
+        Every authenticated role. Returns effective configuration; token/client-secret values are not
+        returned.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MicrosoftGraphSettingsResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - System
+      summary: Store MicrosoftGraph configuration
+      description: >-
+        Admin or Superadmin. Stores settings and returns effective configuration. Omitted secret retains its
+        current value; other fields follow the request schema. Nullable fields may fall back to environment
+        values when effective configuration is loaded.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MicrosoftGraphSettingsResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Required database schema is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MicrosoftGraphSettingsUpdateRequest"
+  /api/system/snipeit-settings:
+    get:
+      tags:
+        - System
+      summary: Get SnipeIt configuration
+      description: >-
+        Every authenticated role. Returns effective configuration; token/client-secret values are not
+        returned.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SnipeItSettingsResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - System
+      summary: Store SnipeIt configuration
+      description: >-
+        Admin or Superadmin. Stores settings and returns effective configuration. Omitted secret retains its
+        current value; other fields follow the request schema. Nullable fields may fall back to environment
+        values when effective configuration is loaded.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SnipeItSettingsResponse"
+        "400":
+          description: Invalid request, configuration, or provider failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Operation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Required database schema is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SnipeItSettingsUpdateRequest"
+  /api/system/status:
+    get:
+      tags:
+        - System
+      summary: Get system and integration status
+      description: >-
+        Every authenticated role. Reports configuration and database probe state, not proof of external
+        service delivery.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatusResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/tasks/{taskId}/checklist-items/{templateChecklistItemId}/evidence/upload:
+    post:
+      tags:
+        - Tasks
+      summary: Upload checklist evidence
+      description: >-
+        Send raw non-empty file bytes, not multipart. Requires assignment-based modification access or manager
+        rights. Approval-locked work rejects non-Superadmin with 400. Requires configured evidence storage.
+        Maximum raw-body size is 50 MiB; parser-level errors may be HTML rather than JSON.
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: templateChecklistItemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-filename
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Original file name; basename is sanitized before storage.
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Body exceeds the 50 MiB limit. May be an Express HTML parser error or a JSON message.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            text/html:
+              schema:
+                type: string
+        "500":
+          description: >-
+            Evidence storage is not configured or evidence insertion failed; unexpected filesystem/database
+            errors are not normalized by this contract.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+          image/*:
+            schema:
+              type: string
+              format: binary
+        description: >-
+          Raw file content with its content type; JSON bodies are consumed by the global JSON parser and are
+          not accepted as a file buffer.
+  /api/tasks/{taskId}/evidence/upload:
+    post:
+      tags:
+        - Tasks
+      summary: Upload task evidence
+      description: >-
+        Send raw non-empty file bytes, not multipart. Requires assignment-based modification access or manager
+        rights. Approval-locked work rejects non-Superadmin with 400. Requires configured evidence storage.
+        Maximum raw-body size is 50 MiB; parser-level errors may be HTML rather than JSON.
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-filename
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Original file name; basename is sanitized before storage.
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Body exceeds the 50 MiB limit. May be an Express HTML parser error or a JSON message.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            text/html:
+              schema:
+                type: string
+        "500":
+          description: >-
+            Evidence storage is not configured or evidence insertion failed; unexpected filesystem/database
+            errors are not normalized by this contract.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+          image/*:
+            schema:
+              type: string
+              format: binary
+        description: >-
+          Raw file content with its content type; JSON bodies are consumed by the global JSON parser and are
+          not accepted as a file buffer.
+  /api/work-orders/{taskId}/resolution:
+    post:
+      tags:
+        - Work orders
+      summary: Update corrective work-order resolution notes
+      description: >-
+        Requires assignment-based modification access or manager rights. Empty or omitted notes clears
+        ResolutionNotes; maximum length 2048. This operation does not close the work order.
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkOrderResolutionRequest"
+  /api/tasks/bulk-assign-unassigned:
+    post:
+      tags:
+        - Tasks
+      summary: Assign work with no user or role assignment
+      description: >-
+        Supervisor, Admin, or Superadmin. Exactly one user or role target is required. Includes unfinished and
+        uncancelled tasks of either maintenance type, excludes approval-locked PM tasks, and applies inclusive
+        due bounds. Returns zero when nothing matches.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkAssignUnassignedResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkAssignUnassignedRequest"
+  /api/auth/me/preferences:
+    get:
+      tags:
+        - Auth
+      summary: Get current user preferences
+      description: Authenticated user only. Missing values or missing user row return null preferences.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferences"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Auth
+      summary: Replace current user preferences
+      description: >-
+        Authenticated user only. Both preference columns are written: omitted fields become null; an empty
+        object clears both preferences.
+      parameters: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPreferencesRequest"
+  /api/templates/{templateId}:
+    get:
+      tags:
+        - Templates
+      summary: Get template and ordered checklist
+      description: Available to every authenticated role. Includes inactive checklist items ordered by sortOrder.
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Templates
+      summary: Update maintenance template
+      description: >-
+        Supervisor, Admin, or Superadmin. Partial template update increments version. Supplied checklistItems
+        deactivates omitted existing IDs. Duplicate name returns 409.
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateUpdateRequest"
+    delete:
+      tags:
+        - Templates
+      summary: Delete unused maintenance template
+      description: >-
+        Supervisor, Admin, or Superadmin. Permanently removes checklist and template in one transaction.
+        Returns 409 when referenced by enabled asset/facility PM settings, schedules, or tasks.
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/templates:
+    get:
+      tags:
+        - Templates
+      summary: List maintenance templates
+      description: >-
+        Available to every authenticated role. Returns all templates unless active is exactly the string true.
+        Sorted by UpdatedAt descending.
+      parameters:
+        - name: active
+          in: query
+          schema:
+            type: string
+          description: Only true filters to active templates; other values return all.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateListResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Templates
+      summary: Create maintenance template
+      description: >-
+        Supervisor, Admin, or Superadmin. Creates template and checklist transactionally; duplicate template
+        name returns 409.
+      parameters: []
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateCreateRequest"
   /health:
     get:
       tags:
@@ -2779,6 +5713,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: >-
+            LDAP is not configured. Local login remains available; omitted login provider still defaults to
+            LDAP.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                  - code
+                properties:
+                  message:
+                    type: string
+                  code:
+                    type: string
+                    enum:
+                      - LDAP_NOT_CONFIGURED
   /api/auth/refresh:
     post:
       tags:
@@ -3084,6 +6036,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/facilities/{facilityId}:
+    get:
+      tags:
+        - Facilities
+      summary: Get facility details
+      description: >-
+        Available to every authenticated role. Missing location is null, unlike the nullable-id object in
+        facility list responses.
+      parameters:
+        - name: facilityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FacilityDetail"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     put:
       tags:
         - Facilities
@@ -3091,7 +6082,11 @@ paths:
       description: >-
         Admin/Superadmin only. Set isActive=false to archive or true to activate. At least one recognized
         field is required; unspecified fields are preserved. PM settings are a separate planning operation.
-        Unknown fields are stripped.
+        Unknown fields are stripped. Enabled PM requires a site and an active default template; asset
+        templates must match the category. Invalid effective settings return HTTP 400 with code
+        PM_ACTIVATION_INVALID and details containing contextId and field. The transaction rolls back on
+        failure. Archiving cancels only unstarted open PM tasks in the same transaction; existing started work
+        and CM are retained.
       parameters:
         - name: facilityId
           in: path
@@ -3166,6 +6161,15 @@ paths:
       tags:
         - Facilities
       summary: Update facility PM settings
+      description: >-
+        Supervisor, Admin, or Superadmin may update supplied PM fields. Omitted fields retain their existing
+        values. Supplying defaultTemplateId (including null) without nextPmDueAt resets planned/effective due
+        dates for recalculation. Explicit nextPmDueAt=null clears both dates; a timestamp sets the planned
+        date and its blackout-adjusted effective date. Disabling PM cancels only unstarted open PM tasks,
+        retaining history and audit records. Enabled PM requires a site and an active default template; asset
+        templates must match the category. Invalid effective settings return HTTP 400 with code
+        PM_ACTIVATION_INVALID and details containing contextId and field. The transaction rolls back on
+        failure.
       parameters:
         - name: facilityId
           in: path
@@ -3322,7 +6326,11 @@ paths:
       description: >-
         Admin/Superadmin only, including when copying PM settings. Copies facility details and active state;
         blank or omitted name generates a copy name. Optional PM settings copy preserves enabled/default
-        template and resets last/next PM dates. Source is retained. Unknown fields are stripped.
+        template and resets last/next PM dates. Source is retained. Unknown fields are stripped. Enabled PM
+        requires a site and an active default template; asset templates must match the category. Invalid
+        effective settings return HTTP 400 with code PM_ACTIVATION_INVALID and details containing contextId
+        and field. The transaction rolls back on failure. Copying invalid enabled settings rolls back the new
+        facility.
       parameters:
         - name: facilityId
           in: path
@@ -3462,7 +6470,10 @@ paths:
       summary: Update asset PM settings
       description: >-
         Manual nextPmDueAt sets the planned anchor for the next regular occurrence; the stored effective due
-        date applies existing blackout shifting.
+        date applies existing blackout shifting. Enabled PM requires a site and an active default template;
+        asset templates must match the category. Invalid effective settings return HTTP 400 with code
+        PM_ACTIVATION_INVALID and details containing contextId and field. The transaction rolls back on
+        failure. Disabling PM atomically cancels only unstarted open PM tasks.
       parameters:
         - name: assetId
           in: path
@@ -3567,6 +6578,11 @@ paths:
       tags:
         - Assets
       summary: Bulk set PM enabled
+      description: >-
+        Enabled PM requires a site and an active default template; asset templates must match the category.
+        Invalid effective settings return HTTP 400 with code PM_ACTIVATION_INVALID and details containing
+        contextId and field. The transaction rolls back on failure. The entire batch is atomic; disabling
+        cancels only unstarted open PM tasks for every selected asset.
       requestBody:
         required: true
         content:
@@ -3603,6 +6619,10 @@ paths:
       tags:
         - Assets
       summary: Bulk set default PM template
+      description: >-
+        Enabled PM requires a site and an active default template; asset templates must match the category.
+        Invalid effective settings return HTTP 400 with code PM_ACTIVATION_INVALID and details containing
+        contextId and field. The transaction rolls back on failure. The entire batch is atomic.
       requestBody:
         required: true
         content:
@@ -3739,6 +6759,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/tasks/{taskId}:
+    delete:
+      tags:
+        - Tasks
+      summary: Delete a PM task
+      description: >-
+        Supervisor, Admin, or Superadmin, subject to task access. PM only; CM or missing IDs return 404.
+        Deletes task-owned checklist results/snapshots, evidence, drafts, work sessions and CM event/interval
+        rows atomically with the task and audit entry. Scheduling history, notification logs or other task
+        references block deletion with 409 TASK_REFERENCED. Evidence files are removed best-effort only after
+        commit; storage failure does not roll back committed data.
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: >-
+            TASK_REFERENCED: independent history or another task references this task; no deletion is
+            performed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     get:
       tags:
         - Tasks
@@ -4394,7 +7470,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
-          description: Broken-asset PM tasks stay cancelled until the asset is no longer broken
+          description: >-
+            Broken assets remain blocked; PM_CONTEXT_UNAVAILABLE when the context is inactive, PM is disabled,
+            site is missing, or the task template is not the active category-compatible default template
           content:
             application/json:
               schema:
@@ -4832,6 +7910,57 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/notifications/channels/{channelId}:
+    delete:
+      tags:
+        - Notifications
+      summary: Delete unused notification channel
+      description: >-
+        Admin or Superadmin only. Returns 409 if notification rules or logs reference the channel; returns 404
+        if no channel is deleted.
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     put:
       tags:
         - Notifications
@@ -5864,6 +8993,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/work-orders/{taskId}:
+    delete:
+      tags:
+        - Work orders
+      summary: Delete corrective work order
+      description: >-
+        Superadmin only. CM only; PM or missing IDs return 404. Atomically deletes task-owned
+        evidence/results/snapshots, drafts, work sessions, CM events/intervals and the task, with an audit
+        entry. Scheduling history, notification logs or incoming source/recurrence links block deletion with
+        409 TASK_REFERENCED. Other work orders are never cascaded. Evidence files are removed best-effort
+        after commit.
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid request or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: >-
+            TASK_REFERENCED: independent history or another task references this task; no deletion is
+            performed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     get:
       tags:
         - Work Orders

@@ -1,0 +1,6 @@
+Created disposable database PreventivePilot_D2_2c570ab50ce145b4ba94369067917bac
+PASS clean schema application and full inventory checks
+PASS second schema application and full inventory checks
+PASS legacy missing context guards restored by upgrade
+PASS disposable clean/repeat/upgrade acceptance; no operational database changed
+CLEANUP dropped PreventivePilot_D2_2c570ab50ce145b4ba94369067917bac

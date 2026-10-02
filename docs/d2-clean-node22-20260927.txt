@@ -1,0 +1,15 @@
+Clean temporary source snapshot; no runtime .env or preinstalled node_modules.
+Commands: root/backend npm ci; lint; regression; backend and frontend typechecks/builds; source schema and docs checks.
+v22.23.3
+added 480 packages in 20s
+added 314 packages in 12s
+# tests 146
+# pass 146
+# fail 0
+✓ built in 12.09s
+Source inventory: 39 tables, 372 columns, 257 named constraints, 29 explicit indexes
+Source order check passed; no database connection or live verification performed.
+PASS: 8 mandatory documents; 41 active Markdown files; 283 local links; 10 historical banners; D0-D3 phase sections.
+PASS: embedded OpenAPI parity; 650 local references; required path parameters/responses; current coverage report.
+PASS: 39 SQL CREATE TABLE entries accounted for in the schema specification.
+Process exit: 0. Temporary source snapshot removed. Not a deployed runtime or remote CI acceptance.

@@ -1883,7 +1883,11 @@ systemRouter.post("/users/:userId/refresh-ldap", requireSystemAdmin, async (req,
       );
 
     res.json({ ok: true });
-  } catch {
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "LDAP_NOT_CONFIGURED") {
+      res.status(503).json({ message: "LDAP is not configured", code: "LDAP_NOT_CONFIGURED" });
+      return;
+    }
     res.status(400).json({ message: "Failed to refresh LDAP profile" });
   }
 });
@@ -2287,6 +2291,10 @@ systemRouter.post("/users/assign-ldap", requireSystemAdmin, async (req, res) => 
 
     res.json({ id: user.userId });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "LDAP_NOT_CONFIGURED") {
+      res.status(503).json({ message: "LDAP is not configured", code: "LDAP_NOT_CONFIGURED" });
+      return;
+    }
     res.status(400).json({ message: "Failed to assign LDAP user" });
   }
 });
@@ -2324,7 +2332,11 @@ systemRouter.get("/ldap/search", requireSystemAdmin, async (req, res) => {
       };
     });
     res.json({ items: response });
-  } catch {
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "LDAP_NOT_CONFIGURED") {
+      res.status(503).json({ message: "LDAP is not configured", code: "LDAP_NOT_CONFIGURED" });
+      return;
+    }
     res.status(500).json({ message: "Search failed" });
   }
 });

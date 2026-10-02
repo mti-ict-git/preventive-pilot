@@ -11,7 +11,7 @@ const require = createRequire(path.join(root, 'backend/package.json'));
 export const express = require('express');
 export const fixtureId = '11111111-1111-4111-8111-111111111111';
 export const newId = '22222222-2222-4222-8222-222222222222';
-export function createHarness() {
+export function createHarness(overrides = {}) {
   const calls = [];
   let persistedRoles = [];
   let failRoles = false;
@@ -19,6 +19,13 @@ export function createHarness() {
     const inputs = {};
     return { input(key, _type, value) { inputs[key] = value; return this; }, async query(query) {
       calls.push({ query, inputs });
+      if (overrides.query) {
+        const value = await overrides.query(query, inputs);
+        if (value !== undefined) return value;
+      }
+      if (query.includes('pm-eligibility: activation')) return { recordset: [{ PMEnabled: false }], rowsAffected: [] };
+      if (query.includes('pm-eligibility: cancel-unstarted')) return { recordset: [], rowsAffected: [0] };
+      if (query.includes('FROM pm.BlackoutWindows bw')) return { recordset: [{ BlackoutEnd: null }], rowsAffected: [] };
       if (query.includes('FROM pm.UserRoles')) {
         if (failRoles) throw new Error('Fixture role lookup unavailable');
         return { recordset: persistedRoles.map(RoleName => ({ RoleName })), rowsAffected: [] };
@@ -32,6 +39,13 @@ export function createHarness() {
       throw new Error(`Unexpected fixture query: ${query}`);
     } };
   } };
+  class Transaction {
+    async begin() { overrides.begin?.(); }
+    request() { return db.request(); }
+    async commit() { overrides.commit?.(); }
+    async rollback() { overrides.rollback?.(); }
+  }
+  const sql = { ...require('mssql'), Transaction };
   const cache = new Map();
   function load(filename) {
     const abs = path.resolve(root, filename);
@@ -42,17 +56,18 @@ export function createHarness() {
     const js = ts.transpileModule(fs.readFileSync(abs, 'utf8'), { compilerOptions: {
       module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true,
     } }).outputText;
-    const localRequire = spec => spec.startsWith('.')
+    const localRequire = spec => spec === 'mssql' ? sql : spec.startsWith('.')
       ? load(path.resolve(path.dirname(abs), spec.replace(/\.js$/, '.ts')))
       : require(spec);
     vm.runInThisContext(`(function(require,module,exports){${js}\n})`, { filename: abs })(localRequire, module, module.exports);
     return module.exports;
   }
   const { facilitiesRouter } = load('backend/src/routes/facilities.ts');
+  const { assetsRouter } = load('backend/src/routes/assets.ts');
   const { signAccessToken } = load('backend/src/auth/jwt.ts');
-  const app = express(); app.use(express.json()); app.use('/api/facilities', facilitiesRouter);
+  const app = express(); app.use(express.json()); app.use('/api/facilities', facilitiesRouter); app.use('/api/assets', assetsRouter);
   return {
-    app, calls,
+    app, calls, load,
     token: roles => signAccessToken({ sub: fixtureId, username: 'fixture', roles }),
     reset(roles = [], fail = false) { calls.length = 0; persistedRoles = roles; failRoles = fail; },
   };

@@ -1,0 +1,14 @@
+PASS PM authentication, roles and wrong-type isolation
+PASS PM actual audit FK failure rolls all rows back and retains files
+PASS PM full owned-row cleanup, committed audit, file removal and retry
+PASS CM authentication, roles and wrong-type isolation
+PASS CM actual audit FK failure rolls all rows back and retains files
+PASS CM full owned-row cleanup, committed audit, file removal and retry
+PASS SourceTaskId blocks deletion and preserves referenced records
+PASS RecurringFromTaskId blocks deletion and preserves referenced records
+PASS missed blocks deletion and preserves referenced records
+PASS skipped blocks deletion and preserves referenced records
+PASS notification blocks deletion and preserves referenced records
+PASS parent lock blocks concurrent evidence insertion and incoming source references
+{"runId":"6a6273a1-b5c0-4439-991b-74a23a04ecc6","checks":12,"expectedAuditFailures":2,"status":"PASS"}
+CLEANUP committed for 11 fixture task IDs; zero remaining fixture rows verified; temporary storage removed; run=6a6273a1-b5c0-4439-991b-74a23a04ecc6

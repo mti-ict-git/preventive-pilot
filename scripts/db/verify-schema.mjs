@@ -1,149 +1,28 @@
-import "dotenv/config";
-import sql from "mssql";
+import 'dotenv/config';
+import sql from 'mssql';
+import { readFile } from 'node:fs/promises';
+import { parseSchemaContract, creationOrderProblems, compareSchema, readSchemaMetadata } from './schema-contract.mjs';
 
-const toBoolean = (value, defaultValue) => {
-  if (value === undefined || value === null || value === "") return defaultValue;
-  const normalized = String(value).trim().toLowerCase();
-  if (["true", "1", "yes", "y"].includes(normalized)) return true;
-  if (["false", "0", "no", "n"].includes(normalized)) return false;
-  return defaultValue;
-};
-
-const toNumber = (value, defaultValue) => {
-  if (value === undefined || value === null || value === "") return defaultValue;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : defaultValue;
-};
-
-const required = (value, name) => {
-  if (!value) throw new Error(`${name} is required`);
-  return value;
-};
-
-const config = {
-  server: required(process.env.DB_SERVER, "DB_SERVER"),
-  database: required(process.env.DB_DATABASE, "DB_DATABASE"),
-  user: required(process.env.DB_USER, "DB_USER"),
-  password: required(process.env.DB_PASSWORD, "DB_PASSWORD"),
-  port: toNumber(process.env.DB_PORT, 1433),
-  options: {
-    encrypt: toBoolean(process.env.DB_ENCRYPT, false),
-    trustServerCertificate: toBoolean(process.env.DB_TRUST_SERVER_CERTIFICATE, true),
-  },
-  pool: {
-    max: 5,
-    min: 0,
-    idleTimeoutMillis: 30000,
-  },
-};
-
-const expectedTables = [
-  "SchemaInfo",
-  "Roles",
-  "Users",
-  "UserRoles",
-  "UserCredentials",
-  "AssetCategories",
-  "Locations",
-  "Assets",
-  "AssetPMSettings",
-  "PMTemplates",
-  "PMTemplateChecklistItems",
-  "AssignmentRules",
-  "BlackoutWindows",
-  "PMSchedules",
-  "PMTasks",
-  "PMMissedOccurrences",
-  "PMSkippedOccurrences",
-  "PMTaskChecklistResults",
-  "PMTaskChecklistSnapshots",
-  "PMTaskEvidence",
-  "TaskDrafts",
-  "NotificationChannels",
-  "NotificationRules",
-  "NotificationLog",
-  "AuditLog",
-  "SystemLog",
-  "SnipeSyncRuns",
-  "SystemSettings",
-  "SnipeItSettings",
-];
-
-const pool = await sql.connect(config);
-try {
-  const schemaResult = await pool
-    .request()
-    .input("schemaName", sql.NVarChar(128), "pm")
-    .query("SELECT schema_id FROM sys.schemas WHERE name = @schemaName");
-
-  if (schemaResult.recordset.length === 0) {
-    throw new Error("Schema 'pm' does not exist");
-  }
-
-  const tablesResult = await pool.request().query(
-    [
-      "SELECT t.name AS TableName",
-      "FROM sys.tables t",
-      "INNER JOIN sys.schemas s ON s.schema_id = t.schema_id",
-      "WHERE s.name = N'pm'",
-      "ORDER BY t.name",
-    ].join("\n"),
-  );
-
-  const tableNames = tablesResult.recordset.map((row) => row.TableName);
-
-  const missingTables = expectedTables.filter((t) => !tableNames.includes(t));
-  const extraTables = tableNames.filter((t) => !expectedTables.includes(t));
-
-  const schemaInfoResult = await pool.request().query(
-    "SELECT TOP (1) Version, AppliedAt FROM pm.SchemaInfo ORDER BY AppliedAt DESC",
-  );
-
-  const fkCountResult = await pool.request().query(
-    [
-      "SELECT COUNT(1) AS ForeignKeyCount",
-      "FROM sys.foreign_keys fk",
-      "INNER JOIN sys.objects o ON o.object_id = fk.parent_object_id",
-      "INNER JOIN sys.schemas s ON s.schema_id = o.schema_id",
-      "WHERE s.name = N'pm'",
-    ].join("\n"),
-  );
-
-  const indexCountResult = await pool.request().query(
-    [
-      "SELECT COUNT(1) AS IndexCount",
-      "FROM sys.indexes i",
-      "INNER JOIN sys.objects o ON o.object_id = i.object_id",
-      "INNER JOIN sys.schemas s ON s.schema_id = o.schema_id",
-      "WHERE s.name = N'pm' AND i.name IS NOT NULL",
-    ].join("\n"),
-  );
-
-  const schemaInfo = schemaInfoResult.recordset[0];
-  const foreignKeyCount = fkCountResult.recordset[0]?.ForeignKeyCount ?? 0;
-  const indexCount = indexCountResult.recordset[0]?.IndexCount ?? 0;
-
-  process.stdout.write("PM schema verification\n");
-  process.stdout.write(`- Schema: pm\n`);
-  process.stdout.write(`- Tables: ${tableNames.length}\n`);
-  process.stdout.write(`- Foreign keys: ${foreignKeyCount}\n`);
-  process.stdout.write(`- Indexes: ${indexCount}\n`);
-  if (schemaInfo) {
-    process.stdout.write(`- SchemaInfo: version=${schemaInfo.Version} appliedAt=${schemaInfo.AppliedAt.toISOString?.() ?? String(schemaInfo.AppliedAt)}\n`);
-  }
-
-  if (missingTables.length > 0) {
-    process.stdout.write(`Missing tables: ${missingTables.join(", ")}\n`);
-    process.exitCode = 2;
-  }
-
-  if (extraTables.length > 0) {
-    process.stdout.write(`Extra tables (not in expected list): ${extraTables.join(", ")}\n`);
-  }
-
-  if (missingTables.length === 0) {
-    process.stdout.write("Verification OK\n");
-  }
-} finally {
-  await pool.close();
+const source=await readFile(new URL('../../db/schema.sql',import.meta.url),'utf8');
+const expected=parseSchemaContract(source);
+const orderProblems=creationOrderProblems(expected);
+console.log(`Source inventory: ${expected.tables.length} tables, ${expected.columns.length} columns, ${expected.constraints.length} named constraints, ${expected.indexes.length} explicit indexes`);
+if(orderProblems.length){console.error(orderProblems.join('\n'));process.exitCode=2;}
+else if(process.argv.includes('--source-only')) console.log('Source order check passed; no database connection or live verification performed.');
+else {
+  const required=name=>{if(!process.env[name])throw Error(`${name} is required`);return process.env[name];};
+  const bool=(value,fallback)=>value===undefined||value===''?fallback:['true','1','yes','y'].includes(value.toLowerCase());
+  let pool;
+  try {
+    pool=await new sql.ConnectionPool({server:required('DB_SERVER'),database:required('DB_DATABASE'),user:required('DB_USER'),password:required('DB_PASSWORD'),port:Number(process.env.DB_PORT||1433),connectionTimeout:10000,requestTimeout:10000,options:{encrypt:bool(process.env.DB_ENCRYPT,false),trustServerCertificate:bool(process.env.DB_TRUST_SERVER_CERTIFICATE,true)},pool:{max:2,min:0,idleTimeoutMillis:1000}}).connect();
+    const actual=await readSchemaMetadata(pool);
+    const problems=compareSchema(expected,actual);
+    const extras=actual.tables.filter(t=>!expected.tables.includes(t));
+    console.log(`Live inventory: ${actual.tables.length} tables, ${actual.columns.length} columns, ${actual.constraints.length} constraints, ${actual.indexes.length} indexes including PK/unique constraints`);
+    if(extras.length)console.log(`Extra tables (informational): ${extras.join(', ')}`);
+    if(problems.length){console.error(problems.join('\n'));process.exitCode=2;}
+    else console.log('Verification OK: all source inventory objects and checked column shapes/flags match.');
+    console.log('LIMIT: constraint expressions, FK endpoints, index key/filter definitions, default expressions, data backfills, permissions and operational behavior are not certified.');
+  }catch(error){console.error(`Schema verification failed: ${error.code??'ERROR'}: ${error.message}`);process.exitCode=1;}
+  finally {if(pool)await pool.close();}
 }

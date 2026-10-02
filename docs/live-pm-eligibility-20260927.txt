@@ -1,0 +1,11 @@
+PASS asset: missing site/template and inactive template reject atomically; valid activation succeeds; enabled template cannot be cleared
+PASS asset: only unstarted PM cancelled; started/paused/session/submitted/revised/CM and evidence retained; audit idempotent; no automatic reopen
+PASS asset: real generation SQL blocks disabled settings and inserts eligible occurrence inside rollback-only transaction
+PASS facility: missing site/template and inactive template reject atomically; valid activation succeeds; enabled template cannot be cleared
+PASS facility: only unstarted PM cancelled; started/paused/session/submitted/revised/CM and evidence retained; audit idempotent; no automatic reopen
+PASS facility: real generation SQL blocks disabled settings and inserts eligible occurrence inside rollback-only transaction
+PASS bulk enable rolls back valid first asset when second lacks activation prerequisites
+PASS facility archive cancels only unstarted PM and reactivation does not reopen it
+PASS invalid enabled clone rolls back facility and copied settings
+{"runId":"ecaf0a60-6404-4821-9521-988cb2f77067","checks":9,"status":"PASS"}
+CLEANUP: zero fixture rows remain; 15 task IDs; run=ecaf0a60-6404-4821-9521-988cb2f77067

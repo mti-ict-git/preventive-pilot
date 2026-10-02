@@ -21,6 +21,8 @@ const numberFromString = z
     return Number.isFinite(parsed) ? parsed : undefined;
   });
 
+const ldapRequiredFields = ["LDAP_URL", "LDAP_BASE_DN", "LDAP_BIND_DN", "LDAP_BIND_PASSWORD", "LDAP_USER_SEARCH_BASE", "LDAP_USER_SEARCH_FILTER", "LDAP_GROUP_SEARCH_BASE", "LDAP_GROUP_SUPERADMIN"] as const;
+
 const EnvSchema = z.object({
   BACKEND_PORT: z.string().optional().default("3001").pipe(numberFromString).pipe(z.number()),
   FRONTEND_ORIGIN: z.string().optional().default("http://localhost:8080,http://localhost:8081"),
@@ -36,17 +38,17 @@ const EnvSchema = z.object({
   DB_ENCRYPT: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
   DB_TRUST_SERVER_CERTIFICATE: z.string().optional().default("true").pipe(booleanFromString).pipe(z.boolean()),
 
-  LDAP_URL: z.string().min(1),
-  LDAP_BASE_DN: z.string().min(1),
-  LDAP_BIND_DN: z.string().min(1),
-  LDAP_BIND_PASSWORD: z.string().min(1),
-  LDAP_USER_SEARCH_BASE: z.string().min(1),
-  LDAP_USER_SEARCH_FILTER: z.string().min(1),
-  LDAP_GROUP_SEARCH_BASE: z.string().min(1),
+  LDAP_URL: z.string().default(""),
+  LDAP_BASE_DN: z.string().default(""),
+  LDAP_BIND_DN: z.string().default(""),
+  LDAP_BIND_PASSWORD: z.string().default(""),
+  LDAP_USER_SEARCH_BASE: z.string().default(""),
+  LDAP_USER_SEARCH_FILTER: z.string().default(""),
+  LDAP_GROUP_SEARCH_BASE: z.string().default(""),
   LDAP_TIMEOUT: z.string().optional().default("5000").pipe(numberFromString).pipe(z.number()),
   LDAP_CONNECT_TIMEOUT: z.string().optional().default("10000").pipe(numberFromString).pipe(z.number()),
   LDAP_TLS_REJECT_UNAUTHORIZED: z.string().optional().default("true").pipe(booleanFromString).pipe(z.boolean()),
-  LDAP_GROUP_SUPERADMIN: z.string().min(1),
+  LDAP_GROUP_SUPERADMIN: z.string().default(""),
 
   JOBS_ENABLED: z.string().optional().default("true").pipe(booleanFromString).pipe(z.boolean()),
   JOB_SNIPE_SYNC_ENABLED: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
@@ -120,6 +122,11 @@ const EnvSchema = z.object({
   APP_UPDATE_STORE_ALLOW_HTTP: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
   APP_UPDATE_STORE_PROXY_DOWNLOAD: z.string().optional().default("false").pipe(booleanFromString).pipe(z.boolean()),
   APP_UPDATE_TOKEN_TTL_SECONDS: z.string().optional().default("600").pipe(numberFromString).pipe(z.number().int().min(60).max(86400)),
+}).superRefine((value, ctx) => {
+  if (!ldapRequiredFields.some((key) => value[key].length > 0)) return;
+  for (const key of ldapRequiredFields) {
+    if (!value[key].trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: "Required when LDAP is configured" });
+  }
 });
 
 export type Env = z.infer<typeof EnvSchema>;

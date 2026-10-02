@@ -4,7 +4,7 @@ Last reviewed: 2026-09-10. This is a scoped description of observed controls, no
 
 ## Authentication
 
-The backend offers local and LDAP login with JWT access tokens and refresh flows. Protected routes use `requireAuth`; operation-specific role and ownership checks follow. Local users can be bootstrapped through the existing superadmin CLI. LDAP configuration is still mandatory at startup under the current environment schema, even if the operator intends to use local login (Q-05).
+The backend offers local and LDAP login with JWT access tokens and refresh flows. Protected routes use `requireAuth`; operation-specific role and ownership checks follow. Local users can be bootstrapped through the existing superadmin CLI. LDAP configuration is optional (Q-05, approved by the user). Leave all eight connection/search fields absent or empty for local-only operation; partial configuration fails startup. Explicit LDAP requests return 503 with `LDAP_NOT_CONFIGURED` when unavailable. Providers never fall back to one another; omitted login provider still defaults to LDAP for compatibility. Select Local on the existing login screen.
 
 Credentials and signing keys belong in server-side environment/configuration. Client `VITE_*` settings are public bundle inputs. Do not copy `.env` values or Firebase service-account content into documentation.
 
@@ -64,3 +64,11 @@ Current role-based task access and assignment routes do not yet establish this f
 Technicians report repair completion; Supervisor verification is required before WO closure. CM-01 now enforces this locally with `pending_review` repair submission, `verify-close` for Supervisor/Admin/Superadmin, and `return-for-correction` on the same WO with a mandatory written reason. The repair performer cannot verify their own WO, including users with any of these privileged roles. Previous work and evidence remain preserved during correction. These CM rules do not change the PM approval chain.
 
 Confirmed restoration access, 2026-09-11, now implemented locally by CM-01: the assigned technician or Supervisor/Admin/Superadmin may record restoration independently of WO verification. Actual past restoration times require a written reason and change history. This permission does not override the prohibition on self-verification. Downtime can also be reopened on the same WO before closure; recurrence after closure requires a new linked WO.
+
+## PM activation and deactivation — 2026-09-27
+
+Existing manager PM-planning and Admin/Superadmin facility-master guards remain unchanged. Authorized disabling/archival atomically cancels only unstarted PM tasks, with the requesting actor recorded in cancellation and audit fields. It grants no new deletion, execution or CM permission. Invalid effective activation prerequisites return 400; ineligible manual reopen returns 409. See [verification](verification-q14-q15.md).
+
+## Manual deletion — 2026-09-27
+
+`DELETE /api/tasks/{taskId}` is restricted to PM and retains manager/task-access checks. `DELETE /api/work-orders/{taskId}` remains CM-only and Superadmin-only. Authorization and typed task lookup occur before evidence paths are read. Wrong-type IDs return 404; referenced tasks return 409 without mutation. Audit failure rolls back deletion. See [verification](verification-task-deletion.md).

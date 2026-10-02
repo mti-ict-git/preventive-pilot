@@ -48,7 +48,7 @@ npm ci
 npm ci --prefix backend
 ```
 
-Configure the root `.env` using [deployment and environment](docs/deployment-and-environment.md). Database credentials, `JWT_SECRET`, and the currently mandatory LDAP fields are required. Preserve any existing environment configuration.
+Use [.env.example](.env.example) as a placeholder template and configure the root `.env` using [deployment and environment](docs/deployment-and-environment.md). Database credentials and `JWT_SECRET` are required. LDAP is optional: leave all LDAP connection/search fields empty for local-only login, or configure all eight fields to enable it. Preserve any existing environment configuration.
 
 After confirming the intended database target:
 

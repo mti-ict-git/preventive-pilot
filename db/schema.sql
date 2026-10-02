@@ -299,27 +299,6 @@ BEGIN
   ALTER TABLE pm.AssetPMSettings ADD NextPlannedPMDueAt datetime2(0) NULL;
 END;
 
-IF OBJECT_ID(N'pm.FacilityPMSettings', N'U') IS NULL
-BEGIN
-  CREATE TABLE pm.FacilityPMSettings (
-    FacilityId uniqueidentifier NOT NULL,
-    PMEnabled bit NOT NULL CONSTRAINT DF_pm_FacilityPMSettings_PMEnabled DEFAULT (1),
-    DefaultTemplateId uniqueidentifier NULL,
-    LastPMCompletedAt datetime2(0) NULL,
-    NextPlannedPMDueAt datetime2(0) NULL,
-    NextPMDueAt datetime2(0) NULL,
-    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_FacilityPMSettings_UpdatedAt DEFAULT (sysutcdatetime()),
-    CONSTRAINT PK_pm_FacilityPMSettings PRIMARY KEY CLUSTERED (FacilityId),
-    CONSTRAINT FK_pm_FacilityPMSettings_Facilities FOREIGN KEY (FacilityId) REFERENCES pm.Facilities(FacilityId),
-    CONSTRAINT FK_pm_FacilityPMSettings_Templates FOREIGN KEY (DefaultTemplateId) REFERENCES pm.PMTemplates(TemplateId)
-  );
-END;
-
-IF COL_LENGTH(N'pm.FacilityPMSettings', N'NextPlannedPMDueAt') IS NULL
-BEGIN
-  ALTER TABLE pm.FacilityPMSettings ADD NextPlannedPMDueAt datetime2(0) NULL;
-END;
-
 IF OBJECT_ID(N'pm.PMTemplates', N'U') IS NULL
 BEGIN
   CREATE TABLE pm.PMTemplates (
@@ -339,6 +318,27 @@ BEGIN
     CONSTRAINT FK_pm_PMTemplates_AssetCategories FOREIGN KEY (ApplicableCategoryId) REFERENCES pm.AssetCategories(CategoryId),
     CONSTRAINT FK_pm_PMTemplates_Roles FOREIGN KEY (RequiredRoleId) REFERENCES pm.Roles(RoleId)
   );
+END;
+
+IF OBJECT_ID(N'pm.FacilityPMSettings', N'U') IS NULL
+BEGIN
+  CREATE TABLE pm.FacilityPMSettings (
+    FacilityId uniqueidentifier NOT NULL,
+    PMEnabled bit NOT NULL CONSTRAINT DF_pm_FacilityPMSettings_PMEnabled DEFAULT (1),
+    DefaultTemplateId uniqueidentifier NULL,
+    LastPMCompletedAt datetime2(0) NULL,
+    NextPlannedPMDueAt datetime2(0) NULL,
+    NextPMDueAt datetime2(0) NULL,
+    UpdatedAt datetime2(0) NOT NULL CONSTRAINT DF_pm_FacilityPMSettings_UpdatedAt DEFAULT (sysutcdatetime()),
+    CONSTRAINT PK_pm_FacilityPMSettings PRIMARY KEY CLUSTERED (FacilityId),
+    CONSTRAINT FK_pm_FacilityPMSettings_Facilities FOREIGN KEY (FacilityId) REFERENCES pm.Facilities(FacilityId),
+    CONSTRAINT FK_pm_FacilityPMSettings_Templates FOREIGN KEY (DefaultTemplateId) REFERENCES pm.PMTemplates(TemplateId)
+  );
+END;
+
+IF COL_LENGTH(N'pm.FacilityPMSettings', N'NextPlannedPMDueAt') IS NULL
+BEGIN
+  ALTER TABLE pm.FacilityPMSettings ADD NextPlannedPMDueAt datetime2(0) NULL;
 END;
 
 IF OBJECT_ID(N'pm.PMTemplateChecklistItems', N'U') IS NULL
@@ -539,6 +539,31 @@ BEGIN
   ALTER TABLE pm.PMTasks ADD FacilityId uniqueidentifier NULL;
 END;
 
+-- Restore guards omitted by older upgrade paths. No data repair is attempted.
+-- Apply only after checking context violations/orphans, inside a bounded transaction.
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'pm.PMTasks') AND name=N'FK_pm_PMTasks_Facilities')
+BEGIN
+  EXEC(N'ALTER TABLE pm.PMTasks WITH CHECK ADD CONSTRAINT FK_pm_PMTasks_Facilities FOREIGN KEY (FacilityId) REFERENCES pm.Facilities(FacilityId);');
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'pm.PMTasks') AND name=N'CK_pm_PMTasks_AssetOrFacility')
+BEGIN
+  EXEC(N'ALTER TABLE pm.PMTasks WITH CHECK ADD CONSTRAINT CK_pm_PMTasks_AssetOrFacility CHECK ((AssetId IS NOT NULL AND FacilityId IS NULL) OR (AssetId IS NULL AND FacilityId IS NOT NULL));');
+END;
+
+IF COL_LENGTH(N'pm.PMTasks', N'MaintenanceType') IS NULL
+BEGIN
+  ALTER TABLE pm.PMTasks
+    ADD MaintenanceType nvarchar(8) NOT NULL
+      CONSTRAINT DF_pm_PMTasks_MaintenanceType DEFAULT (N'PM') WITH VALUES;
+
+  EXEC(
+    N'ALTER TABLE pm.PMTasks
+      ADD CONSTRAINT CK_pm_PMTasks_MaintenanceType
+        CHECK (MaintenanceType IN (N''PM'', N''CM''));'
+  );
+END;
+
 IF COL_LENGTH(N'pm.PMTasks', N'CancelledReason') IS NULL
 BEGIN
   ALTER TABLE pm.PMTasks ADD CancelledReason nvarchar(1024) NULL;
@@ -723,19 +748,6 @@ BEGIN
   CREATE UNIQUE INDEX UQ_pm_PMSkippedOccurrences_FacilityTemplatePlannedDue
   ON pm.PMSkippedOccurrences (FacilityId, TemplateId, PlannedDueAt)
   WHERE FacilityId IS NOT NULL;
-END;
-
-IF COL_LENGTH(N'pm.PMTasks', N'MaintenanceType') IS NULL
-BEGIN
-  ALTER TABLE pm.PMTasks
-    ADD MaintenanceType nvarchar(8) NOT NULL
-      CONSTRAINT DF_pm_PMTasks_MaintenanceType DEFAULT (N'PM') WITH VALUES;
-
-  EXEC(
-    N'ALTER TABLE pm.PMTasks
-      ADD CONSTRAINT CK_pm_PMTasks_MaintenanceType
-        CHECK (MaintenanceType IN (N''PM'', N''CM''));'
-  );
 END;
 
 IF COL_LENGTH(N'pm.PMTasks', N'ReportedByUserId') IS NULL

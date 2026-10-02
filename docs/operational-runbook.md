@@ -47,3 +47,9 @@ Do not rewrite published Git history. Lovable is connected to the repository and
 No tested automated schema rollback or restoration procedure is established in this baseline. Rolling back a container does not undo SQL migrations or restore evidence files. Determine compatibility before redeploying an older build. RPO/RTO, retention, snapshot coordination, and restore drills remain Q-10.
 
 Jobs run in the API process. Validate coordination before increasing replica count; do not claim cross-instance locking from an in-process non-overlap mechanism.
+
+## D2 release evidence — 2026-09-27
+
+[Schema and local verification evidence](verification-d2-environment.md) is available; it is not deployment or restore approval. Before a release, record the deployed revision/artifact digest, environment/configuration changes (without secrets), schema verification report, backup ID/time and evidence-storage snapshot, restore owner and target, tested restore outcome, previous application artifact, and rollback decision criteria. Database rollback must account for forward schema changes; do not assume rolling back the image restores data.
+
+Run the committed CI commands from [.github/workflows/verify.yml](../.github/workflows/verify.yml), inspect live `db:verify` results, and keep background jobs disabled on isolated test servers. Production job ownership and authorized notification recipients must be recorded before enabling side effects. Docker/startup/browser and backup restoration evidence remain open in the roadmap.

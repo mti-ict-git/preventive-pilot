@@ -1,3 +1,4 @@
+import { hasTaskDeletionReferences, deleteTaskOwnedRows } from "../db/taskDeletionPolicy.js";
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
@@ -1066,7 +1067,7 @@ workOrdersRouter.post("/:taskId/resume", async (req, res) => {
   res.json({ ok: true });
 });
 
-workOrdersRouter.delete("/:taskId", requireSuperadmin, async (req, res) => {
+workOrdersRouter.delete("/:taskId", requireSuperadmin, async (req, res, next) => {
   const taskId = req.params.taskId;
   if (!z.string().uuid().safeParse(taskId).success) {
     res.status(400).json({ message: "Invalid request" });
@@ -1074,26 +1075,6 @@ workOrdersRouter.delete("/:taskId", requireSuperadmin, async (req, res) => {
   }
 
   const db = await getDb();
-
-  const storagePathsResult = await db
-    .request()
-    .input("taskId", sql.UniqueIdentifier, taskId)
-    .query(
-      [
-        "SELECT StoragePath",
-        "FROM pm.PMTaskEvidence",
-        "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
-        "UNION ALL",
-        "SELECT StoragePath",
-        "FROM pm.PMTaskChecklistEvidence",
-        "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
-      ].join("\n"),
-    );
-
-  const storagePathRows = storagePathsResult.recordset as Array<Record<string, unknown>>;
-  const storagePaths: string[] = storagePathRows
-    .map((r) => (typeof r.StoragePath === "string" ? r.StoragePath : null))
-    .filter((v): v is string => v !== null);
 
   const tx = new sql.Transaction(db);
   await tx.begin();
@@ -1107,7 +1088,7 @@ workOrdersRouter.delete("/:taskId", requireSuperadmin, async (req, res) => {
           "  t.TaskId AS TaskId,",
           "  t.AssetId AS AssetId,",
           "  t.TaskNumber AS TaskNumber",
-          "FROM pm.PMTasks t",
+          "FROM pm.PMTasks t WITH (XLOCK, HOLDLOCK)",
           "WHERE t.TaskId = @taskId AND t.MaintenanceType = N'CM'",
         ].join("\n"),
       );
@@ -1119,26 +1100,39 @@ workOrdersRouter.delete("/:taskId", requireSuperadmin, async (req, res) => {
       return;
     }
 
-    await tx
+    if (await hasTaskDeletionReferences(tx, taskId)) {
+      await tx.rollback();
+      res.status(409).json({ message: "Task is referenced by scheduling, notification history or another task.", code: "TASK_REFERENCED" });
+      return;
+    }
+
+    const storagePathsResult = await tx
       .request()
       .input("taskId", sql.UniqueIdentifier, taskId)
       .query(
         [
-          "DELETE FROM pm.CMTaskEvents WHERE TaskId = @taskId;",
-          "DELETE FROM pm.CMDowntimeIntervals WHERE TaskId = @taskId;",
-          "DELETE FROM pm.PMTaskEvidence WHERE TaskId = @taskId;",
-          "DELETE FROM pm.PMTaskChecklistEvidence WHERE TaskId = @taskId;",
-          "DELETE FROM pm.PMTaskChecklistResults WHERE TaskId = @taskId;",
-          "DELETE FROM pm.PMTasks WHERE TaskId = @taskId;",
+          "SELECT StoragePath",
+          "FROM pm.PMTaskEvidence",
+          "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
+          "UNION ALL",
+          "SELECT StoragePath",
+          "FROM pm.PMTaskChecklistEvidence",
+          "WHERE TaskId = @taskId AND StoragePath IS NOT NULL",
         ].join("\n"),
       );
 
-    await tx.commit();
+    const storagePathRows = storagePathsResult.recordset as Array<Record<string, unknown>>;
+    const storagePaths: string[] = storagePathRows
+      .map((r) => (typeof r.StoragePath === "string" ? r.StoragePath : null))
+      .filter((v): v is string => v !== null);
+
+    await deleteTaskOwnedRows(tx, taskId);
 
     const assetId = typeof taskRow.AssetId === "string" ? (taskRow.AssetId as string) : null;
     const taskNumber = typeof taskRow.TaskNumber === "string" ? (taskRow.TaskNumber as string) : null;
 
     await writeAuditLog({
+      executor: tx,
       actorUserId: req.user.sub,
       action: "work_order.delete",
       entityType: "task",
@@ -1152,6 +1146,8 @@ workOrdersRouter.delete("/:taskId", requireSuperadmin, async (req, res) => {
       userAgent: req.get("user-agent") ?? null,
     });
 
+    await tx.commit();
+
     if (env.EVIDENCE_STORAGE_ROOT && storagePaths.length > 0) {
       for (const storagePath of storagePaths) {
         const resolved = resolveStoredFileAbs(env.EVIDENCE_STORAGE_ROOT, storagePath);
@@ -1163,7 +1159,7 @@ workOrdersRouter.delete("/:taskId", requireSuperadmin, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     await tx.rollback().catch(() => undefined);
-    throw err;
+    next(err);
   }
 });
 

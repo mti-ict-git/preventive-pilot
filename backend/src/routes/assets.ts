@@ -1,3 +1,4 @@
+import { validateEnabledPmContext, cancelUnstartedPmTasks, PmEligibilityError } from "../db/pmEligibilityPolicy.js";
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
@@ -304,10 +305,19 @@ assetsRouter.post("/pm/bulk", requireManager, async (req, res) => {
       ].join("\n"),
     );
 
+    for (const assetId of assetIds) {
+      if (parsed.data.pmEnabled) await validateEnabledPmContext(tx, "asset", assetId);
+      else await cancelUnstartedPmTasks({ executor: tx, kind: "asset", contextId: assetId, actorUserId: req.user.sub,
+        reason: "PM disabled", ipAddress: typeof req.ip === "string" ? req.ip : null, userAgent: req.get("user-agent") ?? null });
+    }
     await tx.commit();
     res.json({ ok: true });
   } catch (err) {
     await tx.rollback().catch(() => undefined);
+    if (err instanceof PmEligibilityError) {
+      res.status(400).json({ message: err.message, code: err.code, details: [{ contextId: err.contextId, field: err.field }] });
+      return;
+    }
     throw err;
   }
 });
@@ -505,10 +515,15 @@ assetsRouter.post("/pm/bulk/template", requireManager, async (req, res) => {
       ].join("\n"),
     );
 
+    for (const assetId of assetIds) await validateEnabledPmContext(tx, "asset", assetId);
     await tx.commit();
     res.json({ ok: true });
   } catch (err) {
     await tx.rollback().catch(() => undefined);
+    if (err instanceof PmEligibilityError) {
+      res.status(400).json({ message: err.message, code: err.code, details: [{ contextId: err.contextId, field: err.field }] });
+      return;
+    }
     throw err;
   }
 });
@@ -936,10 +951,17 @@ assetsRouter.patch("/:assetId/pm", requireManager, async (req, res) => {
         ].join("\n"),
       );
 
+    await validateEnabledPmContext(tx, "asset", assetId);
+    if (parsed.data.pmEnabled === false) { await cancelUnstartedPmTasks({ executor: tx, kind: "asset", contextId: assetId, actorUserId: req.user.sub,
+        reason: "PM disabled", ipAddress: typeof req.ip === "string" ? req.ip : null, userAgent: req.get("user-agent") ?? null }); }
     await tx.commit();
     res.json({ ok: true });
   } catch (err) {
     await tx.rollback().catch(() => undefined);
+    if (err instanceof PmEligibilityError) {
+      res.status(400).json({ message: err.message, code: err.code, details: [{ contextId: err.contextId, field: err.field }] });
+      return;
+    }
     throw err;
   }
 });

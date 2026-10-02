@@ -119,7 +119,11 @@ authRouter.post("/login", async (req, res) => {
         roles: user.roles,
       },
     });
-  } catch {
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "LDAP_NOT_CONFIGURED") {
+      res.status(503).json({ message: "LDAP is not configured", code: "LDAP_NOT_CONFIGURED" });
+      return;
+    }
     res.status(401).json({ message: "Invalid username or password" });
   }
 });
