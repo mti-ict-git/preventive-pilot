@@ -1532,7 +1532,7 @@ tasksRouter.get("/", async (req, res) => {
         "      )",
         "    )",
         "  )",
-        "ORDER BY t.ScheduledDueAt ASC, t.CreatedAt DESC, t.TaskId ASC, t.TaskId ASC, t.TaskId ASC",
+        "ORDER BY t.ScheduledDueAt ASC, t.CreatedAt DESC, t.TaskId ASC",
         "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY",
       ];
         const from = lines.indexOf("FROM pm.PMTasks t");
