@@ -32,3 +32,7 @@ Reuse `src/components/ui/button.tsx`, Radix-backed dialog/alert-dialog/select pr
 ## AF-02 scope
 
 Hide unauthorized master action triggers, preserve readable detail fields and PM planning controls, show actionable errors and prevent repeat submits while pending. Keep established card/table geometry. Existing unrelated responsive/layout and UI-consistency debt is not authorization to redesign the app.
+
+## Tasks list refinement — 2026-10-03
+
+Preserve the existing semantic CSS/Tailwind tokens, Inter typography and shared Card/Button/Radix Tabs owners. Task views use wrapping rectangular tabs with quiet numeric badges, visible focus and explicit selection; every tab remains visible at laptop widths. Cards keep the existing maintenance vocabulary with tighter spacing and a named keyboard-operable task opener. No new palette or global theme tokens are introduced. Counts are dataset totals rather than unread-message notifications.

@@ -364,6 +364,7 @@ export type TaskListItem = {
   taskNumber: string;
   maintenanceType: "PM" | "CM";
   status: string;
+  displayStatus?: TaskView;
   priority: string;
   plannedDueAt: string;
   scheduledDueAt: string;
@@ -397,13 +398,21 @@ export type TaskListItem = {
   };
 };
 
+export type TaskView = "all" | "due_today" | "overdue" | "in_progress" | "upcoming" | "paused" | "completed" | "cancelled" | "pending_supervisor" | "pending_superadmin";
 export type ListTasksResponse = {
+  total: number;
+  tabCounts: Record<TaskView, number>;
   page: number;
   pageSize: number;
   items: TaskListItem[];
 };
 
 export const apiListTasks = async (input: {
+  view?: TaskView;
+  uiStatus?: TaskView;
+  q?: string;
+  todayStart?: string;
+  todayEnd?: string;
   status?: string;
   assigned?: "me" | "unassigned" | "any";
   overdue?: boolean;
@@ -418,6 +427,11 @@ export const apiListTasks = async (input: {
   pageSize?: number;
 }): Promise<ListTasksResponse> => {
   const params = new URLSearchParams();
+  if (input.view) params.set("view", input.view);
+  if (input.uiStatus) params.set("uiStatus", input.uiStatus);
+  if (input.q) params.set("q", input.q);
+  if (input.todayStart) params.set("todayStart", input.todayStart);
+  if (input.todayEnd) params.set("todayEnd", input.todayEnd);
   if (input.status) params.set("status", input.status);
   if (input.assigned) params.set("assigned", input.assigned);
   if (input.overdue !== undefined) params.set("overdue", input.overdue ? "true" : "false");

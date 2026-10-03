@@ -150,7 +150,7 @@ The script validates resolved configuration without printing credentials, verifi
 
 No git pull, schema migration, data reset, volume deletion, or automatic rollback is performed. Build failure stops before container replacement. A failure during startup may leave a partially updated stack: inspect Compose status/logs and use the previously tested release and recovery procedure. This is not a zero-downtime or verified rollback mechanism.
 
-Verification 2026-10-02: shell syntax/help and isolated command-orchestration tests pass for check-only behavior, build-failure stop, deployment ordering, proxy check and partial-LDAP rejection. Docker image build, container startup, production deployment and recovery were not executed. OpenAPI reviewed: no HTTP contract change. The user instruction to defer actual deployment remains in force.
+Verification 2026-10-02: shell syntax/help and isolated command-orchestration tests pass for check-only behavior, build-failure stop, deployment ordering, proxy check and partial-LDAP rejection. Docker image build, container startup, production deployment and recovery were not executed. OpenAPI reviewed: no HTTP contract change. That checkpoint preceded the user-approved 2026-10-03 deployment below; the earlier deployment hold has been superseded.
 
 
 ### Shared-storage gate before build
@@ -176,3 +176,34 @@ The credentials file contains `username=...`, `password=...` and optionally `dom
 `--check` verifies an existing mount without mounting or writing. If absent it fails with guidance. `--deploy` validates the fstab source/type/target, mounts if needed, revalidates the actual mount, then creates a unique temporary file, writes and reads back data, and deletes that file. Any failure stops before build. The gate runs again after build before replacing containers. Existing mounts are never unmounted or replaced automatically. A successfully mounted share remains mounted even if a later build fails. This host probe does not establish access under every container UID or guarantee availability after deployment; test the application evidence workflow separately.
 
 Verification: `python3 scripts/tests/deploy-share.test.py` checks missing mount in check mode, wrong source, mount success/failure, probe cleanup and access failure with simulated mount commands. `node --test scripts/tests/production-deploy.test.mjs` confirms failed storage validation prevents build. No real share was mounted and no deployment was run.
+
+
+## Production evidence storage migration — 2026-10-03
+
+The user authorized mounting `//10.60.10.44/ict` at `/mnt/preventive-evidence`, copying existing local evidence, and switching the API bind only after verification. The prior host directory `/root/preventive-pilot/shared-documents` is retained intact as a rollback copy. All 102 source files (36,263,260 bytes) were copied without overwriting differing target content and verified by SHA-256, including reads from the actual API container after cutover. Existing share content and other applications' mounts were preserved.
+
+Production now sets `EVIDENCE_STORAGE_HOST_PATH=/mnt/preventive-evidence`. The container destination remains `/app/shared-documents`; `EVIDENCE_STORAGE_ROOT` remains `/app/shared-documents/01. Preventive Maintenance Record/01. Support & System`. A root-owned mode-0600 credential file supports an fstab entry with a generated systemd automount unit. No credentials are recorded here. The production-local Compose configuration also checks SMB/CIFS filesystem type before executing `node dist/index.js`, rejecting local ext4 fallback with exit 78. Both Linux SMB/CIFS magic values (`0xff534d42`, `0xfe534d42`) are supported; the live mount reports the latter. An isolated negative test confirmed rejection of the local source filesystem.
+
+The API was briefly stopped for final synchronization and recreated with `--no-build --pull never --no-deps`, retaining its previous image. Web was retained. API health, web-to-API proxy, actual-container evidence reads, and a unique write/read/delete probe passed; no probe files remain. Protected configuration backups, manifests, and migration state are at `/var/backups/preventive-pilot/storage-20261003T081649Z`. Preserve these and the local evidence directory; any future rollback must reconcile evidence written after cutover before switching back.
+
+This was a storage migration, not an application release or SQL migration. Host reboot/recovery and authenticated application workflows were not tested. The committed `production.sh` currently accepts only `/app/shared-documents` as the logical evidence root; the preserved production subfolder differs. The subsequent release below used reviewed equivalent validation that accepts an existing descendant folder while retaining the exact-share and filesystem guards. Direct use of the committed script remains incompatible with this nested production root until its validation is updated.
+
+## Production application release — 2026-10-03
+
+The user authorized activating the current code. Host checkout, origin/main and local source agreed on `7a68e7abebad64eb74b8b4644d33037b58662bad`; no pull/reset or source changes were required. Codex executed the existing pinned SSH/sudo relay. Hermes reviewed the plan and independently inspected runtime afterward; Hermes did not execute host Compose.
+
+Both candidates were built from a secret-free `git archive` of that exact commit, with OCI revision labels. API image is `sha256:57172ccf183c7e67b896d8661575ad71c390bfe41a9e03edb81dcf21c54b6c09`; web is `sha256:640a1681b8bbe3693e59c0155b124a17e9fbdb6da1a3733d4e4977d0ae6ab843`. Runtime configuration, Firebase bind, ports, jobs/integrations, nested logical evidence root and CIFS startup guard were preserved. The committed production overlay adds restart policies and API/web healthchecks.
+
+The nested logical root was checked as an existing resolved descendant of the exact evidence mount, without `..` traversal. All other configuration gates from `production.sh`, exact CIFS source/type/target checks and temporary storage probes were retained. Resolved base/overlay configurations were compared, allowing only the overlay health/restart/dependency changes. The images were built before replacement and retagged to the existing project service image names only after both succeeded. This is a reviewed equivalent deployment procedure; it does not change the committed script's strict-root rule.
+
+The activation command on the actual host was:
+
+```sh
+docker compose -p preventive-pilot --project-directory /root/preventive-pilot --env-file /root/preventive-pilot/.env -f /root/preventive-pilot/docker-compose.yml -f /root/preventive-pilot/docker-compose.production.yml up -d --no-build --pull never --no-deps --wait --wait-timeout 120 api web
+```
+
+Pre-release SQL COPY_ONLY backup with CHECKSUM succeeded, followed by RESTORE VERIFYONLY WITH CHECKSUM, STOP_ON_ERROR. Backup set 5040, approximately 119 MB compressed, is on the SQL host at `C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Backup\AssetMaintDB_preventive_7a68e7a_20261003_2b3b5ed8-52de-4ae9-a322-88cfd9e39ff4.bak`. Protected host configuration copies, build logs, resolved configuration and release state are at `/var/backups/preventive-pilot/release-20261003T085816Z`. They may contain secrets: keep root-only and do not publish them.
+
+Old image rollback tags are `preventive-pilot-api:rollback-20261003T085816Z` and `preventive-pilot-web:rollback-20261003T085816Z`. A service image rollback would retag both to the corresponding existing `:latest` names and run the same scoped Compose activation, preserving the current CIFS bind and guard. Do not revert storage to the retained local copy without reconciling post-cutover evidence. No rollback or database restore was executed; retained references and VERIFYONLY do not establish successful recovery or a zero-downtime rollout.
+
+Both new image IDs and labels matched running containers; healthchecks and Nginx-to-API routing passed. Live API database connection reached `AssetMaintDB` with 39 pm tables. All 102 pre-cutover evidence files/36,263,260 bytes passed SHA-256 from the new API, and a unique probe passed write/read/delete with cleanup. Public HTTPS root and API specification returned 200, root HTML matched the new web container, and its two referenced assets were accessible. See [full evidence and remaining acceptance limits](verification-d2-environment.md#production-application-release--2026-10-03).

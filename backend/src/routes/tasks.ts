@@ -1,3 +1,4 @@
+import { taskViews, taskViewPredicates, taskViewFilterSql, taskDisplayStatusSql } from "./taskListViews.js";
 import { hasTaskDeletionReferences, deleteTaskOwnedRows } from "../db/taskDeletionPolicy.js";
 import express, { Router } from "express";
 import { z } from "zod";
@@ -81,6 +82,12 @@ const preprocessDateEnd = (value: unknown): Date | undefined => {
 
 const TaskListQuerySchema = z.object({
   status: z.string().max(32).optional(),
+  view: z.enum(taskViews).optional().default("all"),
+  uiStatus: z.enum(taskViews).optional().default("all"),
+  q: z.string().max(200).optional(),
+  approvedOnly: z.enum(["true", "false"]).optional(),
+  todayStart: z.string().datetime({ offset: true }).optional(),
+  todayEnd: z.string().datetime({ offset: true }).optional(),
   assigned: z.enum(["me", "unassigned", "any"]).optional().default("any"),
   overdue: z.string().optional(),
   maintenanceType: z.enum(["PM", "CM", "all"]).optional(),
@@ -1350,15 +1357,35 @@ tasksRouter.get("/", async (req, res) => {
     return;
   }
 
+  if (parsed.data.dueFrom && parsed.data.dueTo && parsed.data.dueFrom > parsed.data.dueTo) {
+    res.status(400).json({ message: "Due from must not be after due to" }); return;
+  }
   const page = Math.max(1, Number(parsed.data.page) || 1);
   const pageSize = Math.min(200, Math.max(1, Number(parsed.data.pageSize) || 50));
   const offset = (page - 1) * pageSize;
   const overdue = parseBoolean(parsed.data.overdue);
   const rolesCsv = req.user.roles.join(",");
 
+  if (Boolean(parsed.data.todayStart) !== Boolean(parsed.data.todayEnd)) {
+    res.status(400).json({ message: "Provide both day boundaries" }); return;
+  }
+  const now = new Date();
+  const todayStart = parsed.data.todayStart ? new Date(parsed.data.todayStart) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const todayEnd = parsed.data.todayEnd ? new Date(parsed.data.todayEnd) : new Date(todayStart.getTime() + 86400000);
+  const dayLength = todayEnd.getTime() - todayStart.getTime();
+  if (dayLength < 23 * 3600000 || dayLength > 25 * 3600000) {
+    res.status(400).json({ message: "Invalid day boundaries" }); return;
+  }
   const db = await getDb();
   const result = await db
     .request()
+    .input("view", sql.NVarChar(32), parsed.data.view)
+    .input("uiStatus", sql.NVarChar(32), parsed.data.uiStatus)
+    .input("search", sql.NVarChar(200), parsed.data.q?.trim() || null)
+    .input("approvedOnly", sql.Bit, parsed.data.approvedOnly === "true")
+    .input("todayStart", sql.DateTime2(0), todayStart)
+    .input("todayEnd", sql.DateTime2(0), todayEnd)
+    .input("now", sql.DateTime2(0), now)
     .input("offset", sql.Int, offset)
     .input("limit", sql.Int, pageSize)
     .input("status", sql.NVarChar(32), parsed.data.status ?? null)
@@ -1373,7 +1400,7 @@ tasksRouter.get("/", async (req, res) => {
     .input("userId", sql.UniqueIdentifier, req.user.sub)
     .input("rolesCsv", sql.NVarChar(1024), rolesCsv)
     .query(
-      [
+      (() => { const lines = [
         "SELECT",
         "  t.TaskId AS TaskId,",
         "  t.TaskNumber AS TaskNumber,",
@@ -1387,7 +1414,9 @@ tasksRouter.get("/", async (req, res) => {
         "  tpl.Name AS TemplateName,",
         "  t.PlannedDueAt AS PlannedDueAt,",
         "  t.ScheduledDueAt AS ScheduledDueAt,",
+        "  t.MaintenanceType AS MaintenanceType,",
         "  t.Status AS Status,",
+        `  ${taskDisplayStatusSql} AS DisplayStatus,`,
         "  t.Priority AS Priority,",
         "  t.ApprovalStatus AS ApprovalStatus,",
         "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
@@ -1453,6 +1482,9 @@ tasksRouter.get("/", async (req, res) => {
         ") liveTotals",
         "WHERE",
         "  (@status IS NULL OR t.Status = @status)",
+        "  AND (@approvedOnly = 0 OR t.ApprovalStatus = N'Approved')",
+        "  AND (@search IS NULL OR CHARINDEX(@search, t.TaskNumber) > 0 OR CHARINDEX(@search, COALESCE(a.AssetTag, N'')) > 0 OR CHARINDEX(@search, COALESCE(a.Name, N'')) > 0 OR CHARINDEX(@search, COALESCE(fac.Name, N'')) > 0 OR CHARINDEX(@search, COALESCE(loc.Name, N'')) > 0)",
+        `  AND ${taskViewFilterSql("@uiStatus")}`,
       "  AND (@maintenanceType IS NULL OR t.MaintenanceType = @maintenanceType)",
         "  AND (@assetId IS NULL OR t.AssetId = @assetId)",
         "  AND (@facilityId IS NULL OR t.FacilityId = @facilityId)",
@@ -1500,19 +1532,36 @@ tasksRouter.get("/", async (req, res) => {
         "      )",
         "    )",
         "  )",
-        "ORDER BY t.ScheduledDueAt ASC, t.CreatedAt DESC",
+        "ORDER BY t.ScheduledDueAt ASC, t.CreatedAt DESC, t.TaskId ASC, t.TaskId ASC, t.TaskId ASC",
         "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY",
-      ].join("\n"),
+      ];
+        const from = lines.indexOf("FROM pm.PMTasks t");
+        const order = lines.findIndex(line => line.startsWith("ORDER BY"));
+        const scopeLines = lines.slice(from, order);
+        const apply = scopeLines.findIndex(line => line.startsWith("OUTER APPLY"));
+        const where = scopeLines.indexOf("WHERE");
+        scopeLines.splice(apply, where - apply);
+        const scope = scopeLines.join("\n");
+        const counts = taskViews.map(view => `SUM(CASE WHEN ${taskViewPredicates[view]} THEN 1 ELSE 0 END) AS [${view}]`).join(", ");
+        lines.splice(order, 0, `  AND ${taskViewFilterSql("@view")}`);
+        return lines.join("\n") + ";\nSELECT " + counts + "\n" + scope;
+      })(),
     );
 
   const rows = result.recordset as Array<Record<string, unknown>>;
+  const countRow = (result.recordsets as sql.IRecordSet<Record<string, unknown>>[] | undefined)?.[1]?.[0];
+  const tabCounts = Object.fromEntries(taskViews.map(view => [view, Number(countRow?.[view] ?? 0)]));
   res.json({
+    total: tabCounts[parsed.data.view],
+    tabCounts,
     page,
     pageSize,
     items: rows.map((r) => ({
       id: r.TaskId,
       taskNumber: r.TaskNumber,
+      maintenanceType: r.MaintenanceType,
       status: r.Status,
+      displayStatus: r.DisplayStatus,
       priority: r.Priority,
       plannedDueAt: r.PlannedDueAt,
       scheduledDueAt: r.ScheduledDueAt,

@@ -191,3 +191,11 @@ Deletion removes the task and its owned checklist results/snapshot, evidence met
 ## Local-only authentication (Q-05)
 
 Local login can operate without LDAP configuration. The existing Local login tab sends `provider: "local"`. LDAP remains available when all eight directory connection/search fields are configured. No automatic credential fallback is performed; omitted API provider retains its LDAP default. Unconfigured LDAP operations return 503 with `LDAP_NOT_CONFIGURED`, after applicable authorization and validation.
+
+### Task-list views — 2026-10-03
+
+Desktop Tasks applies view, search, assignment, approved-only, date range and secondary status filters server-side before pagination. Badge counts cover the complete shared-filter scope, not the first 100/200 rows, and remain independent of the selected view/page. Tabs show total matching tasks, not unread notifications.
+
+All includes historical records. Due Today covers the browser-local calendar day, passed as inclusive/exclusive UTC boundaries. Overdue retains request-time ScheduledDueAt semantics and can overlap Due Today when a due time has already passed. Upcoming starts at the next calendar day with no seven-day cap; the dashboard's Upcoming 7 Days contract is unchanged. Scheduling tabs include open work, including paused/in-progress work when dates match, but exclude completed, cancelled, PendingSupervisor, PendingSuperadmin and Approved records. In Progress requires stored in_progress with no submitted/final approval lock; Paused requires stored paused. Completed excludes pending approval. Approval tabs use their exact ApprovalStatus and exclude cancelled records, including legacy submitted rows whose stored lifecycle is completed. These stage labels take precedence on displayed task cards; no stored historical statuses are rewritten.
+
+Advanced filters intersect the chosen tab and affect all badges. Search matches literal substrings in task number, asset tag/name, facility or site. Approved only means ApprovalStatus=Approved. Task list pages contain 25 records with exact matching totals and page controls; changes reset/clamp paging. Existing assignment/role access remains authoritative; this is a list correction, not a permission change or change to report/dashboard KPI semantics.

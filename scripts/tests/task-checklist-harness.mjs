@@ -1259,7 +1259,7 @@ export function createHarness(overrides = {}) {
 
   function load(filename) {
     const abs = path.resolve(root, filename);
-    if (abs.endsWith('/config/env.ts')) {
+    if (abs.replaceAll('\\', '/').endsWith('/config/env.ts')) {
       return {
         env: {
           JWT_SECRET: 'tc01-isolated-test-secret-only',
@@ -1269,10 +1269,10 @@ export function createHarness(overrides = {}) {
         },
       };
     }
-    if (abs.endsWith('/db/mssql.ts')) {
+    if (abs.replaceAll('\\', '/').endsWith('/db/mssql.ts')) {
       return { getDb: async () => db };
     }
-    if (abs.endsWith('/jobs/index.ts')) {
+    if (abs.replaceAll('\\', '/').endsWith('/jobs/index.ts')) {
       return { runJobNow: async () => {} };
     }
     if (cache.has(abs)) return cache.get(abs).exports;

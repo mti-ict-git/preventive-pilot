@@ -13,6 +13,8 @@ import {
 	ChevronRight,
 	Calendar,
 	Wrench,
+	X,
+	Pause,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Header from "@/components/layout/Header";
@@ -21,10 +23,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { endOfDay, format, isAfter, isBefore, isSameDay, parseISO, startOfDay } from "date-fns";
+import { addDays, endOfDay, format, isBefore, isSameDay, parseISO, startOfDay } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -62,6 +64,7 @@ import {
   apiUploadTaskEvidenceFile,
   type CompleteTaskChecklistResultInput,
   type TaskListItem,
+  type TaskView,
   type LookupRole,
   type UserSummary,
 } from "@/lib/api";
@@ -72,21 +75,58 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
 
 const Tasks = () => {
-	const [searchQuery, setSearchQuery] = useState("");
-	const [activeTab, setActiveTab] = useState("all");
-	const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-	const [taskDetailOpen, setTaskDetailOpen] = useState(false);
-	const navigate = useNavigate();
-	const [searchParams] = useSearchParams();
-	const [filtersOpen, setFiltersOpen] = useState(false);
-	const [assignedFilter, setAssignedFilter] = useState<"any" | "me" | "unassigned">("any");
-	const [approvedOnlyFilter, setApprovedOnlyFilter] = useState(false);
-	const [dueFromFilter, setDueFromFilter] = useState<string>("");
-	const [dueToFilter, setDueToFilter] = useState<string>("");
-	const [statusFilter, setStatusFilter] = useState<
-		"all" | "upcoming" | "in_progress" | "due_today" | "overdue" | "completed" | "cancelled"
-	>("all");
-	
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewOptions: { value: TaskView; label: string; description: string }[] = [
+    { value: "all", label: "All", description: "All PM tasks, including historical records." },
+    { value: "due_today", label: "Due Today", description: "Open work due today. Submitted and closed tasks are excluded." },
+    { value: "overdue", label: "Overdue", description: "Open work past its due time. Tasks due earlier today may also appear in Due Today." },
+    { value: "in_progress", label: "In Progress", description: "Started work that is still in progress, excluding paused and submitted tasks." },
+    { value: "upcoming", label: "Upcoming", description: "Open work due from tomorrow onward." },
+    { value: "paused", label: "Paused", description: "Work paused by a technician and not yet submitted." },
+    { value: "completed", label: "Completed", description: "Completed work with no pending approval." },
+    { value: "cancelled", label: "Cancelled", description: "Cancelled task records." },
+    { value: "pending_supervisor", label: "Pending Supervisor", description: "Submitted tasks waiting for supervisor review." },
+    { value: "pending_superadmin", label: "Pending Superadmin", description: "Tasks waiting for final superadmin review." },
+  ];
+  const validView = (value: string | null): TaskView => viewOptions.find(option => option.value === value)?.value ?? "all";
+  const activeTab = validView(searchParams.get("view"));
+  const statusFilter = validView(searchParams.get("status"));
+  const assignedValue = searchParams.get("assigned");
+  const assignedFilter = assignedValue === "me" || assignedValue === "unassigned" ? assignedValue : "any";
+  const approvedOnlyFilter = searchParams.get("approvedOnly") === "true";
+  const dueFromFilter = searchParams.get("dueFrom") ?? "";
+  const dueToFilter = searchParams.get("dueTo") ?? "";
+  const page = Math.max(1, Math.floor(Number(searchParams.get("page")) || 1));
+  const updateFilter = (key: string, value: string) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    if (value && value !== "all" && value !== "any") next.set(key, value); else next.delete(key);
+    next.delete("page"); return next;
+  }, { replace: true });
+  const setActiveTab = (value: string) => updateFilter("view", value);
+  const setStatusFilter = (value: string) => updateFilter("status", value);
+  const setAssignedFilter = (value: string) => updateFilter("assigned", value);
+  const setApprovedOnlyFilter = (value: boolean) => updateFilter("approvedOnly", value ? "true" : "");
+  const setDueFromFilter = (value: string) => updateFilter("dueFrom", value);
+  const setDueToFilter = (value: string) => updateFilter("dueTo", value);
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
+  const [composing, setComposing] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const committedSearch = searchParams.get("q") ?? "";
+  useEffect(() => { setSearchQuery(committedSearch); }, [committedSearch]);
+  useEffect(() => {
+    if (composing || searchQuery === committedSearch) return;
+    const timeout = window.setTimeout(() => updateFilter("q", searchQuery.trim()), searchQuery.trim() ? 300 : 0);
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery, composing, committedSearch]);
+  const [day, setDay] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  useEffect(() => {
+    const interval = window.setInterval(() => setDay(format(new Date(), "yyyy-MM-dd")), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 	const queryClient = useQueryClient();
 
 	useEffect(() => {
@@ -97,57 +137,38 @@ const Tasks = () => {
 		}
 	}, [searchParams]);
 
-	const listQueryInput: Parameters<typeof apiListTasks>[0] = useMemo(() => {
-		const now = new Date();
-		let input: Parameters<typeof apiListTasks>[0] = { maintenanceType: "PM", page: 1, pageSize: 100 };
-
-		if (activeTab === "overdue") {
-			input = { ...input, overdue: true };
-		} else if (activeTab === "in_progress") {
-			input = { ...input, status: "in_progress" };
-		} else if (activeTab === "due_today") {
-			input = {
-				...input,
-				dueFrom: startOfDay(now).toISOString(),
-				dueTo: endOfDay(now).toISOString(),
-			};
-		} else if (activeTab === "upcoming") {
-			input = { ...input, dueFrom: now.toISOString() };
-		} else if (activeTab === "cancelled") {
-			input = { ...input, status: "cancelled" };
-		}
-
-		if (assignedFilter !== "any") {
-			input = { ...input, assigned: assignedFilter };
-		}
-
-		if (approvedOnlyFilter) {
-			input = { ...input, approvedOnly: true };
-		}
-
-		if (dueFromFilter.trim()) {
-			const from = startOfDay(new Date(dueFromFilter));
-			input = { ...input, dueFrom: from.toISOString() };
-		}
-
-		if (dueToFilter.trim()) {
-			const to = endOfDay(new Date(dueToFilter));
-			input = { ...input, dueTo: to.toISOString() };
-		}
-
-		return input;
-	}, [activeTab, assignedFilter, approvedOnlyFilter, dueFromFilter, dueToFilter]);
-
+  const sharedQueryInput = useMemo<Parameters<typeof apiListTasks>[0]>(() => {
+    const start = startOfDay(parseISO(day));
+    const dateBoundary = (value: string, end = false) => {
+      const date = parseISO(value); if (Number.isNaN(date.getTime())) return undefined;
+      return (end ? endOfDay(date) : startOfDay(date)).toISOString();
+    };
+    return {
+      maintenanceType: "PM", assigned: assignedFilter, approvedOnly: approvedOnlyFilter,
+      q: committedSearch || undefined, uiStatus: statusFilter,
+      todayStart: start.toISOString(), todayEnd: addDays(start, 1).toISOString(),
+      dueFrom: dueFromFilter ? dateBoundary(dueFromFilter) : undefined,
+      dueTo: dueToFilter ? dateBoundary(dueToFilter, true) : undefined,
+    };
+  }, [day, assignedFilter, approvedOnlyFilter, committedSearch, statusFilter, dueFromFilter, dueToFilter]);
+  const listQueryInput = { ...sharedQueryInput, view: activeTab, page, pageSize: 25 };
   const tasksQuery = useQuery({
-    queryKey: ["tasks", listQueryInput],
-    queryFn: () => apiListTasks(listQueryInput),
+    queryKey: ["tasks", listQueryInput], queryFn: () => apiListTasks(listQueryInput), refetchInterval: 30_000,
   });
-
   const statsQuery = useQuery({
-    queryKey: ["task-stats"],
-    queryFn: () => apiListTasks({ maintenanceType: "PM", page: 1, pageSize: 200 }),
-    staleTime: 30_000,
+    queryKey: ["task-stats", sharedQueryInput],
+    queryFn: () => apiListTasks({ ...sharedQueryInput, page: 1, pageSize: 1 }),
+    refetchInterval: 30_000,
   });
+  const tabCounts = statsQuery.data?.tabCounts;
+  const total = tasksQuery.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / 25));
+  const setPage = (value: number) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous); next.set("page", String(value)); return next;
+  });
+  useEffect(() => {
+    if (tasksQuery.isSuccess && page > pageCount) setPage(pageCount);
+  }, [tasksQuery.isSuccess, page, pageCount]);
 
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assignTaskId, setAssignTaskId] = useState<string | null>(null);
@@ -235,29 +256,30 @@ const Tasks = () => {
 
   const currentUserId = getJwtClaims()?.sub ?? null;
 
-  type UiStatus = "upcoming" | "in_progress" | "due_today" | "overdue" | "completed" | "cancelled";
-
+  type UiStatus = Exclude<TaskView, "all">;
   const getUiStatus = (task: TaskListItem, now: Date): UiStatus => {
+    if (task.displayStatus && task.displayStatus !== "all") return task.displayStatus;
+    if (task.status === "cancelled") return "cancelled";
+    if (task.approvalStatus === "PendingSupervisor") return "pending_supervisor";
+    if (task.approvalStatus === "PendingSuperadmin") return "pending_superadmin";
+    if (task.status === "completed" || task.status === "in_progress" || task.status === "paused") return task.status;
     const due = parseISO(task.scheduledDueAt);
-    const status = task.status.toLowerCase();
-    if (status === "cancelled") return "cancelled";
-    if (status === "completed") return "completed";
-    if (status === "in_progress") return "in_progress";
-    if (isBefore(due, now)) return "overdue";
     if (isSameDay(due, now)) return "due_today";
-    if (isAfter(due, now)) return "upcoming";
-    return "upcoming";
+    return isBefore(due, now) ? "overdue" : "upcoming";
   };
 
   const getStatusConfig = (status: UiStatus) => {
     const config = {
-      upcoming: { label: "Upcoming", color: "bg-accent/20 text-accent border-accent/30", icon: Clock },
+      paused: { label: "Paused", color: "bg-muted text-muted-foreground border-border", icon: Pause },
+      pending_supervisor: { label: "Pending Supervisor", color: "bg-warning/10 text-foreground border-warning/40", icon: Clock },
+      pending_superadmin: { label: "Pending Superadmin", color: "bg-warning/10 text-foreground border-warning/40", icon: Clock },
+      upcoming: { label: "Upcoming", color: "bg-muted/60 text-muted-foreground border-border", icon: Clock },
       in_progress: {
         label: "In Progress",
         color: "bg-primary/20 text-primary border-primary/30",
         icon: ClipboardList,
       },
-      due_today: { label: "Due Today", color: "bg-warning/20 text-warning border-warning/30", icon: AlertTriangle },
+      due_today: { label: "Due Today", color: "bg-warning/10 text-foreground border-warning/40", icon: AlertTriangle },
       overdue: { label: "Overdue", color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertTriangle },
       completed: { label: "Completed", color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
       cancelled: {
@@ -273,27 +295,13 @@ const Tasks = () => {
   type StatItem = { label: string; value: number; tone: StatTone; icon: ElementType };
 
   const statItems = useMemo<StatItem[]>(() => {
-    const now = new Date();
-    const items = statsQuery.data?.items ?? [];
-    const total = items.length;
-    const dueTodayCount = items.filter((t) => {
-      const status = t.status.toLowerCase();
-      if (status === "completed" || status === "cancelled") return false;
-      return isSameDay(parseISO(t.scheduledDueAt), now);
-    }).length;
-    const overdueCount = items.filter((t) => {
-      const status = t.status.toLowerCase();
-      if (status === "completed" || status === "cancelled") return false;
-      return isBefore(parseISO(t.scheduledDueAt), now);
-    }).length;
-    const completedCount = items.filter((t) => t.status.toLowerCase() === "completed").length;
     return [
-      { label: "Total Tasks", value: total, tone: "primary", icon: ClipboardList },
-      { label: "Due Today", value: dueTodayCount, tone: "warning", icon: Clock },
-      { label: "Overdue", value: overdueCount, tone: "destructive", icon: AlertTriangle },
-      { label: "Completed", value: completedCount, tone: "success", icon: CheckCircle },
+      { label: "Total Tasks", value: tabCounts?.all ?? 0, tone: "primary", icon: ClipboardList },
+      { label: "Due Today", value: tabCounts?.due_today ?? 0, tone: "warning", icon: Clock },
+      { label: "Overdue", value: tabCounts?.overdue ?? 0, tone: "destructive", icon: AlertTriangle },
+      { label: "Completed", value: tabCounts?.completed ?? 0, tone: "success", icon: CheckCircle },
     ];
-  }, [statsQuery.data?.items]);
+  }, [tabCounts]);
 
   const statBorder = (tone: "primary" | "warning" | "destructive" | "success") => {
     if (tone === "primary") return "border-t-primary";
@@ -311,20 +319,7 @@ const Tasks = () => {
 
 	const filteredTasks = useMemo(() => {
 		const now = new Date();
-		const items = (tasksQuery.data?.items ?? []).filter((task) => {
-			const status = task.status.toLowerCase();
-			if (activeTab === "due_today" && status === "cancelled") {
-				return false;
-			}
-			if (activeTab === "pending_supervisor") {
-				return (task.approvalStatus ?? "None") === "PendingSupervisor";
-			}
-			if (activeTab === "pending_superadmin") {
-				return (task.approvalStatus ?? "None") === "PendingSuperadmin";
-			}
-			return true;
-		});
-		const q = searchQuery.trim().toLowerCase();
+    const items = tasksQuery.data?.items ?? [];
 		return items
 			.map((task) => {
 				const uiStatus = getUiStatus(task, now);
@@ -332,18 +327,11 @@ const Tasks = () => {
 				const dueDate = format(parseISO(task.scheduledDueAt), "yyyy-MM-dd");
 				const assetTag = task.asset.assetTag ?? (task.facility ? task.facility.name ?? "" : "");
 				const assetName = task.asset.name ?? (task.facility ? task.facility.locationName ?? task.facility.name ?? "" : "");
-				const progress =
-					uiStatus === "completed"
-						? 100
-						: task.checklistTotal > 0
-							? Math.round((task.checklistCompleted / task.checklistTotal) * 100)
-							: uiStatus === "in_progress"
-								? 50
-								: 0;
+        const progress = task.checklistTotal > 0 ? Math.round((task.checklistCompleted / task.checklistTotal) * 100) : 0;
 				const isAssigned = Boolean(task.assignedTo.userId || task.assignedTo.roleId);
                                 const assignmentLocked =
                                         task.maintenanceType === "PM" &&
-                                        ((task.approvalStatus ?? "None") === "PendingSupervisor" ||
+                                        (task.status === "completed" || task.status === "cancelled" || (task.approvalStatus ?? "None") === "PendingSupervisor" ||
                                                 (task.approvalStatus ?? "None") === "PendingSuperadmin" ||
                                                 (task.approvalStatus ?? "None") === "Approved");
                                 const canClaim =
@@ -375,20 +363,7 @@ const Tasks = () => {
 					approvalStatus: task.approvalStatus ?? "None",
 				};
 			})
-			.filter((task) => {
-				if (statusFilter !== "all" && task.status !== statusFilter) {
-					return false;
-				}
-				if (!q) {
-					return true;
-				}
-				return (
-					task.displayId.toLowerCase().includes(q) ||
-					task.asset.toLowerCase().includes(q) ||
-					task.assetName.toLowerCase().includes(q)
-				);
-			});
-        }, [searchQuery, tasksQuery.data?.items, activeTab, statusFilter, currentUserId]);
+        }, [tasksQuery.data?.items, currentUserId]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -411,7 +386,7 @@ const Tasks = () => {
                     <div className="min-w-0">
                       <p className="text-xs uppercase tracking-wide text-muted-foreground truncate">{stat.label}</p>
                       <p className="text-3xl font-semibold text-foreground mt-2 tabular-nums leading-none">
-                        {stat.value}
+                        {statsQuery.isError ? "—" : statsQuery.isLoading ? "…" : stat.value}
                       </p>
                     </div>
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${statIconClass(stat.tone)}`}>
@@ -452,17 +427,24 @@ const Tasks = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search by task ID, asset..."
+                    ref={searchInput}
+                    aria-label="Search tasks"
+                    maxLength={200}
+                    onCompositionStart={() => setComposing(true)}
+                    onCompositionEnd={() => setComposing(false)}
+                    onKeyDown={event => { if (event.key === "Enter" && !event.nativeEvent.isComposing) updateFilter("q", searchQuery.trim()); }}
+                    placeholder="Search by task ID, asset or facility..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-background"
+                    className="pl-10 pr-10 bg-background"
                   />
+                  {searchQuery && <Button type="button" size="icon" variant="ghost" aria-label="Clear search" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8" onClick={() => { setSearchQuery(""); updateFilter("q", ""); searchInput.current?.focus(); }}><X className="h-4 w-4" /></Button>}
                 </div>
               </div>
               <div className="col-span-12 md:col-span-4">
                 <div className="flex items-center gap-2 justify-end text-sm text-muted-foreground h-full">
                   <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">
-                    {filteredTasks.length} records
+                    {tasksQuery.isError ? "Unavailable" : tasksQuery.isLoading ? "Loading…" : `${total} tasks`}
                   </Badge>
                 </div>
               </div>
@@ -470,7 +452,7 @@ const Tasks = () => {
           </CardContent>
         </Card>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs activationMode="manual" value={activeTab} onValueChange={setActiveTab} className="w-full">
           <Card className="border-border/60 bg-card/70 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -478,88 +460,49 @@ const Tasks = () => {
                   <Wrench className="w-5 h-5 text-primary" />
                   Tasks
                 </CardTitle>
-                <TabsList className="bg-muted/60 p-1 rounded-full w-full md:w-auto overflow-x-auto">
-                  <TabsTrigger
-                    value="all"
-                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                  >
-                    All
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="due_today"
-                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                  >
-                    Due Today
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="overdue"
-                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                  >
-                    Overdue
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="in_progress"
-                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                  >
-                    In Progress
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="upcoming"
-                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                  >
-                    Upcoming
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="cancelled"
-                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                  >
-                    Cancelled
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="pending_supervisor"
-                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                  >
-                    Pending Supervisor
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="pending_superadmin"
-                    className="rounded-full px-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                  >
-                    Pending Superadmin
-                  </TabsTrigger>
-                </TabsList>
               </div>
+              <TabsList aria-label="Task views" className="mt-4 flex h-auto w-full flex-wrap justify-start gap-2 rounded-lg bg-muted/40 p-2" >
+                {viewOptions.map(option => (
+                  <TabsTrigger key={option.value} value={option.value} className="group min-h-10 cursor-pointer gap-2 rounded-md px-3 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                    {option.label}
+                    <span className="min-w-6 rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground group-data-[state=active]:bg-primary-foreground/20 group-data-[state=active]:text-primary-foreground">
+                      {statsQuery.isError ? "—" : tabCounts ? tabCounts[option.value].toLocaleString() : "…"}
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <p className="mt-3 text-sm text-muted-foreground">{viewOptions.find(option => option.value === activeTab)?.description}</p>
+              {statsQuery.isError && <p role="alert" className="text-sm text-destructive">Task counts could not be loaded. <Button variant="link" onClick={() => statsQuery.refetch()}>Retry counts</Button></p>}
+
             </CardHeader>
             <CardContent>
               <TabsContent value={activeTab} className="mt-0">
                 {tasksQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground p-4">Loading tasks…</div>
+                  <div role="status" className="min-h-40 flex items-center justify-center text-sm text-muted-foreground">Loading tasks…</div>
                 ) : tasksQuery.isError ? (
-                  <div className="text-sm text-destructive p-4">Failed to load tasks.</div>
+                  <div role="alert" className="min-h-40 flex items-center justify-center gap-3 text-sm text-destructive">Failed to load tasks.<Button variant="outline" onClick={() => tasksQuery.refetch()}>Retry</Button></div>
+                ) : filteredTasks.length === 0 ? (
+                  <div role="status" className="min-h-40 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground"><ClipboardList className="h-6 w-6" /><p>No tasks match this view and filters.</p><Button variant="outline" onClick={() => { setSearchQuery(""); setSearchParams({ view: activeTab }); }}>Clear filters</Button></div>
                 ) : (
                   <div className="space-y-3">
                     {filteredTasks.map((task, index) => {
                       const statusConfig = getStatusConfig(task.status);
                       return (
-                        <motion.div
+                        <motion.article
                           key={task.id}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: index * 0.04 }}
-                          className="rounded-xl border border-border/60 bg-background/60 p-5 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer group"
-                          onClick={() => {
-                            setSelectedTaskId(task.taskId);
-                            setTaskDetailOpen(true);
-                          }}
+                          className="rounded-lg border border-border/60 bg-background/60 p-4 hover:border-primary/40 transition-colors group"
                         >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-4">
+                          <button type="button" aria-label={`Open task ${task.displayId}`} className="flex w-full cursor-pointer items-start justify-between gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setSelectedTaskId(task.taskId); setTaskDetailOpen(true); }}>
+                            <div className="flex min-w-0 items-start gap-3">
                               <div className="w-12 h-12 rounded-xl bg-muted/60 flex items-center justify-center shrink-0">
                                 <Server className="w-6 h-6 text-muted-foreground" />
                               </div>
                               <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-mono text-xs text-muted-foreground">{task.displayId}</span>
+                                <div className="flex flex-wrap items-center gap-2 mb-1">
+                                  <span className="break-all font-mono text-xs text-muted-foreground">{task.displayId}</span>
                                   <Badge variant="outline" className={statusConfig.color}>
                                     <statusConfig.icon className="w-3 h-3 mr-1" />
                                     {statusConfig.label}
@@ -575,14 +518,14 @@ const Tasks = () => {
                                 </div>
                                 <h3 className="font-semibold text-foreground">{task.asset}</h3>
                                 <p className="text-sm text-muted-foreground">
-                                  {task.assetName} • {task.template}
+                                  {task.assetName} / {task.template}
                                 </p>
                               </div>
                             </div>
                             <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
+                          </button>
 
-                          <div className="mt-4 pt-4 border-t border-border/60 flex flex-wrap items-center justify-between gap-3">
+                          <div className="mt-3 pt-3 border-t border-border/60 flex flex-wrap items-center justify-between gap-3">
                             <div className="flex flex-wrap items-center gap-6">
                               <div className="flex items-center gap-2">
                                 <User className="w-4 h-4 text-muted-foreground" />
@@ -593,12 +536,12 @@ const Tasks = () => {
                                 <span className="text-sm text-muted-foreground">Due: {task.dueDate}</span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3 min-w-48">
-                              <Progress value={task.progress} className="h-2" />
+                            <div className="flex w-full items-center gap-3 sm:w-auto sm:min-w-48">
+                              <Progress value={task.progress} className="h-1.5 w-20 shrink-0" />
                               <span className="text-sm text-muted-foreground whitespace-nowrap">
                                 {task.checklistComplete}/{task.checklistTotal}
                               </span>
-                              {isManager() ? (
+                              {isManager() && !task.assignmentLocked ? (
                                 <Button
                                   type="button"
                                   variant="outline"
@@ -627,12 +570,16 @@ const Tasks = () => {
                               ) : null}
                             </div>
                           </div>
-                        </motion.div>
+                        </motion.article>
                       );
                     })}
                   </div>
                 )}
               </TabsContent>
+              <nav aria-label="Task pagination" className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4 text-sm">
+                <p aria-live="polite" className="text-muted-foreground">{tasksQuery.isError ? "Task totals unavailable" : tasksQuery.isLoading ? "Loading tasks…" : `${total ? (page - 1) * 25 + 1 : 0}-${Math.min(page * 25, total)} of ${total} tasks`}</p>
+                <div className="flex items-center gap-3"><Button variant="outline" size="sm" disabled={page <= 1 || tasksQuery.isFetching} onClick={() => setPage(page - 1)}>Previous</Button><span className="tabular-nums">Page {page} of {pageCount}</span><Button variant="outline" size="sm" disabled={page >= pageCount || tasksQuery.isFetching} onClick={() => setPage(page + 1)}>Next</Button></div>
+              </nav>
             </CardContent>
           </Card>
         </Tabs>
@@ -660,11 +607,12 @@ const Tasks = () => {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Filter Tasks</DialogTitle>
+            <DialogDescription>Filter tasks by assignment, approval, due date and status.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-12 gap-4">
               <div className="col-span-12 md:col-span-6 space-y-2">
-                <Label>Assigned</Label>
+                <Label htmlFor="task-assigned-filter">Assigned</Label>
                 <Select
                   value={assignedFilter}
                   onValueChange={(value) => {
@@ -673,7 +621,7 @@ const Tasks = () => {
                     }
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="task-assigned-filter">
                     <SelectValue placeholder="Assigned" />
                   </SelectTrigger>
                   <SelectContent>
@@ -694,50 +642,34 @@ const Tasks = () => {
                 </div>
               </div>
               <div className="col-span-12 md:col-span-6 space-y-2">
-                <Label>Due from</Label>
+                <Label htmlFor="task-due-from">Due from</Label>
                 <Input
+                  id="task-due-from"
                   type="date"
                   value={dueFromFilter}
                   onChange={(event) => setDueFromFilter(event.target.value)}
                 />
               </div>
               <div className="col-span-12 md:col-span-6 space-y-2">
-                <Label>Due to</Label>
+                <Label htmlFor="task-due-to">Due to</Label>
                 <Input
+                  id="task-due-to"
                   type="date"
                   value={dueToFilter}
                   onChange={(event) => setDueToFilter(event.target.value)}
                 />
               </div>
 					<div className="col-span-12 md:col-span-6 space-y-2">
-						<Label>Status</Label>
+						<Label htmlFor="task-status-filter">Status</Label>
 						<Select
 							value={statusFilter}
-							onValueChange={(value) => {
-								if (
-									value === "all" ||
-									value === "upcoming" ||
-									value === "in_progress" ||
-									value === "due_today" ||
-									value === "overdue" ||
-									value === "completed" ||
-									value === "cancelled"
-								) {
-									setStatusFilter(value);
-								}
-							}}
+              onValueChange={setStatusFilter}
 						>
-							<SelectTrigger>
+							<SelectTrigger id="task-status-filter">
 								<SelectValue placeholder="Status" />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem value="all">All</SelectItem>
-								<SelectItem value="upcoming">Upcoming</SelectItem>
-								<SelectItem value="in_progress">In Progress</SelectItem>
-								<SelectItem value="due_today">Due Today</SelectItem>
-								<SelectItem value="overdue">Overdue</SelectItem>
-								<SelectItem value="completed">Completed</SelectItem>
-								<SelectItem value="cancelled">Cancelled</SelectItem>
+                {viewOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
 							</SelectContent>
 						</Select>
 					</div>
@@ -747,11 +679,11 @@ const Tasks = () => {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setAssignedFilter("any");
-                  setApprovedOnlyFilter(false);
-                  setDueFromFilter("");
-                  setDueToFilter("");
-							setStatusFilter("all");
+                  setSearchParams(previous => {
+                    const next = new URLSearchParams(previous);
+                    for (const key of ["assigned", "approvedOnly", "dueFrom", "dueTo", "status", "page"]) next.delete(key);
+                    return next;
+                  }, { replace: true });
                   setFiltersOpen(false);
                 }}
               >

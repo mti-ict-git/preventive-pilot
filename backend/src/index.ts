@@ -6555,8 +6555,16 @@ const openApiSpec: OpenApiSchema = {
       get: {
         tags: ["Tasks"],
         summary: "List tasks",
-        description: "Checklist totals/counts prefer the frozen submitted checklist definition when a PM task snapshot exists; otherwise they use the current live template.",
+        description: "Server-side view/uiStatus and search filter before pagination. total is the selected view total; tabCounts covers the complete shared-filter scope independently of view/page. Day boundaries are paired ISO timestamps (23–25 hours), start inclusive/end exclusive; default UTC. Scheduling views exclude submitted/finalized/closed work; pending views use approval stage even for historical completed lifecycle rows. Overdue uses request time and can overlap Due Today; Upcoming begins at todayEnd. Checklist totals/counts prefer the frozen submitted checklist definition when a PM task snapshot exists; otherwise they use the current live template.",
         parameters: [
+          { name: "view", in: "query", schema: { type: "string", enum: ["all", "due_today", "overdue", "in_progress", "upcoming", "paused", "completed", "cancelled", "pending_supervisor", "pending_superadmin"], default: "all" } },
+          { name: "uiStatus", in: "query", schema: { type: "string", enum: ["all", "due_today", "overdue", "in_progress", "upcoming", "paused", "completed", "cancelled", "pending_supervisor", "pending_superadmin"], default: "all" } },
+          { name: "q", in: "query", description: "Literal substring of task number, asset tag/name, facility or site; maximum 200 characters", schema: { type: "string", maxLength: 200 } },
+          { name: "approvedOnly", in: "query", schema: { type: "string", enum: ["true", "false"] } },
+          { name: "todayStart", in: "query", schema: { type: "string", format: "date-time" } },
+          { name: "todayEnd", in: "query", schema: { type: "string", format: "date-time" } },
+          { name: "facilityId", in: "query", schema: { type: "string", format: "uuid" } },
+
           { name: "status", in: "query", required: false, schema: { type: "string" } },
           { name: "assigned", in: "query", required: false, schema: { type: "string", enum: ["me", "unassigned", "any"], default: "any" } },
           { name: "overdue", in: "query", required: false, schema: { type: "string", enum: ["true", "false"] } },
@@ -6583,7 +6591,7 @@ const openApiSpec: OpenApiSchema = {
         responses: {
           "200": {
             description: "OK",
-            content: { "application/json": { schema: { $ref: "#/components/schemas/PaginatedList" } } },
+            content: { "application/json": { schema: { allOf: [{ $ref: "#/components/schemas/PaginatedList" }, { type: "object", required: ["total", "tabCounts"], properties: { total: { type: "integer", minimum: 0 }, tabCounts: { type: "object", required: ["all", "due_today", "overdue", "in_progress", "upcoming", "paused", "completed", "cancelled", "pending_supervisor", "pending_superadmin"], properties: {"all": {"type": "integer", "minimum": 0}, "due_today": {"type": "integer", "minimum": 0}, "overdue": {"type": "integer", "minimum": 0}, "in_progress": {"type": "integer", "minimum": 0}, "upcoming": {"type": "integer", "minimum": 0}, "paused": {"type": "integer", "minimum": 0}, "completed": {"type": "integer", "minimum": 0}, "cancelled": {"type": "integer", "minimum": 0}, "pending_supervisor": {"type": "integer", "minimum": 0}, "pending_superadmin": {"type": "integer", "minimum": 0}} }, items: { type: "array", items: { type: "object", properties: { maintenanceType: { type: "string", enum: ["PM", "CM"] }, displayStatus: { type: "string", enum: ["all", "due_today", "overdue", "in_progress", "upcoming", "paused", "completed", "cancelled", "pending_supervisor", "pending_superadmin"] } } } } } }] } } },
           },
           "400": {
             description: "Invalid request",
