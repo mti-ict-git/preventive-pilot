@@ -134,7 +134,7 @@ Resolve differences between documented desktop/web behavior, supporting API defi
 - [x] Implement and verify the Q-14/Q-15 activation/cancellation policy across individual, bulk, clone, generation and reopen paths; see [evidence](verification-q14-q15.md).
 - [x] Record Q-12 deferral confirmed 2026-09-27: retain current synchronization; no asset-to-facility mapping or new filtering. This is a scope decision, not an implemented mapping feature. See [boundary review](d1-boundary-review.md).
 - [x] Verify and record the current PM submission-versus-completion contract, including repeated submission behavior (Q-02). [Evidence](verification-q02-q03.md).
-- [x] Decide and implement PM own-work/self-approval behavior under Q-03; PM review now blocks the performer from reviewing the same submitted PM task. [Evidence](verification-q02-q03.md).
+- [x] Decide and implement PM own-work/self-approval behavior under Q-03; Updated user direction (2026-10-05): Supervisor own-submission review is allowed at PendingSupervisor only; final-stage and CM restrictions remain. Local regression verification passed (18/18 relevant HTTP/policy tests); production release verification remains pending. [Evidence](verification-q02-q03.md).
 - [x] Validate final approval schedule recalculation parity across asset and facility PM (Q-04). [Evidence](verification-q04.md).
 - [x] Classify all 51 uncovered API operations by desktop callers: 37 have current desktop references. [Boundary review](d1-boundary-review.md). This is static dependency evidence only.
 - [x] Repair and verify PM/CM deletion boundaries and all current task foreign-key dependencies; see [evidence](verification-task-deletion.md).

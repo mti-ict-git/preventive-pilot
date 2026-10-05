@@ -69,7 +69,7 @@ test('Q-02 and current Q-03 PM approval boundaries stay explicit', async t => {
   });
 
   await t.test('supervisor-stage approval blocks same-user own-work approval', async () => {
-    for (const roles of [['Supervisor'], ['Admin'], ['Superadmin'], ['Technician', 'Supervisor']]) {
+    for (const roles of [['Admin'], ['Superadmin']]) {
       h.reset({
         taskStatus: 'in_progress',
         approvalStatus: 'PendingSupervisor',
@@ -111,7 +111,7 @@ test('Q-02 and current Q-03 PM approval boundaries stay explicit', async t => {
     }
   });
 
-  await t.test('review actions block same-user PM performers at both approval stages', async () => {
+  await t.test('review actions block same-user PM performers outside the Supervisor exception', async () => {
     h.reset({
       taskStatus: 'in_progress',
       approvalStatus: 'PendingSupervisor',
@@ -121,7 +121,7 @@ test('Q-02 and current Q-03 PM approval boundaries stay explicit', async t => {
       'POST',
       `/api/tasks/${fixtureTaskId}/revise-approval`,
       { reason: 'Need correction', reopenTask: false },
-      h.token(['Supervisor']),
+      h.token(['Superadmin']),
     );
     assert.equal(reviseSupervisor.status, 403, await reviseSupervisor.text());
 
@@ -134,7 +134,7 @@ test('Q-02 and current Q-03 PM approval boundaries stay explicit', async t => {
       'POST',
       `/api/tasks/${fixtureTaskId}/reject-approval`,
       { reason: 'Need rework' },
-      h.token(['Supervisor']),
+      h.token(['Superadmin']),
     );
     assert.equal(rejectSupervisor.status, 403, await rejectSupervisor.text());
 
@@ -163,6 +163,31 @@ test('Q-02 and current Q-03 PM approval boundaries stay explicit', async t => {
       h.token(['Superadmin']),
     );
     assert.equal(rejectSuperadmin.status, 403, await rejectSuperadmin.text());
+  });
+
+
+  await t.test('Supervisor submitters can approve, revise or reject their own PM at PendingSupervisor', async () => {
+    for (const roles of [['Supervisor'], ['Technician', 'Supervisor']]) {
+      for (const action of ['approve-by-supervisor', 'revise-approval', 'reject-approval']) {
+        h.reset({ taskStatus: 'in_progress', approvalStatus: 'PendingSupervisor', technicianCompletedByUserId: fixtureUserId });
+        const response = await request('POST', `/api/tasks/${fixtureTaskId}/${action}`,
+          action === 'approve-by-supervisor' ? undefined : { reason: 'Supervisor review of own submission' }, h.token(roles));
+        assert.equal(response.status, 200, `${roles.join(',')} ${action}: ${await response.text()}`);
+        assert.equal(h.getState().approvalStatus, action === 'approve-by-supervisor' ? 'PendingSuperadmin' : action === 'revise-approval' ? 'None' : 'Rejected');
+      }
+    }
+  });
+
+  await t.test('own-work exception does not bypass final approval or role authorization', async () => {
+    for (const roles of [['Technician'], ['Supervisor'], ['Superadmin'], ['Supervisor', 'Superadmin']]) {
+      h.reset({ taskStatus: 'in_progress', approvalStatus: 'PendingSuperadmin', technicianCompletedByUserId: fixtureUserId });
+      const final = await request('POST', `/api/tasks/${fixtureTaskId}/approve-by-superadmin`, undefined, h.token(roles));
+      assert.equal(final.status, 403, await final.text());
+      assert.equal(h.getState().approvalStatus, 'PendingSuperadmin');
+    }
+    h.reset({ taskStatus: 'in_progress', approvalStatus: 'PendingSupervisor', technicianCompletedByUserId: fixtureUserId });
+    const technician = await request('POST', `/api/tasks/${fixtureTaskId}/approve-by-supervisor`, undefined, h.token(['Technician']));
+    assert.equal(technician.status, 403, await technician.text());
   });
 
   await t.test('final approval route rejects non-Superadmin reviewers', async () => {

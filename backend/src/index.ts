@@ -7265,7 +7265,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["Tasks"],
         summary: "Approve by supervisor",
         description:
-          "Moves a PM task from `PendingSupervisor` to `PendingSuperadmin`. The reviewer must not be the same user who submitted the PM work for approval.",
+          "Moves a PM task from `PendingSupervisor` to `PendingSuperadmin`. Supervisor, Admin or Superadmin may review; a Supervisor may review their own submission at this stage. Other same-user reviewers remain forbidden; final Superadmin approval still requires a different reviewer.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -7331,7 +7331,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["Tasks"],
         summary: "Revise approval",
         description:
-          "Return the submitted PM task for correction. A nonblank reason is required, and the reviewer must not be the same user who submitted the PM work for approval.",
+          "Return the submitted PM task for correction. A nonblank reason is required. A Supervisor may review their own submission only at PendingSupervisor; same-user review at PendingSuperadmin remains forbidden. Existing route role restrictions apply.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -7380,7 +7380,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["Tasks"],
         summary: "Reject approval",
         description:
-          "Reject the submitted PM task and create or reuse one linked replacement PM task for the repeated work. The original rejected task keeps its history, results, evidence, and work time. The reviewer must not be the same user who submitted the PM work for approval.",
+          "Reject the submitted PM task and create or reuse one linked replacement PM task for the repeated work. The original rejected task keeps its history, results, evidence, and work time. A Supervisor may review their own submission only at PendingSupervisor; same-user review at PendingSuperadmin remains forbidden. Existing route role restrictions apply.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],

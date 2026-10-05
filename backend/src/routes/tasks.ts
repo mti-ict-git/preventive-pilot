@@ -5304,7 +5304,10 @@ tasksRouter.post(
       res.status(400).json({ message: "Invalid state" });
       return;
     }
-    if ((row.TechnicianCompletedByUserId as string | null) === req.user.sub) {
+    if (
+        (row.TechnicianCompletedByUserId as string | null) === req.user.sub &&
+        !(approvalStatus === "PendingSupervisor" && req.user.roles.some((role) => role.trim().toLowerCase() === "supervisor"))
+      ) {
       res.status(403).json({ message: PM_OWN_WORK_REVIEW_FORBIDDEN_MESSAGE });
       return;
     }
@@ -5521,7 +5524,10 @@ tasksRouter.post(
         await rollbackQuietly(tx);
         return;
       }
-      if ((row.TechnicianCompletedByUserId as string | null) === req.user.sub) {
+      if (
+        (row.TechnicianCompletedByUserId as string | null) === req.user.sub &&
+        !(approvalStatus === "PendingSupervisor" && req.user.roles.some((role) => role.trim().toLowerCase() === "supervisor"))
+      ) {
         res.status(403).json({ message: PM_OWN_WORK_REVIEW_FORBIDDEN_MESSAGE });
         await rollbackQuietly(tx);
         return;
@@ -5691,7 +5697,10 @@ tasksRouter.post(
         await rollbackQuietly(tx);
         return;
       }
-      if ((row.TechnicianCompletedByUserId as string | null) === req.user.sub) {
+      if (
+        (row.TechnicianCompletedByUserId as string | null) === req.user.sub &&
+        !(approvalStatus === "PendingSupervisor" && req.user.roles.some((role) => role.trim().toLowerCase() === "supervisor"))
+      ) {
         res.status(403).json({ message: PM_OWN_WORK_REVIEW_FORBIDDEN_MESSAGE });
         await rollbackQuietly(tx);
         return;
