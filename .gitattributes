@@ -1,2 +1,5 @@
 # Keep Linux deployment scripts executable across Windows and Linux checkouts.
 *.sh text eol=lf
+
+# Documentation checks compare generated Markdown literally.
+*.md text eol=lf

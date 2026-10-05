@@ -69,7 +69,7 @@ git diff --check
 - Backend review-route behavior changed in this step, so `backend/src/index.ts` and `docs/openapi.yaml` were updated together.
 
 
-## Supervisor own-submission correction â€” 2026-10-05
+## Supervisor own-submission correction — 2026-10-05
 
 User direction supersedes the earlier blanket PM prohibition: a Supervisor may approve, revise or reject their own PM at PendingSupervisor, including Technician/Supervisor users. Existing route roles remain; same-user PendingSuperadmin review, both final approval paths, and CM self-verification remain forbidden.
 
@@ -78,3 +78,5 @@ Backend guards and embedded/canonical OpenAPI descriptions are synchronized. No 
 Authorized production data correction: task `PM-20260106-12D5A750` had submitter `widji.santoso`; only `TechnicianCompletedByUserId` was changed to the existing active `it.support.assistant` / IT Support Assistant [MTI] account, which was already assigned to the task. Serializable transaction, row lock, exact identity/state guards and comparison of every other task column passed. The same transaction inserted `task_submitter.correct` audit metadata preserving the original actor and reason. Status remains completed / PendingSupervisor; submission time, checklist and evidence were not edited; no approval or notification was performed. Protected before/after evidence: `/var/backups/preventive-pilot/submitter-correction-20261005T025346Z/correction.json`.
 
 Release preparation follow-up, 2026-10-05: the first exact-source Linux check passed 159/160 regressions; Windows Git archive conversion exported the deployment shell script with CRLF and Bash rejected `pipefail`. Added `*.sh text eol=lf` in `.gitattributes` to preserve portable shell input. The policy source was unaffected; final-source verification must pass before release.
+
+The second Linux run passed all 160 regressions, lint, backend/frontend typechecks and builds, and schema-source inventory. Its final documentation check exposed the same archive CRLF conversion in generated Markdown equality. Added explicit Markdown LF export alongside the shell rule, and preserved UTF-8 documentation punctuation. These packaging/documentation fixes do not change application behavior; final archive checks are being repeated.

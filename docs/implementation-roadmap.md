@@ -67,11 +67,11 @@ Product semantics remain in the [functional specification](functional-specificat
 
 ## Active phase
 
-**D0 â€” Documentation baseline (complete, 2026-09-10).** D1 is active for desktop implementation. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. All eight ordered items through CM-01 are implemented with local evidence. Q-02/Q-03/Q-04/Q-09 are locally verified; remaining D1 contract and product boundaries stay open. D2 is in progress with schema/release-tooling evidence; D3 remains proposed.
+**D0 — Documentation baseline (complete, 2026-09-10).** D1 is active for desktop implementation. Asset/facility, template/checklist, scheduling, assignment, and initial execution/return-to-work decisions are recorded below. Reject now requires a linked replacement task. All eight ordered items through CM-01 are implemented with local evidence. Q-02/Q-03/Q-04/Q-09 are locally verified; remaining D1 contract and product boundaries stay open. D2 is in progress with schema/release-tooling evidence; D3 remains proposed.
 
 Historical plans describe earlier intentions; an unchecked historical item is not proof that a feature is missing. Source inspection establishes implementation presence, not runtime correctness.
 
-## D0 â€” Documentation baseline
+## D0 — Documentation baseline
 
 ### Objective
 
@@ -101,11 +101,11 @@ An indexed documentation baseline, supporting operational guidance, a documented
 
 Record results in [documentation verification](documentation-verification.md). Check for misleading claims of completed runtime verification, missing setup prerequisites, obsolete mobile paths, stale contract exports, and incomplete roadmap phases. Completion requires all D0 checks to pass; application acceptance remains a separate phase.
 
-## Current priority â€” Desktop/web first
+## Current priority — Desktop/web first
 
-User direction, 2026-09-10: prioritize the browser-based desktop application and its supporting backend/database. Mobile questions Q-06, Q-07, and Q-11 are deferred, not resolved, and do not block desktop acceptance. Mobile-only API operations, APK delivery, native integrations, and mobile verification are excluded from D1â€“D3 for now. Preserve shared API compatibility when making desktop-related backend changes. Resume mobile work only when explicitly brought back into scope.
+User direction, 2026-09-10: prioritize the browser-based desktop application and its supporting backend/database. Mobile questions Q-06, Q-07, and Q-11 are deferred, not resolved, and do not block desktop acceptance. Mobile-only API operations, APK delivery, native integrations, and mobile verification are excluded from D1–D3 for now. Preserve shared API compatibility when making desktop-related backend changes. Resume mobile work only when explicitly brought back into scope.
 
-## D1 â€” Contract and workflow reconciliation
+## D1 — Contract and workflow reconciliation
 
 Status: active implementation since 2026-09-11. AF-02, TC-01, TC-02, AF-01, SC-01, AS-01, EX-01, and CM-01 are implemented and verified locally; later phases and deployment acceptance remain pending.
 
@@ -156,7 +156,7 @@ The order below is the default execution order after implementation is requested
 
 <a id="af-02"></a>
 
-#### AF-02 â€” Restrict facility master-data changes
+#### AF-02 — Restrict facility master-data changes
 
 **Status:** implemented and locally verified, 2026-09-11. **Sources:** [F-01](functional-specification.md), [access model](security-and-access-model.md), Q-14; inspect facility routes, shared middleware and desktop facility controls.
 
@@ -179,7 +179,7 @@ Evidence: [AF-02 verification](verification-af02.md), 37 passing HTTP tests with
 
 <a id="tc-01"></a>
 
-#### TC-01 â€” Outcome-based notes validation
+#### TC-01 — Outcome-based notes validation
 
 **Status:** implemented and locally verified, 2026-09-15. **Sources:** [F-02/F-05](functional-specification.md), [OpenAPI](openapi.yaml), Q-02/Q-17; inspect template flags, complete/submit validation and desktop task controls.
 
@@ -192,7 +192,7 @@ Evidence: [TC-01 verification](verification-tc01.md). Submit and complete now sh
 
 <a id="tc-02"></a>
 
-#### TC-02 â€” Preserve final-submitted/historical checklist definitions
+#### TC-02 — Preserve final-submitted/historical checklist definitions
 
 **Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-02/F-05](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-16; inspect template updates, submission, review, detail and exports.
 
@@ -208,7 +208,7 @@ Evidence: [TC-02 verification](verification-tc02.md). Successful technician subm
 
 <a id="af-01"></a>
 
-#### AF-01 â€” Cancel PM work when an asset becomes broken
+#### AF-01 — Cancel PM work when an asset becomes broken
 
 **Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-01/F-03](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-13; inspect `snipeSync.ts`, `scheduleCalc.ts`, task lifecycle and reports.
 
@@ -229,7 +229,7 @@ Evidence: [AF-01 verification](verification-af01.md). Broken-asset cancellation 
 
 <a id="sc-01"></a>
 
-#### SC-01 â€” Anchor recurring PM to the planned schedule
+#### SC-01 — Anchor recurring PM to the planned schedule
 
 **Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-03](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-04/Q-18; inspect SQL calculation, scheduling jobs/routes, completion/approval and PM settings.
 
@@ -252,7 +252,7 @@ Resolved implementation: SC-01 now persists `NextPlannedPMDueAt` separately from
 
 Evidence: [SC-01 verification](verification-sc01.md). Reporting now explicitly uses the effective due window (`ScheduledDueAt`) and keeps skipped-versus-missed history distinguishable without reopening the fixed-cadence implementation.
 
-### Current scheduling discussion â€” Q-18
+### Current scheduling discussion — Q-18
 
 Inspection, 2026-09-11: `scheduleCalc.ts` processes one next-due candidate per context and avoids reinserting the same context/template/due date. It does not enumerate every missed period. Asset and facility PM Now routes create work due now, using the default template. Duplicate checks consider unfinished, uncancelled tasks whose due time falls in the recent idempotency window (default 15 minutes), rather than all open/overdue regular tasks. Thus an older overdue task or a future regular task does not inherently prevent a new PM Now task. This is static source evidence, not a live test.
 
@@ -301,7 +301,7 @@ These are the confirmed assignment requirements and their local implementation r
 
 <a id="as-01"></a>
 
-#### AS-01 â€” Role queue, exclusive claim, and reassignment boundaries
+#### AS-01 — Role queue, exclusive claim, and reassignment boundaries
 
 **Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-03/F-04](functional-specification.md), [access model](security-and-access-model.md), [OpenAPI](openapi.yaml), [data model](database-schema-specification.md); inspect `scheduleCalc.ts`, assignment-rule and task routes, task access helper, and desktop task/approval controls.
 
@@ -340,7 +340,7 @@ Additional source inspection: current DDL has StartedAt/CompletedAt and approval
 
 <a id="ex-01"></a>
 
-#### EX-01 â€” Timed PM execution, findings, and return-to-work semantics
+#### EX-01 — Timed PM execution, findings, and return-to-work semantics
 
 **Status:** implemented and locally verified, 2026-09-16. **Sources:** [F-04/F-05/F-06](functional-specification.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-02/Q-20; inspect task lifecycle/submission/revision routes, CM creation, existing desktop task/WO entry points, and TC-01/TC-02/AS-01 boundaries.
 
@@ -355,7 +355,7 @@ Additional source inspection: current DDL has StartedAt/CompletedAt and approval
 
 EX-01 builds on the earlier TC-01, TC-02, AF-01, SC-01, and AS-01 behaviors. Current reporting semantics now document how these timing and replacement records are interpreted without reopening the implemented workflow.
 
-### CM work-order inspection â€” 2026-09-11
+### CM work-order inspection — 2026-09-11
 
 D1 requirements discussion only; no application change. Inspected `backend/src/routes/workOrders.ts`, `src/components/workorders/ReportBreakdownDialog.tsx`, `src/pages/WorkOrderDetail.tsx`, and report-dialog call sites in Tasks/AssetDetail/FacilityDetail.
 
@@ -366,7 +366,7 @@ D1 requirements discussion only; no application change. Inspected `backend/src/r
 
 <a id="cm-01"></a>
 
-#### CM-01 â€” Supervisor verification and restoration timing
+#### CM-01 — Supervisor verification and restoration timing
 
 **Status:** implemented and locally verified, 2026-09-17. **Sources:** [F-06](functional-specification.md), [access model](security-and-access-model.md), [data model](database-schema-specification.md), [OpenAPI](openapi.yaml), Q-21/Q-09, `backend/src/routes/workOrders.ts`, desktop `WorkOrderDetail`, shared task paths, and `db/schema.sql`.
 
@@ -383,13 +383,13 @@ User confirmed on 2026-09-11: technician reports repair completion; Supervisor v
 
 Evidence: [CM-01 verification](verification-cm01.md). CM-01 now uses `pending_review` for technician repair submission, `verify-close` for manager closure, `return-for-correction` for same-WO correction, `CMDowntimeIntervals` plus `CMTaskEvents` for additive downtime/history, `RecurringFromTaskId` for post-closure recurrence linkage, updated desktop work-order detail actions, synchronized OpenAPI, and isolated CM route tests plus AS-01/EX-01 regressions.
 
-### CM correction and reviewer inspection â€” 2026-09-11
+### CM correction and reviewer inspection — 2026-09-11
 
 Inspected CM lifecycle/resolution routes, shared task reopen/approval routes and role middleware. No dedicated CM return-for-correction route was found in workOrders.ts. Shared reopen accepts only cancelled tasks; shared Supervisor approval advances to PendingSuperadmin and is not the agreed CM closure flow. Existing shared approval/revision role guards differ (approval includes Admin; revision excludes Admin), so reviewer substitution must be specified explicitly. The inspected CM resolution route checks ownership/manager access but does not gate edits on review/closure state.
 
 Resolved by CM-01 on 2026-09-17: the same WO can be returned for correction with a mandatory reason, one manager review stage verifies/closes it, and repair performers cannot verify-close their own work. Work/evidence history is preserved through correction.
 
-### CM restoration and repeat-outage inspection â€” 2026-09-11
+### CM restoration and repeat-outage inspection — 2026-09-11
 
 Inspected work-order creation/close-downtime handlers, desktop close-downtime mutation and schema downtime columns. Creation accepts an optional downtime start; close-downtime uses the first server timestamp through COALESCE and accepts no restoration-time input. It uses the broad task modification helper. The inspected schema stores one start/end pair per WO; this does not represent multiple distinct outage intervals on the same WO. No application behavior was changed.
 
@@ -399,7 +399,7 @@ Resolved by CM-01 on 2026-09-17: restoration can be recorded independently with 
 
 For the next feature, inspect implementation briefly, discuss only remaining product decisions, update its functional-specification section and question IDs, and add any agreed implementation item to this backlog with sources, boundaries, verification, and status. Do not create another active feature-plan file.
 
-## D2 â€” Reproducible environment and delivery
+## D2 — Reproducible environment and delivery
 
 Status: in progress since 2026-09-27. Schema source/live inventory and disposable clean/repeat/upgrade checks pass; fresh-checkout delivery and recovery gates remain open. See [evidence](verification-d2-environment.md).
 
@@ -429,7 +429,7 @@ A verified installation and release runbook with reproducible inputs.
 
 Use a fresh checkout and disposable database, apply schema twice, restart services, verify same-origin API routing, and verify the desktop browser application. Verify backup restoration before making recovery claims. Capture actual versions and command results.
 
-## D3 â€” End-to-end operational acceptance
+## D3 — End-to-end operational acceptance
 
 Status: proposed; not started; depends on D1 and D2.
 
@@ -455,26 +455,26 @@ A dated acceptance report tied to a commit, environment, and test evidence.
 
 Test loss of connectivity, expired credentials, duplicate actions, absent storage, failed external services, rejected approval, and timezone boundaries. External messages must use explicitly authorized test recipients. Close only after evidence is attached and unresolved release blockers are addressed.
 
-## Repository synchronization â€” 2026-09-11
+## Repository synchronization — 2026-09-11
 
 - [x] Resolve the local documentation-baseline merge with remote checkpoint `6bb0c27`, preserving the current D1 decisions and the local mandatory OpenAPI change-control rules.
   - Evidence: documentation checker passed; merge markers and whitespace checked; no application, backend, or database source changes. See [verification record](documentation-verification.md#repository-merge-reconciliation--2026-09-11). D1 implementation items remain pending.
 
-## Runtime correction â€” 2026-10-02
+## Runtime correction — 2026-10-02
 
 Repaired missing ownership-filter SQL conjunctions in PM task list/status/outstanding queries and the CM work-order list. See [contract verification](verification-q01-desktop.md). Prior fixture-based test success did not establish live SQL syntax validity. Deployment remains on hold by user instruction.
 
-## Operator utility â€” 2026-10-02
+## Operator utility — 2026-10-02
 
 Added an existing-local-account password reset CLI at user request. [Usage and isolated verification](deployment-and-environment.md#reset-one-local-account-password). No live account was reset; deployment remains on hold.
 
-## Production deployment utility â€” 2026-10-02
+## Production deployment utility — 2026-10-02
 
 Added the production Compose overlay and check/deploy script with isolated orchestration verification. See [deployment usage](deployment-and-environment.md#production-docker-deployment-script). Actual Docker build/runtime, database readiness, backup/restore and rollback acceptance remain open in D2. No deployment executed.
 
 Production script follow-up: CIFS source/type/mount validation, optional fstab mount in deploy mode and temporary read/write/delete probes now gate build and container replacement. Isolated tests pass; actual Linux host/share acceptance remains pending.
 
-## Production application release â€” 2026-10-03
+## Production application release — 2026-10-03
 
 User approval superseded the earlier deployment hold. Exact commit `7a68e7a` is running in both production services. Fresh Linux validation passed 153/153 regressions, lint, typechecks, builds, schema-source and documentation checks. No SQL migration or business-data test mutation was performed. Runtime gates and protected backup/image rollback references are recorded in the existing [D2 evidence](verification-d2-environment.md); D2 and D3 remain open for the outstanding acceptance/recovery work. No new parallel backlog was created.
 
