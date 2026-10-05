@@ -203,3 +203,7 @@ Advanced filters intersect the chosen tab and affect all badges. Search matches 
 ### Task approval return context — 2026-10-05
 
 After supervisor or final approval from a task detail modal, closing the modal returns to the same Tasks tab and retains search, shared filters and page. Successful approval refreshes rows/counts so the approved record moves out of its former pending queue. If that removes the final page, clamp to the nearest valid page within the same filtered view. Deep-link cleanup removes only the task identifier. Cancelling/closing without approval also retains context; an approval error leaves the modal available for retry.
+
+### Approvals list completeness — 2026-10-05
+
+The desktop Approvals inbox must use the same pending-stage predicates and totals as PM Tasks, within the same PM/search scope. Filtering precedes pagination; all matching tasks remain reachable beyond the first 100 general tasks. Queue badges count matching records, not unread notifications. Search applies to the entire queue and preserves route state. Review actions refresh queue and task totals without resetting the selected tab. Unsupported location/category placeholder filters are not presented as functional filters. This correction does not alter approval permissions or transitions.

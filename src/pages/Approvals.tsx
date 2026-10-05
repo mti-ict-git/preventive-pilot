@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -20,28 +19,43 @@ import {
   apiApproveTaskBySuperadmin,
   apiRejectTaskApproval,
   apiReviseTaskApproval,
-  type ListTasksResponse,
 } from "@/lib/api";
 
-const stageLabel = (status: string): "supervisor" | "superadmin" | null => {
-  if (status === "PendingSupervisor") return "supervisor";
-  if (status === "PendingSuperadmin") return "superadmin";
-  return null;
-};
+import { loadWaitingSubmissions } from "@/lib/approvalQueue";
 
 const Approvals = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"supervisor" | "superadmin" | "waiting">("supervisor");
-  const [search, setSearch] = useState("");
-  const [locationId, setLocationId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabValue = searchParams.get("tab");
+  const tab = tabValue === "superadmin" || tabValue === "waiting" ? tabValue : "supervisor";
+  const page = Math.max(1, Math.floor(Number(searchParams.get("page")) || 1));
+  const committedSearch = searchParams.get("q") ?? "";
+  const [search, setSearch] = useState(committedSearch);
+  const [composing, setComposing] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const updateFilter = (key: string, value: string) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    if (value) next.set(key, value); else next.delete(key);
+    next.delete("page");
+    return next;
+  }, { replace: true });
+  const setPage = (value: number) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous); next.set("page", String(value)); return next;
+  });
+  useEffect(() => { setSearch(committedSearch); }, [committedSearch]);
+  useEffect(() => {
+    if (composing || search === committedSearch) return;
+    const timeout = window.setTimeout(() => updateFilter("q", search.trim()), search.trim() ? 300 : 0);
+    return () => window.clearTimeout(timeout);
+  }, [search, composing, committedSearch]);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectTaskId, setRejectTaskId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [reviseDialogOpen, setReviseDialogOpen] = useState(false);
   const [reviseTaskId, setReviseTaskId] = useState<string | null>(null);
   const [reviseReason, setReviseReason] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Record<string, boolean>>({});
 
   const canSupervisor = hasRole("Supervisor") || hasRole("Admin") || isSuperadmin();
@@ -49,76 +63,39 @@ const Approvals = () => {
   const claims = getJwtClaims();
   const currentUserId = claims?.sub ?? null;
 
+  const view: "pending_superadmin" | "pending_supervisor" = tab === "superadmin" ? "pending_superadmin" : "pending_supervisor";
+  const listInput = { maintenanceType: "PM" as const, view, q: committedSearch || undefined, page: tab === "waiting" ? 1 : page, pageSize: 25 };
   const tasksQuery = useQuery({
-    queryKey: ["approvals", { tab, locationId, categoryId }],
-    queryFn: async () => {
-      const res = await apiListTasks({ maintenanceType: "PM", page: 1, pageSize: 100 });
-      return res;
-    },
-    staleTime: 15_000,
+    queryKey: ["approvals", "queue", listInput],
+    queryFn: () => apiListTasks(listInput),
+    refetchInterval: 30_000,
   });
-
-  const items = useMemo(() => {
-    const all = (tasksQuery.data?.items ?? []) as ListTasksResponse["items"];
-    let filtered: ListTasksResponse["items"] = [];
-
-    if (tab === "supervisor" || tab === "superadmin") {
-      filtered = all.filter((t) => {
-        const stage = stageLabel(t.approvalStatus ?? "None");
-        if (tab === "supervisor") return stage === "supervisor";
-        return stage === "superadmin";
-      });
-    } else if (tab === "waiting") {
-      filtered = all.filter((t) => {
-        const stage = stageLabel(t.approvalStatus ?? "None");
-        const assignedUserId = t.assignedTo.userId;
-        const isAssignedToCurrentUser = currentUserId !== null && assignedUserId === currentUserId;
-        const hasNoApprovalStage = stage === null;
-        const isTechnicianCompleted = t.technicianCompletedAt !== null;
-        return isAssignedToCurrentUser && hasNoApprovalStage && isTechnicianCompleted;
-      });
-    }
-
-    const q = search.trim().toLowerCase();
-    if (!q) {
-      return filtered;
-    }
-
-    return filtered.filter((t) => {
-      const s = `${t.taskNumber} ${t.asset?.assetTag ?? ""} ${t.asset?.name ?? ""} ${t.template?.name ?? ""}`.toLowerCase();
-      return s.includes(q);
-    });
-  }, [tasksQuery.data?.items, tab, search, currentUserId]);
-
-  const summary = useMemo(() => {
-    const all = (tasksQuery.data?.items ?? []) as ListTasksResponse["items"];
-    let pendingSupervisor = 0;
-    let pendingSuperadmin = 0;
-    let waitingSubmit = 0;
-
-    for (const t of all) {
-      const stage = stageLabel(t.approvalStatus ?? "None");
-      if (stage === "supervisor") pendingSupervisor += 1;
-      if (stage === "superadmin") pendingSuperadmin += 1;
-
-      const assignedUserId = t.assignedTo.userId;
-      const isAssignedToCurrentUser = currentUserId !== null && assignedUserId === currentUserId;
-      const hasNoApprovalStage = stage === null;
-      const isTechnicianCompleted = t.technicianCompletedAt !== null;
-      if (isAssignedToCurrentUser && hasNoApprovalStage && isTechnicianCompleted) waitingSubmit += 1;
-    }
-
-    return { pendingSupervisor, pendingSuperadmin, waitingSubmit };
-  }, [tasksQuery.data?.items, currentUserId]);
-
+  const waitingQuery = useQuery({
+    queryKey: ["approvals", "waiting", currentUserId, committedSearch],
+    queryFn: () => loadWaitingSubmissions(apiListTasks, currentUserId, committedSearch),
+    refetchInterval: 30_000,
+  });
+  const queueQuery = tab === "waiting" ? waitingQuery : tasksQuery;
+  const total = tab === "waiting" ? waitingQuery.data?.length ?? 0 : tasksQuery.data?.total ?? 0;
+  const items = tab === "waiting" ? (waitingQuery.data ?? []).slice((page - 1) * 25, page * 25) : tasksQuery.data?.items ?? [];
+  const pageCount = Math.max(1, Math.ceil(total / 25));
+  const summary = {
+    pendingSupervisor: tasksQuery.isError ? "Unavailable" : tasksQuery.data?.tabCounts.pending_supervisor ?? "…",
+    pendingSuperadmin: tasksQuery.isError ? "Unavailable" : tasksQuery.data?.tabCounts.pending_superadmin ?? "…",
+    waitingSubmit: waitingQuery.isError ? "Unavailable" : waitingQuery.data?.length ?? "…",
+  };
   useEffect(() => {
-    setBulkSelected({});
-  }, [tab]);
+    if (queueQuery.isSuccess && page > pageCount) setPage(pageCount);
+  }, [queueQuery.isSuccess, page, pageCount]);
+  useEffect(() => { setBulkSelected({}); }, [tab, page, committedSearch]);
+  const refreshQueues = async () => {
+    await Promise.all(["approvals", "tasks", "task-stats"].map(key => queryClient.invalidateQueries({ queryKey: [key] })));
+  };
 
   const approveSupervisorMutation = useMutation({
     mutationFn: async (taskId: string) => apiApproveTaskBySupervisor(taskId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      await refreshQueues();
       toast({ title: "Supervisor approved" });
     },
     onError: (err: unknown) => {
@@ -129,7 +106,7 @@ const Approvals = () => {
   const approveSuperadminMutation = useMutation({
     mutationFn: async (taskId: string) => apiApproveTaskBySuperadmin(taskId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      await refreshQueues();
       toast({ title: "Superadmin approved" });
     },
     onError: (err: unknown) => {
@@ -146,7 +123,7 @@ const Approvals = () => {
       setRejectDialogOpen(false);
       setRejectTaskId(null);
       setRejectReason("");
-      await queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      await refreshQueues();
       toast({ title: "Approval rejected" });
     },
     onError: (err: unknown) => {
@@ -169,7 +146,7 @@ const Approvals = () => {
       setReviseDialogOpen(false);
       setReviseTaskId(null);
       setReviseReason("");
-      await queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      await refreshQueues();
       toast({ title: "Sent for revision" });
     },
     onError: (err: unknown) => {
@@ -182,9 +159,9 @@ const Approvals = () => {
   });
 
   const allVisibleIds = useMemo(() => items.map((x) => x.id), [items]);
-  const selectedCount = Object.keys(bulkSelected).filter((id) => bulkSelected[id]).length;
-  const allSelectedOnPage = selectedCount > 0 && allVisibleIds.every((id) => bulkSelected[id]);
+  const selectedCount = allVisibleIds.filter(id => bulkSelected[id]).length;
 
+  const mutationPending = bulkBusy || approveSupervisorMutation.isPending || approveSuperadminMutation.isPending || rejectMutation.isPending || reviseMutation.isPending;
   const canBulkApproveSupervisor = tab === "supervisor" && canSupervisor;
 
   return (
@@ -197,13 +174,13 @@ const Approvals = () => {
             <p className="text-sm text-muted-foreground">Review and sign-off pending PM approvals</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => tasksQuery.refetch()} disabled={tasksQuery.isFetching}>Refresh</Button>
+            <Button variant="outline" onClick={() => { void tasksQuery.refetch(); void waitingQuery.refetch(); }} disabled={tasksQuery.isFetching || waitingQuery.isFetching}>Refresh</Button>
           </div>
         </div>
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card className="border-border/60 bg-background/70 shadow-sm">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-xs text-muted-foreground">Pending Supervisor</p>
                   <p className="text-2xl font-semibold text-foreground">{summary.pendingSupervisor}</p>
@@ -214,7 +191,7 @@ const Approvals = () => {
           </Card>
           <Card className="border-border/60 bg-background/70 shadow-sm">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-xs text-muted-foreground">Pending Superadmin</p>
                   <p className="text-2xl font-semibold text-foreground">{summary.pendingSuperadmin}</p>
@@ -225,7 +202,7 @@ const Approvals = () => {
           </Card>
           <Card className="border-border/60 bg-background/70 shadow-sm">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-xs text-muted-foreground">Waiting Submit</p>
                   <p className="text-2xl font-semibold text-foreground">{summary.waitingSubmit}</p>
@@ -238,7 +215,7 @@ const Approvals = () => {
       </div>
 
       <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 lg:col-span-8 space-y-6">
+        <div className="col-span-12 lg:col-span-8 space-y-6 order-last lg:order-first">
           <Card className="border-border/60 bg-card/70 shadow-sm">
             <CardHeader className="border-b border-border/60 pb-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -247,7 +224,7 @@ const Approvals = () => {
                   <CardDescription>Focus on what needs your attention right now.</CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">{items.length} items</Badge>
+                  <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">{queueQuery.isSuccess ? `${total} items` : queueQuery.isError ? "Unavailable" : "Loading…"}</Badge>
                   {tab === "supervisor" ? (
                     <>
                       <Badge
@@ -258,12 +235,15 @@ const Approvals = () => {
                       </Badge>
                       <Button
                         variant="outline"
-                        disabled={!canBulkApproveSupervisor || selectedCount === 0 || approveSupervisorMutation.isPending}
+                        disabled={!canBulkApproveSupervisor || selectedCount === 0 || mutationPending || queueQuery.isFetching}
                         onClick={async () => {
-                          const ids = Object.keys(bulkSelected).filter((id) => bulkSelected[id]);
-                          for (const id of ids) {
-                            await approveSupervisorMutation.mutateAsync(id);
-                          }
+                          const ids = allVisibleIds.filter((id) => bulkSelected[id]);
+                          setBulkBusy(true);
+                          try {
+                            for (const id of ids) {
+                              try { await approveSupervisorMutation.mutateAsync(id); } catch { break; }
+                            }
+                          } finally { setBulkBusy(false); setBulkSelected({}); }
                         }}
                       >
                         Bulk Approve
@@ -273,32 +253,35 @@ const Approvals = () => {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-4">
-              <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="w-full">
-                <TabsList className="bg-muted/40 p-1 rounded-lg">
+            <CardContent className="pt-4" aria-busy={queueQuery.isFetching}>
+              {queueQuery.isPending ? <div role="status" className="min-h-32 p-8 text-center text-muted-foreground">Loading approval queue…</div> : null}
+              {queueQuery.isError ? <div role="alert" className="min-h-32 p-4 space-y-3"><p>Could not load the approval queue. Please retry.</p><Button variant="outline" onClick={() => { void queueQuery.refetch(); }}>Retry</Button></div> : null}
+              {queueQuery.isFetching && !queueQuery.isPending ? <p role="status" className="text-sm text-muted-foreground">Refreshing queue…</p> : null}
+              <Tabs activationMode="manual" value={tab} onValueChange={(v) => updateFilter("tab", v)} className="w-full">
+                <TabsList className="bg-muted/40 p-1 rounded-lg flex h-auto flex-wrap justify-start gap-1">
                   <TabsTrigger
                     value="supervisor"
                     className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
                   >
-                    Pending Supervisor
+                    Pending Supervisor <Badge variant="secondary" className="ml-2 tabular-nums">{summary.pendingSupervisor}</Badge>
                   </TabsTrigger>
                   <TabsTrigger
                     value="superadmin"
                     className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
                   >
-                    Pending Superadmin
+                    Pending Superadmin <Badge variant="secondary" className="ml-2 tabular-nums">{summary.pendingSuperadmin}</Badge>
                   </TabsTrigger>
                   <TabsTrigger
                     value="waiting"
                     className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
                   >
-                    Waiting Submit
+                    Waiting Submit <Badge variant="secondary" className="ml-2 tabular-nums">{summary.waitingSubmit}</Badge>
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="supervisor" className="mt-4">
-                  {items.length === 0 ? (
+                  {queueQuery.isPending || queueQuery.isError ? null : items.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border/60 bg-background/40 p-8 text-center text-sm text-muted-foreground">
-                      No pending supervisor approvals
+                      {committedSearch ? "No supervisor approvals match your search" : "No pending supervisor approvals"}
                     </div>
                   ) : (
                     <div className="grid grid-cols-12 gap-3">
@@ -315,7 +298,7 @@ const Approvals = () => {
                                 <Checkbox
                                   checked={bulkSelected[t.id] || false}
                                   onCheckedChange={(checked) => setBulkSelected((prev) => ({ ...prev, [t.id]: !!checked }))}
-                                  disabled={!canBulkApproveSupervisor}
+                                  aria-label={`Select ${t.taskNumber}`} disabled={!canBulkApproveSupervisor || mutationPending || queueQuery.isFetching}
                                 />
                                 <div className="space-y-1">
                                   <div className="flex flex-wrap items-center gap-2">
@@ -332,10 +315,10 @@ const Approvals = () => {
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <Button variant="outline" onClick={() => navigate(`/tasks?taskId=${t.id}`)}>View Task</Button>
+                                <Button variant="outline" onClick={() => navigate(`/tasks?view=${view}&taskId=${t.id}`)}>View Task</Button>
                                 <Button
                                   onClick={() => approveSupervisorMutation.mutate(t.id)}
-                                  disabled={!canApprove || approveSupervisorMutation.isPending}
+                                  disabled={!canApprove || mutationPending || queueQuery.isFetching}
                                 >
                                   Approve
                                 </Button>
@@ -345,7 +328,7 @@ const Approvals = () => {
                                     setReviseTaskId(t.id);
                                     setReviseDialogOpen(true);
                                   }}
-                                  disabled={!canRevise || reviseMutation.isPending}
+                                  disabled={!canRevise || mutationPending || queueQuery.isFetching}
                                 >
                                   Revise
                                 </Button>
@@ -355,7 +338,7 @@ const Approvals = () => {
                                     setRejectTaskId(t.id);
                                     setRejectDialogOpen(true);
                                   }}
-                                  disabled={!canApprove || rejectMutation.isPending}
+                                  disabled={!canApprove || mutationPending || queueQuery.isFetching}
                                 >
                                   Reject
                                 </Button>
@@ -368,9 +351,9 @@ const Approvals = () => {
                   )}
                 </TabsContent>
                 <TabsContent value="superadmin" className="mt-4">
-                  {items.length === 0 ? (
+                  {queueQuery.isPending || queueQuery.isError ? null : items.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border/60 bg-background/40 p-8 text-center text-sm text-muted-foreground">
-                      No pending superadmin approvals
+                      {committedSearch ? "No superadmin approvals match your search" : "No pending superadmin approvals"}
                     </div>
                   ) : (
                     <div className="grid grid-cols-12 gap-3">
@@ -397,10 +380,10 @@ const Approvals = () => {
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <Button variant="outline" onClick={() => navigate(`/tasks?taskId=${t.id}`)}>View Task</Button>
+                                <Button variant="outline" onClick={() => navigate(`/tasks?view=${view}&taskId=${t.id}`)}>View Task</Button>
                                 <Button
                                   onClick={() => approveSuperadminMutation.mutate(t.id)}
-                                  disabled={!canApprove || approveSuperadminMutation.isPending}
+                                  disabled={!canApprove || mutationPending || queueQuery.isFetching}
                                 >
                                   Approve
                                 </Button>
@@ -410,7 +393,7 @@ const Approvals = () => {
                                     setReviseTaskId(t.id);
                                     setReviseDialogOpen(true);
                                   }}
-                                  disabled={!canRevise || reviseMutation.isPending}
+                                  disabled={!canRevise || mutationPending || queueQuery.isFetching}
                                 >
                                   Revise
                                 </Button>
@@ -420,7 +403,7 @@ const Approvals = () => {
                                     setRejectTaskId(t.id);
                                     setRejectDialogOpen(true);
                                   }}
-                                  disabled={!canApprove || rejectMutation.isPending}
+                                  disabled={!canApprove || mutationPending || queueQuery.isFetching}
                                 >
                                   Reject
                                 </Button>
@@ -433,7 +416,7 @@ const Approvals = () => {
                   )}
                 </TabsContent>
                 <TabsContent value="waiting" className="mt-4">
-                  {items.length === 0 ? (
+                  {queueQuery.isPending || queueQuery.isError ? null : items.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border/60 bg-background/40 p-8 text-center text-sm text-muted-foreground">
                       No tasks waiting to submit for approval
                     </div>
@@ -460,7 +443,7 @@ const Approvals = () => {
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <Button variant="outline" onClick={() => navigate(`/tasks?taskId=${t.id}`)}>
+                                <Button variant="outline" onClick={() => navigate(`/tasks?view=${view}&taskId=${t.id}`)}>
                                   View Task
                                 </Button>
                               </div>
@@ -472,10 +455,14 @@ const Approvals = () => {
                   )}
                 </TabsContent>
               </Tabs>
+              {queueQuery.isSuccess ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+                <span role="status">{total ? `${(page - 1) * 25 + 1}–${Math.min(page * 25, total)} of ${total}` : "0 results"}</span>
+                <div className="flex items-center gap-3"><Button variant="outline" size="sm" disabled={page <= 1 || queueQuery.isFetching} onClick={() => setPage(page - 1)}>Previous</Button><span className="tabular-nums">Page {page} of {pageCount}</span><Button variant="outline" size="sm" disabled={page >= pageCount || queueQuery.isFetching} onClick={() => setPage(page + 1)}>Next</Button></div>
+              </div> : null}
             </CardContent>
           </Card>
         </div>
-        <div className="col-span-12 lg:col-span-4">
+        <div className="col-span-12 lg:col-span-4 order-first lg:order-last">
           <Card className="border-border/60 bg-card/70 shadow-sm">
             <CardHeader className="border-b border-border/60 pb-3">
               <CardTitle className="text-base text-foreground">Filters</CardTitle>
@@ -483,31 +470,12 @@ const Approvals = () => {
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Search</Label>
-                <Input
-                  placeholder="Search approvals…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-9 bg-background/80"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Location</Label>
-                <Select value={locationId} onValueChange={setLocationId}>
-                  <SelectTrigger className="h-9 bg-background/80"><SelectValue placeholder="Location" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Category</Label>
-                <Select value={categoryId} onValueChange={setCategoryId}>
-                  <SelectTrigger className="h-9 bg-background/80"><SelectValue placeholder="Category" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="approval-search" className="text-xs text-muted-foreground">Search</Label>
+                <Input id="approval-search" ref={searchInput} placeholder="Search task, asset or facility…" value={search}
+                  onChange={(e) => setSearch(e.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) updateFilter("q", search.trim()); }} className="h-9 bg-background/80" />
+                {search ? <Button variant="outline" size="sm" onClick={() => { setSearch(""); updateFilter("q", ""); searchInput.current?.focus(); }}>Clear search</Button> : null}
+                <p className="text-xs text-muted-foreground">Search and counts cover the full queue, across all pages.</p>
               </div>
             </CardContent>
           </Card>
@@ -521,7 +489,7 @@ const Approvals = () => {
           </DialogHeader>
           <div className="space-y-3">
             <Label>Reason</Label>
-            <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} className="bg-muted/50" />
+            <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} className="bg-muted/50 resize-none" />
             <p className="text-xs text-muted-foreground">
               Reject creates a new linked replacement PM task and preserves the rejected submission history.
             </p>
@@ -544,7 +512,7 @@ const Approvals = () => {
               value={reviseReason}
               onChange={(e) => setReviseReason(e.target.value)}
               rows={3}
-              className="bg-muted/50"
+              className="bg-muted/50 resize-none"
             />
             <div className="flex items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setReviseDialogOpen(false)}>
