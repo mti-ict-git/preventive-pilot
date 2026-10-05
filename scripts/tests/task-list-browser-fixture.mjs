@@ -1,7 +1,16 @@
 // Isolated browser verification: synthetic data and token; no production credentials or DB.
-import os from 'node:os';import fs from 'node:fs/promises';import path from 'node:path';import {createServer} from 'vite';import {createRequire} from 'node:module';import {root} from './task-checklist-harness.mjs';import {createListHarness} from './task-view-fixtures.mjs';
-const require=createRequire(path.join(root,'backend/package.json'));const express=require('express');const app=express();const h=createListHarness();
+import os from 'node:os';import fs from 'node:fs/promises';import path from 'node:path';import {createServer} from 'vite';import {createRequire} from 'node:module';import {root} from './task-checklist-harness.mjs';import {createListHarness,dataset} from './task-view-fixtures.mjs';
+const require=createRequire(path.join(root,'backend/package.json'));const express=require('express');const app=express();const rows=dataset.map(row=>({...row}));const h=createListHarness(rows);
 app.get('/__fixture',(req,res)=>{res.cookie('tasks_fixture_failure',req.query.fail==='1'?'1':'0',{sameSite:'strict'});res.type('html').send(`<script>localStorage.setItem('pm_access_token',${JSON.stringify(h.token(['Superadmin']))});location.replace('/tasks');</script>`);});
+// Browser-only detail/approval fixture: mutate this process's synthetic rows only.
+app.get('/api/tasks/:id/draft',(_req,res)=>res.json({items:[]}));
+app.get('/api/tasks/:id',(req,res)=>{
+ const row=rows.find(row=>row.TaskId===req.params.id);if(!row)return res.status(404).json({message:'Fixture task not found'});
+ res.json({id:row.TaskId,taskNumber:row.TaskNumber,maintenanceType:'PM',status:row.Status,priority:'normal',plannedDueAt:row.PlannedDueAt,scheduledDueAt:row.ScheduledDueAt,createdAt:row.CreatedAt,startedAt:null,completedAt:row.CompletedAt,cancelledAt:null,approvalStatus:row.ApprovalStatus,technicianCompletedAt:row.CompletedAt,supervisorApprovedAt:null,superadminApprovedAt:null,asset:{id:row.AssetId,assetTag:row.AssetTag,name:row.AssetName},facility:null,template:{id:row.TemplateId,name:row.TemplateName},assignedTo:{userId:row.AssignedToUserId,displayName:row.AssignedToDisplayName,roleId:null},checklistItems:[],evidence:[],workSessionSummary:null});
+});
+for(const [action,from,to]of [['approve-by-supervisor','PendingSupervisor','PendingSuperadmin'],['approve-by-superadmin','PendingSuperadmin','Approved']])app.post('/api/tasks/:id/'+action,(req,res)=>{
+ const row=rows.find(row=>row.TaskId===req.params.id);if(!row||row.ApprovalStatus!==from)return res.status(409).json({message:'Fixture approval stage changed'});row.ApprovalStatus=to;if(to==='Approved')row.Status='completed';res.json({ok:true});
+});
 app.use('/api/tasks',(req,res,next)=>{if(req.headers.cookie?.includes('tasks_fixture_failure=1')&&req.path==='/')return res.status(503).json({message:'Fixture service unavailable'});next();});app.use(h.app);
 app.get('/api/auth/me',(_req,res)=>res.json({user:{id:'11111111-1111-4111-8111-111111111111',username:'fixture',displayName:'Tasks Fixture',roles:['Superadmin']}}));
 app.get('/api/*',(_req,res)=>res.json({items:[],count:0,stats:{overdueCount:0,dueTodayCount:0,upcoming7DaysCount:0},upcomingTasks:[]}));

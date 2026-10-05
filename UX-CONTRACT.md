@@ -30,3 +30,7 @@ Source: [task lifecycle and list policy](docs/functional-specification.md#task-l
 | Navigation | Existing Header/layout and task detail dialog | Existing list/detail workflow | Named task opener; separate assignment control | Keyboard focus and opener |
 
 React Query keys include the complete request so stale responses cannot overwrite another view. Search is debounced 300 ms, skips IME composition, clears immediately and exposes an explicit clear control. Day boundaries refresh on calendar rollover; reads revalidate every 30 seconds. Schedule/date and lifecycle views may overlap; the panel text explains the selected view. Each page keeps document scrolling; no ancestor viewport-height or hidden-overflow constraint is introduced. Existing task-detail mutations and unrelated global UI debt are outside this slice.
+
+### Task detail return context — 2026-10-05
+
+Closing a Tasks detail modal preserves the current route-backed view, search, assignment, status, approval/date filters and page. A deep-linked modal removes only `taskId`, using history replacement; closing an ordinary list-opened modal does not navigate. Successful supervisor or final approval refreshes Tasks lists/counts and approval queues while preserving that context. Existing pagination may clamp a page that becomes empty after the count changes. Failed approval preserves the open modal and context. Shared Radix Dialog remains the modal/focus owner; no new navigation primitive is introduced.

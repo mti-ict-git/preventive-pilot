@@ -589,8 +589,16 @@ const Tasks = () => {
         open={taskDetailOpen}
         onOpenChange={(next) => {
           setTaskDetailOpen(next);
-          if (!next) setSelectedTaskId(null);
-          if (!next) navigate("/tasks", { replace: true });
+          if (!next) {
+            setSelectedTaskId(null);
+            if (searchParams.has("taskId")) {
+              setSearchParams(previous => {
+                const params = new URLSearchParams(previous);
+                params.delete("taskId");
+                return params;
+              }, { replace: true });
+            }
+          }
         }}
         taskId={selectedTaskId}
         onStarted={async () => {
@@ -780,6 +788,7 @@ export const TaskDetailDialog = (props: {
   onStarted: () => Promise<void>;
   onCompleted?: () => Promise<void> | void;
 }) => {
+  const queryClient = useQueryClient();
   const formatDurationLabel = (totalSeconds: number): string => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -1035,7 +1044,12 @@ export const TaskDetailDialog = (props: {
       return apiApproveTaskBySupervisor(props.taskId);
     },
     onSuccess: async () => {
-      await taskQuery.refetch();
+      await Promise.all([
+        taskQuery.refetch(),
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+        queryClient.invalidateQueries({ queryKey: ["task-stats"] }),
+        queryClient.invalidateQueries({ queryKey: ["approvals"] }),
+      ]);
       toast({ title: "Supervisor approved" });
     },
     onError: (err: unknown) => {
@@ -1053,7 +1067,12 @@ export const TaskDetailDialog = (props: {
       return apiApproveTaskBySuperadmin(props.taskId);
     },
     onSuccess: async () => {
-      await taskQuery.refetch();
+      await Promise.all([
+        taskQuery.refetch(),
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+        queryClient.invalidateQueries({ queryKey: ["task-stats"] }),
+        queryClient.invalidateQueries({ queryKey: ["approvals"] }),
+      ]);
       toast({ title: "Superadmin approved" });
     },
     onError: (err: unknown) => {
