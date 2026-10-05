@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Server,
   Search,
-  Filter,
-  Download,
   RefreshCw,
   CheckCircle,
   XCircle,
@@ -85,6 +83,14 @@ const Assets = () => {
     "all" | "operational" | "broken" | "archived"
   >("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [committedSearch, setCommittedSearch] = useState("");
+  const [composing, setComposing] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (composing || searchQuery === committedSearch) return;
+    const timer = window.setTimeout(() => { setCommittedSearch(searchQuery.trim()); setPage(1); }, searchQuery.trim() ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery, committedSearch, composing]);
   const [pmEnabledFilter, setPmEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(10);
@@ -134,7 +140,7 @@ const Assets = () => {
       {
         page,
         pageSize,
-        searchQuery,
+        searchQuery: committedSearch,
         pmEnabledFilter,
         selectedCategoryId,
         selectedLocationId,
@@ -146,7 +152,7 @@ const Assets = () => {
       apiListAssets({
         page,
         pageSize,
-        search: searchQuery || undefined,
+        search: committedSearch || undefined,
         pmEnabled: pmEnabledFilter === "all" ? undefined : pmEnabledFilter === "enabled",
         categoryId: selectedCategoryId === "all" ? undefined : selectedCategoryId,
         categoryIds: visibleCategoryIds ?? undefined,
@@ -346,10 +352,10 @@ const Assets = () => {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass rounded-xl p-4 border border-border/60 shadow-card flex items-center justify-between"
+          className="glass rounded-xl p-4 border border-border/60 shadow-card flex flex-wrap items-center justify-between gap-4"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-success/20 flex items-center justify-center">
+            <div className="w-10 h-10 shrink-0 rounded-lg bg-success/20 flex items-center justify-center">
               <CheckCircle className="w-5 h-5 text-success" />
             </div>
             <div>
@@ -390,66 +396,20 @@ const Assets = () => {
         <div className="glass rounded-xl p-4 border border-border/60 shadow-card">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-1 flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
+              <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by asset ID or name..."
+                  ref={searchInput}
+                  aria-label="Search assets"
+                  placeholder="Search by asset ID or name…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-background/80"
+                  onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { setCommittedSearch(searchQuery.trim()); setPage(1); } }}
+                  className="pl-10 pr-20 bg-background/80"
                 />
+                {searchQuery ? <Button variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs" onClick={() => { setSearchQuery(""); setCommittedSearch(""); setPage(1); searchInput.current?.focus(); }}>Clear</Button> : null}
               </div>
-              <Select
-                value={selectedCategoryId}
-                onValueChange={(value) => {
-                  setSelectedCategoryId(value);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-full md:w-52 bg-background/80">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categorySelectItems.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="gap-2 bg-background/80">
-                    <Filter className="w-4 h-4" />
-                    More Filters
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-80">
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-sm font-medium">PM Enabled</div>
-                      <div className="mt-2">
-                        <Select
-                          value={pmEnabledFilter}
-                          onValueChange={(v) => {
-                            setPmEnabledFilter(v as "all" | "enabled" | "disabled");
-                            setPage(1);
-                          }}
-                        >
-                          <SelectTrigger className="bg-muted/50">
-                            <SelectValue placeholder="PM Enabled" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All</SelectItem>
-                            <SelectItem value="enabled">Enabled</SelectItem>
-                            <SelectItem value="disabled">Disabled</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 xl:pl-4 xl:border-l xl:border-border/60">
@@ -490,10 +450,114 @@ const Assets = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button variant="outline" className="gap-2 bg-background/80">
-                <Download className="w-4 h-4" />
-                Export
-              </Button>
+              <Badge variant="secondary" className="tabular-nums">{selectedIdsOnPage.length} selected</Badge>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Category</p>
+              <Select
+                      value={selectedCategoryId}
+                      onValueChange={(value) => {
+                        setSelectedCategoryId(value);
+                        setPage(1);
+                      }}
+                    >
+                    <SelectTrigger className="h-9 bg-background/80" aria-label="Category">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categorySelectItems.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Location</p>
+              <Select
+                      value={selectedLocationId}
+                      onValueChange={(value) => {
+                        setSelectedLocationId(value);
+                        setPage(1);
+                      }}
+                    >
+                    <SelectTrigger className="h-9 bg-background/80" aria-label="Location">
+                        <SelectValue placeholder="Location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locationSelectItems.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Operational status</p>
+              <Select
+                      value={operationalStatusFilter}
+                      onValueChange={(value) => {
+                        setOperationalStatusFilter(
+                          value as "all" | "operational" | "broken" | "archived",
+                        );
+                        setPage(1);
+                      }}
+                    >
+                    <SelectTrigger className="h-9 bg-background/80" aria-label="Operational status">
+                        <SelectValue placeholder="Operational" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="operational">Operational</SelectItem>
+                        <SelectItem value="broken">Broken</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">PM status</p>
+              <Select
+                      value={pmStatusFilter}
+                      onValueChange={(v) => {
+                        setPmStatusFilter(v as typeof pmStatusFilter);
+                        setPage(1);
+                      }}
+                    >
+                    <SelectTrigger className="h-9 bg-background/80" aria-label="PM status">
+                        <SelectValue placeholder="PM Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="not-started">Not Started</SelectItem>
+                        <SelectItem value="on-track">On Track</SelectItem>
+                        <SelectItem value="due-soon">Due Soon</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                        <SelectItem value="no-schedule">No Schedule</SelectItem>
+                      </SelectContent>
+                    </Select>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">PM enabled</p>
+              <Select
+                      value={pmEnabledFilter}
+                      onValueChange={(v) => {
+                        setPmEnabledFilter(v as "all" | "enabled" | "disabled");
+                        setPage(1);
+                      }}
+                    >
+                    <SelectTrigger className="h-9 bg-background/80" aria-label="PM enabled">
+                        <SelectValue placeholder="PM Enabled" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="enabled">Enabled</SelectItem>
+                        <SelectItem value="disabled">Disabled</SelectItem>
+                      </SelectContent>
+                    </Select>
             </div>
           </div>
         </div>
@@ -506,12 +570,13 @@ const Assets = () => {
           className="glass rounded-xl overflow-hidden border border-border/60 shadow-card"
         >
           {assetsQuery.isLoading ? (
-            <div className="p-6 text-sm text-muted-foreground">Loading assets…</div>
+            <div className="min-h-48 p-6 text-sm text-muted-foreground" role="status">Loading assets…</div>
           ) : assetsQuery.isError ? (
-            <div className="p-6 text-sm text-destructive">Failed to load assets.</div>
+            <div className="min-h-48 p-6 space-y-3" role="alert"><p className="text-sm text-destructive">Failed to load assets.</p><Button variant="outline" onClick={() => { void assetsQuery.refetch(); }}>Retry</Button></div>
           ) : (
             <>
-              <Table>
+              <Table aria-label="Assets" tabIndex={0} className="min-w-[1400px] table-fixed [&_th]:h-10 [&_th]:px-3 [&_th]:whitespace-nowrap [&_td]:px-3 [&_td]:py-3">
+              <colgroup>{[44, 212, 128, 184, 120, 128, 128, 152, 120, 112, 32].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
               <TableHeader>
                 <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
                   <TableHead className="w-10">
@@ -540,150 +605,26 @@ const Assets = () => {
                       />
                     </div>
                   </TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Asset ID</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Asset</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Category</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Location</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Asset Responsibility</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Responsibility</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operational</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PM Status</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next PM</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PM Enabled</TableHead>
                   <TableHead className="text-muted-foreground"></TableHead>
                 </TableRow>
-                <TableRow className="border-border bg-muted/20">
-                  <TableHead className="w-10"></TableHead>
-                  <TableHead>
-                    <Input
-                      placeholder="Filter Asset ID"
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setPage(1);
-                      }}
-                      className="h-8 bg-background/80"
-                    />
-                  </TableHead>
-                  <TableHead>
-                    
-                  </TableHead>
-                  <TableHead>
-                    <Select
-                      value={selectedCategoryId}
-                      onValueChange={(value) => {
-                        setSelectedCategoryId(value);
-                        setPage(1);
-                      }}
-                    >
-                    <SelectTrigger className="h-8 bg-background/80">
-                        <SelectValue placeholder="Category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categorySelectItems.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableHead>
-                  <TableHead></TableHead>
-                  <TableHead>
-                    <Select
-                      value={selectedLocationId}
-                      onValueChange={(value) => {
-                        setSelectedLocationId(value);
-                        setPage(1);
-                      }}
-                    >
-                    <SelectTrigger className="h-8 bg-background/80">
-                        <SelectValue placeholder="Location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {locationSelectItems.map((loc) => (
-                          <SelectItem key={loc.id} value={loc.id}>
-                            {loc.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableHead>
-                  <TableHead></TableHead>
-                  <TableHead>
-                    <Select
-                      value={operationalStatusFilter}
-                      onValueChange={(value) => {
-                        setOperationalStatusFilter(
-                          value as "all" | "operational" | "broken" | "archived",
-                        );
-                        setPage(1);
-                      }}
-                    >
-                    <SelectTrigger className="h-8 bg-background/80">
-                        <SelectValue placeholder="Operational" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="operational">Operational</SelectItem>
-                        <SelectItem value="broken">Broken</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableHead>
-                  <TableHead>
-                    <Select
-                      value={pmStatusFilter}
-                      onValueChange={(v) => {
-                        setPmStatusFilter(v as typeof pmStatusFilter);
-                        setPage(1);
-                      }}
-                    >
-                    <SelectTrigger className="h-8 bg-background/80">
-                        <SelectValue placeholder="PM Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="not-started">Not Started</SelectItem>
-                        <SelectItem value="on-track">On Track</SelectItem>
-                        <SelectItem value="due-soon">Due Soon</SelectItem>
-                        <SelectItem value="overdue">Overdue</SelectItem>
-                        <SelectItem value="no-schedule">No Schedule</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableHead>
-                  <TableHead></TableHead>
-                  <TableHead>
-                    <Select
-                      value={pmEnabledFilter}
-                      onValueChange={(v) => {
-                        setPmEnabledFilter(v as "all" | "enabled" | "disabled");
-                        setPage(1);
-                      }}
-                    >
-                    <SelectTrigger className="h-8 bg-background/80">
-                        <SelectValue placeholder="PM Enabled" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="enabled">Enabled</SelectItem>
-                        <SelectItem value="disabled">Disabled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAssets.map((asset, index) => {
+                {filteredAssets.length === 0 ? <TableRow><TableCell colSpan={11} className="h-32 text-center text-muted-foreground">No assets match the current filters.</TableCell></TableRow> : null}
+                {filteredAssets.map((asset) => {
                   const pmEnabled = asset.pm.enabled === true;
                   const pmStatus = getPMStatus(asset.pm.lastCompletedAt, asset.pm.nextDueAt, pmEnabled);
                   return (
-                    <motion.tr
+                    <TableRow
                       key={asset.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
                       className="border-border hover:bg-muted/40 transition-colors cursor-pointer group"
                       onClick={() => navigate(`/assets/${asset.id}`)}
                     >
@@ -706,25 +647,24 @@ const Assets = () => {
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-                            <Server className="w-4 h-4 text-primary" />
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <div className="h-8 w-8 shrink-0 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center"><Server className="h-4 w-4 text-primary" /></div>
+                          <div className="min-w-0">
+                            <Link to={`/assets/${asset.id}`} onClick={e => e.stopPropagation()} aria-label={`View asset ${asset.name} (${asset.assetTag})`} title={asset.name} className="block truncate font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm">{asset.name || asset.assetTag}</Link>
+                            <span className="block truncate font-mono text-xs text-muted-foreground" title={`Asset ID: ${asset.assetTag}`}>{asset.assetTag}</span>
                           </div>
-                          <span className="font-mono text-sm text-foreground">{asset.assetTag}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="font-medium text-foreground">{asset.name}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="bg-muted/60 text-foreground">
                           {asset.category.name ?? "—"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground max-w-xs">
-                        <span className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-wrap">
-                          {asset.snipeNotes && asset.snipeNotes.trim().length > 0
-                            ? asset.snipeNotes
-                            : "—"}
-                        </span>
+                      <TableCell className="text-muted-foreground">
+                        {asset.snipeNotes?.trim() ? <Popover>
+                          <PopoverTrigger asChild><button type="button" aria-label={`Read notes for ${asset.name}`} onClick={e => e.stopPropagation()} className="w-full text-left text-xs text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"><span className="line-clamp-2 break-words whitespace-pre-wrap">{asset.snipeNotes}</span></button></PopoverTrigger>
+                          <PopoverContent aria-label={`Notes for ${asset.name}`} onClick={e => e.stopPropagation()} align="start" className="w-80 max-w-[calc(100vw-2rem)] max-h-64 overflow-y-auto"><p className="mb-2 text-sm font-medium">Notes · {asset.name}</p><p className="text-sm whitespace-pre-wrap break-words text-muted-foreground">{asset.snipeNotes}</p></PopoverContent>
+                        </Popover> : <span>—</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{asset.location.name ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground">{asset.assetResponsibility ?? "—"}</TableCell>
@@ -732,9 +672,9 @@ const Assets = () => {
                         <OperationalStatusBadge status={asset.assetOperationalStatus} />
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <pmStatus.icon className={`w-4 h-4 ${pmStatus.color}`} />
-                          <span className={`text-sm capitalize ${pmStatus.color}`}>{pmStatus.status}</span>
+                          <span className={`text-sm whitespace-nowrap capitalize ${pmStatus.color}`}>{pmStatus.status}</span>
                           {pmEnabled && !asset.pm.defaultTemplateId ? (
                             <div className="flex items-center gap-1 text-xs text-warning">
                               <AlertTriangle className="w-4 h-4" />
@@ -744,7 +684,7 @@ const Assets = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {asset.pm.nextDueAt ? new Date(asset.pm.nextDueAt).toLocaleDateString() : "—"}
+                        {asset.pm.nextDueAt ? new Date(asset.pm.nextDueAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                       </TableCell>
                       <TableCell>
                         <div
@@ -753,6 +693,7 @@ const Assets = () => {
                           }}
                         >
                           <Switch
+                            aria-label={`PM enabled for ${asset.name}`}
                             checked={pmEnabled}
                             onCheckedChange={(checked) =>
                               togglePmMutation.mutate({ assetId: asset.id, pmEnabled: checked })
@@ -764,14 +705,14 @@ const Assets = () => {
                       <TableCell>
                         <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </TableCell>
-                    </motion.tr>
+                    </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
-            <div className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-t border-border/60 bg-muted/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                <p className="text-sm text-muted-foreground">Showing {filteredAssets.length} assets</p>
+                <p className="text-sm text-muted-foreground">{filteredAssets.length} assets on this page</p>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Per page</span>
                   <Select
@@ -794,7 +735,8 @@ const Assets = () => {
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-2 text-sm text-muted-foreground tabular-nums">Page {page}</span>
                 <Button
                   variant="outline"
                   size="sm"
