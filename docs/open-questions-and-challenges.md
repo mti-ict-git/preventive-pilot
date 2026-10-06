@@ -85,7 +85,7 @@ The [technical map](code-implementation-map.md) supplies evidence and bounded wo
 Q-14 master-mutation permission scope is implemented for create/update/clone, including isActive and UI bulk archival via per-facility update. PM planning rights remain unchanged. [Verification](verification-af02.md) covers isolated HTTP authorization and browser controls; live deployment/data persistence are not claimed. Existing shared middleware accepts valid token roles and refreshes roles only when needed to satisfy a guard; this change does not introduce immediate revocation of already-issued privileged tokens. Broader auth/session policy remains outside AF-02.
 
 
-## Historical PM reconciliation exceptions — 2026-10-06
+## Historical PM reconciliation exceptions â€” 2026-10-06
 
 Q-16/SC-01 follow-up in the existing [roadmap](implementation-roadmap.md#selected-correction--pm-now-history-and-calendar-2026-10-06): eight records remain protected after the whole-PM scan. Do not infer completion or cancel active work without a reviewed decision.
 
@@ -93,11 +93,30 @@ Q-16/SC-01 follow-up in the existing [roadmap](implementation-roadmap.md#selecte
 | --- | --- | --- |
 | MTI-PC-028 | PM-NOW-20260126-50E3B157 | CompletedAt and technician completion disagree (January 26 / February 3) |
 | MTI-UPS-010 | PM-NOW-20260206-2ABDA9FE | No unique same-template period; historical/current interval differs |
-| MTI-PC-046 | PM-NOW-20260313-E80514E6 | Candidate original period is already cancelled; verify reason before mapping |
+| MTI-PC-046 | PM-NOW-20260313-E80514E6 | March 22 original was cancelled with reason "already being PM now"; March 13 execution incorrectly records September 22 fulfilment. Retain September work; review original-period link |
 | MTI-PR-005 | PM-NOW-20260821-8D9F156F | Unfinished alias without a unique completed normal period |
-| MTI-PC-010 | PM-NOW-20260302-EEEC7150 | In-progress work must be reviewed against normal execution |
-| MTI-PC-049 | PM-NOW-20260302-5EA1A61C | In-progress work must be reviewed against normal execution |
+| MTI-PC-010 | PM-NOW-20260302-EEEC7150 | Started-only alias; rescan finds a unique completed/approved normal execution on March 3, with 11 checklist results and no work on the alias. See rescan below |
+| MTI-PC-049 | PM-NOW-20260302-5EA1A61C | Started-only alias; rescan finds a unique completed/approved normal execution on March 3, with 11 checklist results and no work on the alias. See rescan below |
 | MTI-PR-005 | PM-NOW-20260312-6A31DEB4 | In-progress work preserved |
 | MTI-PR-007 | PM-NOW-20260821-89517209 | Paused work preserved; April history may resolve without changing its current anchor |
 
 The protected SQL backup and reviewed plan are operational evidence, not a second backlog. The roadmap remains the entry point for continuing work.
+
+
+### Thorough PM rescan - 2026-10-06
+
+Fresh production read at 03:31:17 UTC: 269 PM tasks, 29 PM Now, 121 completed (59 Approved, 62 legacy None), 26 cancelled, 118 open, 3 in progress and 1 paused. All 122 nonterminal tasks were compared with all 121 completed tasks; active status was not an exclusion. LEFT JOINs retained every PM task regardless of template/context availability (no missing context/template found). Three CM records were counted separately and excluded from PM fulfilment. Protected scan and detailed review: `/var/backups/preventive-pilot/pm-thorough-rescan-20261006T033117Z`. The additional task since the first scan is `PM-20261006-8F9E2EFD` for MTI-PC-030, created at 03:18:23 UTC for August 27; it is a later obligation, not fulfilled by February's work.
+
+| Finding | Evidence | Required follow-up |
+| --- | --- | --- |
+| MTI-PC-010 started-only duplicate | `PM-NOW-20260302-EEEC7150` remains In Progress; zero checklist results, task/checklist evidence, sessions and drafts. Same asset/template `PM-20260122-F2D04F2A` completed and approved March 3, 11 results, 4 checklist evidence rows, February 21 planned period. | Review a narrowly scoped started-only duplicate resolution; retain StartedAt, history, actual execution and the separate August 21 task. Current automatic runner deliberately does not accept active records. |
+| MTI-PC-049 started-only duplicate | `PM-NOW-20260302-5EA1A61C` remains In Progress with the same zero-work counts. `PM-20260122-BBB0C2E2` completed and approved March 3, 11 results, 3 checklist evidence rows, February 21 planned period. | Same reviewed resolution boundary; retain the separate August 21 obligation. |
+| MTI-PC-046 wrong fulfilment period | `PM-NOW-20260313-E80514E6` completed/approved March 13 with 11 results and 3 checklist evidence rows, but FulfilledPlannedDueAt is September 22. March 22 original `PM-20260220-624597EE` was cancelled March 23 with reason "already being PM now". Open September task `PM-20261002-EBD742C1` conflicts with the erroneous fulfilment metadata. | Link March execution to March original after reviewed correction; do not cancel September as a duplicate of March. Current next cursor is March 22, 2027 and also needs period-aware review. |
+| MTI-UPS-010 unresolved cross-template history | February PM Now uses Personal Computer template; cancelled March records use Server Room / Printer Test templates and reason "test purpose". September open work uses Printer Test. | Do not map across templates or infer September completion; reconstruct historical configuration before correcting fulfilment/cadence. |
+| MTI-PC-028 completion metadata disagreement | CompletedAt January 26 differs from technician completion February 3; cancelled November original had StartedAt and no cancellation reason. | Preserve execution/approval; review dates and original period before changing cadence. |
+| MTI-PR-005 unfinished overlap | March PM Now is In Progress; April/July normal work and August PM Now remain open. Only January backdate execution exists; no completed execution for these later periods. | Review task reuse/overlap separately; cannot mark any later period fulfilled from January history. |
+| MTI-PR-007 unfinished later cycle | August PM Now is Paused, July/October normal tasks remain open. Approved March execution already fulfils April via the ledger. | Keep later obligations separate; March execution cannot fulfil another cycle. |
+
+All 29 PM Now records were accounted for: 13 appear in the previous resolution ledger, 6 other records are already cancelled, 5 other records are completed, and 5 remain nonterminal. All 13 prior ledger links were checked for matching context/template, cancelled alias, approved completed execution and matching fulfilment period; they passed. Selected audit action trails corroborate March 2 creation of the two PC aliases, March 3 assignment of the corresponding normal tasks, and March 23 cancellation of the PC-046 original; legacy trails do not supply every start/completion action.
+
+Matching candidates used context/template, planned/fulfilled/effective dates, creation/start/completion order and a broad one-cycle envelope; these are review signals, not automatic authority to cancel work. A separate chronology check flagged 13 approved rows with differing completion timestamps or StartedAt later than CompletedAt; those flags are not 13 more duplicates and may reflect legacy/backdating semantics. Raw evidence remains protected for review. No task, approval, evidence, schedule, database schema or application runtime was changed during this rescan. The existing eight exceptions remain open but now have explicit evidence instead of a status-only exclusion.
