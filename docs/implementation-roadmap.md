@@ -498,5 +498,6 @@ Release preparation follow-up, 2026-10-05: the first exact-source Linux check pa
 D1 user-authorized whole-PM scan/reconciliation alongside D2. Sources: functional specification SC-01, schema, OpenAPI, desktop UX contract.
 
 - [x] Read-only production scan: 268 PM tasks, 29 legacy PM Now and 44 missed occurrences; protected snapshot `/var/backups/preventive-pilot/pm-reconciliation-20261006T020624Z`.
-- [ ] Verify transactional planner/application, resolved history links, original-period finalization, remaining-capacity calendar buckets, source SQL and browser behavior.
-- [ ] Back up and verify SQL, apply additive ledger and reviewed unambiguous repairs, release API/web, and verify production calendar. Active/ambiguous records require explicit review; no blanket historical completion.
+- [x] Verify transactional planner/application, resolved history links, original-period finalization, remaining-capacity calendar buckets, source SQL and browser behavior. Final source `a821ae1` passed 173 Linux regressions and all release checks; see [SC-01 evidence](verification-sc01.md#pm-now-historical-fulfilment-and-calendar--2026-10-06).
+- [x] Back up and verify SQL, apply additive ledger and reviewed 13 unambiguous repairs, release API/web, and verify production calendar. Performing history/evidence/approval and all original records remain. See [release evidence](deployment-and-environment.md#production-pm-history-and-calendar--2026-10-06).
+- [ ] Review the eight preserved active/ambiguous cases in the [challenge register](open-questions-and-challenges.md#historical-pm-reconciliation-exceptions--2026-10-06). Do not infer completion or cancel active work; no blanket historical completion. D2/D3 remain open.
