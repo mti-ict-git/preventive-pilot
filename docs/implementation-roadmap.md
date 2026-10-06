@@ -529,7 +529,9 @@ Release closure: all selected automatic-PM items above were verified on runtime 
 
 Sources: functional specification PM Tasks date sorting, Tasks UX contract and GET /api/tasks OpenAPI.
 
-- [ ] Add visible due/created date sorting, server ordering before pagination, validated keys and stable tie-breakers; preserve URL context and counts.
-- [ ] Verify HTTP/actual SQL ordering, browser popup/keyboard/restoration, final-source checks and scoped API/web production release.
+- [x] Add visible due/created date sorting, server ordering before pagination, validated keys and stable tie-breakers; preserve URL context and counts.
+- [x] Verify HTTP/actual SQL ordering, browser popup/keyboard/restoration, final-source checks and scoped API/web production release.
 
 Output: discoverable dataset-wide date sort. Wider D2/D3 remain open.
+
+Evidence: seven targeted HTTP regressions; eight exact read-only SQL batches; synthetic browser popup/keyboard, pagination, empty/error/clear and approval context; base API/source `ed4c3f9` passed 180 Linux tests and full release checks. API and final responsive web `ecf9ed6` were deployed with scoped health/configuration/CIFS/public asset checks. Authenticated production verified ordering, page reset, modal/reload persistence and desktop/narrow popup. See [verification](verification-q01-desktop.md#pm-tasks-date-sorting---2026-10-06) and [release evidence](deployment-and-environment.md#production-pm-tasks-date-sorting---2026-10-06). No schema/business-data change; D2/D3 remain open.
