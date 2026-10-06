@@ -449,7 +449,7 @@ const Tasks = () => {
                   {searchQuery && <Button type="button" size="icon" variant="ghost" aria-label="Clear search" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8" onClick={() => { setSearchQuery(""); updateFilter("q", ""); searchInput.current?.focus(); }}><X className="h-4 w-4" /></Button>}
                 </div>
               </div>
-              <div className="col-span-12 sm:col-span-8 lg:col-span-4 flex items-center gap-3">
+              <div className="col-span-12 lg:col-span-4 flex items-center gap-3">
                 <Label htmlFor="task-sort" className="shrink-0">Sort by</Label>
                 <Select value={sort} onValueChange={value => updateFilter("sort", value)}>
                   <SelectTrigger id="task-sort" className="min-w-0 bg-background">
@@ -460,7 +460,7 @@ const Tasks = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-12 sm:col-span-4 lg:col-span-2">
+              <div className="col-span-12 lg:col-span-2">
                 <div className="flex items-center gap-2 sm:justify-end text-sm text-muted-foreground h-full">
                   <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">
                     {tasksQuery.isError ? "Unavailable" : tasksQuery.isLoading ? "Loading…" : `${total} tasks${committedSearch || assignedFilter !== "any" || approvedOnlyFilter || statusFilter !== "all" || dueFromFilter || dueToFilter ? " matching filters" : " in this view"}`}
