@@ -95,8 +95,8 @@ Q-16/SC-01 follow-up in the existing [roadmap](implementation-roadmap.md#selecte
 | MTI-UPS-010 | PM-NOW-20260206-2ABDA9FE | No unique same-template period; historical/current interval differs |
 | MTI-PC-046 | PM-NOW-20260313-E80514E6 | March 22 original was cancelled with reason "already being PM now"; March 13 execution incorrectly records September 22 fulfilment. Retain September work; review original-period link |
 | MTI-PR-005 | PM-NOW-20260821-8D9F156F | Unfinished alias without a unique completed normal period |
-| MTI-PC-010 | PM-NOW-20260302-EEEC7150 | Started-only alias; rescan finds a unique completed/approved normal execution on March 3, with 11 checklist results and no work on the alias. See rescan below |
-| MTI-PC-049 | PM-NOW-20260302-5EA1A61C | Started-only alias; rescan finds a unique completed/approved normal execution on March 3, with 11 checklist results and no work on the alias. See rescan below |
+| MTI-PC-010 | PM-NOW-20260302-EEEC7150 | Resolved 2026-10-06: cancelled as started-only duplicate; linked to approved PM-20260122-F2D04F2A. StartedAt and August obligation retained. |
+| MTI-PC-049 | PM-NOW-20260302-5EA1A61C | Resolved 2026-10-06: cancelled as started-only duplicate; linked to approved PM-20260122-BBB0C2E2. StartedAt and August obligation retained. |
 | MTI-PR-005 | PM-NOW-20260312-6A31DEB4 | In-progress work preserved |
 | MTI-PR-007 | PM-NOW-20260821-89517209 | Paused work preserved; April history may resolve without changing its current anchor |
 
@@ -120,3 +120,10 @@ Fresh production read at 03:31:17 UTC: 269 PM tasks, 29 PM Now, 121 completed (5
 All 29 PM Now records were accounted for: 13 appear in the previous resolution ledger, 6 other records are already cancelled, 5 other records are completed, and 5 remain nonterminal. All 13 prior ledger links were checked for matching context/template, cancelled alias, approved completed execution and matching fulfilment period; they passed. Selected audit action trails corroborate March 2 creation of the two PC aliases, March 3 assignment of the corresponding normal tasks, and March 23 cancellation of the PC-046 original; legacy trails do not supply every start/completion action.
 
 Matching candidates used context/template, planned/fulfilled/effective dates, creation/start/completion order and a broad one-cycle envelope; these are review signals, not automatic authority to cancel work. A separate chronology check flagged 13 approved rows with differing completion timestamps or StartedAt later than CompletedAt; those flags are not 13 more duplicates and may reflect legacy/backdating semantics. Raw evidence remains protected for review. No task, approval, evidence, schedule, database schema or application runtime was changed during this rescan. The existing eight exceptions remain open but now have explicit evidence instead of a status-only exclusion.
+
+
+### Started-only PC alias resolution - 2026-10-06
+
+The user requested removal of the remaining March 2 overdue duplicates. The reviewed exception is limited to PC-010/049 and is documented in the functional specification. `scripts/admin/reconcile-started-only-pc.mjs` locks/rechecks both aliases, actual executions, work/evidence counts, candidate uniqueness, existing ledger references, current settings and August obligations in a SERIALIZABLE transaction. It rejects submitted, worked, linked, ambiguous or changed-period records. Exact SQL rollback rehearsal passed, including ten negative guard checks. Backup set 5043 passed COPY_ONLY/CHECKSUM and VERIFYONLY. The two corrections then committed once, with before-images and audit; no performing-task or recurrence update was issued.
+
+Independent post-commit reads confirmed cancelled aliases, preserved StartedAt, unchanged performing task columns and work/evidence counts, unchanged August tasks/settings, 15 total ledger links, no March 2 day events and no March 2 calendar bucket. Authenticated production browser confirmed selected March 2: no tasks and zero capacity. Protected evidence: `/var/backups/preventive-pilot/pm-started-only-20261006-review`. PC-046, UPS-010, PC-028 and the three unfinished printer records remain open; these two resolutions do not close them. No approval, deletion, database migration or application restart was performed.
