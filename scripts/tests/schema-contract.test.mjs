@@ -6,11 +6,13 @@ const source=fs.readFileSync(new URL('../../db/schema.sql',import.meta.url),'utf
 const contract=parseSchemaContract(source);
 const fixture=()=>structuredClone({...contract,constraints:contract.constraints.map(c=>({...c,disabled:false,untrusted:false})),indexes:contract.indexes.map(i=>({...i,disabled:false}))});
 test('schema inventory includes all current tables and evolved task columns',()=>{
- assert.equal(contract.tables.length,39);assert.equal(contract.columns.length,372);
+ assert.equal(contract.tables.length,40);assert.equal(contract.columns.length,378);
  for(const name of ['SourceTaskId','SourceTemplateChecklistItemId','RecurringFromTaskId'])assert(contract.columns.some(c=>c.table==='PMTasks'&&c.name===name));
  assert.equal(contract.columns.find(c=>c.table==='PMTasks'&&c.name==='PlannedDueAt').nullable,false);
  assert.equal(contract.columns.find(c=>c.table==='PMTasks'&&c.name==='AssetId').nullable,true);
  assert.equal(contract.columns.find(c=>c.table==='Assets'&&c.name==='ImageData').maxLength,-1);
+ for(const name of ['OriginalTaskId','FulfilledByTaskId','PlannedDueAt','EffectiveDueAt','Reason','RecordedAt'])assert(contract.columns.some(c=>c.table==='PMOccurrenceResolutions'&&c.name===name));
+ assert(contract.constraints.some(c=>c.table==='PMOccurrenceResolutions'&&c.kind==='U'));
 });
 test('fresh schema creates referenced tables first and catches former facility settings order',()=>{
  assert.deepEqual(creationOrderProblems(contract),[]);
