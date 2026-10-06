@@ -12,7 +12,7 @@ test('schema inventory includes all current tables and evolved task columns',()=
  assert.equal(contract.columns.find(c=>c.table==='PMTasks'&&c.name==='AssetId').nullable,true);
  assert.equal(contract.columns.find(c=>c.table==='Assets'&&c.name==='ImageData').maxLength,-1);
  for(const name of ['OriginalTaskId','FulfilledByTaskId','PlannedDueAt','EffectiveDueAt','Reason','RecordedAt'])assert(contract.columns.some(c=>c.table==='PMOccurrenceResolutions'&&c.name===name));
- assert(contract.constraints.some(c=>c.table==='PMOccurrenceResolutions'&&c.kind==='U'));
+ assert(contract.constraints.some(c=>c.name==='UQ_pm_PMOccurrenceResolutions_Execution'&&c.kind==='UQ'));
 });
 test('fresh schema creates referenced tables first and catches former facility settings order',()=>{
  assert.deepEqual(creationOrderProblems(contract),[]);
