@@ -501,7 +501,7 @@ const Tasks = () => {
                 ) : tasksQuery.isError ? (
                   <div role="alert" className="min-h-40 flex items-center justify-center gap-3 text-sm text-destructive">Failed to load tasks.<Button variant="outline" onClick={() => tasksQuery.refetch()}>Retry</Button></div>
                 ) : filteredTasks.length === 0 ? (
-                  <div role="status" className="min-h-40 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground"><ClipboardList className="h-6 w-6" /><p>No tasks match this view and filters.</p><Button variant="outline" onClick={() => { setSearchQuery(""); setSearchParams({ view: activeTab }); }}>Clear filters</Button></div>
+                  <div role="status" className="min-h-40 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground"><ClipboardList className="h-6 w-6" /><p>No tasks match this view and filters.</p><Button variant="outline" onClick={() => { setSearchQuery(""); setSearchParams({ view: activeTab, sort }); }}>Clear filters</Button></div>
                 ) : (
                   <div className="space-y-3">
                     {filteredTasks.map((task, index) => {
