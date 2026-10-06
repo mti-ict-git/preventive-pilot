@@ -492,3 +492,11 @@ Release preparation follow-up, 2026-10-05: the first exact-source Linux check pa
 - Scope: D1 user-selected screenshot correction. Combine name/source ID, compact rows, single labelled filter toolbar, full-note popup, named detail links and readable Next PM dates. Remove the inert Export control; preserve source, role and PM actions.
 - [x] Complete final-source checks and web-only production acceptance. Final source `30120f0` passed 163 regressions, Linux lint/typechecks/builds, schema-source and docs checks. Synthetic browser covered compact rows, popup Escape/focus, search empty/clear, pagination/per-page, keyboard scroll and error/retry. Read-only production covered search, full notes, and direct list/detail reload. Nginx route collision was corrected; API/configuration were retained. See [desktop verification](verification-q01-desktop.md#assets-table-presentation--2026-10-05) and [release evidence](deployment-and-environment.md#production-assets-table--2026-10-05).
 - Existing limitation: PM-status filtering is page-local, and global header/sidebar narrow-screen overflow remains outside this visual slice. D2/D3 remain open. No API contract change.
+
+### Selected correction — PM Now history and calendar (2026-10-06)
+
+D1 user-authorized whole-PM scan/reconciliation alongside D2. Sources: functional specification SC-01, schema, OpenAPI, desktop UX contract.
+
+- [x] Read-only production scan: 268 PM tasks, 29 legacy PM Now and 44 missed occurrences; protected snapshot `/var/backups/preventive-pilot/pm-reconciliation-20261006T020624Z`.
+- [ ] Verify transactional planner/application, resolved history links, original-period finalization, remaining-capacity calendar buckets, source SQL and browser behavior.
+- [ ] Back up and verify SQL, apply additive ledger and reviewed unambiguous repairs, release API/web, and verify production calendar. Active/ambiguous records require explicit review; no blanket historical completion.

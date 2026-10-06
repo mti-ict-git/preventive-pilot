@@ -11,6 +11,7 @@ export const hasTaskDeletionReferences = async (executor: Executor, taskId: stri
     "OR EXISTS (SELECT 1 FROM pm.PMMissedOccurrences WITH (UPDLOCK, HOLDLOCK) WHERE SourceTaskId = @taskId)",
     "OR EXISTS (SELECT 1 FROM pm.PMSkippedOccurrences WITH (UPDLOCK, HOLDLOCK) WHERE TaskId = @taskId)",
     "OR EXISTS (SELECT 1 FROM pm.NotificationLog WITH (UPDLOCK, HOLDLOCK) WHERE TaskId = @taskId)",
+    "OR EXISTS (SELECT 1 FROM pm.PMOccurrenceResolutions WITH (UPDLOCK, HOLDLOCK) WHERE OriginalTaskId = @taskId OR FulfilledByTaskId = @taskId)",
     "THEN 1 ELSE 0 END AS HasReferences",
   ].join("\n"));
   return Boolean(result.recordset[0]?.HasReferences);

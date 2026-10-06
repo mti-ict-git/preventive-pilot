@@ -1,3 +1,4 @@
+import { schedulingReadSql, schedulingBuckets, type SchedulingBucket } from "../db/schedulingReadModel.js";
 import { Router } from "express";
 import { z } from "zod";
 import sql from "mssql";
@@ -505,155 +506,7 @@ schedulingRouter.get("/day", async (req, res) => {
     .request()
     .input("from", sql.DateTime2(0), from)
     .input("to", sql.DateTime2(0), to)
-    .query(
-      [
-        "DECLARE @todayStart datetime2(0) = dateadd(day, datediff(day, 0, sysutcdatetime()), 0);",
-        "DECLARE @todayEnd datetime2(0) = dateadd(day, 1, @todayStart);",
-        "WITH items AS (",
-        "  SELECT",
-        "    CAST(t.TaskId AS nvarchar(64)) AS TaskId,",
-        "    t.TaskNumber AS TaskNumber,",
-        "    t.ScheduledDueAt AS ScheduledDueAt,",
-        "    t.Status AS Status,",
-        "    t.Priority AS Priority,",
-        "    a.AssetId AS AssetId,",
-        "    a.AssetTag AS AssetTag,",
-        "    a.Name AS AssetName,",
-        "    tpl.TemplateId AS TemplateId,",
-        "    tpl.Name AS TemplateName,",
-        "    a.AssetOperationalStatus AS AssetOperationalStatus,",
-        "    sch.Frozen AS ScheduleFrozen,",
-        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
-        "  FROM pm.PMTasks t",
-        "  INNER JOIN pm.Assets a ON a.AssetId = t.AssetId",
-        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
-        "  LEFT JOIN pm.PMSchedules sch ON sch.AssetId = t.AssetId AND sch.TemplateId = t.TemplateId",
-        "  WHERE t.ScheduledDueAt >= @from",
-        "    AND t.ScheduledDueAt < @to",
-        "    AND t.Status NOT IN (N'completed', N'cancelled')",
-        "  UNION ALL",
-        "  SELECT",
-        "    CAST(t.TaskId AS nvarchar(64)) AS TaskId,",
-        "    t.TaskNumber AS TaskNumber,",
-        "    t.ScheduledDueAt AS ScheduledDueAt,",
-        "    t.Status AS Status,",
-        "    t.Priority AS Priority,",
-        "    f.FacilityId AS AssetId,",
-        "    CAST(N'' AS nvarchar(64)) AS AssetTag,",
-        "    f.Name AS AssetName,",
-        "    tpl.TemplateId AS TemplateId,",
-        "    tpl.Name AS TemplateName,",
-        "    CAST(NULL AS nvarchar(64)) AS AssetOperationalStatus,",
-        "    sch.Frozen AS ScheduleFrozen,",
-        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
-        "  FROM pm.PMTasks t",
-        "  INNER JOIN pm.Facilities f ON f.FacilityId = t.FacilityId",
-        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
-        "  LEFT JOIN pm.FacilityPMSchedules sch ON sch.FacilityId = t.FacilityId AND sch.TemplateId = t.TemplateId",
-        "  WHERE t.ScheduledDueAt >= @from",
-        "    AND t.ScheduledDueAt < @to",
-        "    AND t.Status NOT IN (N'completed', N'cancelled')",
-        "    AND t.AssetId IS NULL",
-        "    AND t.FacilityId IS NOT NULL",
-        "  UNION ALL",
-        "  SELECT",
-        "    CONCAT(N'projected:', a.AssetId, N':', s.DefaultTemplateId, N':', CONVERT(varchar(19), due.DueAt, 126)) AS TaskId,",
-        "    N'Projected' AS TaskNumber,",
-        "    due.DueAt AS ScheduledDueAt,",
-        "    N'projected' AS Status,",
-        "    N'normal' AS Priority,",
-        "    a.AssetId AS AssetId,",
-        "    a.AssetTag AS AssetTag,",
-        "    a.Name AS AssetName,",
-        "    tpl.TemplateId AS TemplateId,",
-        "    tpl.Name AS TemplateName,",
-        "    a.AssetOperationalStatus AS AssetOperationalStatus,",
-        "    sch.Frozen AS ScheduleFrozen,",
-        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
-        "  FROM pm.Assets a",
-        "  INNER JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
-        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
-        "  LEFT JOIN pm.PMSchedules sch ON sch.AssetId = a.AssetId AND sch.TemplateId = s.DefaultTemplateId",
-        "  OUTER APPLY (",
-        "    SELECT COALESCE(s.NextPMDueAt, s.NextPlannedPMDueAt) AS DueAt",
-        "  ) due",
-        "  WHERE a.IsArchived = 0",
-        "    AND (a.AssetOperationalStatus IS NULL OR a.AssetOperationalStatus NOT IN (N'broken', N'archived'))",
-        "    AND s.PMEnabled = 1",
-        "    AND s.DefaultTemplateId IS NOT NULL",
-        "    AND tpl.IsActive = 1",
-        "    AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
-        "    AND due.DueAt >= @from",
-        "    AND due.DueAt < @to",
-        "    AND NOT EXISTS (",
-        "      SELECT 1",
-        "      FROM pm.PMTasks t2",
-        "      WHERE t2.AssetId = a.AssetId",
-        "        AND t2.TemplateId = s.DefaultTemplateId",
-        "        AND t2.ScheduledDueAt = due.DueAt",
-        "        AND t2.Status NOT IN (N'completed', N'cancelled')",
-        "    )",
-        "  UNION ALL",
-        "  SELECT",
-        "    CONCAT(N'projected-facility:', f.FacilityId, N':', s.DefaultTemplateId, N':', CONVERT(varchar(19), due.DueAt, 126)) AS TaskId,",
-        "    N'Projected' AS TaskNumber,",
-        "    due.DueAt AS ScheduledDueAt,",
-        "    N'projected' AS Status,",
-        "    N'normal' AS Priority,",
-        "    f.FacilityId AS AssetId,",
-        "    CAST(N'' AS nvarchar(64)) AS AssetTag,",
-        "    f.Name AS AssetName,",
-        "    tpl.TemplateId AS TemplateId,",
-        "    tpl.Name AS TemplateName,",
-        "    CAST(NULL AS nvarchar(64)) AS AssetOperationalStatus,",
-        "    sch.Frozen AS ScheduleFrozen,",
-        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
-        "  FROM pm.Facilities f",
-        "  INNER JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
-        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
-        "  LEFT JOIN pm.FacilityPMSchedules sch ON sch.FacilityId = f.FacilityId AND sch.TemplateId = s.DefaultTemplateId",
-        "  OUTER APPLY (",
-        "    SELECT COALESCE(s.NextPMDueAt, s.NextPlannedPMDueAt) AS DueAt",
-        "  ) due",
-        "  WHERE f.IsActive = 1",
-        "    AND s.PMEnabled = 1",
-        "    AND s.DefaultTemplateId IS NOT NULL",
-        "    AND tpl.IsActive = 1",
-        "    AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
-        "    AND due.DueAt >= @from",
-        "    AND due.DueAt < @to",
-        "    AND NOT EXISTS (",
-        "      SELECT 1",
-        "      FROM pm.PMTasks t2",
-        "      WHERE t2.FacilityId = f.FacilityId",
-        "        AND t2.TemplateId = s.DefaultTemplateId",
-        "        AND t2.ScheduledDueAt = due.DueAt",
-        "        AND t2.Status NOT IN (N'completed', N'cancelled')",
-        "    )",
-        ")",
-        "SELECT",
-        "  i.TaskId AS TaskId,",
-        "  i.TaskNumber AS TaskNumber,",
-        "  i.ScheduledDueAt AS ScheduledDueAt,",
-        "  i.Status AS Status,",
-        "  i.Priority AS Priority,",
-        "  i.AssetId AS AssetId,",
-        "  i.AssetTag AS AssetTag,",
-        "  i.AssetName AS AssetName,",
-        "  i.TemplateId AS TemplateId,",
-        "  i.TemplateName AS TemplateName,",
-        "  i.AssetOperationalStatus AS AssetOperationalStatus,",
-        "  i.ScheduleFrozen AS ScheduleFrozen,",
-        "  i.EstimatedMinutes AS EstimatedMinutes,",
-        "  CASE",
-        "    WHEN i.ScheduledDueAt < @todayStart THEN N'overdue'",
-        "    WHEN i.ScheduledDueAt < @todayEnd THEN N'due'",
-        "    ELSE N'scheduled'",
-        "  END AS Bucket",
-        "FROM items i",
-        "ORDER BY i.ScheduledDueAt ASC, i.TaskNumber ASC",
-      ].join("\n"),
-    );
+    .query(schedulingReadSql("day"));
 
   const rows = result.recordset as Array<Record<string, unknown>>;
   res.json({
@@ -688,7 +541,7 @@ schedulingRouter.get("/day", async (req, res) => {
           !status ||
           !priority ||
           !assetId ||
-          !assetTag ||
+          assetTag === null ||
           !assetName ||
           !templateId ||
           !templateName
@@ -696,7 +549,7 @@ schedulingRouter.get("/day", async (req, res) => {
           return null;
         }
 
-        if (bucket !== "scheduled" && bucket !== "due" && bucket !== "overdue") return null;
+        if (!bucket || !schedulingBuckets.includes(bucket)) return null;
 
         const estimatedMinutes = estimatedMinutesRaw ?? 0;
 
@@ -707,11 +560,13 @@ schedulingRouter.get("/day", async (req, res) => {
           status,
           priority,
           estimatedMinutes,
-          bucket: bucket as "scheduled" | "due" | "overdue",
+          bucket: bucket as SchedulingBucket,
           asset: { id: assetId, assetTag, name: assetName },
           template: { id: templateId, name: templateName },
           assetOperationalStatus,
           scheduleFrozen,
+          completedAt: r.CompletedAt instanceof Date ? r.CompletedAt.toISOString() : null,
+          replacedTaskNumber: typeof r.ReplacedTaskNumber === "string" ? r.ReplacedTaskNumber : null,
         };
       })
       .filter(
@@ -722,11 +577,13 @@ schedulingRouter.get("/day", async (req, res) => {
           status: string;
           priority: string;
           estimatedMinutes: number;
-          bucket: "scheduled" | "due" | "overdue";
+          bucket: SchedulingBucket;
           asset: { id: string; assetTag: string; name: string };
           template: { id: string; name: string };
           assetOperationalStatus: string | null;
           scheduleFrozen: boolean;
+          completedAt: string | null;
+          replacedTaskNumber: string | null;
         } => v !== null,
       ),
   });
@@ -772,101 +629,7 @@ schedulingRouter.get("/calendar", async (req, res) => {
     .request()
     .input("from", sql.DateTime2(0), from)
     .input("to", sql.DateTime2(0), to)
-    .query(
-      [
-        "DECLARE @todayStart datetime2(0) = dateadd(day, datediff(day, 0, sysutcdatetime()), 0);",
-        "DECLARE @todayEnd datetime2(0) = dateadd(day, 1, @todayStart);",
-        "WITH occurrences AS (",
-        "  SELECT",
-        "    t.ScheduledDueAt AS ScheduledDueAt,",
-        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
-        "  FROM pm.PMTasks t",
-        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = t.TemplateId",
-        "  WHERE t.ScheduledDueAt >= @from",
-        "    AND t.ScheduledDueAt < @to",
-        "    AND t.Status NOT IN (N'completed', N'cancelled')",
-        "  UNION ALL",
-        "  SELECT",
-        "    due.DueAt AS ScheduledDueAt,",
-        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
-        "  FROM pm.Assets a",
-        "  INNER JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
-        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
-        "  LEFT JOIN pm.PMSchedules sch ON sch.AssetId = a.AssetId AND sch.TemplateId = s.DefaultTemplateId",
-        "  OUTER APPLY (",
-        "    SELECT COALESCE(s.NextPMDueAt, s.NextPlannedPMDueAt) AS DueAt",
-        "  ) due",
-        "  WHERE a.IsArchived = 0",
-        "    AND (a.AssetOperationalStatus IS NULL OR a.AssetOperationalStatus NOT IN (N'broken', N'archived'))",
-        "    AND s.PMEnabled = 1",
-        "    AND s.DefaultTemplateId IS NOT NULL",
-        "    AND tpl.IsActive = 1",
-        "    AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
-        "    AND due.DueAt >= @from",
-        "    AND due.DueAt < @to",
-        "    AND NOT EXISTS (",
-        "      SELECT 1",
-        "      FROM pm.PMTasks t2",
-        "      WHERE t2.AssetId = a.AssetId",
-        "        AND t2.TemplateId = s.DefaultTemplateId",
-        "        AND t2.ScheduledDueAt = due.DueAt",
-        "        AND t2.Status NOT IN (N'completed', N'cancelled')",
-        "    )",
-        "  UNION ALL",
-        "  SELECT",
-        "    due.DueAt AS ScheduledDueAt,",
-        "    COALESCE(tpl.EstimatedDurationMinutes, 60) AS EstimatedMinutes",
-        "  FROM pm.Facilities f",
-        "  INNER JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
-        "  INNER JOIN pm.PMTemplates tpl ON tpl.TemplateId = s.DefaultTemplateId",
-        "  LEFT JOIN pm.FacilityPMSchedules sch ON sch.FacilityId = f.FacilityId AND sch.TemplateId = s.DefaultTemplateId",
-        "  OUTER APPLY (",
-        "    SELECT COALESCE(s.NextPMDueAt, s.NextPlannedPMDueAt) AS DueAt",
-        "  ) due",
-        "  WHERE f.IsActive = 1",
-        "    AND s.PMEnabled = 1",
-        "    AND s.DefaultTemplateId IS NOT NULL",
-        "    AND tpl.IsActive = 1",
-        "    AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
-        "    AND due.DueAt >= @from",
-        "    AND due.DueAt < @to",
-        "    AND NOT EXISTS (",
-        "      SELECT 1",
-        "      FROM pm.PMTasks t2",
-        "      WHERE t2.FacilityId = f.FacilityId",
-        "        AND t2.TemplateId = s.DefaultTemplateId",
-        "        AND t2.ScheduledDueAt = due.DueAt",
-        "        AND t2.Status NOT IN (N'completed', N'cancelled')",
-        "    )",
-        "),",
-        "date_capacity AS (",
-        "  SELECT",
-        "    CAST(ScheduledDueAt AS date) AS DueDate,",
-        "    SUM(EstimatedMinutes) AS CapacityMinutes",
-        "  FROM occurrences",
-        "  GROUP BY CAST(ScheduledDueAt AS date)",
-        ")",
-        "SELECT",
-        "  CAST(o.ScheduledDueAt AS date) AS DueDate,",
-        "  CASE",
-        "    WHEN o.ScheduledDueAt < @todayStart THEN N'overdue'",
-        "    WHEN o.ScheduledDueAt < @todayEnd THEN N'due'",
-        "    ELSE N'scheduled'",
-        "  END AS Bucket,",
-        "  COUNT(1) AS Cnt,",
-        "  dc.CapacityMinutes AS CapacityMinutes",
-        "FROM occurrences o",
-        "INNER JOIN date_capacity dc ON dc.DueDate = CAST(o.ScheduledDueAt AS date)",
-        "GROUP BY CAST(o.ScheduledDueAt AS date),",
-        "  CASE",
-        "    WHEN o.ScheduledDueAt < @todayStart THEN N'overdue'",
-        "    WHEN o.ScheduledDueAt < @todayEnd THEN N'due'",
-        "    ELSE N'scheduled'",
-        "  END,",
-        "  dc.CapacityMinutes",
-        "ORDER BY DueDate ASC",
-      ].join("\n"),
-    );
+    .query(schedulingReadSql("calendar"));
 
   const rows = result.recordset as Array<Record<string, unknown>>;
   res.json({
@@ -883,11 +646,11 @@ schedulingRouter.get("/calendar", async (req, res) => {
           .toISOString()
           .slice(0, 10);
 
-        if (bucket !== "scheduled" && bucket !== "due" && bucket !== "overdue") return null;
-        return { date, type: bucket as "scheduled" | "due" | "overdue", count, capacityMinutes };
+        if (!bucket || !schedulingBuckets.includes(bucket)) return null;
+        return { date, type: bucket as SchedulingBucket, count, capacityMinutes };
       })
       .filter(
-        (v): v is { date: string; type: "scheduled" | "due" | "overdue"; count: number; capacityMinutes: number } =>
+        (v): v is { date: string; type: SchedulingBucket; count: number; capacityMinutes: number } =>
           v !== null,
       ),
   });

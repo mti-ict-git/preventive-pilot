@@ -105,3 +105,7 @@ The configured `AssetMaintDB` database lacked the EX-01/CM-01 source/recurrence 
 ## D2 schema readiness — 2026-09-27
 
 Creation order now places PMTemplates before FacilityPMSettings and MaintenanceType before filtered planned-occurrence indexes. Guarded upgrades restore the task facility FK and exclusive-context check for older databases. A disposable clean/repeat/upgrade test passed; the two missing constraints were added WITH CHECK to the live database after verifying zero violations. The verifier now covers source object inventory and column shapes/flags with explicit definition-level limits. See [evidence](verification-d2-environment.md).
+
+## PMOccurrenceResolutions — 2026-10-06
+
+`PMOccurrenceResolutions` (`pm.PMOccurrenceResolutions`) is an additive execution-to-occurrence ledger. OriginalTaskId is the primary key and references PMTasks; unique FulfilledByTaskId references the actual PM execution. PlannedDueAt and EffectiveDueAt retain canonical cadence/execution deadlines; Reason and RecordedAt explain the authorized reconciliation. Distinct-task check prevents self-links. No checklist, evidence, approval or missed-history record is removed. See `db/migrations/20261006-pm-occurrence-resolutions.sql`. Runtime data migration requires a protected before-image, transaction, concurrency rechecks and audit entries; initial schema deployment is independent of data reconciliation.

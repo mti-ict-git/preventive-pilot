@@ -83,3 +83,21 @@ The [technical map](code-implementation-map.md) supplies evidence and bounded wo
 ## AF-02 permission implementation â€” 2026-09-11
 
 Q-14 master-mutation permission scope is implemented for create/update/clone, including isActive and UI bulk archival via per-facility update. PM planning rights remain unchanged. [Verification](verification-af02.md) covers isolated HTTP authorization and browser controls; live deployment/data persistence are not claimed. Existing shared middleware accepts valid token roles and refreshes roles only when needed to satisfy a guard; this change does not introduce immediate revocation of already-issued privileged tokens. Broader auth/session policy remains outside AF-02.
+
+
+## Historical PM reconciliation exceptions — 2026-10-06
+
+Q-16/SC-01 follow-up in the existing [roadmap](implementation-roadmap.md#selected-correction--pm-now-history-and-calendar-2026-10-06): eight records remain protected after the whole-PM scan. Do not infer completion or cancel active work without a reviewed decision.
+
+| Context | PM Now record | Review required |
+| --- | --- | --- |
+| MTI-PC-028 | PM-NOW-20260126-50E3B157 | CompletedAt and technician completion disagree (January 26 / February 3) |
+| MTI-UPS-010 | PM-NOW-20260206-2ABDA9FE | No unique same-template period; historical/current interval differs |
+| MTI-PC-046 | PM-NOW-20260313-E80514E6 | Candidate original period is already cancelled; verify reason before mapping |
+| MTI-PR-005 | PM-NOW-20260821-8D9F156F | Unfinished alias without a unique completed normal period |
+| MTI-PC-010 | PM-NOW-20260302-EEEC7150 | In-progress work must be reviewed against normal execution |
+| MTI-PC-049 | PM-NOW-20260302-5EA1A61C | In-progress work must be reviewed against normal execution |
+| MTI-PR-005 | PM-NOW-20260312-6A31DEB4 | In-progress work preserved |
+| MTI-PR-007 | PM-NOW-20260821-89517209 | Paused work preserved; April history may resolve without changing its current anchor |
+
+The protected SQL backup and reviewed plan are operational evidence, not a second backlog. The roadmap remains the entry point for continuing work.

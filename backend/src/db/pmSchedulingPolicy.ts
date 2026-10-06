@@ -582,7 +582,10 @@ export const finalizePmOccurrenceCompletion = async (input: {
   fulfilledPlannedDueAt: Date;
   completedAt: Date;
 }): Promise<{ nextPlannedDueAt: Date; nextDueAt: Date }> => {
-  const nextPlannedDueAt = advancePmPlannedDueAt(input.fulfilledPlannedDueAt, input.context.intervalDays);
+  const completedNext = advancePmPlannedDueAt(input.fulfilledPlannedDueAt, input.context.intervalDays);
+  // Delayed approval must not rewind a later planned cycle or last execution.
+  const nextPlannedDueAt = input.context.nextPlannedDueAt && input.context.nextPlannedDueAt > completedNext
+    ? input.context.nextPlannedDueAt : completedNext;
   const nextDueAt = await applyPmBlackout({
     executor: input.executor,
     plannedDueAt: nextPlannedDueAt,
@@ -592,7 +595,7 @@ export const finalizePmOccurrenceCompletion = async (input: {
     context: input.context,
     nextPlannedDueAt,
     nextDueAt,
-    lastPmCompletedAt: input.completedAt,
+    lastPmCompletedAt: input.context.lastPmCompletedAt && input.context.lastPmCompletedAt > input.completedAt ? input.context.lastPmCompletedAt : input.completedAt,
   });
   return { nextPlannedDueAt, nextDueAt };
 };

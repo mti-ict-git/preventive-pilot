@@ -57,9 +57,10 @@ test('Deletion policy accounts for every current incoming PMTasks foreign key',(
   const schema=fs.readFileSync(path.join(root,'db/schema.sql'),'utf8');
   const policy=fs.readFileSync(path.join(root,'backend/src/db/taskDeletionPolicy.ts'),'utf8');
   const constraints=[...schema.matchAll(/CONSTRAINT (FK_\w+) FOREIGN KEY \((\w+)\) REFERENCES pm\.PMTasks\(TaskId\)/g)].map(m=>m[1]);
-  assert.equal(constraints.length,13,'Review deletion policy when adding an incoming task FK');
+  assert.equal(constraints.length,15,'Review deletion policy when adding an incoming task FK');
   for(const table of ['PMTaskEvidence','PMTaskChecklistEvidence','PMTaskChecklistResults','PMTaskChecklistSnapshots','TaskDrafts','TaskWorkSessions','CMTaskEvents','CMDowntimeIntervals']) assert(policy.includes(`DELETE FROM pm.${table} WHERE TaskId = @taskId;`));
   for(const [table,column] of [['PMMissedOccurrences','SourceTaskId'],['PMSkippedOccurrences','TaskId'],['NotificationLog','TaskId'],['PMTasks','SourceTaskId']]) assert(policy.includes(`FROM pm.${table} WITH (UPDLOCK, HOLDLOCK) WHERE ${column} = @taskId`));
   assert(policy.includes('OR RecurringFromTaskId = @taskId'));
+  assert(policy.includes('FROM pm.PMOccurrenceResolutions WITH (UPDLOCK, HOLDLOCK) WHERE OriginalTaskId = @taskId OR FulfilledByTaskId = @taskId'));
   assert(policy.indexOf('DELETE FROM pm.PMTasks')>policy.indexOf('DELETE FROM pm.TaskWorkSessions'));
 });

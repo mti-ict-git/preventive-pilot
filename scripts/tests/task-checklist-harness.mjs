@@ -107,6 +107,7 @@ export function createHarness(overrides = {}) {
   const calls = [];
   const txEvents = [];
   let persistedRoles = [];
+  let occurrenceResolved = false;
   let templateItems = defaultTemplateItems.map(item => ({ ...item }));
   let snapshotItems = [];
   let checklistEvidenceIds = [];
@@ -1248,6 +1249,7 @@ export function createHarness(overrides = {}) {
             return { recordset: [], rowsAffected: [] };
           }
 
+          if (query.includes('FROM pm.PMOccurrenceResolutions')) return { recordset: occurrenceResolved ? [{ OriginalTaskId: fixtureTaskId }] : [], rowsAffected: [] };
           throw new Error(`Unexpected fixture query: ${query}`);
         },
       };
@@ -1340,6 +1342,7 @@ export function createHarness(overrides = {}) {
       calls.length = 0;
       txEvents.length = 0;
       persistedRoles = options.persistedRoles ?? [];
+      occurrenceResolved = options.occurrenceResolved ?? false;
       templateItems = (options.templateItems ?? defaultTemplateItems).map(item => ({ ...item }));
       snapshotItems = (options.snapshotItems ?? []).map(item => ({ ...item }));
       checklistEvidenceIds = [...(options.checklistEvidenceIds ?? [])];

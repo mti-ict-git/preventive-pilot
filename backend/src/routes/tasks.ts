@@ -4147,6 +4147,13 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
     return;
   }
 
+  const resolution = await db.request().input("taskId", sql.UniqueIdentifier, taskId)
+    .query("SELECT TOP (1) OriginalTaskId FROM pm.PMOccurrenceResolutions WHERE OriginalTaskId=@taskId");
+  if (resolution.recordset[0]) {
+    res.status(409).json({ message: "This occurrence was fulfilled by another task and cannot be reopened.", code: "PM_OCCURRENCE_FULFILLED" });
+    return;
+  }
+
   const status = typeof row.Status === "string" ? row.Status.toLowerCase() : null;
   if (status !== "cancelled") {
     res.status(400).json({ message: "Only cancelled tasks can be reopened" });
@@ -4513,8 +4520,8 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
             now: completedAtDate,
           });
     const fulfilledPlannedDueAt =
-      currentOccurrence?.plannedDueAt ??
       (row.PlannedDueAt instanceof Date ? row.PlannedDueAt : null) ??
+      currentOccurrence?.plannedDueAt ??
       completedAtDate;
 
     const completeUpdateResult = await tx
@@ -4583,7 +4590,7 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       await finalizePmOccurrenceCompletion({
         executor: tx,
         context: scheduleContext,
-        fulfilledPlannedDueAt: currentOccurrence.plannedDueAt,
+        fulfilledPlannedDueAt,
         completedAt: completedAtDate,
       });
     }
@@ -5416,8 +5423,8 @@ tasksRouter.post(
               now: finalCompletedAt,
             });
       const fulfilledPlannedDueAt =
-        currentOccurrence?.plannedDueAt ??
         (row.PlannedDueAt instanceof Date ? row.PlannedDueAt : null) ??
+        currentOccurrence?.plannedDueAt ??
         finalCompletedAt;
 
       await tx
@@ -5454,7 +5461,7 @@ tasksRouter.post(
         await finalizePmOccurrenceCompletion({
           executor: tx,
           context: scheduleContext,
-          fulfilledPlannedDueAt: currentOccurrence.plannedDueAt,
+          fulfilledPlannedDueAt,
           completedAt: finalCompletedAt,
         });
       }

@@ -1546,7 +1546,7 @@ export const apiSearchAdUsers = async (input: { q: string; limit?: number }): Pr
 
 export type SchedulingCalendarDay = {
   date: string;
-  type: "scheduled" | "due" | "overdue";
+  type: "scheduled" | "due" | "overdue" | "pending" | "completed" | "completed-late";
   count: number;
   capacityMinutes: number;
 };
@@ -1558,11 +1558,13 @@ export type SchedulingDayEventItem = {
   status: string;
   priority: string;
   estimatedMinutes: number;
-  bucket: "scheduled" | "due" | "overdue";
+  bucket: "scheduled" | "due" | "overdue" | "pending" | "completed" | "completed-late";
   asset: { id: string; assetTag: string; name: string };
   template: { id: string; name: string };
   assetOperationalStatus: string | null;
   scheduleFrozen: boolean;
+  completedAt: string | null;
+  replacedTaskNumber: string | null;
 };
 
 export const apiGetSchedulingCalendar = async (input: {

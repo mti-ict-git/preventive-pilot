@@ -233,3 +233,27 @@ test('Q-04 final approval route writes the same next anchor for asset and facili
     },
   );
 });
+
+test('late approval preserves task occurrence without advancing or rewinding a later cursor', async t => {
+ const h=createHarness();const server=h.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));const origin=`http://127.0.0.1:${server.address().port}`;
+ h.reset({contextKind:'asset',approvalStatus:'PendingSuperadmin',technicianCompletedByUserId:fixtureUserId,technicianCompletedAt:new Date('2026-09-16T09:00:00Z'),nextPlannedPmDueAt:new Date('2027-03-16T08:00:00Z'),nextPmDueAt:new Date('2027-03-16T08:00:00Z')});
+ const response=await fetch(`${origin}/api/tasks/${fixtureTaskId}/approve-by-superadmin`,{method:'POST',headers:{authorization:`Bearer ${h.tokenFor(fixtureSecondUserId,['Superadmin'])}`},signal:AbortSignal.timeout(5000)});
+ assert.equal(response.status,200,await response.text());const writes=h.getState().scheduleAnchorWrites;assert.equal(writes.at(-1).nextPlannedDueAt.toISOString(),'2027-03-16T08:00:00.000Z');const update=h.calls.find(c=>c.query.includes('FulfilledPlannedDueAt = COALESCE'));assert.equal(update.inputs.fulfilledPlannedDueAt.toISOString(),'2026-09-16T08:00:00.000Z');
+});
+
+
+test('fulfilled legacy alias cannot reopen and duplicate an approved occurrence', async t => {
+  const h = createHarness();
+  const server = h.app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  h.reset({ taskStatus: 'cancelled', occurrenceResolved: true });
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/tasks/${fixtureTaskId}/reopen`, {
+    method: 'POST', headers: { authorization: `Bearer ${h.tokenFor(fixtureSecondUserId, ['Superadmin'])}` },
+    signal: AbortSignal.timeout(5000),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).code, 'PM_OCCURRENCE_FULFILLED');
+  assert.equal(h.getState().taskStatus, 'cancelled');
+  assert.equal(h.calls.filter(c => c.query.includes('UPDATE pm.PMTasks')).length, 0);
+});

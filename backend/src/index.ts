@@ -2952,7 +2952,7 @@ const openApiSpec: OpenApiSchema = {
         type: "object",
         properties: {
           date: { type: "string", format: "date" },
-          type: { type: "string", enum: ["scheduled", "due", "overdue"] },
+          type: { type: "string", enum: ["scheduled", "due", "overdue", "pending", "completed", "completed-late"] },
           count: { type: "integer" },
           capacityMinutes: { type: "integer" },
         },
@@ -2973,10 +2973,12 @@ const openApiSpec: OpenApiSchema = {
           id: { type: "string" },
           taskNumber: { type: "string" },
           scheduledDueAt: { type: "string", format: "date-time" },
+          completedAt: { type: ["string", "null"], format: "date-time" },
+          replacedTaskNumber: { type: ["string", "null"] },
           status: { type: "string" },
           priority: { type: "string" },
           estimatedMinutes: { type: "integer" },
-          bucket: { type: "string", enum: ["scheduled", "due", "overdue"] },
+          bucket: { type: "string", enum: ["scheduled", "due", "overdue", "pending", "completed", "completed-late"] },
           asset: {
             type: "object",
             properties: {
@@ -7157,7 +7159,7 @@ const openApiSpec: OpenApiSchema = {
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
           "409": {
-            description: "Broken assets remain blocked; PM_CONTEXT_UNAVAILABLE when the context is inactive, PM is disabled, site is missing, or the task template is not the active category-compatible default template",
+            description: "Broken assets remain blocked; PM_CONTEXT_UNAVAILABLE when the context is inactive, PM is disabled, site is missing, or the task template is not the active category-compatible default template; PM_OCCURRENCE_FULFILLED when a historical alias was fulfilled by another task",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },

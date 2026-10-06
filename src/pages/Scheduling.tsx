@@ -366,7 +366,7 @@ const Scheduling = () => {
   });
 
   type CalendarDayBuckets = {
-    buckets: Array<{ count: number; type: "scheduled" | "due" | "overdue" }>;
+    buckets: Array<{ count: number; type: "scheduled" | "due" | "overdue" | "pending" | "completed" | "completed-late" }>;
     capacityMinutes: number;
   };
 
@@ -389,7 +389,7 @@ const Scheduling = () => {
       const dayIndex = Number(day);
       const value = map[dayIndex];
       const sortedBuckets = value.buckets.slice().sort((a, b) => {
-        const order: Record<typeof a.type, number> = { overdue: 0, due: 1, scheduled: 2 };
+        const order: Record<typeof a.type, number> = { overdue: 0, due: 1, pending: 2, scheduled: 3, "completed-late": 4, completed: 5 };
         return order[a.type] - order[b.type];
       });
       map[dayIndex] = {
@@ -425,13 +425,13 @@ const Scheduling = () => {
                     <CardTitle className="text-lg text-foreground">PM Schedule</CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => goToMonth(-1)}>
+                    <Button variant="ghost" size="icon" aria-label="Previous month" onClick={() => goToMonth(-1)}>
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
                     <span className="text-sm font-semibold text-foreground min-w-32 text-center">
                       {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                     </span>
-                    <Button variant="ghost" size="icon" onClick={() => goToMonth(1)}>
+                    <Button variant="ghost" size="icon" aria-label="Next month" onClick={() => goToMonth(1)}>
                       <ChevronRight className="w-4 h-4" />
                     </Button>
                   </div>
@@ -519,14 +519,18 @@ const Scheduling = () => {
                             <div
                               key={idx}
                               className={`text-[10px] px-1 rounded ${
-                                task.type === "overdue"
+                                task.type.startsWith("completed")
+                                  ? "bg-success/15 text-success"
+                                  : task.type === "pending"
+                                    ? "bg-warning/15 text-warning"
+                                    : task.type === "overdue"
                                   ? "bg-destructive/15 text-destructive"
                                   : task.type === "due"
                                     ? "bg-warning/15 text-warning"
                                     : "bg-primary/15 text-primary"
                               }`}
                             >
-                              {task.count} PM
+                              {task.count} {task.type === "completed-late" ? "Done late" : task.type === "completed" ? "Done" : task.type === "pending" ? "Review" : "PM"}
                             </div>
                           ))}
                         </div>
@@ -540,7 +544,7 @@ const Scheduling = () => {
                 {calendarQuery.isLoading && <div className="text-sm text-muted-foreground">Loading calendar…</div>}
                 {calendarQuery.isError && <div className="text-sm text-destructive">Failed to load calendar.</div>}
 
-                <div className="flex items-center gap-6 pt-4 border-t border-border">
+                <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-border">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded bg-primary/40" />
                     <span className="text-sm text-muted-foreground">Scheduled</span>
@@ -553,6 +557,8 @@ const Scheduling = () => {
                     <div className="w-2.5 h-2.5 rounded bg-destructive/40" />
                     <span className="text-sm text-muted-foreground">Overdue</span>
                   </div>
+                  <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded bg-success/40" /><span className="text-sm text-muted-foreground">Completed / completed late</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded bg-warning/40" /><span className="text-sm text-muted-foreground">Awaiting review</span></div>
                 </div>
               </CardContent>
             </Card>
@@ -880,12 +886,14 @@ const Scheduling = () => {
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <Badge variant={badgeVariant} className="capitalize">
-                                      {item.bucket}
+                                    <Badge variant={badgeVariant} className={`capitalize ${item.bucket.startsWith("completed") ? "bg-success/15 text-success border-success/30" : ""}`}>
+                                      {item.bucket === "completed-late" ? "Completed late" : item.bucket === "pending" ? "Awaiting review" : item.bucket}
                                     </Badge>
                                     <span className="text-xs text-muted-foreground">{timeText}</span>
                                   </div>
                                   <div className="mt-1 text-sm text-foreground font-medium truncate">{item.taskNumber}</div>
+                                  {item.completedAt && <p className="text-xs text-success">Completed {new Date(item.completedAt).toLocaleDateString("en-GB")}</p>}
+                                  {item.replacedTaskNumber && <p className="text-xs text-muted-foreground">Fulfils {item.replacedTaskNumber}</p>}
                                   <div className="text-xs text-muted-foreground truncate">
                                     {item.asset.assetTag} • {item.asset.name}
                                   </div>
@@ -894,7 +902,7 @@ const Scheduling = () => {
                                     {item.estimatedMinutes > 0 ? `${item.estimatedMinutes} min` : "—"}
                                   </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground whitespace-nowrap capitalize">{item.status}</div>
+                                <div className="text-xs text-muted-foreground whitespace-nowrap capitalize">{item.bucket === "pending" ? "Awaiting review" : item.status.replaceAll("_", " ")}</div>
                               </div>
                             </div>
                           );
