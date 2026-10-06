@@ -902,7 +902,7 @@ const Scheduling = () => {
                                     {item.estimatedMinutes > 0 ? `${item.estimatedMinutes} min` : "—"}
                                   </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground whitespace-nowrap capitalize">{item.bucket === "pending" ? "Awaiting review" : item.status.replaceAll("_", " ")}</div>
+                                <div className="text-xs text-muted-foreground whitespace-nowrap capitalize">{item.bucket === "pending" ? "Awaiting review" : item.status.replace(/_/g, " ")}</div>
                               </div>
                             </div>
                           );
