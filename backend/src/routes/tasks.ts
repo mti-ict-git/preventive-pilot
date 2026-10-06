@@ -4186,11 +4186,18 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
         "  CancelledByUserId = NULL",
         "FROM pm.PMTasks t",
         "WHERE t.TaskId = @taskId AND t.Status = N'cancelled'",
+        "AND NOT EXISTS (SELECT 1 FROM pm.PMOccurrenceResolutions WITH (UPDLOCK, HOLDLOCK) WHERE OriginalTaskId = t.TaskId)",
         "AND (" + pmContextEligibilitySql("asset", "t.AssetId", "t.TemplateId") + " OR " + pmContextEligibilitySql("facility", "t.FacilityId", "t.TemplateId") + ")",
       ].join("\n"),
     );
 
   if (!reopened.rowsAffected[0]) {
+    const resolved = await db.request().input("taskId", sql.UniqueIdentifier, taskId)
+      .query("SELECT TOP (1) OriginalTaskId FROM pm.PMOccurrenceResolutions WHERE OriginalTaskId=@taskId");
+    if (resolved.recordset[0]) {
+      res.status(409).json({ message: "This occurrence was fulfilled by another task and cannot be reopened.", code: "PM_OCCURRENCE_FULFILLED" });
+      return;
+    }
     res.status(409).json({ message: "PM must be enabled with a site and active template on an active context before reopening this task.", code: "PM_CONTEXT_UNAVAILABLE" });
     return;
   }

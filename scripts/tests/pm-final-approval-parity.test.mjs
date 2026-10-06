@@ -257,3 +257,29 @@ test('fulfilled legacy alias cannot reopen and duplicate an approved occurrence'
   assert.equal(h.getState().taskStatus, 'cancelled');
   assert.equal(h.calls.filter(c => c.query.includes('UPDATE pm.PMTasks')).length, 0);
 });
+
+
+test('reopen update atomically blocks a resolution inserted after the initial lookup', async t => {
+  let resolutionReads = 0;
+  const h = createHarness({ query(query) {
+    if (query.includes('FROM pm.PMOccurrenceResolutions') && query.startsWith('SELECT')) {
+      return { recordset: ++resolutionReads > 1 ? [{ OriginalTaskId: fixtureTaskId }] : [], rowsAffected: [] };
+    }
+    if (query.includes('UPDATE t') && query.includes("Status = N'open'")) {
+      assert(query.includes('AND NOT EXISTS (SELECT 1 FROM pm.PMOccurrenceResolutions WITH (UPDLOCK, HOLDLOCK) WHERE OriginalTaskId = t.TaskId)'));
+      return { recordset: [], rowsAffected: [0] };
+    }
+    return undefined;
+  }});
+  const server = h.app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  h.reset({ taskStatus: 'cancelled' });
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/tasks/${fixtureTaskId}/reopen`, {
+    method: 'POST', headers: { authorization: `Bearer ${h.tokenFor(fixtureSecondUserId, ['Superadmin'])}` }, signal: AbortSignal.timeout(5000),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).code, 'PM_OCCURRENCE_FULFILLED');
+  assert.equal(h.getState().taskStatus, 'cancelled');
+  assert(!h.calls.some(c => c.query.includes('INSERT INTO pm.AuditLog')));
+});

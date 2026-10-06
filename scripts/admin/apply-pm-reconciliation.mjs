@@ -56,6 +56,7 @@ try{
    const day=(await tx.request().input('from',sql.DateTime2(0),from).input('to',sql.DateTime2(0),to).query(reads.day)).recordset;
    const example=day.find(x=>x.TaskNumber==='PM-NOW-20260302-5F12BE0A');
    if(plan.plans.some(p=>p.execution.TaskNumber==='PM-NOW-20260302-5F12BE0A')&&(!example||example.Bucket!=='completed-late'||example.ReplacedTaskNumber!=='PM-20260122-0896D108'||example.EstimatedMinutes!==0))throw new Error('Calendar example parity failed');
+   if(reads.reopen){const originalId=plan.plans.find(p=>p.execution.TaskNumber==='PM-NOW-20260302-5F12BE0A')?.original.TaskId;if(originalId){const blocked=await tx.request().input('taskId',sql.UniqueIdentifier,originalId).query(reads.reopen);if(blocked.rowsAffected.some(n=>n!==0))throw new Error('Resolved reopen SQL mutated history');}}
    const month=(await tx.request().input('from',sql.DateTime2(0),new Date('2026-02-01')).input('to',sql.DateTime2(0),new Date('2026-03-01')).query(reads.calendar)).recordset;
    await fs.writeFile(audit+'/calendar-verification.json',JSON.stringify({day,month},null,2),{mode:0o600});
   }
