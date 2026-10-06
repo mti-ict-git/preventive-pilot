@@ -36,6 +36,12 @@ const loadPmSchedulingPolicy = () => {
   vm.runInThisContext(`(function(require,module,exports){${js}\n})`, { filename: abs })(
     spec => {
       if (spec === 'mssql') return sqlStub;
+      if (spec === './pmActiveWorkPolicy.js') {
+        const m={exports:{}};
+        const source=ts.transpileModule(fs.readFileSync(path.join(root,'backend/src/db/pmActiveWorkPolicy.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+        vm.runInThisContext(`(function(require,module,exports){${source}\n})`)(()=>sqlStub,m,m.exports);
+        return m.exports;
+      }
       return require(spec);
     },
     module,

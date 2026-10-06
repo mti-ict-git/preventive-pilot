@@ -30,6 +30,12 @@ const loadPmSchedulingPolicy = () => {
   vm.runInThisContext(`(function(require,module,exports){${js}\n})`, { filename: abs })(
     (spec) => {
       if (spec === "mssql") return sqlStub;
+      if (spec === './pmActiveWorkPolicy.js') {
+        const m={exports:{}};
+        const source=ts.transpileModule(fs.readFileSync(path.join(root,'backend/src/db/pmActiveWorkPolicy.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+        vm.runInThisContext(`(function(require,module,exports){${source}\n})`)(()=>sqlStub,m,m.exports);
+        return m.exports;
+      }
       return require(spec);
     },
     module,
@@ -57,6 +63,11 @@ const createExecutor = (state) => ({
         return this;
       },
       async query(query) {
+        if (query.includes('pm-active-across-dates')) {
+          const active=[...state.tasks.values()].find(t => !t.completedAt && !t.cancelledAt && ['in_progress','paused'].includes(t.status));
+          return {recordset: active ? [{TaskId:active.taskId,PlannedDueAt:active.plannedDueAt,ScheduledDueAt:active.scheduledDueAt,Status:active.status,ApprovalStatus:active.approvalStatus}] : [],rowsAffected:[]};
+        }
+        if(query.includes('PM_AUTO_SUPERSEDED:') || query.includes('PM_AUTO_MISSED:')) return {recordset:[{Changed:0}],rowsAffected:[0]};
         if (query.includes("FROM pm.BlackoutWindows")) {
           return { recordset: [{ BlackoutEnd: null }], rowsAffected: [] };
         }
@@ -282,4 +293,27 @@ test("SC-01 PM Now reuse prefers due or overdue work before a future occurrence"
 test("SC-01 keeps month-end progression aligned with SQL-like month handling", () => {
   const next = advancePmPlannedDueAt(new Date("2026-01-31T00:00:00.000Z"), 30);
   assert.equal(next.toISOString(), "2026-02-28T00:00:00.000Z");
+});
+
+for (const status of ['in_progress','paused']) {
+  test(`SC-01 ${status} legacy PM Now holds future generation across different dates`, async () => {
+    const nowTask={taskId:'33333333-3333-4333-8333-333333333333',plannedDueAt:new Date('2026-03-12T00:00:00Z'),scheduledDueAt:new Date('2026-03-12T00:00:00Z'),status,approvalStatus:'None',completedAt:null,cancelledAt:null,createdAt:new Date('2026-03-12T00:00:00Z')};
+    const state={tasks:new Map([[toKey(nowTask.plannedDueAt),nowTask]]),savedAnchors:[],missed:new Set(),skipped:new Set()};
+    const context={kind:'asset',contextId:'11111111-1111-4111-8111-111111111111',templateId:'22222222-2222-4222-8222-222222222222',intervalDays:90,pmEnabled:true,templateIsActive:true,isContextActive:true,nextPlannedDueAt:new Date('2026-07-16T00:00:00Z'),nextDueAt:new Date('2026-07-16T00:00:00Z'),lastPmCompletedAt:new Date('2026-01-16T00:00:00Z')};
+    for(let n=0;n<2;n++) {
+      const result=await reconcilePmScheduleContext({executor:createExecutor(state),context,now:new Date('2026-10-06T00:00:00Z')});
+      assert.equal(result.task.taskId,nowTask.taskId);
+      assert.equal(result.task.status,status);
+    }
+    assert.equal(state.savedAnchors.length,0);
+    assert.equal(state.missed.size,0);
+  });
+}
+
+test('SC-01 long-running execution resumes at next future cycle and preserves skipped work as missed', async()=>{
+ const state={tasks:new Map(),savedAnchors:[],missed:new Set(),skipped:new Set()};
+ const context={kind:'asset',contextId:'11111111-1111-4111-8111-111111111111',templateId:'22222222-2222-4222-8222-222222222222',intervalDays:90,nextPlannedDueAt:new Date('2026-04-16T00:00:00Z'),lastPmCompletedAt:null};
+ const r=await finalizePmOccurrenceCompletion({executor:createExecutor(state),context,fulfilledPlannedDueAt:new Date('2026-04-16T00:00:00Z'),completedAt:new Date('2026-10-06T00:00:00Z')});
+ assert.equal(r.nextPlannedDueAt.toISOString(),'2026-10-16T00:00:00.000Z');
+ assert.deepEqual([...state.missed],['2026-07-16T00:00:00.000Z']);
 });

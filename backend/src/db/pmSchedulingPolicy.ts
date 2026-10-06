@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { protectedPmSql, retireMissedPmTasks, supersedeUntouchedPmTasks } from "./pmActiveWorkPolicy.js";
 
 type SqlExecutor = {
   request(): sql.Request;
@@ -242,7 +243,8 @@ export const loadPmScheduleContextByTask = async (input: {
       [
         "SELECT TOP (1)",
         "  t.AssetId AS AssetId,",
-        "  t.FacilityId AS FacilityId",
+        "  t.FacilityId AS FacilityId,",
+        "  t.TemplateId AS TaskTemplateId",
         "FROM pm.PMTasks t",
         "WHERE t.TaskId = @taskId",
       ].join("\n"),
@@ -250,10 +252,12 @@ export const loadPmScheduleContextByTask = async (input: {
   const row = result.recordset[0] as Record<string, unknown> | undefined;
   if (!row) return null;
   if (typeof row.AssetId === "string") {
-    return loadAssetPmScheduleContext({ executor: input.executor, assetId: row.AssetId });
+    const context = await loadAssetPmScheduleContext({ executor: input.executor, assetId: row.AssetId });
+    return typeof row.TaskTemplateId === "string" && context?.templateId !== row.TaskTemplateId ? null : context;
   }
   if (typeof row.FacilityId === "string") {
-    return loadFacilityPmScheduleContext({ executor: input.executor, facilityId: row.FacilityId });
+    const context = await loadFacilityPmScheduleContext({ executor: input.executor, facilityId: row.FacilityId });
+    return typeof row.TaskTemplateId === "string" && context?.templateId !== row.TaskTemplateId ? null : context;
   }
   return null;
 };
@@ -365,6 +369,7 @@ const loadOccurrenceTask = async (input: {
         `  AND ${contextWhereClause(input.context.kind)}`,
         "  AND TemplateId = @templateId",
         "  AND PlannedDueAt = @plannedDueAt",
+        "  AND ISNULL(CancelledReason,N'') NOT LIKE N'PM[_]AUTO[_]SUPERSEDED:%'",
         "ORDER BY CreatedAt ASC",
       ].join("\n"),
     );
@@ -491,6 +496,24 @@ export const reconcilePmScheduleContext = async (input: {
     return null;
   }
 
+  // Ongoing work dominates the context/template even when legacy PM Now dates differ.
+  const active = await input.executor.request()
+    .input("contextId", sql.UniqueIdentifier, context.contextId)
+    .input("templateId", sql.UniqueIdentifier, context.templateId)
+    .query(`/* pm-active-across-dates */ SELECT TOP(1) t.TaskId,COALESCE(t.FulfilledPlannedDueAt,t.PlannedDueAt) PlannedDueAt,t.ScheduledDueAt,t.Status,t.ApprovalStatus,t.CancelledAt,t.CompletedAt
+      FROM pm.PMTasks t WHERE COALESCE(t.AssetId,t.FacilityId)=@contextId AND t.TemplateId=@templateId
+      AND ${protectedPmSql("t")} ORDER BY t.StartedAt,t.CreatedAt;`);
+  const activeRow=active.recordset[0];
+  if (activeRow) {
+    await supersedeUntouchedPmTasks(input.executor, activeRow.TaskId as string);
+    const task: PmOccurrenceTask = { taskId: activeRow.TaskId as string,
+      plannedDueAt: toDate(activeRow.PlannedDueAt)!, scheduledDueAt: toDate(activeRow.ScheduledDueAt)!,
+      status: activeRow.Status as string, approvalStatus: activeRow.ApprovalStatus as string,
+      cancelledAt: null, completedAt: null };
+    return { plannedDueAt: task.plannedDueAt, scheduledDueAt: task.scheduledDueAt, task };
+  }
+  await retireMissedPmTasks(input.executor, context.contextId, context.templateId);
+
   let currentPlannedDueAt = computeInitialPmPlannedDueAt({
     nextPlannedDueAt: context.nextPlannedDueAt,
     nextDueAt: context.nextDueAt,
@@ -562,10 +585,14 @@ export const reconcilePmScheduleContext = async (input: {
         effectiveDueAt: currentDueAt,
         sourceTaskId: task?.taskId ?? null,
       });
+      await retireMissedPmTasks(input.executor, context.contextId, context.templateId);
       currentPlannedDueAt = nextPlannedDueAt;
       continue;
     }
 
+    if (task && !task.cancelledAt && !task.completedAt) {
+      await supersedeUntouchedPmTasks(input.executor, task.taskId);
+    }
     return {
       plannedDueAt: currentPlannedDueAt,
       scheduledDueAt: currentDueAt,
@@ -582,7 +609,16 @@ export const finalizePmOccurrenceCompletion = async (input: {
   fulfilledPlannedDueAt: Date;
   completedAt: Date;
 }): Promise<{ nextPlannedDueAt: Date; nextDueAt: Date }> => {
-  const completedNext = advancePmPlannedDueAt(input.fulfilledPlannedDueAt, input.context.intervalDays);
+  let completedNext = advancePmPlannedDueAt(input.fulfilledPlannedDueAt, input.context.intervalDays);
+  // A long-running execution holds the current need; elapsed intervening periods
+  // are missed, never a second immediate PM after the work actually finishes.
+  let guard=0;
+  while (completedNext <= input.completedAt) {
+    if (++guard > 120) throw new Error("PM completion catch-up exceeded guard limit");
+    await recordPmMissedOccurrence({executor:input.executor,context:input.context,
+      plannedDueAt:completedNext,effectiveDueAt:await applyPmBlackout({executor:input.executor,plannedDueAt:completedNext})});
+    completedNext=advancePmPlannedDueAt(completedNext,input.context.intervalDays);
+  }
   // Delayed approval must not rewind a later planned cycle or last execution.
   const nextPlannedDueAt = input.context.nextPlannedDueAt && input.context.nextPlannedDueAt > completedNext
     ? input.context.nextPlannedDueAt : completedNext;
@@ -641,6 +677,7 @@ export const findReusablePmTask = async (input: {
         "  AND CompletedAt IS NULL",
         "  AND CancelledAt IS NULL",
         "ORDER BY",
+        "  CASE WHEN Status IN (N'in_progress',N'paused') OR StartedAt IS NOT NULL OR ApprovalStatus IN (N'PendingSupervisor',N'PendingSuperadmin') THEN 0 ELSE 1 END ASC,",
         "  CASE WHEN PlannedDueAt <= @currentPlannedDueAt THEN 0 ELSE 1 END ASC,",
         "  PlannedDueAt ASC,",
         "  CreatedAt ASC",
@@ -669,13 +706,36 @@ export const createPmTaskForOccurrence = async (input: {
     .input("assignedToRoleId", sql.UniqueIdentifier, input.assignedToRoleId)
     .query(
       [
+        "BEGIN TRY",
+        "BEGIN TRANSACTION;",
+        "DECLARE @resource nvarchar(255)=CONCAT(N'pm-context:',CONVERT(nvarchar(36),@contextId)), @lockResult int;",
+        "EXEC @lockResult=sys.sp_getapplock @Resource=@resource,@LockMode=N'Exclusive',@LockOwner=N'Transaction',@LockTimeout=15000;",
+        "IF @lockResult<0 THROW 51000,'PM context lock unavailable',1;",
         "DECLARE @existingTaskId uniqueidentifier;",
         "SELECT TOP (1) @existingTaskId = TaskId",
         "FROM pm.PMTasks",
         "WHERE MaintenanceType = N'PM'",
         `  AND ${contextWhereClause(input.context.kind)}`,
         "  AND TemplateId = @templateId",
-        "  AND PlannedDueAt = @plannedDueAt;",
+        "  AND CompletedAt IS NULL AND CancelledAt IS NULL AND Status NOT IN (N'completed',N'cancelled')",
+        "  AND ISNULL(ApprovalStatus,N'None')<>N'Rejected'",
+        "ORDER BY CASE WHEN Status IN(N'in_progress',N'paused') THEN 0 ELSE 1 END, PlannedDueAt,CreatedAt;",
+        "IF @existingTaskId IS NULL",
+        "BEGIN",
+        "  DECLARE @priorReason nvarchar(1024);",
+        "  SELECT TOP(1) @existingTaskId=TaskId,@priorReason=CancelledReason FROM pm.PMTasks",
+        `  WHERE ${contextWhereClause(input.context.kind)} AND TemplateId=@templateId AND MaintenanceType=N'PM'`,
+        "    AND PlannedDueAt=@plannedDueAt AND Status=N'cancelled' AND StartedAt IS NULL AND CompletedAt IS NULL",
+        "    AND CancelledReason LIKE N'PM[_]AUTO[_]SUPERSEDED:%'",
+        "    AND " + pmContextEligibilitySql(input.context.kind),
+        `    AND NOT EXISTS(SELECT 1 FROM pm.PMMissedOccurrences m WHERE ${contextWhereClause(input.context.kind)} AND m.TemplateId=@templateId AND m.PlannedDueAt=@plannedDueAt)`,
+        `    AND NOT EXISTS(SELECT 1 FROM pm.PMSkippedOccurrences m WHERE ${contextWhereClause(input.context.kind)} AND m.TemplateId=@templateId AND m.PlannedDueAt=@plannedDueAt);`,
+        "  IF @existingTaskId IS NOT NULL",
+        "  BEGIN",
+        "    UPDATE pm.PMTasks SET Status=N'open',CancelledAt=NULL,CancelledByUserId=NULL,CancelledReason=NULL,ScheduledDueAt=@scheduledDueAt WHERE TaskId=@existingTaskId;",
+        "    INSERT pm.AuditLog(ActorUserId,Action,EntityType,EntityId,Metadata) VALUES(NULL,N'task.restore.next-occurrence',N'task',@existingTaskId,CONCAT(N'{\"previousCancellationReason\":\"',@priorReason,N'\"}'));",
+        "  END",
+        "END",
         "IF @existingTaskId IS NOT NULL",
         "BEGIN",
         "  SELECT @existingTaskId AS TaskId;",
@@ -702,6 +762,9 @@ export const createPmTaskForOccurrence = async (input: {
           : "    @taskNumber, NULL, @contextId, @templateId, @plannedDueAt, @scheduledDueAt, @assignedToUserId, @assignedToRoleId, N'open'",
         "  WHERE " + pmContextEligibilitySql(input.context.kind) + ";",
         "END",
+        "COMMIT TRANSACTION;",
+        "END TRY BEGIN CATCH",
+        "IF @@TRANCOUNT>0 ROLLBACK TRANSACTION; THROW; END CATCH;",
       ].join("\n"),
     );
   const row = result.recordset[0] as Record<string, unknown> | undefined;

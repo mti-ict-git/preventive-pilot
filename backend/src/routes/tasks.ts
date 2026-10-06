@@ -1,3 +1,4 @@
+import { preparePmExecution, supersedeUntouchedPmTasks } from "../db/pmActiveWorkPolicy.js";
 import { taskViews, taskViewPredicates, taskViewFilterSql, taskDisplayStatusSql } from "./taskListViews.js";
 import { hasTaskDeletionReferences, deleteTaskOwnedRows } from "../db/taskDeletionPolicy.js";
 import express, { Router } from "express";
@@ -2462,15 +2463,15 @@ tasksRouter.post(
           "  TaskId, FileName, ContentType, SizeBytes, Uri, StoragePath, UploadedByUserId",
           ")",
           "OUTPUT inserted.EvidenceId AS EvidenceId",
-          "VALUES (",
-          "  @taskId, @fileName, @contentType, @sizeBytes, @uri, @storagePath, @uploadedByUserId",
-          ")",
+          "SELECT @taskId, @fileName, @contentType, @sizeBytes, @uri, @storagePath, @uploadedByUserId",
+          "FROM pm.PMTasks guard WITH (UPDLOCK,HOLDLOCK)",
+          "WHERE guard.TaskId=@taskId AND guard.Status NOT IN(N'completed',N'cancelled')",
         ].join("\n"),
       );
 
     const evidenceId = inserted.recordset[0]?.EvidenceId as string | undefined;
     if (!evidenceId) {
-      res.status(500).json({ message: "Failed to create evidence" });
+      res.status(409).json({ message: "Task is no longer editable; evidence was not attached." });
       return;
     }
 
@@ -2626,15 +2627,15 @@ tasksRouter.post(
           "  TaskId, TemplateChecklistItemId, FileName, ContentType, SizeBytes, Uri, StoragePath, UploadedByUserId",
           ")",
           "OUTPUT inserted.ChecklistEvidenceId AS ChecklistEvidenceId",
-          "VALUES (",
-          "  @taskId, @templateChecklistItemId, @fileName, @contentType, @sizeBytes, @uri, @storagePath, @uploadedByUserId",
-          ")",
+          "SELECT @taskId, @templateChecklistItemId, @fileName, @contentType, @sizeBytes, @uri, @storagePath, @uploadedByUserId",
+          "FROM pm.PMTasks guard WITH (UPDLOCK,HOLDLOCK)",
+          "WHERE guard.TaskId=@taskId AND guard.Status NOT IN(N'completed',N'cancelled')",
         ].join("\n"),
       );
 
     const checklistEvidenceId = inserted.recordset[0]?.ChecklistEvidenceId as string | undefined;
     if (!checklistEvidenceId) {
-      res.status(500).json({ message: "Failed to create evidence" });
+      res.status(409).json({ message: "Task is no longer editable; evidence was not attached." });
       return;
     }
 
@@ -3993,6 +3994,12 @@ tasksRouter.post("/:taskId/start", async (req, res) => {
       return;
     }
 
+    if (!(await preparePmExecution(tx, taskId))) {
+      await tx.rollback();
+      res.status(409).json({ message: "Another PM task for this context and template is already being worked or reviewed.", code: "PM_ACTIVE_WORK_EXISTS" });
+      return;
+    }
+
     const actionAt = new Date();
     const started = await tx
       .request()
@@ -4014,6 +4021,8 @@ tasksRouter.post("/:taskId/start", async (req, res) => {
       res.status(409).json({ message: "Task is no longer actionable." });
       return;
     }
+
+    await supersedeUntouchedPmTasks(tx, taskId);
 
     await ensureTaskWorkSessionStarted({
       executor: tx,
@@ -4129,7 +4138,7 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
       [
         "SELECT TOP (1)",
         "  Status,",
-        "  MaintenanceType",
+        "  MaintenanceType, CancelledReason",
         "FROM pm.PMTasks",
         "WHERE TaskId = @taskId",
       ].join("\n"),
@@ -4144,6 +4153,11 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
   const maintenanceType = typeof row.MaintenanceType === "string" ? row.MaintenanceType : null;
   if (maintenanceType !== "PM") {
     res.status(409).json({ message: "Use the corrective-maintenance work order routes for CM tasks." });
+    return;
+  }
+
+  if (typeof row.CancelledReason === "string" && row.CancelledReason.startsWith("PM_AUTO_")) {
+    res.status(409).json({ message: "Superseded or missed PM history cannot be reopened; use the current maintenance task.", code: "PM_TASK_RETIRED" });
     return;
   }
 
@@ -4186,6 +4200,7 @@ tasksRouter.post("/:taskId/reopen", requireManager, async (req, res) => {
         "  CancelledByUserId = NULL",
         "FROM pm.PMTasks t",
         "WHERE t.TaskId = @taskId AND t.Status = N'cancelled'",
+        "AND ISNULL(t.CancelledReason,N'') NOT LIKE N'PM[_]AUTO[_]%'",
         "AND NOT EXISTS (SELECT 1 FROM pm.PMOccurrenceResolutions WITH (UPDLOCK, HOLDLOCK) WHERE OriginalTaskId = t.TaskId)",
         "AND (" + pmContextEligibilitySql("asset", "t.AssetId", "t.TemplateId") + " OR " + pmContextEligibilitySql("facility", "t.FacilityId", "t.TemplateId") + ")",
       ].join("\n"),
@@ -4286,6 +4301,12 @@ tasksRouter.post("/:taskId/resume", async (req, res) => {
       return;
     }
 
+    if (!(await preparePmExecution(tx, taskId))) {
+      await tx.rollback();
+      res.status(409).json({ message: "Another PM task for this context and template is already being worked or reviewed.", code: "PM_ACTIVE_WORK_EXISTS" });
+      return;
+    }
+
     const actionAt = new Date();
     const started = await tx
       .request()
@@ -4307,6 +4328,8 @@ tasksRouter.post("/:taskId/resume", async (req, res) => {
       res.status(409).json({ message: "Task is no longer actionable." });
       return;
     }
+
+    await supersedeUntouchedPmTasks(tx, taskId);
 
     await ensureTaskWorkSessionStarted({
       executor: tx,
@@ -4350,6 +4373,7 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
           "  t.AssetId AS AssetId,",
           "  t.TemplateId AS TemplateId,",
           "  t.PlannedDueAt AS PlannedDueAt,",
+          "  t.FulfilledPlannedDueAt AS FulfilledPlannedDueAt,",
           "  t.MaintenanceType AS MaintenanceType,",
           "  t.AssignedToUserId AS AssignedToUserId,",
           "  r.Name AS AssignedToRoleName,",
@@ -4527,6 +4551,7 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
             now: completedAtDate,
           });
     const fulfilledPlannedDueAt =
+      (row.FulfilledPlannedDueAt instanceof Date ? row.FulfilledPlannedDueAt : null) ??
       (row.PlannedDueAt instanceof Date ? row.PlannedDueAt : null) ??
       currentOccurrence?.plannedDueAt ??
       completedAtDate;
@@ -4743,6 +4768,15 @@ tasksRouter.patch("/:taskId/draft", async (req, res) => {
   const tx = new sql.Transaction(db);
   await tx.begin();
   try {
+    if (!(await preparePmExecution(tx, taskId))) {
+      await tx.rollback(); res.status(409).json({ message: "Another PM execution is already active.", code: "PM_ACTIVE_WORK_EXISTS" }); return;
+    }
+    const current = await tx.request().input("taskId",sql.UniqueIdentifier,taskId)
+      .query("SELECT Status FROM pm.PMTasks WITH(UPDLOCK,HOLDLOCK) WHERE TaskId=@taskId");
+    if (!current.recordset[0] || ["completed","cancelled"].includes(current.recordset[0].Status as string)) {
+      await tx.rollback(); res.status(409).json({ message: "Task is no longer editable." }); return;
+    }
+
     const ids = new Set<string>();
     for (const item of parsed.data.items) {
       ids.add(item.templateChecklistItemId);
@@ -5373,6 +5407,7 @@ tasksRouter.post(
             "  t.AssetId AS AssetId,",
             "  t.TemplateId AS TemplateId,",
             "  t.PlannedDueAt AS PlannedDueAt,",
+          "  t.FulfilledPlannedDueAt AS FulfilledPlannedDueAt,",
             "  t.MaintenanceType AS MaintenanceType,",
             "  t.ApprovalStatus AS ApprovalStatus,",
             "  t.TechnicianCompletedAt AS TechnicianCompletedAt,",
@@ -5430,7 +5465,8 @@ tasksRouter.post(
               now: finalCompletedAt,
             });
       const fulfilledPlannedDueAt =
-        (row.PlannedDueAt instanceof Date ? row.PlannedDueAt : null) ??
+        (row.FulfilledPlannedDueAt instanceof Date ? row.FulfilledPlannedDueAt : null) ??
+      (row.PlannedDueAt instanceof Date ? row.PlannedDueAt : null) ??
         currentOccurrence?.plannedDueAt ??
         finalCompletedAt;
 
@@ -5889,7 +5925,7 @@ tasksRouter.post("/:taskId/evidence", async (req, res) => {
 
   const evidenceId = inserted.recordset[0]?.EvidenceId as string | undefined;
   if (!evidenceId) {
-    res.status(500).json({ message: "Failed to create evidence" });
+    res.status(409).json({ message: "Task is no longer editable; evidence was not attached." });
     return;
   }
 

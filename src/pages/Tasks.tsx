@@ -407,7 +407,7 @@ const Tasks = () => {
                   <Filter className="w-4 h-4 text-primary" />
                   Filters
                 </CardTitle>
-                <div className="text-sm text-muted-foreground mt-1">Search and refine tasks quickly</div>
+                <div className="text-sm text-muted-foreground mt-1">Search and refine tasks quickly. Tab counts follow filters; the sidebar counts all overdue PM work.</div>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" className="gap-2" onClick={() => setFiltersOpen(true)}>
@@ -444,7 +444,7 @@ const Tasks = () => {
               <div className="col-span-12 md:col-span-4">
                 <div className="flex items-center gap-2 justify-end text-sm text-muted-foreground h-full">
                   <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">
-                    {tasksQuery.isError ? "Unavailable" : tasksQuery.isLoading ? "Loading…" : `${total} tasks`}
+                    {tasksQuery.isError ? "Unavailable" : tasksQuery.isLoading ? "Loading…" : `${total} tasks${committedSearch || assignedFilter !== "any" || approvedOnlyFilter || statusFilter !== "all" || dueFromFilter || dueToFilter ? " matching filters" : " in this view"}`}
                   </Badge>
                 </div>
               </div>

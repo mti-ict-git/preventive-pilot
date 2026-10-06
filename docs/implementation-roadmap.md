@@ -511,3 +511,14 @@ D1 user-authorized whole-PM scan/reconciliation alongside D2. Sources: functiona
 
 - [x] Cross-check calendar-wide overdue against persisted Tasks after the user's calendar challenge. Exact deployed SQL plus authenticated browser: 121 red entries across 38 days, comprising 113 persisted tasks and eight projections; July alone has 57. See [calendar audit](open-questions-and-challenges.md#calendar-wide-red-bucket-cross-check---2026-10-06). No additional data correction.
 - [ ] Reconcile projected-calendar versus persisted-task scope/eligibility and make counts understandable, alongside missed-task retirement and active occurrence normalization. Do not mark every red period completed.
+
+
+#### Selected D1 correction: automatic single active PM need (2026-10-06)
+
+- [ ] Implement atomic start/resume protection and automatic retirement of untouched competing schedules, preserving worked/submitted records.
+- [ ] Find ongoing PM across dates before generator advancement; retire missed untouched tasks and prevent concurrent duplicate inserts.
+- [ ] Align calendar eligibility and projections, and explain global versus filtered counters.
+- [ ] Reconcile existing anomalies with verified backup, transaction rehearsal and guarded before-images.
+- [ ] Validate exact release source, deploy only API/web, verify repeated generator idempotency and production calendar/tasks.
+
+Source documents: functional specification SC-01 and automatic single active PM clarification, OpenAPI, database schema, deployment/environment and operational runbook. D2/D3 remain open.

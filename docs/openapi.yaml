@@ -5217,6 +5217,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Task became completed or cancelled before the evidence was attached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
       requestBody:
         required: true
         content:
@@ -5231,6 +5237,7 @@ paths:
         description: >-
           Raw file content with its content type; JSON bodies are consumed by the global JSON parser and are
           not accepted as a file buffer.
+
   /api/tasks/{taskId}/evidence/upload:
     post:
       tags:
@@ -5301,6 +5308,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Task became completed or cancelled before the evidence was attached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
       requestBody:
         required: true
         content:
@@ -5315,6 +5328,7 @@ paths:
         description: >-
           Raw file content with its content type; JSON bodies are consumed by the global JSON parser and are
           not accepted as a file buffer.
+
   /api/work-orders/{taskId}/resolution:
     post:
       tags:
@@ -7346,6 +7360,7 @@ paths:
       tags:
         - Tasks
       summary: Start a task
+      description: Starting or resuming PM work atomically supersedes untouched open tasks for the same asset/facility and template. Worked or submitted tasks are preserved. PM_ACTIVE_WORK_EXISTS returns 409 when another protected execution exists.
       parameters:
         - name: taskId
           in: path
@@ -7507,6 +7522,7 @@ paths:
       tags:
         - Tasks
       summary: Resume a task
+      description: Starting or resuming PM work atomically supersedes untouched open tasks for the same asset/facility and template. Worked or submitted tasks are preserved. PM_ACTIVE_WORK_EXISTS returns 409 when another protected execution exists.
       parameters:
         - name: taskId
           in: path
@@ -7629,7 +7645,7 @@ paths:
           description: >-
             Broken assets remain blocked; PM_CONTEXT_UNAVAILABLE when the context is inactive, PM is disabled,
             site is missing, or the task template is not the active category-compatible default template;
-            PM_OCCURRENCE_FULFILLED when a historical alias was fulfilled by another task
+            PM_OCCURRENCE_FULFILLED when a historical alias was fulfilled by another task; PM_TASK_RETIRED when a task is automatically superseded or missed
           content:
             application/json:
               schema:

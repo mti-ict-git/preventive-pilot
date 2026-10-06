@@ -1,3 +1,4 @@
+import { lockPmContext } from "../db/pmActiveWorkPolicy.js";
 import sql from "mssql";
 import { env } from "../config/env.js";
 import { resolvePmAssignment } from "../db/pmAssignment.js";
@@ -26,6 +27,7 @@ const loadEligibleAssetIds = async (): Promise<string[]> => {
         "  AND s.PMEnabled = 1",
         "  AND s.DefaultTemplateId IS NOT NULL",
         "  AND t.IsActive = 1",
+        "  AND (t.ApplicableCategoryId IS NULL OR t.ApplicableCategoryId=a.CategoryId)",
         "  AND (sch.Frozen IS NULL OR sch.Frozen = 0)",
       ].join("\n"),
     );
@@ -74,14 +76,18 @@ export const runScheduleCalculationJob = async (): Promise<void> => {
   let reconciledFacilities = 0;
 
   for (const assetId of assetIds) {
-    const context = await loadAssetPmScheduleContext({ executor: db, assetId });
-    if (!context) continue;
-    const occurrence = await reconcilePmScheduleContext({ executor: db, context });
+    const tx = new sql.Transaction(db);
+    await tx.begin();
+    try {
+      await lockPmContext(tx, assetId);
+    const context = await loadAssetPmScheduleContext({ executor: tx, assetId });
+    if (!context) { await tx.commit(); continue; }
+    const occurrence = await reconcilePmScheduleContext({ executor: tx, context });
     reconciledAssets += 1;
-    if (!occurrence || occurrence.task || occurrence.scheduledDueAt.getTime() > horizonAt.getTime()) continue;
+    if (!occurrence || occurrence.task || occurrence.scheduledDueAt.getTime() > horizonAt.getTime()) { await tx.commit(); continue; }
 
     const assignment = await resolvePmAssignment({
-      executor: db,
+      executor: tx,
       templateId: context.templateId,
       categoryId: context.categoryId,
       locationId: context.locationId,
@@ -89,24 +95,33 @@ export const runScheduleCalculationJob = async (): Promise<void> => {
       requiredRoleId: context.requiredRoleId,
     });
     const taskId = await createPmTaskForOccurrence({
-      executor: db,
+      executor: tx,
       context,
       occurrence,
       assignedToUserId: assignment.assignToUserId,
       assignedToRoleId: assignment.assignToRoleId,
     });
     if (taskId) created += 1;
+    await tx.commit();
+    } catch (error) {
+      try { await tx.rollback(); } catch { /* Original error takes precedence. */ }
+      throw error;
+    }
   }
 
   for (const facilityId of facilityIds) {
-    const context = await loadFacilityPmScheduleContext({ executor: db, facilityId });
-    if (!context) continue;
-    const occurrence = await reconcilePmScheduleContext({ executor: db, context });
+    const tx = new sql.Transaction(db);
+    await tx.begin();
+    try {
+      await lockPmContext(tx, facilityId);
+    const context = await loadFacilityPmScheduleContext({ executor: tx, facilityId });
+    if (!context) { await tx.commit(); continue; }
+    const occurrence = await reconcilePmScheduleContext({ executor: tx, context });
     reconciledFacilities += 1;
-    if (!occurrence || occurrence.task || occurrence.scheduledDueAt.getTime() > horizonAt.getTime()) continue;
+    if (!occurrence || occurrence.task || occurrence.scheduledDueAt.getTime() > horizonAt.getTime()) { await tx.commit(); continue; }
 
     const assignment = await resolvePmAssignment({
-      executor: db,
+      executor: tx,
       templateId: context.templateId,
       categoryId: null,
       locationId: context.locationId,
@@ -114,13 +129,18 @@ export const runScheduleCalculationJob = async (): Promise<void> => {
       requiredRoleId: context.requiredRoleId,
     });
     const taskId = await createPmTaskForOccurrence({
-      executor: db,
+      executor: tx,
       context,
       occurrence,
       assignedToUserId: assignment.assignToUserId,
       assignedToRoleId: assignment.assignToRoleId,
     });
     if (taskId) facilityCreated += 1;
+    await tx.commit();
+    } catch (error) {
+      try { await tx.rollback(); } catch { /* Original error takes precedence. */ }
+      throw error;
+    }
   }
 
   const durationMs = Date.now() - startedAt;

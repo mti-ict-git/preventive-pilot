@@ -4950,7 +4950,8 @@ const openApiSpec: OpenApiSchema = {
                 }
               }
             }
-          }
+          },
+          "409": {"description": "Task became completed or cancelled before the evidence was attached", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
         },
         "requestBody": {
           "required": true,
@@ -5074,7 +5075,8 @@ const openApiSpec: OpenApiSchema = {
                 }
               }
             }
-          }
+          },
+          "409": {"description": "Task became completed or cancelled before the evidence was attached", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
         },
         "requestBody": {
           "required": true,
@@ -6966,6 +6968,7 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Start a task",
+        description: "Starting or resuming PM work atomically supersedes untouched open tasks for the same asset/facility and template. Worked or submitted tasks are preserved. PM_ACTIVE_WORK_EXISTS returns 409 when another protected execution exists.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -7076,6 +7079,7 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Resume a task",
+        description: "Starting or resuming PM work atomically supersedes untouched open tasks for the same asset/facility and template. Worked or submitted tasks are preserved. PM_ACTIVE_WORK_EXISTS returns 409 when another protected execution exists.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -7159,7 +7163,7 @@ const openApiSpec: OpenApiSchema = {
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
           "409": {
-            description: "Broken assets remain blocked; PM_CONTEXT_UNAVAILABLE when the context is inactive, PM is disabled, site is missing, or the task template is not the active category-compatible default template; PM_OCCURRENCE_FULFILLED when a historical alias was fulfilled by another task",
+            description: "Broken assets remain blocked; PM_CONTEXT_UNAVAILABLE when the context is inactive, PM is disabled, site is missing, or the task template is not the active category-compatible default template; PM_OCCURRENCE_FULFILLED when a historical alias was fulfilled by another task; PM_TASK_RETIRED when a task is automatically superseded or missed",
             content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
           },
         },
