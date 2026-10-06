@@ -500,25 +500,27 @@ D1 user-authorized whole-PM scan/reconciliation alongside D2. Sources: functiona
 - [x] Read-only production scan: 268 PM tasks, 29 legacy PM Now and 44 missed occurrences; protected snapshot `/var/backups/preventive-pilot/pm-reconciliation-20261006T020624Z`.
 - [x] Verify transactional planner/application, resolved history links, original-period finalization, remaining-capacity calendar buckets, source SQL and browser behavior. Final source `a821ae1` passed 173 Linux regressions and all release checks; see [SC-01 evidence](verification-sc01.md#pm-now-historical-fulfilment-and-calendar--2026-10-06).
 - [x] Back up and verify SQL, apply additive ledger and reviewed 13 unambiguous repairs, release API/web, and verify production calendar. Performing history/evidence/approval and all original records remain. See [release evidence](deployment-and-environment.md#production-pm-history-and-calendar--2026-10-06).
-- [ ] Review the eight preserved active/ambiguous cases in the [challenge register](open-questions-and-challenges.md#historical-pm-reconciliation-exceptions--2026-10-06). Do not infer completion or cancel active work; no blanket historical completion. D2/D3 remain open.
+- [x] Review the eight preserved active/ambiguous cases in the [challenge register](open-questions-and-challenges.md#historical-pm-reconciliation-exceptions--2026-10-06). Do not infer completion or cancel active work; no blanket historical completion. D2/D3 remain open.
 
 - [x] Rescan remaining cases across all statuses after the user's PC-010/049 challenge. Fresh production scan: 269 PM tasks, all 122 nonterminal versus 121 completed, checklist/task evidence and session/draft counts, cancelled originals, selected action trails and all 13 ledger links checked. See [the detailed findings](open-questions-and-challenges.md#thorough-pm-rescan---2026-10-06). Scan only; no additional repair or runtime release.
 - [x] Apply reviewed started-only PC-010/049 duplicate resolution. Exact rollback rehearsal, ten negative guard checks, verified SQL backup, committed two-link correction, independent history/evidence/cadence checks and authenticated March 2 calendar acceptance passed. See [resolution evidence](open-questions-and-challenges.md#started-only-pc-alias-resolution---2026-10-06).
-- [ ] Review PC-046 original-period metadata correction; keep UPS-010 cross-template, PC-028 date ambiguity and unfinished printer records separate. Preserve work/history and later obligations; do not reuse March completion for September.
+- [x] Review PC-046 original-period metadata correction; keep UPS-010 cross-template, PC-028 date ambiguity and unfinished printer records separate. Preserve work/history and later obligations; do not reuse March completion for September.
 
 - [x] Audit Overdue active-versus-active overlap after user screenshots. Fresh data has 113 overdue; nine context/template groups contain 21 overdue rows, eight missed snapshots still have untouched open task records, and legacy active PM Now uses noncanonical dates. See [queue audit](open-questions-and-challenges.md#overdue-queue-overlap-and-missed-task-retirement---2026-10-06). Read-only audit; no additional correction claimed.
-- [ ] Fix missed-task retirement and legacy unfinished-occurrence association with reviewed data plans and prevention in generation. Preserve missed as not performed, protect actual work/approval, retain cadence and distinguish later periods. Verify PC-015 and facility stale jobs, PR-005/007 active aliases and PC-030/Makarti off-cadence records; do not manufacture completion.
+- [x] Fix missed-task retirement and legacy unfinished-occurrence association with reviewed data plans and prevention in generation. Preserve missed as not performed, protect actual work/approval, retain cadence and distinguish later periods. Verify PC-015 and facility stale jobs, PR-005/007 active aliases and PC-030/Makarti off-cadence records; do not manufacture completion.
 
 - [x] Cross-check calendar-wide overdue against persisted Tasks after the user's calendar challenge. Exact deployed SQL plus authenticated browser: 121 red entries across 38 days, comprising 113 persisted tasks and eight projections; July alone has 57. See [calendar audit](open-questions-and-challenges.md#calendar-wide-red-bucket-cross-check---2026-10-06). No additional data correction.
-- [ ] Reconcile projected-calendar versus persisted-task scope/eligibility and make counts understandable, alongside missed-task retirement and active occurrence normalization. Do not mark every red period completed.
+- [x] Reconcile projected-calendar versus persisted-task scope/eligibility and make counts understandable, alongside missed-task retirement and active occurrence normalization. Do not mark every red period completed.
 
 
 #### Selected D1 correction: automatic single active PM need (2026-10-06)
 
-- [ ] Implement atomic start/resume protection and automatic retirement of untouched competing schedules, preserving worked/submitted records.
-- [ ] Find ongoing PM across dates before generator advancement; retire missed untouched tasks and prevent concurrent duplicate inserts.
-- [ ] Align calendar eligibility and projections, and explain global versus filtered counters.
-- [ ] Reconcile existing anomalies with verified backup, transaction rehearsal and guarded before-images.
-- [ ] Validate exact release source, deploy only API/web, verify repeated generator idempotency and production calendar/tasks.
+- [x] Implement atomic start/resume protection and automatic retirement of untouched competing schedules, preserving worked/submitted records.
+- [x] Find ongoing PM across dates before generator advancement; retire missed untouched tasks and prevent concurrent duplicate inserts.
+- [x] Align calendar eligibility and projections, and explain global versus filtered counters.
+- [x] Reconcile existing anomalies with verified backup, transaction rehearsal and guarded before-images.
+- [x] Validate exact release source, deploy only API/web, verify repeated generator idempotency and production calendar/tasks.
 
 Source documents: functional specification SC-01 and automatic single active PM clarification, OpenAPI, database schema, deployment/environment and operational runbook. D2/D3 remain open.
+
+Release closure: all selected automatic-PM items above were verified on runtime `e6dff70377278d2acb984d4c6d85476d4c3ff5bf`. The earlier exception reviews are closed by the bounded corrections described in the [deployment record](deployment-and-environment.md#automatic-pm-production-closure---2026-10-06); historical inconsistent timestamps and unperformed later cycles are retained. Production audit: zero live context/template duplicate groups, zero untouched missed tasks still open, 99 overdue tasks equal 99 persisted red calendar events, no projected red events. Generator second run stable; automatic scheduler enabled every 10 minutes. D2 recovery and wider D3 acceptance remain open.
