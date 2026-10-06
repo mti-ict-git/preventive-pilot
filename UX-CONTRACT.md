@@ -48,3 +48,7 @@ Search commits after 300 ms, pauses during IME composition, supports Enter and e
 ## PM calendar fulfilment — 2026-10-06
 
 Existing Scheduling calendar buttons, shared Badge, Radix Select/Dialog and ScrollArea remain canonical owners. Completed/late-completed buckets use the existing success token and distinct text labels; pending review uses warning with explicit text. Day cards display actual completion and original-task link text, avoiding a date-only red state for fulfilled work. No global layout/theme change. Capacity measures remaining execution work and excludes completed/review waiting. Current UTC calendar day boundaries are retained; browser completion-date formatting uses English display.
+
+## Tasks date sorting - 2026-10-06
+
+The visible labelled Sort by uses the existing shared Radix Select, with due date earliest/latest and created date oldest/newest. Authored popup matches trigger width and supports keyboard/Escape. Server sorting precedes 25-row pagination. URL sort survives tab/filter changes, reload and detail close; changing sort resets page 1. Counts retain their existing independent shared-filter scope. Existing tokens and document scroll ownership remain unchanged.

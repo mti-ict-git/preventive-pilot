@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { once } from 'node:events';
-import { createListHarness, views } from './task-view-fixtures.mjs';
+import { createListHarness, views, dataset } from './task-view-fixtures.mjs';
 async function setup(t,rows){const h=createListHarness(rows);const server=h.app.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(resolve=>server.close(resolve)));return {h,get: async query=>{const response=await fetch(`http://127.0.0.1:${server.address().port}/api/tasks?${query}`,{headers:{Authorization:`Bearer ${h.token(['Superadmin'])}`}});return {status:response.status,body:await response.json()};}};}
 const bounds='todayStart=2026-10-03T00:00:00Z&todayEnd=2026-10-04T00:00:00Z';
 test('list returns full-result counts above the old 200-row cap and maintains counts across pages',async t=>{const {get,h}=await setup(t);const a=await get(`pageSize=25&${bounds}`);const b=await get(`page=2&pageSize=25&${bounds}`);assert.equal(a.status,200);assert.equal(a.body.total,240);assert.equal(a.body.items.length,25);assert.deepEqual(a.body.tabCounts,b.body.tabCounts);assert.notEqual(a.body.items[0].id,b.body.items[0].id);const sql=h.calls.find(call=>call.query.includes('AS [pending_supervisor]')).query;assert(sql.includes('CHARINDEX(@search'));assert(sql.includes('@view'));assert(sql.includes('@uiStatus'));assert(sql.includes('OFFSET @offset'));const ordering=sql.match(/^ORDER BY (.+)$/m)[1].split(',').map(term=>term.trim().split(/\s+/)[0]);assert.equal(new Set(ordering).size,ordering.length,'SQL Server ordering columns must be unique');assert(sql.includes("AND t.AssignedToRoleId IS NOT NULL"));});
@@ -9,3 +9,18 @@ test('every view uses server filtering, including paused and historical submitte
 test('shared search and approved-only affect both counts and rows; literal search is parameterized',async t=>{const {get,h}=await setup(t);const a=await get(`q=PM-STATE-235&approvedOnly=true&${bounds}`);assert.equal(a.body.total,1);assert.equal(a.body.tabCounts.completed,1);assert.equal(a.body.items[0].maintenanceType,'PM');const b=await get(`q=${encodeURIComponent("'; DROP TABLE pm.PMTasks;--")}&${bounds}`);assert.equal(b.body.total,0);assert(!h.calls.at(-1).query.includes('DROP TABLE'));});
 test('invalid view, oversized search, missing or reversed day boundaries and reversed due dates fail before SQL',async t=>{const {get,h}=await setup(t);for(const q of ['view=not-a-view',`q=${'x'.repeat(201)}`,'todayStart=2026-10-03T00:00:00Z','todayStart=2026-10-04T00:00:00Z&todayEnd=2026-10-03T00:00:00Z','dueFrom=2026-10-04&dueTo=2026-10-03']){assert.equal((await get(q)).status,400);}assert.equal(h.calls.length,0);});
 test('empty and out-of-range pages keep totals, and independent status/date filters intersect the tab',async t=>{const {get}=await setup(t);const a=await get(`page=99&${bounds}`);assert.equal(a.body.items.length,0);assert.equal(a.body.total,240);const b=await get(`view=upcoming&uiStatus=completed&${bounds}`);assert.equal(b.body.total,0);assert.equal(b.body.tabCounts.all,2);const c=await get(`assigned=unassigned&${bounds}`);assert.equal(c.body.total,0);});
+
+
+test('date sorting covers the full filtered dataset before pagination with stable ties and unchanged totals',async t=>{
+ const rows=dataset.slice(0,90).map((row,i)=>({...row,ScheduledDueAt:new Date(Date.UTC(2026,8,1+i%11)),CreatedAt:new Date(Date.UTC(2026,7,1+(89-i)%7))}));
+ const {get,h}=await setup(t,rows);let baseline;
+ for(const [sort,field,direction]of [['due_asc','ScheduledDueAt',1],['due_desc','ScheduledDueAt',-1],['created_asc','CreatedAt',1],['created_desc','CreatedAt',-1]]){
+  const a=(await get(`sort=${sort}&pageSize=25&${bounds}`)).body;const b=(await get(`sort=${sort}&page=2&pageSize=25&${bounds}`)).body;
+  assert.equal(a.total,90);baseline??=a.tabCounts;assert.deepEqual(a.tabCounts,baseline);assert.deepEqual(b.tabCounts,baseline);
+  const expected=[...rows].sort((a,b)=>direction*(+a[field]-+b[field])||(field==='ScheduledDueAt'?+b.CreatedAt-+a.CreatedAt:0)||a.TaskId.localeCompare(b.TaskId));
+  assert.deepEqual([...a.items,...b.items].map(x=>x.id),expected.slice(0,50).map(x=>x.TaskId));
+  const query=h.calls.at(-1).query;assert(query.indexOf('ORDER BY')<query.indexOf('OFFSET @offset'));assert(query.includes(`t.${field} ${direction===1?'ASC':'DESC'}`));
+ }
+ const implicit=(await get(`pageSize=25&${bounds}`)).body;const explicit=(await get(`sort=due_asc&pageSize=25&${bounds}`)).body;assert.deepEqual(implicit.items,explicit.items);
+});
+test('sort values are allowlisted and rejected before database execution',async t=>{const {get,h}=await setup(t);for(const sort of ['invalid','due_asc; DROP TABLE pm.PMTasks','CreatedAt DESC'])assert.equal((await get(`sort=${encodeURIComponent(sort)}`)).status,400);assert.equal(h.calls.length,0)});

@@ -524,3 +524,12 @@ D1 user-authorized whole-PM scan/reconciliation alongside D2. Sources: functiona
 Source documents: functional specification SC-01 and automatic single active PM clarification, OpenAPI, database schema, deployment/environment and operational runbook. D2/D3 remain open.
 
 Release closure: all selected automatic-PM items above were verified on runtime `e6dff70377278d2acb984d4c6d85476d4c3ff5bf`. The earlier exception reviews are closed by the bounded corrections described in the [deployment record](deployment-and-environment.md#automatic-pm-production-closure---2026-10-06); historical inconsistent timestamps and unperformed later cycles are retained. Production audit: zero live context/template duplicate groups, zero untouched missed tasks still open, 99 overdue tasks equal 99 persisted red calendar events, no projected red events. Generator second run stable; automatic scheduler enabled every 10 minutes. D2 recovery and wider D3 acceptance remain open.
+
+### Selected D1 correction: PM Tasks date sorting (2026-10-06)
+
+Sources: functional specification PM Tasks date sorting, Tasks UX contract and GET /api/tasks OpenAPI.
+
+- [ ] Add visible due/created date sorting, server ordering before pagination, validated keys and stable tie-breakers; preserve URL context and counts.
+- [ ] Verify HTTP/actual SQL ordering, browser popup/keyboard/restoration, final-source checks and scoped API/web production release.
+
+Output: discoverable dataset-wide date sort. Wider D2/D3 remain open.

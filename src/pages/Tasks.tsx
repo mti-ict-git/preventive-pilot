@@ -65,6 +65,7 @@ import {
   type CompleteTaskChecklistResultInput,
   type TaskListItem,
   type TaskView,
+  type TaskSort,
   type LookupRole,
   type UserSummary,
 } from "@/lib/api";
@@ -90,6 +91,13 @@ const Tasks = () => {
     { value: "pending_superadmin", label: "Pending Superadmin", description: "Tasks waiting for final superadmin review." },
   ];
   const validView = (value: string | null): TaskView => viewOptions.find(option => option.value === value)?.value ?? "all";
+  const sortOptions: { value: TaskSort; label: string }[] = [
+    { value: "due_asc", label: "Due date: earliest first" },
+    { value: "due_desc", label: "Due date: latest first" },
+    { value: "created_desc", label: "Created date: newest first" },
+    { value: "created_asc", label: "Created date: oldest first" },
+  ];
+  const sort = sortOptions.find(option => option.value === searchParams.get("sort"))?.value ?? "due_asc";
   const activeTab = validView(searchParams.get("view"));
   const statusFilter = validView(searchParams.get("status"));
   const assignedValue = searchParams.get("assigned");
@@ -151,7 +159,7 @@ const Tasks = () => {
       dueTo: dueToFilter ? dateBoundary(dueToFilter, true) : undefined,
     };
   }, [day, assignedFilter, approvedOnlyFilter, committedSearch, statusFilter, dueFromFilter, dueToFilter]);
-  const listQueryInput = { ...sharedQueryInput, view: activeTab, page, pageSize: 25 };
+  const listQueryInput = { ...sharedQueryInput, view: activeTab, sort, page, pageSize: 25 };
   const tasksQuery = useQuery({
     queryKey: ["tasks", listQueryInput], queryFn: () => apiListTasks(listQueryInput), refetchInterval: 30_000,
   });
@@ -423,7 +431,7 @@ const Tasks = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-12 gap-4">
-              <div className="col-span-12 md:col-span-8">
+              <div className="col-span-12 lg:col-span-6">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
@@ -441,8 +449,19 @@ const Tasks = () => {
                   {searchQuery && <Button type="button" size="icon" variant="ghost" aria-label="Clear search" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8" onClick={() => { setSearchQuery(""); updateFilter("q", ""); searchInput.current?.focus(); }}><X className="h-4 w-4" /></Button>}
                 </div>
               </div>
-              <div className="col-span-12 md:col-span-4">
-                <div className="flex items-center gap-2 justify-end text-sm text-muted-foreground h-full">
+              <div className="col-span-12 sm:col-span-8 lg:col-span-4 flex items-center gap-3">
+                <Label htmlFor="task-sort" className="shrink-0">Sort by</Label>
+                <Select value={sort} onValueChange={value => updateFilter("sort", value)}>
+                  <SelectTrigger id="task-sort" className="min-w-0 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)]">
+                    {sortOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-12 sm:col-span-4 lg:col-span-2">
+                <div className="flex items-center gap-2 sm:justify-end text-sm text-muted-foreground h-full">
                   <Badge variant="secondary" className="rounded-md px-2.5 py-1 text-xs">
                     {tasksQuery.isError ? "Unavailable" : tasksQuery.isLoading ? "Loading…" : `${total} tasks${committedSearch || assignedFilter !== "any" || approvedOnlyFilter || statusFilter !== "all" || dueFromFilter || dueToFilter ? " matching filters" : " in this view"}`}
                   </Badge>

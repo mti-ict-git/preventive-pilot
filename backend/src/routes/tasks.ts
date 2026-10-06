@@ -85,6 +85,7 @@ const TaskListQuerySchema = z.object({
   status: z.string().max(32).optional(),
   view: z.enum(taskViews).optional().default("all"),
   uiStatus: z.enum(taskViews).optional().default("all"),
+  sort: z.enum(["due_asc", "due_desc", "created_asc", "created_desc"]).optional().default("due_asc"),
   q: z.string().max(200).optional(),
   approvedOnly: z.enum(["true", "false"]).optional(),
   todayStart: z.string().datetime({ offset: true }).optional(),
@@ -1364,6 +1365,13 @@ tasksRouter.get("/", async (req, res) => {
   const page = Math.max(1, Number(parsed.data.page) || 1);
   const pageSize = Math.min(200, Math.max(1, Number(parsed.data.pageSize) || 50));
   const offset = (page - 1) * pageSize;
+  // Validated keys select fixed SQL fragments; user text never becomes SQL.
+  const orderBy = {
+    due_asc: "t.ScheduledDueAt ASC, t.CreatedAt DESC, t.TaskId ASC",
+    due_desc: "t.ScheduledDueAt DESC, t.CreatedAt DESC, t.TaskId ASC",
+    created_asc: "t.CreatedAt ASC, t.TaskId ASC",
+    created_desc: "t.CreatedAt DESC, t.TaskId ASC",
+  }[parsed.data.sort];
   const overdue = parseBoolean(parsed.data.overdue);
   const rolesCsv = req.user.roles.join(",");
 
@@ -1533,7 +1541,7 @@ tasksRouter.get("/", async (req, res) => {
         "      )",
         "    )",
         "  )",
-        "ORDER BY t.ScheduledDueAt ASC, t.CreatedAt DESC, t.TaskId ASC",
+        `ORDER BY ${orderBy}`,
         "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY",
       ];
         const from = lines.indexOf("FROM pm.PMTasks t");

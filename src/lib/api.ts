@@ -407,7 +407,10 @@ export type ListTasksResponse = {
   items: TaskListItem[];
 };
 
+export type TaskSort = "due_asc" | "due_desc" | "created_asc" | "created_desc";
+
 export const apiListTasks = async (input: {
+  sort?: TaskSort;
   view?: TaskView;
   uiStatus?: TaskView;
   q?: string;
@@ -427,6 +430,7 @@ export const apiListTasks = async (input: {
   pageSize?: number;
 }): Promise<ListTasksResponse> => {
   const params = new URLSearchParams();
+  if (input.sort) params.set("sort", input.sort);
   if (input.view) params.set("view", input.view);
   if (input.uiStatus) params.set("uiStatus", input.uiStatus);
   if (input.q) params.set("q", input.q);
