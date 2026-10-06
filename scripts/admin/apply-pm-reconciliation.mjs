@@ -28,10 +28,12 @@ try{
    for(const k of ['ChecklistRows','EvidenceRows','SessionRows','DraftRows'])if(actual[k]!==expected[k])throw new Error('Concurrent work drift');
   }
   const original=rows.find(t=>t.TaskId===p.original.TaskId),execution=rows.find(t=>t.TaskId===p.execution.TaskId);
+  if(original.MaintenanceType!=='PM'||execution.MaintenanceType!=='PM')throw new Error('Maintenance type drift');
   if(original.Status!=='open'||original.ApprovalStatus!=='None'||original.StartedAt||original.CompletedAt||original.ChecklistEvidenceRows||original.ChecklistRows||original.EvidenceRows||original.SessionRows||original.DraftRows)throw new Error('Protected duplicate');
   if(execution.Status!=='completed'||execution.ApprovalStatus!=='Approved'||!execution.CompletedAt||execution.AssetId!==original.AssetId||execution.FacilityId!==original.FacilityId||execution.TemplateId!==original.TemplateId)throw new Error('Execution/context mismatch');
   const prior=(await tx.request().input('a',sql.UniqueIdentifier,original.TaskId).input('b',sql.UniqueIdentifier,execution.TaskId).query('SELECT * FROM pm.PMOccurrenceResolutions WITH(UPDLOCK,HOLDLOCK) WHERE OriginalTaskId=@a OR FulfilledByTaskId=@b')).recordset;if(prior.length)throw new Error('Plan already applied or overlapping mapping; rescan');
   const context=await loadPmScheduleContextByTask({executor:tx,taskId:execution.TaskId});
+  if(p.repairAnchor&&(!context||context.intervalDays!==p.execution.IntervalDays))throw new Error('Schedule/template interval drift');
   if(p.setting&&context){for(const [field,key] of [['nextPlannedDueAt','NextPlannedPMDueAt'],['nextDueAt','NextPMDueAt'],['lastPmCompletedAt','LastPMCompletedAt']])if(norm(context[field])!==p.setting[key])throw new Error('Concurrent schedule drift');}
   before.push({original,execution,context});
   const reason=`Occurrence fulfilled by ${execution.TaskNumber}; actual completion ${execution.CompletedAt.toISOString()}. Authorized legacy reconciliation.`;
