@@ -42,7 +42,7 @@ export const preparePmExecution = async (executor: Executor, taskId: string): Pr
   await lockPmContext(executor,task.ContextId as string);
   const conflict=await executor.request().input("taskId",sql.UniqueIdentifier,taskId).query(`
     SELECT TOP(1) other.TaskId FROM pm.PMTasks target JOIN pm.PMTasks other
-      ON COALESCE(other.AssetId,other.FacilityId)=COALESCE(target.AssetId,target.FacilityId)
+      ON (other.AssetId=target.AssetId OR other.FacilityId=target.FacilityId)
       AND other.TemplateId=target.TemplateId AND other.TaskId<>target.TaskId
     WHERE target.TaskId=@taskId AND ${protectedPmSql("other")};`);
   return !conflict.recordset[0];
@@ -61,7 +61,7 @@ export const supersedeUntouchedPmTasks = async (executor: Executor, taskId: stri
       CancelledReason=CONCAT(N'PM_AUTO_SUPERSEDED:',CONVERT(nvarchar(36),target.TaskId))
     OUTPUT inserted.TaskId INTO @changed
     FROM pm.PMTasks other WITH(UPDLOCK,HOLDLOCK) JOIN pm.PMTasks target WITH(HOLDLOCK)
-      ON COALESCE(other.AssetId,other.FacilityId)=COALESCE(target.AssetId,target.FacilityId)
+      ON (other.AssetId=target.AssetId OR other.FacilityId=target.FacilityId)
       AND other.TemplateId=target.TemplateId AND other.TaskId<>target.TaskId
     WHERE target.TaskId=@taskId AND (${protectedPmSql("target")} OR (target.MaintenanceType=N'PM' AND ${untouchedPmSql("target")}))
       AND other.MaintenanceType=N'PM' AND ${untouchedPmSql("other")};
@@ -74,7 +74,7 @@ export const supersedeUntouchedPmTasks = async (executor: Executor, taskId: stri
   return Number(r.recordset[0]?.Changed ?? 0);
 };
 
-export const retireMissedPmTasks = async (executor: Executor, contextId: string, templateId: string): Promise<number> => {
+export const retireMissedPmTasks = async (executor: Executor, contextId: string, templateId: string, kind: "asset" | "facility"): Promise<number> => {
   const r=await executor.request().input("contextId",sql.UniqueIdentifier,contextId)
     .input("templateId",sql.UniqueIdentifier,templateId).query(`
     BEGIN TRY
@@ -87,10 +87,10 @@ export const retireMissedPmTasks = async (executor: Executor, contextId: string,
     UPDATE t SET Status=N'cancelled',CancelledAt=sysutcdatetime(),CancelledByUserId=NULL,
       CancelledReason=N'PM_AUTO_MISSED: unperformed occurrence retained in missed history'
     OUTPUT inserted.TaskId INTO @changed
-    FROM pm.PMTasks t WITH(UPDLOCK,HOLDLOCK) WHERE t.MaintenanceType=N'PM' AND COALESCE(t.AssetId,t.FacilityId)=@contextId
+    FROM pm.PMTasks t WITH(UPDLOCK,HOLDLOCK) WHERE t.MaintenanceType=N'PM' AND t.${kind === "asset" ? "AssetId" : "FacilityId"}=@contextId
       AND t.TemplateId=@templateId AND ${untouchedPmSql("t")}
       AND EXISTS(SELECT 1 FROM pm.PMMissedOccurrences m WHERE m.TemplateId=t.TemplateId
-        AND COALESCE(m.AssetId,m.FacilityId)=@contextId AND m.PlannedDueAt=t.PlannedDueAt);
+        AND m.${kind === "asset" ? "AssetId" : "FacilityId"}=@contextId AND m.PlannedDueAt=t.PlannedDueAt);
     INSERT pm.AuditLog(ActorUserId,Action,EntityType,EntityId,Metadata)
       SELECT NULL,N'task.cancel.auto-missed',N'task',TaskId,N'{"policy":"missed-not-completed"}' FROM @changed;
     SELECT COUNT(*) Changed FROM @changed;

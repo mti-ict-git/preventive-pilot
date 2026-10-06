@@ -43,7 +43,7 @@ export const schedulingReadSql = (mode: "day" | "calendar"): string => {
     LEFT JOIN pm.PMTasks original ON original.TaskId=r.OriginalTaskId
     LEFT JOIN pm.PMTasks covered ON covered.CancelledReason=CONCAT(N'PM_AUTO_SUPERSEDED:',CONVERT(nvarchar(36),t.TaskId))
       AND covered.PlannedDueAt=t.FulfilledPlannedDueAt AND covered.TemplateId=t.TemplateId
-      AND COALESCE(covered.AssetId,covered.FacilityId)=COALESCE(t.AssetId,t.FacilityId)
+      AND (covered.AssetId=t.AssetId OR covered.FacilityId=t.FacilityId)
     WHERE t.MaintenanceType=N'PM' AND t.Status<>N'cancelled'
       AND COALESCE(r.EffectiveDueAt,covered.ScheduledDueAt,t.ScheduledDueAt)>=@from AND COALESCE(r.EffectiveDueAt,covered.ScheduledDueAt,t.ScheduledDueAt)<@to
     UNION ALL ${projections.join(" UNION ALL ")}

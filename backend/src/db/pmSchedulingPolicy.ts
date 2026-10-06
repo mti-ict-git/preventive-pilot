@@ -501,7 +501,7 @@ export const reconcilePmScheduleContext = async (input: {
     .input("contextId", sql.UniqueIdentifier, context.contextId)
     .input("templateId", sql.UniqueIdentifier, context.templateId)
     .query(`/* pm-active-across-dates */ SELECT TOP(1) t.TaskId,COALESCE(t.FulfilledPlannedDueAt,t.PlannedDueAt) PlannedDueAt,t.ScheduledDueAt,t.Status,t.ApprovalStatus,t.CancelledAt,t.CompletedAt
-      FROM pm.PMTasks t WHERE COALESCE(t.AssetId,t.FacilityId)=@contextId AND t.TemplateId=@templateId
+      FROM pm.PMTasks t WHERE t.${context.kind === "asset" ? "AssetId" : "FacilityId"}=@contextId AND t.TemplateId=@templateId
       AND ${protectedPmSql("t")} ORDER BY t.StartedAt,t.CreatedAt;`);
   const activeRow=active.recordset[0];
   if (activeRow) {
@@ -512,7 +512,7 @@ export const reconcilePmScheduleContext = async (input: {
       cancelledAt: null, completedAt: null };
     return { plannedDueAt: task.plannedDueAt, scheduledDueAt: task.scheduledDueAt, task };
   }
-  await retireMissedPmTasks(input.executor, context.contextId, context.templateId);
+  await retireMissedPmTasks(input.executor, context.contextId, context.templateId, context.kind);
 
   let currentPlannedDueAt = computeInitialPmPlannedDueAt({
     nextPlannedDueAt: context.nextPlannedDueAt,
@@ -585,7 +585,7 @@ export const reconcilePmScheduleContext = async (input: {
         effectiveDueAt: currentDueAt,
         sourceTaskId: task?.taskId ?? null,
       });
-      await retireMissedPmTasks(input.executor, context.contextId, context.templateId);
+      await retireMissedPmTasks(input.executor, context.contextId, context.templateId, context.kind);
       currentPlannedDueAt = nextPlannedDueAt;
       continue;
     }

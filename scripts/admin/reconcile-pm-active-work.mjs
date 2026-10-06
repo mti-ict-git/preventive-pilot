@@ -93,10 +93,10 @@ try {
   await auditAction(t,'pm.reconcile.stale-anchor',{reason});
  }
  // Process every configured context, including missed sources with category/site blockers.
- const contexts=new Map();for(const t of all[0])contexts.set((t.AssetId??t.FacilityId)+':'+t.TemplateId,t);
+ const contexts=new Map();for(const t of all[0])contexts.set((t.AssetId?'asset:':'facility:')+(t.AssetId??t.FacilityId)+':'+t.TemplateId,t);
  for(const t of contexts.values()) {
   await lockPmContext(tx,t.AssetId??t.FacilityId);
-  const missed=await retireMissedPmTasks(tx,t.AssetId??t.FacilityId,t.TemplateId);
+  const missed=await retireMissedPmTasks(tx,t.AssetId??t.FacilityId,t.TemplateId,t.AssetId ? "asset" : "facility");
   if(missed)actions.push({task:t.TaskNumber,action:'retire-missed',count:missed});
  }
  const settings=(await tx.request().query(`SELECT AssetId ContextId,N'asset' Kind FROM pm.AssetPMSettings WHERE PMEnabled=1

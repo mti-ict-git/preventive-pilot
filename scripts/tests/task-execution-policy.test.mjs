@@ -130,3 +130,23 @@ test('EX-01 preserves PM timing, revision reasons, replacement tasks, and findin
     assert.deepEqual(secondBody, { id: fixtureWorkOrderId, created: false });
   });
 });
+
+
+test('single active PM rejects competing start, resume, submission and force-completion before checklist writes', async t=>{
+ const h=createHarness({query(query){if(query.includes('SELECT TOP(1) other.TaskId'))return {recordset:[{TaskId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'}],rowsAffected:[]};}});
+ const server=h.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
+ const origin=`http://127.0.0.1:${server.address().port}`;
+ for(const action of ['start','resume','submit-for-approval','complete']){
+  h.reset({taskStatus:'open'});
+  const response=await fetch(`${origin}/api/tasks/${fixtureTaskId}/${action}`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${h.token(['Supervisor'])}`},body:JSON.stringify({checklistResults:[{templateChecklistItemId:mandatoryItemId,outcome:1}]})});
+  assert.equal(response.status,409,`${action}: ${await response.text()}`);
+  assert(!h.calls.some(c=>c.query.includes('MERGE pm.PMTaskChecklistResults')));
+  assert(!h.txEvents.includes('commit'));
+ }
+});
+
+test('retired PM cannot be submitted after a stale editor remains open',async t=>{
+ const h=createHarness();h.reset({taskStatus:'cancelled'});const server=h.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
+ const response=await fetch(`http://127.0.0.1:${server.address().port}/api/tasks/${fixtureTaskId}/submit-for-approval`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${h.token(['Technician'])}`},body:JSON.stringify({checklistResults:[{templateChecklistItemId:mandatoryItemId,outcome:1}]})});
+ assert.equal(response.status,409,await response.text());assert(!h.calls.some(c=>c.query.includes('MERGE pm.PMTaskChecklistResults')));
+});

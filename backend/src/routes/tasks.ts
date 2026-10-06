@@ -4434,6 +4434,15 @@ tasksRouter.post("/:taskId/complete", async (req, res) => {
       return;
     }
 
+    if (!(await preparePmExecution(tx, taskId))) {
+      await tx.rollback(); res.status(409).json({ message: "Another PM execution is already active.", code: "PM_ACTIVE_WORK_EXISTS" }); return;
+    }
+    const actionable=await tx.request().input("taskId",sql.UniqueIdentifier,taskId)
+      .query("SELECT Status FROM pm.PMTasks WITH(UPDLOCK,HOLDLOCK) WHERE TaskId=@taskId");
+    if (!actionable.recordset[0] || ["completed","cancelled"].includes(actionable.recordset[0].Status as string)) {
+      await tx.rollback(); res.status(409).json({ message: "Task is no longer actionable." }); return;
+    }
+
     const checklistDefinition = await loadTaskChecklistDefinition({
       executor: tx,
       taskId,
@@ -4999,6 +5008,15 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
     ) {
       await tx.rollback();
       return;
+    }
+
+    if (!(await preparePmExecution(tx, taskId))) {
+      await tx.rollback(); res.status(409).json({ message: "Another PM execution is already active.", code: "PM_ACTIVE_WORK_EXISTS" }); return;
+    }
+    const actionable=await tx.request().input("taskId",sql.UniqueIdentifier,taskId)
+      .query("SELECT Status FROM pm.PMTasks WITH(UPDLOCK,HOLDLOCK) WHERE TaskId=@taskId");
+    if (!actionable.recordset[0] || ["completed","cancelled"].includes(actionable.recordset[0].Status as string)) {
+      await tx.rollback(); res.status(409).json({ message: "Task is no longer actionable." }); return;
     }
 
     await ensureTaskChecklistSnapshot({

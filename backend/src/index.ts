@@ -7173,6 +7173,7 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Complete a task",
+        description: "Uses the single active PM context lock; PM_ACTIVE_WORK_EXISTS returns 409 for a competing execution.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -7217,7 +7218,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["Tasks"],
         summary: "Submit task for approval",
         description:
-          "For PM tasks, the first successful technician submission captures a frozen checklist snapshot that later detail, review, export, and resubmission flows continue to use. Any open PM work session is closed at the submitted timestamp so review waiting time is not counted as active execution time.",
+          "For PM tasks, the first successful technician submission captures a frozen checklist snapshot that later detail, review, export, and resubmission flows continue to use. Any open PM work session is closed at the submitted timestamp so review waiting time is not counted as active execution time. Uses the single active PM context lock; PM_ACTIVE_WORK_EXISTS returns 409 for a competing execution.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],

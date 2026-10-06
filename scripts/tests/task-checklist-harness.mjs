@@ -227,17 +227,17 @@ export function createHarness(overrides = {}) {
           return this;
         },
         async query(query) {
+          calls.push({ query, inputs: { ...inputs } });
+          if (overrides.query) {
+            const overridden = await overrides.query(query, inputs);
+            if (overridden !== undefined) return overridden;
+          }
           if(query.includes('SELECT MaintenanceType,COALESCE(AssetId,FacilityId) ContextId')) return {recordset:[{MaintenanceType:maintenanceType,ContextId:fixtureTaskId}],rowsAffected:[]};
           if(query.includes('SELECT Status FROM pm.PMTasks WITH(UPDLOCK,HOLDLOCK)')) return {recordset:[{Status:taskStatus}],rowsAffected:[]};
           if(query.includes('sp_getapplock')) return {recordset:[],rowsAffected:[]};
           if(query.includes('SELECT TOP(1) other.TaskId')) return {recordset:[],rowsAffected:[]};
           if(query.includes('UPDATE other SET') || query.includes('UPDATE t SET Status=N')) return {recordset:[{Changed:0}],rowsAffected:[0]};
           if(query.includes('pm-active-across-dates')) return {recordset:[],rowsAffected:[]};
-          calls.push({ query, inputs: { ...inputs } });
-          if (overrides.query) {
-            const overridden = await overrides.query(query, inputs);
-            if (overridden !== undefined) return overridden;
-          }
           if (query.includes("UPDATE t") && query.includes("Status = N'open'") && query.includes('AND s.DefaultTemplateId = t.TemplateId')) {
             if (!pmEnabled || !templateIsActive) return { recordset: [], rowsAffected: [0] };
             taskStatus = 'open';
