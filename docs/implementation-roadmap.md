@@ -569,6 +569,6 @@ The preceding outstanding-PM correction is already closed by its own release evi
 ### Selected D1 correction — Company Asset label layout, 2026-10-07
 
 Objective: implement the user-provided company asset label reference on 18mm tape. Sources: functional specification Company Asset layout, UX-CONTRACT.md and Label Designer UI-settings contract.
-- [ ] Implement backward-compatible layout/logo settings, shared PDF/SVG geometry, named controls and bounded logo upload.
-- [ ] Verify geometry, persistence/validation, browser preview and exact-source production release.
+- [x] Implement backward-compatible layout/logo settings, shared PDF/SVG geometry, named controls and bounded logo upload.
+- [x] Verify geometry, persistence/validation, browser preview and exact-source production release.
 Output: reusable Company Asset preset; verification evidence in verification-q01-desktop.md. Physical printer split/orientation issue remains device acceptance.
