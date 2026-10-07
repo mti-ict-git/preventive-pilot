@@ -593,6 +593,6 @@ Output and challenge: record browser, regression and release evidence in verific
 ### Selected D1 correction: uploaded logo visible bounds, 2026-10-07
 
 Objective: make 100% fit actual logo content even for uploaded PNG/JPG with transparent or white padding. Sources: Label Designer functional specification, UX-CONTRACT and prior logo slider verification.
-- [ ] Detect visible bounds for built-in and uploaded images; preserve original image and shared PDF/SVG clipping.
-- [ ] Verify padded PNG/JPG, small tape geometry and browser preview, then release the affected web service.
+- [x] Detect visible bounds for built-in and uploaded images; preserve original image and shared PDF/SVG clipping.
+- [x] Verify padded PNG/JPG, small tape geometry and browser preview, then release the affected web service.
 Output and challenge: capture regression, browser and release evidence in verification-q01-desktop.md.
