@@ -1,3 +1,4 @@
+import { getLogoViewport } from "./logoViewport";
 import { companyLogoDataUrl } from "./companyLogo";
 import { PDFDocument, StandardFonts, rgb, degrees, pushGraphicsState, popGraphicsState, rectangle, clip, endPath } from "pdf-lib";
 import * as QRCode from "qrcode";
@@ -72,8 +73,8 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
         let image;
         try { image = logoDataUrl.startsWith("data:image/png") ? await doc.embedPng(logoDataUrl) : await doc.embedJpg(logoDataUrl); }
         catch { throw new Error("The logo cannot be read. Upload a valid PNG or JPG image."); }
-        // The bundled reconstruction contains transparent padding; clip only its known ink bounds.
-        const viewport = logoDataUrl === companyLogoDataUrl ? { x: 12, y: 141, width: 2143, height: 428, imageWidth: image.width, imageHeight: image.height } : undefined;
+        // Fit visible content for built-in and uploaded PNG/JPG logos alike.
+        const viewport = getLogoViewport(logoDataUrl);
         const visibleWidth = viewport?.width ?? image.width, visibleHeight = viewport?.height ?? image.height;
         const scale = Math.min(leftWidth / visibleWidth, headerHeight / visibleHeight) * logoSizePercent / 100;
         logo = { dataUrl: logoDataUrl, x: inset, y: height - inset - visibleHeight * scale, width: visibleWidth * scale, height: visibleHeight * scale, viewport };

@@ -105,3 +105,25 @@ test("logo size scales visible ink within a fixed safe header and survives persi
  }
  const legacy=await buildLabelOutput([asset],cfg,"assetTag");assert.equal(legacy.drawings[0].logo.width,a.logo.width);
 });
+
+
+test("uploaded padded PNG/JPG fit visible ink at 100 percent on 45x18 tape",async()=>{
+ const upng=require("@pdf-lib/upng").default,jpeg=require("jpeg-js"),{getLogoViewport}=load("logoViewport");
+ const width=500,height=200,pixels=new Uint8Array(width*height*4);
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  const i=(y*width+x)*4;const ink=x>=30&&x<470&&y>=80&&y<120;
+  pixels[i]=pixels[i+1]=pixels[i+2]=ink?0:255;pixels[i+3]=255;
+ }
+ const png="data:image/png;base64,"+Buffer.from(upng.encode([pixels.buffer],width,height,0)).toString("base64");
+ const jpg="data:image/jpeg;base64,"+Buffer.from(jpeg.encode({data:pixels,width,height},100).data).toString("base64");
+ for(const dataUrl of [png,jpg]){
+  const bounds=getLogoViewport(dataUrl);assert(bounds.height<50);assert(bounds.width>430);
+  const result=await buildLabelOutput([asset],{...config,width:45,qrSize:10,layout:"companyAsset",showLogo:true,logoDataUrl:dataUrl,logoSizePercent:100},"assetTag");
+  const d=result.drawings[0];assert(d.logo.viewport);assert(d.logo.width>d.width*0.4);assert(d.logo.x+d.logo.width<d.qr.x);
+  assert(d.logo.y>=d.lines.find(l=>l.text==="Company Asset").y+d.lines.find(l=>l.text==="Company Asset").size);
+  assert.equal((await PDFDocument.load(result.pdfBytes)).getPageCount(),1);
+ }
+ const blank="data:image/png;base64,"+Buffer.from(upng.encode([new Uint8Array(100*100*4).buffer],100,100,0)).toString("base64");
+ await assert.rejects(buildLabelOutput([asset],{...config,layout:"companyAsset",showLogo:true,logoDataUrl:blank},"assetTag"),/blank on white/);
+});
+

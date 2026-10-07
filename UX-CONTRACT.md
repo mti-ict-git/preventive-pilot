@@ -61,3 +61,6 @@ Company Asset uses the existing shared Radix Select/Input/Button and the same PD
 
 
 Company Asset Logo size uses the shared Radix Slider with an accessible name and visible percent, disabled while logo visibility is off or controls are locked. The safe header bounds preserve text/QR separation; the same drawing geometry owns PDF and preview.
+
+
+Logo size now fits visible PNG/JPG content, including uploaded logos. Inline helper text explains ignored blank outer margins. Blank/unreadable/oversized images produce a preview error; the source image remains unchanged.

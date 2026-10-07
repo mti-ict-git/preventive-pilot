@@ -420,7 +420,7 @@ export default function LabelDesigner() {
                     <div className="space-y-2 pt-2">
                       <div className="flex items-center justify-between"><Label>Logo size</Label><span className="text-sm text-muted-foreground">{config.logoSizePercent ?? 100}%</span></div>
                       <Slider aria-label="Logo size" min={25} max={100} step={1} value={[config.logoSizePercent ?? 100]} disabled={controlsLocked || !config.showLogo} onValueChange={([value]) => updateConfig("logoSizePercent", value)} />
-                      <p className="text-xs text-muted-foreground">Fits the header without covering text or QR. Uploaded logos with blank margins may look smaller.</p>
+                      <p className="text-xs text-muted-foreground">Fits the visible logo in the header. Blank outer margins are ignored; text and QR stay separate.</p>
                     </div>
                     <p className="text-xs text-muted-foreground">Company Asset prints the asset name, QR, Company Asset and DON'T REMOVE. Standard content toggles apply to Standard layout.</p>
                   </div>}
