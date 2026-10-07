@@ -10,7 +10,7 @@ export const labelDimensions = (config: LabelDesignerConfig) => ({
   height: config.orientation === "landscape" ? Math.min(config.width, config.height) : Math.max(config.width, config.height),
 });
 export type LabelDrawing = {
-  width: number; height: number; showBorder: boolean; borderBlack?: boolean;
+  width: number; height: number; showBorder: boolean; borderBlack?: boolean; borderInset: number;
   logo?: { dataUrl: string; x: number; y: number; width: number; height: number; viewport?: { x: number; y: number; width: number; height: number; imageWidth: number; imageHeight: number } };
   qr: { dataUrl: string; x: number; y: number; size: number };
   lines: Array<{ text: string; size: number; bold: boolean; x: number; y: number; rotation?: number }>;
@@ -25,7 +25,8 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       !Number.isFinite(config.qrSize) || config.qrSize < 5 ||
       !Number.isFinite(config.fontSize) || config.fontSize < 5) throw new Error("Enter valid label dimensions and sizes.");
   const width = mmToPt(dimensions.width), height = mmToPt(dimensions.height);
-  const padding = mmToPt(config.padding), gap = mmToPt(2), qrSize = mmToPt(config.qrSize);
+  const borderInset = mmToPt(dimensions.height === 18 ? 1.5 : 0.5);
+  const padding = mmToPt(Math.max(config.padding, dimensions.height === 18 ? 2 : 0)), gap = mmToPt(2), qrSize = mmToPt(config.qrSize);
   const landscape = config.orientation === "landscape";
   const company = config.layout === "companyAsset";
   if (company && !landscape) throw new Error("Company Asset requires landscape orientation.");
@@ -96,8 +97,8 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       const warning = "DON'T REMOVE", warningSize = fit(warning, 6, usableHeight, true);
       add(warning, warningSize, width - inset - warningSize, (height + bold.widthOfTextAtSize(warning, warningSize)) / 2, true, -90);
       page.drawImage(qr, { x: qrX, y: qrY, width: qrSize, height: qrSize });
-      if (config.showBorder) page.drawRectangle({ x: mmToPt(0.5), y: mmToPt(0.5), width: width-mmToPt(1), height: height-mmToPt(1), borderColor: rgb(0,0,0), borderWidth: 0.8 });
-      drawings.push({ width, height, showBorder: config.showBorder, borderBlack: true, logo, qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines });
+      if (config.showBorder) page.drawRectangle({ x: borderInset, y: borderInset, width: width-borderInset*2, height: height-borderInset*2, borderColor: rgb(0,0,0), borderWidth: 0.8 });
+      drawings.push({ width, height, showBorder: config.showBorder, borderInset, borderBlack: true, logo, qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines });
       continue;
     }
     const lines: Array<{ text: string; size: number; bold: boolean }> = [];
@@ -119,8 +120,8 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       }
     }
     const page = doc.addPage([width, height]);
-    if (config.showBorder) page.drawRectangle({ x: mmToPt(0.5), y: mmToPt(0.5),
-      width: width - mmToPt(1), height: height - mmToPt(1), borderColor: rgb(0.7, 0.7, 0.7), borderWidth: 0.5 });
+    if (config.showBorder) page.drawRectangle({ x: borderInset, y: borderInset,
+      width: width - borderInset*2, height: height - borderInset*2, borderColor: rgb(0.7, 0.7, 0.7), borderWidth: 0.5 });
     const qrX = landscape ? padding : (width - qrSize) / 2;
     const qrY = landscape ? (height - qrSize) / 2 : height - padding - qrSize;
     page.drawImage(qr, { x: qrX, y: qrY, width: qrSize, height: qrSize });
@@ -133,7 +134,7 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       positionedLines.push({ ...line, x, y });
       page.drawText(line.text, { x, y, size: line.size, font: currentFont, color: rgb(0, 0, 0) });
     }
-    drawings.push({ width, height, showBorder: config.showBorder,
+    drawings.push({ width, height, showBorder: config.showBorder, borderInset,
       qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines: positionedLines });
   }
   return { pdfBytes: await doc.save(), drawings };

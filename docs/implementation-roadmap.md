@@ -596,3 +596,11 @@ Objective: make 100% fit actual logo content even for uploaded PNG/JPG with tran
 - [x] Detect visible bounds for built-in and uploaded images; preserve original image and shared PDF/SVG clipping.
 - [x] Verify padded PNG/JPG, small tape geometry and browser preview, then release the affected web service.
 Output and challenge: capture regression, browser and release evidence in verification-q01-desktop.md.
+
+
+### Selected D1 correction: 18mm printable area, 2026-10-07
+
+Objective: prevent clipped borders/content on Brother PT-P750W 18mm tape, retaining physical page dimensions. Sources: functional specification, UX-CONTRACT and Brother official specs (15.8mm print height).
+- [ ] Place border at 1.5mm and enforce at least 2mm artwork padding for 18mm-height labels in both renderers.
+- [ ] Verify physical page size and safe geometry, browser preview and scoped web release.
+Output and challenge: verification-q01-desktop.md; physical printer acceptance remains with the user.

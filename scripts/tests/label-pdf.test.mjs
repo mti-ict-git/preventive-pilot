@@ -127,3 +127,16 @@ test("uploaded padded PNG/JPG fit visible ink at 100 percent on 45x18 tape",asyn
  await assert.rejects(buildLabelOutput([asset],{...config,layout:"companyAsset",showLogo:true,logoDataUrl:blank},"assetTag"),/blank on white/);
 });
 
+
+
+test("18mm label border and artwork stay inside Brother 15.8mm print height",async()=>{
+ for(const layout of ["standard","companyAsset"]){
+  const cfg={...config,width:45,qrSize:10,layout,showLogo:layout==="companyAsset",showBorder:true};
+  const {drawings,pdfBytes}=await buildLabelOutput([asset],cfg,"assetTag"),d=drawings[0];
+  const mm=72/25.4;assert.equal(d.borderInset,1.5*mm);
+  assert(d.borderInset-0.4>1.1*mm);assert(d.qr.y>=2*mm);assert(d.qr.y+d.qr.size<=d.height-2*mm);
+  if(d.logo){assert(d.logo.y>=2*mm);assert(d.logo.y+d.logo.height<=d.height-2*mm);}
+  assert(d.lines.filter(l=>!l.rotation).every(l=>l.y>=2*mm&&l.y+l.size<=d.height-2*mm));
+  const pdf=await PDFDocument.load(pdfBytes);assert(Math.abs(pdf.getPage(0).getHeight()/mm-18)<1e-8);assert(Math.abs(pdf.getPage(0).getWidth()/mm-45)<1e-8);
+ }
+});

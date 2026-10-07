@@ -255,3 +255,6 @@ Company Asset logo size is adjustable from 25% to 100% of the safe header area, 
 
 
 Uploaded PNG/JPG logos now omit only transparent or near-white outer margins when fitting the header. The original image remains stored; preview and PDF clip the same detected viewport. Logo images must be visible on white and at most 16 megapixels. A 100% size refers to visible content rather than the full padded image.
+
+
+For 18mm-height labels, the Brother PT-P750W safe print layout places the border 1.5mm inside every edge and uses at least 2mm artwork padding. Preview/PDF share these bounds; physical page dimensions remain unchanged. This accommodates the official 15.8mm print height on 18mm tape. Tape feeding/peeling margins are outside this correction.

@@ -863,7 +863,7 @@ function PdfLabelPreview({ asset, config, qrPayloadMode, snipeBaseUrl }: {
     <div className="w-full rounded border bg-white" style={{ aspectRatio: `${width} / ${height}`, minHeight: 100 }}>
       {result.error ? <p role="alert" className="p-2 text-xs text-destructive">{result.error}</p>
         : d ? <svg viewBox={`0 0 ${d.width} ${d.height}`} role="img" aria-label={`Label preview for ${asset.name}`} className="h-full w-full">
-          {d.showBorder && <rect x={72 / 50.8} y={72 / 50.8} width={d.width - 72 / 25.4} height={d.height - 72 / 25.4} fill="none" stroke={d.borderBlack ? "#000" : "#b3b3b3"} strokeWidth={d.borderBlack ? 0.8 : 0.5} />}
+          {d.showBorder && <rect x={d.borderInset} y={d.borderInset} width={d.width - d.borderInset*2} height={d.height - d.borderInset*2} fill="none" stroke={d.borderBlack ? "#000" : "#b3b3b3"} strokeWidth={d.borderBlack ? 0.8 : 0.5} />}
           {d.logo && (d.logo.viewport ? <svg x={d.logo.x} y={d.height-d.logo.y-d.logo.height} width={d.logo.width} height={d.logo.height} viewBox={`${d.logo.viewport.x} ${d.logo.viewport.y} ${d.logo.viewport.width} ${d.logo.viewport.height}`} overflow="hidden"><image href={d.logo.dataUrl} width={d.logo.viewport.imageWidth} height={d.logo.viewport.imageHeight} /></svg> : <image href={d.logo.dataUrl} x={d.logo.x} y={d.height-d.logo.y-d.logo.height} width={d.logo.width} height={d.logo.height} />)}
           <image href={d.qr.dataUrl} x={d.qr.x} y={d.height - d.qr.y - d.qr.size} width={d.qr.size} height={d.qr.size} />
           {d.lines.map((line, i) => <text key={i} x={line.x} y={d.height - line.y} fontSize={line.size}
