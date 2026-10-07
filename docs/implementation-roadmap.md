@@ -564,4 +564,4 @@ Sources: functional specification Label Designer printing, UX-CONTRACT.md, exist
 - [ ] Current tape-width edits survive refetch/reload and Print/Export use current settings before Save Defaults.
 - [ ] Preview/export/print exact-size parity, PDF boundary tests, browser draft/save/failure checks and production web-only release verified.
 
-The PC-006 schedule-cursor correction remains pending; inspection confirmed an open July task and January 2027 cursor. No schedule/data repair was applied in this work item. Mobile audit remains paused at the user request.
+The preceding outstanding-PM correction is already closed by its own release evidence above (API 95af66d); this Label Designer work does not change that correction, scheduling or business data. Mobile audit remains paused at the user request.
