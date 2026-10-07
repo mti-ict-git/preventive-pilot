@@ -585,6 +585,6 @@ Output and challenge: document regression and release evidence in verification-q
 ### Selected D1 correction: logo size slider, 2026-10-07
 
 Objective: let users resize Company Asset logos in the safe header. Sources: functional specification, UX-CONTRACT and label UI-settings OpenAPI.
-- [ ] Implement a persisted 25-100 percent slider, identical preview/PDF geometry and bounded built-in logo clipping.
-- [ ] Verify resizing, legacy defaults, persistence, bounds and exact-source API/web release.
+- [x] Implement a persisted 25-100 percent slider, identical preview/PDF geometry and bounded built-in logo clipping.
+- [x] Verify resizing, legacy defaults, persistence, bounds and exact-source API/web release.
 Output and challenge: record browser, regression and release evidence in verification-q01-desktop.md.
