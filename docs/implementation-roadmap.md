@@ -566,7 +566,7 @@ Sources: functional specification Label Designer printing, UX-CONTRACT.md, exist
 
 The preceding outstanding-PM correction is already closed by its own release evidence above (API 95af66d); this Label Designer work does not change that correction, scheduling or business data. Mobile audit remains paused at the user request.
 
-### Selected D1 correction — Company Asset label layout, 2026-10-07
+### Selected D1 correction ï¿½ Company Asset label layout, 2026-10-07
 
 Objective: implement the user-provided company asset label reference on 18mm tape. Sources: functional specification Company Asset layout, UX-CONTRACT.md and Label Designer UI-settings contract.
 - [x] Implement backward-compatible layout/logo settings, shared PDF/SVG geometry, named controls and bounded logo upload.
@@ -609,6 +609,6 @@ Output and challenge: verification-q01-desktop.md; physical printer acceptance r
 ### Selected D1 correction: vertical print calibration, 2026-10-07
 
 Objective: let the user calibrate vertical printer alignment independently of label dimensions. Sources: Label Designer functional specification, UX-CONTRACT and UI-settings OpenAPI.
-- [ ] Implement persisted -1 to +1mm slider, 0.1mm steps, center reset and shared whole-design PDF/SVG translation with page-bound checks.
-- [ ] Verify direction, persistence, legacy defaults, bounds, browser and exact-source API/web release.
+- [x] Implement persisted -1 to +1mm slider, 0.1mm steps, center reset and shared whole-design PDF/SVG translation with page-bound checks.
+- [x] Verify direction, persistence, legacy defaults, bounds, browser and exact-source API/web release.
 Output and challenge: verification-q01-desktop.md; actual calibration remains a user print test.
