@@ -14,7 +14,7 @@ const load = file => {
   vm.runInThisContext(`(function(require,module,exports){${js}\n})`)(require,m,m.exports);
   return m.exports;
 };
-const { buildLabelPdf } = load("labelPdf"), { parseLabelDraft, labelDraftKey } = load("labelDraft");
+const { buildLabelPdf, buildLabelOutput } = load("labelPdf"), { parseLabelDraft, labelDraftKey } = load("labelDraft");
 const config = { width:82,height:18,qrSize:13,padding:1,fontSize:8,showAssetTag:true,showAssetName:true,
   showCategory:false,showLocation:false,showCustomText:false,customText:"",showBorder:true,showLogo:false,borderRadius:0,orientation:"landscape" };
 const asset = { id:"asset-1",assetTag:"34H6CF3",name:"MTI-PC-005",snipeAssetId:7,category:{name:null},location:{name:null} };
@@ -40,4 +40,16 @@ test("browser draft is user scoped, validates dimensions and rejects corrupted d
   const settings={config,gridColumns:3,qrPayloadMode:"assetTag"};assert.deepEqual(parseLabelDraft(JSON.stringify(settings)),settings);
   assert.notEqual(labelDraftKey("a"),labelDraftKey("b"));assert.equal(parseLabelDraft("invalid"),null);
   assert.equal(parseLabelDraft(JSON.stringify({...settings,config:{...config,height:0}})),null);
+});
+
+test("preview drawing shares exact PDF geometry and top-down text order",async()=>{
+  for(const orientation of ["landscape","portrait"]){
+    const output=await buildLabelOutput([asset],{...config,orientation},"assetTag");
+    const page=(await PDFDocument.load(output.pdfBytes)).getPage(0),d=output.drawings[0];
+    assert.equal(d.width,page.getWidth());assert.equal(d.height,page.getHeight());
+    assert.equal(d.lines[0].text,asset.assetTag);assert.equal(d.lines[1].text,asset.name);
+    assert(d.lines[0].y>d.lines[1].y);assert(d.lines.every(line=>line.y>=0&&line.y+line.size<=d.height));
+    assert(d.qr.x>=0&&d.qr.y>=0&&d.qr.x+d.qr.size<=d.width&&d.qr.y+d.qr.size<=d.height);
+    assert.match(d.qr.dataUrl,/^data:image\/png;base64,/);
+  }
 });

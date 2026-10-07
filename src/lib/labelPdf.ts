@@ -7,8 +7,13 @@ export const labelDimensions = (config: LabelDesignerConfig) => ({
   width: config.orientation === "landscape" ? Math.max(config.width, config.height) : Math.min(config.width, config.height),
   height: config.orientation === "landscape" ? Math.min(config.width, config.height) : Math.max(config.width, config.height),
 });
-export const buildLabelPdf = async (assets: Asset[], config: LabelDesignerConfig,
-  mode: LabelDesignerQrPayloadMode, snipeBaseUrl?: string | null): Promise<Uint8Array> => {
+export type LabelDrawing = {
+  width: number; height: number; showBorder: boolean;
+  qr: { dataUrl: string; x: number; y: number; size: number };
+  lines: Array<{ text: string; size: number; bold: boolean; x: number; y: number }>;
+};
+export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerConfig,
+  mode: LabelDesignerQrPayloadMode, snipeBaseUrl?: string | null): Promise<{ pdfBytes: Uint8Array; drawings: LabelDrawing[] }> => {
   const dimensions = labelDimensions(config);
   if (![config.width, config.height].every(v => Number.isInteger(v) && v >= 10 && v <= 200) ||
       !Number.isFinite(config.padding) || config.padding < 0 ||
@@ -23,12 +28,14 @@ export const buildLabelPdf = async (assets: Asset[], config: LabelDesignerConfig
     throw new Error("QR code and padding do not fit. Reduce QR size or padding, or increase label size.");
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica), bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const drawings: LabelDrawing[] = [];
   for (const asset of assets) {
     const base = snipeBaseUrl?.replace(/\/+$/, "");
     const payload = mode === "snipeItUrl" && base && asset.snipeAssetId != null
       ? `${base}/hardware/${asset.snipeAssetId}`
       : mode !== "assetId" && asset.assetTag ? asset.assetTag : asset.id;
-    const qr = await doc.embedPng(await QRCode.toDataURL(payload, { margin: 4, errorCorrectionLevel: "M" }));
+    const dataUrl = await QRCode.toDataURL(payload, { margin: 4, errorCorrectionLevel: "M" });
+    const qr = await doc.embedPng(dataUrl);
     const lines: Array<{ text: string; size: number; bold: boolean }> = [];
     if (config.showAssetTag && asset.assetTag) lines.push({ text: asset.assetTag, size: config.fontSize + 2, bold: true });
     if (config.showAssetName && asset.name) lines.push({ text: asset.name, size: config.fontSize, bold: false });
@@ -53,13 +60,21 @@ export const buildLabelPdf = async (assets: Asset[], config: LabelDesignerConfig
     const qrX = landscape ? padding : (width - qrSize) / 2;
     const qrY = landscape ? (height - qrSize) / 2 : height - padding - qrSize;
     page.drawImage(qr, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+    const positionedLines: LabelDrawing["lines"] = [];
     let y = landscape ? (height + totalHeight) / 2 : qrY - gap;
     for (const line of lines) {
       y -= line.size * 1.25;
       const currentFont = line.bold ? bold : font;
       const x = landscape ? padding + qrSize + gap : (width - currentFont.widthOfTextAtSize(line.text, line.size)) / 2;
+      positionedLines.push({ ...line, x, y });
       page.drawText(line.text, { x, y, size: line.size, font: currentFont, color: rgb(0, 0, 0) });
     }
+    drawings.push({ width, height, showBorder: config.showBorder,
+      qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines: positionedLines });
   }
-  return doc.save();
+  return { pdfBytes: await doc.save(), drawings };
 };
+export const buildLabelPdf = async (assets: Asset[], config: LabelDesignerConfig,
+  mode: LabelDesignerQrPayloadMode, snipeBaseUrl?: string | null): Promise<Uint8Array> =>
+  (await buildLabelOutput(assets, config, mode, snipeBaseUrl)).pdfBytes;
+

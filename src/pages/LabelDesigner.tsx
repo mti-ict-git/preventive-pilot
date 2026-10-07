@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { buildLabelPdf, labelDimensions } from "@/lib/labelPdf";
+import { buildLabelPdf, buildLabelOutput, labelDimensions, type LabelDrawing } from "@/lib/labelPdf";
 import {
   QrCode,
   Printer,
@@ -803,28 +803,29 @@ export default function LabelDesigner() {
 function PdfLabelPreview({ asset, config, qrPayloadMode, snipeBaseUrl }: {
   asset: Asset; config: LabelDesignerConfig; qrPayloadMode: LabelDesignerQrPayloadMode; snipeBaseUrl?: string | null;
 }) {
-  const [result, setResult] = useState<{ url?: string; error?: string }>({});
+  const [result, setResult] = useState<{ drawing?: LabelDrawing; error?: string }>({});
   useEffect(() => {
     let disposed = false;
-    let url: string | undefined;
     setResult({});
-    void buildLabelPdf([asset], config, qrPayloadMode, snipeBaseUrl).then(bytes => {
-      if (disposed) return;
-      const buffer = new ArrayBuffer(bytes.byteLength);
-      new Uint8Array(buffer).set(bytes);
-      url = URL.createObjectURL(new Blob([buffer], { type: "application/pdf" }));
-      setResult({ url });
+    void buildLabelOutput([asset], config, qrPayloadMode, snipeBaseUrl).then(output => {
+      if (!disposed) setResult({ drawing: output.drawings[0] });
     }).catch(error => {
       if (!disposed) setResult({ error: error instanceof Error ? error.message : "Preview failed." });
     });
-    return () => { disposed = true; if (url) URL.revokeObjectURL(url); };
+    return () => { disposed = true; };
   }, [asset, config, qrPayloadMode, snipeBaseUrl]);
   const { width, height } = labelDimensions(config);
+  const d = result.drawing;
   return <div className="w-full min-w-0 space-y-2">
     <p className="text-xs text-muted-foreground">{width} × {height} mm</p>
     <div className="w-full rounded border bg-white" style={{ aspectRatio: `${width} / ${height}`, minHeight: 100 }}>
       {result.error ? <p role="alert" className="p-2 text-xs text-destructive">{result.error}</p>
-        : result.url ? <object data={result.url} type="application/pdf" className="h-full w-full" aria-label={`Label preview for ${asset.name}`}><a href={result.url}>Open label preview</a></object>
+        : d ? <svg viewBox={`0 0 ${d.width} ${d.height}`} role="img" aria-label={`Label preview for ${asset.name}`} className="h-full w-full">
+          {d.showBorder && <rect x={72 / 50.8} y={72 / 50.8} width={d.width - 72 / 25.4} height={d.height - 72 / 25.4} fill="none" stroke="#b3b3b3" strokeWidth={0.5} />}
+          <image href={d.qr.dataUrl} x={d.qr.x} y={d.height - d.qr.y - d.qr.size} width={d.qr.size} height={d.qr.size} />
+          {d.lines.map((line, i) => <text key={i} x={line.x} y={d.height - line.y} fontSize={line.size}
+            fontWeight={line.bold ? 700 : 400} fontFamily="Helvetica, Arial, sans-serif" fill="#000">{line.text}</text>)}
+        </svg>
         : <p role="status" className="p-2 text-xs text-muted-foreground">Rendering…</p>}
     </div>
   </div>;
