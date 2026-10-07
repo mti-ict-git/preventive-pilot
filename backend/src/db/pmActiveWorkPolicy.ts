@@ -98,3 +98,30 @@ export const retireMissedPmTasks = async (executor: Executor, contextId: string,
     END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK TRANSACTION; THROW; END CATCH;`);
   return Number(r.recordset[0]?.Changed ?? 0);
 };
+
+// A live occurrence takes precedence over a persisted cursor that has drifted ahead.
+// Explicit missed/skipped history remains authoritative for untouched jobs.
+export const actionablePmSql = (alias: string, kind: "asset" | "facility"): string => {
+  const column = kind === "asset" ? "AssetId" : "FacilityId";
+  return `${alias}.MaintenanceType=N'PM' AND ${alias}.Status NOT IN(N'completed',N'cancelled')
+    AND ${alias}.CompletedAt IS NULL AND ${alias}.CancelledAt IS NULL
+    AND ISNULL(${alias}.ApprovalStatus,N'None') NOT IN(N'Rejected',N'Approved')
+    AND (${protectedPmSql(alias)} OR (
+      NOT EXISTS(SELECT 1 FROM pm.PMMissedOccurrences m WHERE m.${column}=${alias}.${column}
+        AND m.TemplateId=${alias}.TemplateId AND m.PlannedDueAt=COALESCE(${alias}.FulfilledPlannedDueAt,${alias}.PlannedDueAt))
+      AND NOT EXISTS(SELECT 1 FROM pm.PMSkippedOccurrences m WHERE m.${column}=${alias}.${column}
+        AND m.TemplateId=${alias}.TemplateId AND m.PlannedDueAt=COALESCE(${alias}.FulfilledPlannedDueAt,${alias}.PlannedDueAt))))`;
+};
+
+export const currentPmTaskApplySql = (kind: "asset" | "facility", contextAlias: string): string => {
+  const column = kind === "asset" ? "AssetId" : "FacilityId";
+  return `OUTER APPLY (SELECT TOP(1) COALESCE(live.FulfilledPlannedDueAt,live.PlannedDueAt) PlannedDueAt,
+    live.ScheduledDueAt FROM pm.PMTasks live
+    WHERE live.${column}=${contextAlias}.${column} AND live.TemplateId=s.DefaultTemplateId
+      AND ${actionablePmSql("live",kind)}
+      AND (COALESCE(s.NextPlannedPMDueAt,s.NextPMDueAt) IS NULL
+        OR COALESCE(live.FulfilledPlannedDueAt,live.PlannedDueAt)<=COALESCE(s.NextPlannedPMDueAt,s.NextPMDueAt)
+        OR ${protectedPmSql("live")})
+    ORDER BY CASE WHEN ${protectedPmSql("live")} THEN 0 ELSE 1 END,
+      COALESCE(live.FulfilledPlannedDueAt,live.PlannedDueAt),live.CreatedAt,live.TaskId) currentPm`;
+};

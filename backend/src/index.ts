@@ -5803,7 +5803,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["Assets"],
         summary: "List assets (updated)",
         description:
-          "Returns a paginated list of assets. Search matches substrings in Name, AssetTag, and SerialNumber. Use categoryId or categoryIds (CSV of UUIDs, max 50) to filter. pageSize is capped at 500.",
+          "Next PM dates prefer outstanding PM work for the current template over a later stored schedule cursor; completed, cancelled, rejected and explicitly missed or skipped untouched occurrences do not become current work. Returns a paginated list of assets. Search matches substrings in Name, AssetTag, and SerialNumber. Use categoryId or categoryIds (CSV of UUIDs, max 50) to filter. pageSize is capped at 500.",
         parameters: [
           {
             name: "search",
@@ -5863,7 +5863,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["Facilities"],
         summary: "List facilities",
         description:
-          "Returns a paginated list of facilities that can have PM configured. Facilities represent locations or areas, not Snipe-IT assets.",
+          "Next PM dates prefer outstanding PM work for the current template over a later stored schedule cursor; completed, cancelled, rejected and explicitly missed or skipped untouched occurrences do not become current work. Returns a paginated list of facilities that can have PM configured. Facilities represent locations or areas, not Snipe-IT assets.",
         parameters: [
           {
             name: "search",
@@ -5972,7 +5972,7 @@ const openApiSpec: OpenApiSchema = {
           "Facilities"
         ],
         "summary": "Get facility details",
-        "description": "Available to every authenticated role. Missing location is null, unlike the nullable-id object in facility list responses.",
+        "description": "Next PM dates prefer outstanding PM work for the current template over a later stored schedule cursor; completed, cancelled, rejected and explicitly missed or skipped untouched occurrences do not become current work. Available to every authenticated role. Missing location is null, unlike the nullable-id object in facility list responses.",
         "parameters": [
           {
             "name": "facilityId",
@@ -6364,6 +6364,7 @@ const openApiSpec: OpenApiSchema = {
     "/api/assets/{assetId}": {
       get: {
         tags: ["Assets"],
+        description: "Next PM dates prefer outstanding PM work for the current template over a later stored schedule cursor; completed, cancelled, rejected and explicitly missed or skipped untouched occurrences do not become current work.",
         summary: "Get asset by id (updated)",
         parameters: [
           { name: "assetId", in: "path", required: true, schema: { type: "string", format: "uuid" } },

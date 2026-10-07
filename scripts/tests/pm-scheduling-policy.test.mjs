@@ -63,6 +63,13 @@ const createExecutor = (state) => ({
         return this;
       },
       async query(query) {
+        if (query.includes('pm-outstanding-before-cursor')) {
+          const candidate=[...state.tasks.values()].filter(t => !t.completedAt && !t.cancelledAt
+            && !['completed','cancelled'].includes(t.status) && !['Rejected','Approved'].includes(t.approvalStatus)
+            && !state.missed.has(toKey(t.plannedDueAt)) && !state.skipped.has(toKey(t.plannedDueAt)))
+            .sort((a,b)=>a.plannedDueAt-b.plannedDueAt)[0];
+          return {recordset:candidate ? [{PlannedDueAt:candidate.plannedDueAt}] : [],rowsAffected:[]};
+        }
         if (query.includes('pm-active-across-dates')) {
           const active=[...state.tasks.values()].find(t => !t.completedAt && !t.cancelledAt && ['in_progress','paused'].includes(t.status));
           return {recordset: active ? [{TaskId:active.taskId,PlannedDueAt:active.plannedDueAt,ScheduledDueAt:active.scheduledDueAt,Status:active.status,ApprovalStatus:active.approvalStatus}] : [],rowsAffected:[]};
@@ -305,7 +312,7 @@ for (const status of ['in_progress','paused']) {
       assert.equal(result.task.taskId,nowTask.taskId);
       assert.equal(result.task.status,status);
     }
-    assert.equal(state.savedAnchors.length,0);
+    assert.equal(state.savedAnchors.length,1);
     assert.equal(state.missed.size,0);
   });
 }
@@ -317,3 +324,43 @@ test('SC-01 long-running execution resumes at next future cycle and preserves sk
  assert.equal(r.nextPlannedDueAt.toISOString(),'2026-10-16T00:00:00.000Z');
  assert.deepEqual([...state.missed],['2026-07-16T00:00:00.000Z']);
 });
+
+for (const kind of ["asset","facility"]) {
+  test(`SC-01 ${kind} recovers an outstanding half-year occurrence before a drifted future cursor`, async () => {
+    const due=new Date("2026-07-30T07:41:02Z");
+    const task={taskId:"33333333-3333-4333-8333-333333333333",plannedDueAt:due,scheduledDueAt:due,
+      status:"open",approvalStatus:"None",cancelledAt:null,completedAt:null,createdAt:due};
+    const state={savedAnchors:[],missed:new Set(),skipped:new Set(),tasks:new Map([[toKey(due),task]])};
+    const context={kind,contextId:"11111111-1111-4111-8111-111111111111",
+      templateId:"22222222-2222-4222-8222-222222222222",intervalDays:180,pmEnabled:true,
+      templateIsActive:true,isContextActive:true,nextPlannedDueAt:new Date("2027-01-30T07:41:02Z"),
+      nextDueAt:new Date("2027-01-30T07:41:02Z"),lastPmCompletedAt:new Date("2026-01-30T07:41:02Z")};
+    const result=await reconcilePmScheduleContext({executor:createExecutor(state),context,now:new Date("2026-10-07T00:00:00Z")});
+    assert.equal(result.task.taskId,task.taskId);
+    assert.equal(result.plannedDueAt.toISOString(),due.toISOString());
+    assert.equal(state.savedAnchors[0].nextDueAt.toISOString(),due.toISOString());
+    assert.equal(state.missed.size,0);
+    const again=await reconcilePmScheduleContext({executor:createExecutor(state),context,now:new Date("2026-10-07T00:00:00Z")});
+    assert.equal(again.task.taskId,task.taskId);
+    assert.equal(state.savedAnchors.length,1);
+  });
+}
+
+for (const scenario of ["missed","skipped","future","expired"]) {
+  test(`SC-01 cursor recovery preserves ${scenario} occurrence semantics`, async () => {
+    const july=new Date("2026-07-30T07:41:02Z"),january=new Date("2027-01-30T07:41:02Z");
+    const due=scenario==="future"?january:scenario==="expired"?new Date("2026-01-30T07:41:02Z"):july;
+    const task={taskId:"33333333-3333-4333-8333-333333333333",plannedDueAt:due,scheduledDueAt:due,
+      status:"open",approvalStatus:"None",cancelledAt:null,completedAt:null,createdAt:due};
+    const state={savedAnchors:[],missed:new Set(scenario==="missed"?[toKey(due)]:[]),
+      skipped:new Set(scenario==="skipped"?[toKey(due)]:[]),tasks:new Map([[toKey(due),task]])};
+    const cursor=scenario==="future"?july:january;
+    const context={kind:"asset",contextId:"11111111-1111-4111-8111-111111111111",
+      templateId:"22222222-2222-4222-8222-222222222222",intervalDays:180,pmEnabled:true,
+      templateIsActive:true,isContextActive:true,nextPlannedDueAt:cursor,nextDueAt:cursor,lastPmCompletedAt:null};
+    const result=await reconcilePmScheduleContext({executor:createExecutor(state),context,now:new Date("2026-10-07T00:00:00Z")});
+    assert.equal(result.task,null);
+    assert.equal(result.plannedDueAt.toISOString(),(scenario==="future"||scenario==="expired"?july:january).toISOString());
+    assert.equal(state.missed.size,scenario==="missed"||scenario==="expired"?1:0);
+  });
+}

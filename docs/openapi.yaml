@@ -5200,6 +5200,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Task became completed or cancelled before the evidence was attached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "413":
           description: Body exceeds the 50 MiB limit. May be an Express HTML parser error or a JSON message.
           content:
@@ -5213,12 +5219,6 @@ paths:
           description: >-
             Evidence storage is not configured or evidence insertion failed; unexpected filesystem/database
             errors are not normalized by this contract.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Task became completed or cancelled before the evidence was attached
           content:
             application/json:
               schema:
@@ -5237,7 +5237,6 @@ paths:
         description: >-
           Raw file content with its content type; JSON bodies are consumed by the global JSON parser and are
           not accepted as a file buffer.
-
   /api/tasks/{taskId}/evidence/upload:
     post:
       tags:
@@ -5291,6 +5290,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Task became completed or cancelled before the evidence was attached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "413":
           description: Body exceeds the 50 MiB limit. May be an Express HTML parser error or a JSON message.
           content:
@@ -5304,12 +5309,6 @@ paths:
           description: >-
             Evidence storage is not configured or evidence insertion failed; unexpected filesystem/database
             errors are not normalized by this contract.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Task became completed or cancelled before the evidence was attached
           content:
             application/json:
               schema:
@@ -5328,7 +5327,6 @@ paths:
         description: >-
           Raw file content with its content type; JSON bodies are consumed by the global JSON parser and are
           not accepted as a file buffer.
-
   /api/work-orders/{taskId}/resolution:
     post:
       tags:
@@ -5851,8 +5849,11 @@ paths:
         - Assets
       summary: List assets (updated)
       description: >-
-        Returns a paginated list of assets. Search matches substrings in Name, AssetTag, and SerialNumber. Use
-        categoryId or categoryIds (CSV of UUIDs, max 50) to filter. pageSize is capped at 500.
+        Next PM dates prefer outstanding PM work for the current template over a later stored schedule cursor;
+        completed, cancelled, rejected and explicitly missed or skipped untouched occurrences do not become
+        current work. Returns a paginated list of assets. Search matches substrings in Name, AssetTag, and
+        SerialNumber. Use categoryId or categoryIds (CSV of UUIDs, max 50) to filter. pageSize is capped at
+        500.
       parameters:
         - name: search
           in: query
@@ -5949,8 +5950,10 @@ paths:
         - Facilities
       summary: List facilities
       description: >-
-        Returns a paginated list of facilities that can have PM configured. Facilities represent locations or
-        areas, not Snipe-IT assets.
+        Next PM dates prefer outstanding PM work for the current template over a later stored schedule cursor;
+        completed, cancelled, rejected and explicitly missed or skipped untouched occurrences do not become
+        current work. Returns a paginated list of facilities that can have PM configured. Facilities represent
+        locations or areas, not Snipe-IT assets.
       parameters:
         - name: search
           in: query
@@ -6070,8 +6073,10 @@ paths:
         - Facilities
       summary: Get facility details
       description: >-
-        Available to every authenticated role. Missing location is null, unlike the nullable-id object in
-        facility list responses.
+        Next PM dates prefer outstanding PM work for the current template over a later stored schedule cursor;
+        completed, cancelled, rejected and explicitly missed or skipped untouched occurrences do not become
+        current work. Available to every authenticated role. Missing location is null, unlike the nullable-id
+        object in facility list responses.
       parameters:
         - name: facilityId
           in: path
@@ -6421,6 +6426,10 @@ paths:
     get:
       tags:
         - Assets
+      description: >-
+        Next PM dates prefer outstanding PM work for the current template over a later stored schedule cursor;
+        completed, cancelled, rejected and explicitly missed or skipped untouched occurrences do not become
+        current work.
       summary: Get asset by id (updated)
       parameters:
         - name: assetId
@@ -6691,20 +6700,25 @@ paths:
       description: >-
         Server-side view/uiStatus, search and date sorting apply before pagination. sort defaults to due_asc;
         due sorting uses ScheduledDueAt, created sorting uses CreatedAt, with TaskId as a stable tie-breaker.
-        total is the selected view total;
-        tabCounts covers the complete shared-filter scope independently of view/page. Day boundaries are
-        paired ISO timestamps (23–25 hours), start inclusive/end exclusive; default UTC. Scheduling views
-        exclude submitted/finalized/closed work; pending views use approval stage even for historical
-        completed lifecycle rows. Overdue uses request time and can overlap Due Today; Upcoming begins at
-        todayEnd. Checklist totals/counts prefer the frozen submitted checklist definition when a PM task
-        snapshot exists; otherwise they use the current live template.
+        total is the selected view total; tabCounts covers the complete shared-filter scope independently of
+        view/page. Day boundaries are paired ISO timestamps (23–25 hours), start inclusive/end exclusive;
+        default UTC. Scheduling views exclude submitted/finalized/closed work; pending views use approval
+        stage even for historical completed lifecycle rows. Overdue uses request time and can overlap Due
+        Today; Upcoming begins at todayEnd. Checklist totals/counts prefer the frozen submitted checklist
+        definition when a PM task snapshot exists; otherwise they use the current live template.
       parameters:
         - name: sort
           in: query
-          description: Sort the complete matching dataset before pagination; invalid values return 400. Does not affect totals.
+          description: >-
+            Sort the complete matching dataset before pagination; invalid values return 400. Does not affect
+            totals.
           schema:
             type: string
-            enum: [due_asc, due_desc, created_asc, created_desc]
+            enum:
+              - due_asc
+              - due_desc
+              - created_asc
+              - created_desc
             default: due_asc
         - name: view
           in: query
@@ -7369,7 +7383,10 @@ paths:
       tags:
         - Tasks
       summary: Start a task
-      description: Starting or resuming PM work atomically supersedes untouched open tasks for the same asset/facility and template. Worked or submitted tasks are preserved. PM_ACTIVE_WORK_EXISTS returns 409 when another protected execution exists.
+      description: >-
+        Starting or resuming PM work atomically supersedes untouched open tasks for the same asset/facility
+        and template. Worked or submitted tasks are preserved. PM_ACTIVE_WORK_EXISTS returns 409 when another
+        protected execution exists.
       parameters:
         - name: taskId
           in: path
@@ -7531,7 +7548,10 @@ paths:
       tags:
         - Tasks
       summary: Resume a task
-      description: Starting or resuming PM work atomically supersedes untouched open tasks for the same asset/facility and template. Worked or submitted tasks are preserved. PM_ACTIVE_WORK_EXISTS returns 409 when another protected execution exists.
+      description: >-
+        Starting or resuming PM work atomically supersedes untouched open tasks for the same asset/facility
+        and template. Worked or submitted tasks are preserved. PM_ACTIVE_WORK_EXISTS returns 409 when another
+        protected execution exists.
       parameters:
         - name: taskId
           in: path
@@ -7654,7 +7674,8 @@ paths:
           description: >-
             Broken assets remain blocked; PM_CONTEXT_UNAVAILABLE when the context is inactive, PM is disabled,
             site is missing, or the task template is not the active category-compatible default template;
-            PM_OCCURRENCE_FULFILLED when a historical alias was fulfilled by another task; PM_TASK_RETIRED when a task is automatically superseded or missed
+            PM_OCCURRENCE_FULFILLED when a historical alias was fulfilled by another task; PM_TASK_RETIRED
+            when a task is automatically superseded or missed
           content:
             application/json:
               schema:
@@ -7723,7 +7744,8 @@ paths:
       description: >-
         For PM tasks, the first successful technician submission captures a frozen checklist snapshot that
         later detail, review, export, and resubmission flows continue to use. Any open PM work session is
-        closed at the submitted timestamp so review waiting time is not counted as active execution time. Uses the single active PM context lock; PM_ACTIVE_WORK_EXISTS returns 409 for a competing execution.
+        closed at the submitted timestamp so review waiting time is not counted as active execution time. Uses
+        the single active PM context lock; PM_ACTIVE_WORK_EXISTS returns 409 for a competing execution.
       parameters:
         - name: taskId
           in: path

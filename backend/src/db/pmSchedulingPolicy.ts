@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { protectedPmSql, retireMissedPmTasks, supersedeUntouchedPmTasks } from "./pmActiveWorkPolicy.js";
+import { actionablePmSql, protectedPmSql, retireMissedPmTasks, supersedeUntouchedPmTasks } from "./pmActiveWorkPolicy.js";
 
 type SqlExecutor = {
   request(): sql.Request;
@@ -510,9 +510,27 @@ export const reconcilePmScheduleContext = async (input: {
       plannedDueAt: toDate(activeRow.PlannedDueAt)!, scheduledDueAt: toDate(activeRow.ScheduledDueAt)!,
       status: activeRow.Status as string, approvalStatus: activeRow.ApprovalStatus as string,
       cancelledAt: null, completedAt: null };
+    if (context.nextPlannedDueAt?.getTime() !== task.plannedDueAt.getTime() ||
+        context.nextDueAt?.getTime() !== task.scheduledDueAt.getTime()) {
+      await savePmScheduleAnchor({executor: input.executor, context,
+        nextPlannedDueAt: task.plannedDueAt, nextDueAt: task.scheduledDueAt});
+      context.nextPlannedDueAt = task.plannedDueAt;
+      context.nextDueAt = task.scheduledDueAt;
+    }
     return { plannedDueAt: task.plannedDueAt, scheduledDueAt: task.scheduledDueAt, task };
   }
   await retireMissedPmTasks(input.executor, context.contextId, context.templateId, context.kind);
+
+  // Recover an outstanding occurrence before trusting a later stored cursor.
+  const outstanding = await input.executor.request()
+    .input("contextId", sql.UniqueIdentifier, context.contextId)
+    .input("templateId", sql.UniqueIdentifier, context.templateId)
+    .query(`/* pm-outstanding-before-cursor */ SELECT TOP(1)
+      COALESCE(t.FulfilledPlannedDueAt,t.PlannedDueAt) PlannedDueAt
+      FROM pm.PMTasks t WHERE t.${context.kind === "asset" ? "AssetId" : "FacilityId"}=@contextId
+      AND t.TemplateId=@templateId AND ${actionablePmSql("t",context.kind)}
+      ORDER BY COALESCE(t.FulfilledPlannedDueAt,t.PlannedDueAt),t.CreatedAt,t.TaskId;`);
+  const outstandingPlannedDueAt = toDate(outstanding.recordset[0]?.PlannedDueAt);
 
   let currentPlannedDueAt = computeInitialPmPlannedDueAt({
     nextPlannedDueAt: context.nextPlannedDueAt,
@@ -521,6 +539,9 @@ export const reconcilePmScheduleContext = async (input: {
     intervalDays: context.intervalDays,
     now,
   });
+  if (outstandingPlannedDueAt && (!currentPlannedDueAt || outstandingPlannedDueAt < currentPlannedDueAt)) {
+    currentPlannedDueAt = outstandingPlannedDueAt;
+  }
   if (!currentPlannedDueAt) return null;
 
   let guard = 0;

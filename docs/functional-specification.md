@@ -231,3 +231,7 @@ When a long-running PM finally completes, elapsed intervening planned periods ar
 ### PM Tasks date sorting - 2026-10-06
 
 PM Tasks exposes a visible Sort by selector for due date earliest/latest and created date oldest/newest. The backend sorts the complete matching dataset before pagination; defaults preserve due-date ascending behavior. Stable TaskId tie-breaking prevents repeated dates from destabilizing pages. Sort never changes task membership or totals. Committed sort lives in the URL, survives tab/filter/detail return and reload, and resets pagination to page 1 when changed. Due date means stored ScheduledDueAt; created date means CreatedAt. No lifecycle or permissions change.
+
+### Outstanding PM schedule precedence — 2026-10-07
+
+Asset and facility next planned/effective dates must prefer outstanding work for the current template over a stored cursor that has advanced past it. Started, paused and submitted work retains precedence. For untouched work, explicit skipped/missed history remains authoritative; older elapsed cycles may still be reconciled as missed under the existing cadence policy. The generator recovers an earlier outstanding occurrence before trusting the cursor, does not let a future task conceal a nearer unmaterialized obligation, and synchronizes schedule settings under the existing context transaction lock. Interval 180 continues to mean six calendar months; this correction does not change intervals, actual completion, approval, checklist or evidence history.

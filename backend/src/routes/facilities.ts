@@ -1,3 +1,4 @@
+import { currentPmTaskApplySql } from "../db/pmActiveWorkPolicy.js";
 import { validateEnabledPmContext, cancelUnstartedPmTasks, PmEligibilityError } from "../db/pmEligibilityPolicy.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -169,11 +170,12 @@ facilitiesRouter.get("/", async (req, res) => {
         "  s.PMEnabled AS PMEnabled,",
         "  s.DefaultTemplateId AS DefaultTemplateId,",
         "  COALESCE(h.LastCompletedAt, s.LastPMCompletedAt) AS LastPMCompletedAt,",
-        "  COALESCE(s.NextPlannedPMDueAt, s.NextPMDueAt) AS NextPlannedPMDueAt,",
-        "  s.NextPMDueAt AS NextPMDueAt",
+        "  CASE WHEN s.PMEnabled=1 THEN COALESCE(currentPm.PlannedDueAt,s.NextPlannedPMDueAt,s.NextPMDueAt) END AS NextPlannedPMDueAt,",
+        "  CASE WHEN s.PMEnabled=1 THEN COALESCE(currentPm.ScheduledDueAt,s.NextPMDueAt) END AS NextPMDueAt",
         "FROM pm.Facilities f",
         "LEFT JOIN pm.Locations l ON l.LocationId = f.LocationId",
         "LEFT JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
+        currentPmTaskApplySql("facility", "f"),
         "OUTER APPLY (",
         "  SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
         "  FROM pm.PMTasks tt",
@@ -277,11 +279,12 @@ facilitiesRouter.get("/:facilityId", async (req, res) => {
         "  s.PMEnabled AS PMEnabled,",
         "  s.DefaultTemplateId AS DefaultTemplateId,",
         "  COALESCE(h.LastCompletedAt, s.LastPMCompletedAt) AS LastPMCompletedAt,",
-        "  COALESCE(s.NextPlannedPMDueAt, s.NextPMDueAt) AS NextPlannedPMDueAt,",
-        "  s.NextPMDueAt AS NextPMDueAt",
+        "  CASE WHEN s.PMEnabled=1 THEN COALESCE(currentPm.PlannedDueAt,s.NextPlannedPMDueAt,s.NextPMDueAt) END AS NextPlannedPMDueAt,",
+        "  CASE WHEN s.PMEnabled=1 THEN COALESCE(currentPm.ScheduledDueAt,s.NextPMDueAt) END AS NextPMDueAt",
         "FROM pm.Facilities f",
         "LEFT JOIN pm.Locations l ON l.LocationId = f.LocationId",
         "LEFT JOIN pm.FacilityPMSettings s ON s.FacilityId = f.FacilityId",
+        currentPmTaskApplySql("facility", "f"),
         "OUTER APPLY (",
         "  SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
         "  FROM pm.PMTasks tt",

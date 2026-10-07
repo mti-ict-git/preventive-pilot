@@ -1,3 +1,4 @@
+import { currentPmTaskApplySql } from "../db/pmActiveWorkPolicy.js";
 import { validateEnabledPmContext, cancelUnstartedPmTasks, PmEligibilityError } from "../db/pmEligibilityPolicy.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -136,6 +137,7 @@ assetsRouter.get("/", async (req, res) => {
       "  CASE",
       "    WHEN ISNULL(s.PMEnabled, 0) = 0 THEN NULL",
       "    ELSE COALESCE(",
+      "      currentPm.PlannedDueAt,",
       "      s.NextPlannedPMDueAt,",
       "      s.NextPMDueAt,",
       "      CASE",
@@ -153,6 +155,7 @@ assetsRouter.get("/", async (req, res) => {
       "  CASE",
       "    WHEN ISNULL(s.PMEnabled, 0) = 0 THEN NULL",
       "    ELSE COALESCE(",
+      "      currentPm.ScheduledDueAt,",
       "      s.NextPMDueAt,",
       "      s.NextPlannedPMDueAt,",
       "      CASE",
@@ -171,6 +174,7 @@ assetsRouter.get("/", async (req, res) => {
       "LEFT JOIN pm.AssetCategories c ON c.CategoryId = a.CategoryId",
       "LEFT JOIN pm.Locations l ON l.LocationId = a.LocationId",
       "LEFT JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
+      currentPmTaskApplySql("asset", "a"),
       "LEFT JOIN pm.PMTemplates t ON t.TemplateId = s.DefaultTemplateId",
       "OUTER APPLY (",
       "  SELECT MAX(tt.CompletedAt) AS LastCompletedAt",
@@ -617,6 +621,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
       "  CASE",
       "    WHEN ISNULL(s.PMEnabled, 0) = 0 THEN NULL",
       "    ELSE COALESCE(",
+      "      currentPm.PlannedDueAt,",
       "      s.NextPlannedPMDueAt,",
       "      s.NextPMDueAt,",
       "      CASE",
@@ -634,6 +639,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
       "  CASE",
       "    WHEN ISNULL(s.PMEnabled, 0) = 0 THEN NULL",
       "    ELSE COALESCE(",
+      "      currentPm.ScheduledDueAt,",
       "      s.NextPMDueAt,",
       "      s.NextPlannedPMDueAt,",
       "      CASE",
@@ -652,6 +658,7 @@ assetsRouter.get("/:assetId", async (req, res) => {
         "LEFT JOIN pm.AssetCategories c ON c.CategoryId = a.CategoryId",
         "LEFT JOIN pm.Locations l ON l.LocationId = a.LocationId",
         "LEFT JOIN pm.AssetPMSettings s ON s.AssetId = a.AssetId",
+        currentPmTaskApplySql("asset", "a"),
         "LEFT JOIN pm.PMTemplates t ON t.TemplateId = s.DefaultTemplateId",
         "OUTER APPLY (",
         "  SELECT MAX(tt.CompletedAt) AS LastCompletedAt",

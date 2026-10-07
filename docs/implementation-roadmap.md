@@ -535,3 +535,14 @@ Sources: functional specification PM Tasks date sorting, Tasks UX contract and G
 Output: discoverable dataset-wide date sort. Wider D2/D3 remain open.
 
 Evidence: seven targeted HTTP regressions; eight exact read-only SQL batches; synthetic browser popup/keyboard, pagination, empty/error/clear and approval context; base API/source `ed4c3f9` passed 180 Linux tests and full release checks. API and final responsive web `ecf9ed6` were deployed with scoped health/configuration/CIFS/public asset checks. Authenticated production verified ordering, page reset, modal/reload persistence and desktop/narrow popup. See [verification](verification-q01-desktop.md#pm-tasks-date-sorting---2026-10-06) and [release evidence](deployment-and-environment.md#production-pm-tasks-date-sorting---2026-10-06). No schema/business-data change; D2/D3 remain open.
+
+## Selected D1 correction — outstanding PM schedule precedence (2026-10-07)
+
+Source documents: functional-specification.md (SC-01 and outstanding PM schedule precedence), openapi.yaml, database-schema-specification.md, deployment-and-environment.md.
+
+Objective: prevent a future persisted cursor from hiding outstanding PC/facility PM work.
+
+- [ ] Implement generator recovery and asset/facility list/detail precedence without changing template intervals or execution history.
+- [ ] Verify drifted half-year cases, missed/skipped/protected/future work, exact generated SQL, production scan and scoped API deployment.
+
+Output and challenge: record evidence in verification-q01-desktop.md; retain D2 recovery and D3 acceptance gates separately.
