@@ -617,6 +617,6 @@ Output and challenge: verification-q01-desktop.md; actual calibration remains a 
 ### Selected D1 correction: shared paper presets and border calibration, 2026-10-07
 
 Objective: let operators disable/recess clipped borders and reuse shared calibrated paper settings. Sources: functional specification, UX-CONTRACT and label UI-settings OpenAPI.
-- [ ] Implement named shared paper presets and accessible Layout border controls; retain legacy settings and protect the shifted 18mm border band.
-- [ ] Verify persistence, duplicate-name failures, geometry and exact-source API/web release.
+- [x] Implement named shared paper presets and accessible Layout border controls; retain legacy settings and protect the shifted 18mm border band.
+- [x] Verify persistence, duplicate-name failures, geometry and exact-source API/web release.
 Output and challenge: verification-q01-desktop.md; physical print acceptance remains a user test.
