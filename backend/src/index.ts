@@ -506,7 +506,7 @@ const openApiSpec: OpenApiSchema = {
                 "type": "boolean"
               },
               "layout": { "type": "string", "enum": ["standard", "companyAsset"], "description": "Optional layout; omitted values use standard." },
-                "logoDataUrl": { "type": "string", "maxLength": 220000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },
+                "logoDataUrl": { "type": "string", "maxLength": 2800000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },
                 "showLogo": {
                 "type": "boolean"
               },
@@ -940,7 +940,7 @@ const openApiSpec: OpenApiSchema = {
                 "type": "boolean"
               },
               "layout": { "type": "string", "enum": ["standard", "companyAsset"], "description": "Optional layout; omitted values use standard." },
-                "logoDataUrl": { "type": "string", "maxLength": 220000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },
+                "logoDataUrl": { "type": "string", "maxLength": 2800000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },
                 "showLogo": {
                 "type": "boolean"
               },
@@ -8674,6 +8674,8 @@ app.options(
   }),
 );
 
+// Base64 logo uploads need a larger body only on the label settings endpoint.
+app.use("/api/system/ui-settings/label-designer", express.json({ limit: "3mb" }));
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => {

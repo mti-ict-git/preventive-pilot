@@ -65,8 +65,8 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       const headerHeight = usableHeight * 0.32;
       const logoDataUrl = config.logoDataUrl ?? companyLogoDataUrl;
       if (config.showLogo) {
-        if ((config.logoDataUrl && config.logoDataUrl.length > 220000) || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))
-          throw new Error("Use a valid PNG or JPG logo up to 160 KB.");
+        if ((config.logoDataUrl && config.logoDataUrl.length > 2800000) || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))
+          throw new Error("Use a valid PNG or JPG logo up to 2 MB.");
         let image;
         try { image = logoDataUrl.startsWith("data:image/png") ? await doc.embedPng(logoDataUrl) : await doc.embedJpg(logoDataUrl); }
         catch { throw new Error("The logo cannot be read. Upload a valid PNG or JPG image."); }

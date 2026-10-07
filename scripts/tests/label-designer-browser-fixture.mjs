@@ -2,7 +2,7 @@
 import os from 'node:os';import fs from 'node:fs/promises';import path from 'node:path';import {createServer} from 'vite';import {createRequire} from 'node:module';import {root} from './task-checklist-harness.mjs';import {createListHarness,dataset} from './task-view-fixtures.mjs';
 const require=createRequire(path.join(root,'backend/package.json'));const express=require('express');const app=express();const rows=dataset.map(row=>({...row}));const h=createListHarness(rows);
 app.get('/__fixture',(req,res)=>{res.cookie('tasks_fixture_failure',req.query.fail==='1'?'1':'0',{sameSite:'strict'});res.type('html').send(`<script>localStorage.setItem('pm_access_token',${JSON.stringify(h.token(['Superadmin']))});location.replace('/label-designer');</script>`);});
-app.use(express.json());
+app.use(express.json({ limit: "3mb" }));
 const initial={qrPayloadMode:'assetTag',gridColumns:1,config:{width:82,height:24,qrSize:13,padding:1,fontSize:8,showAssetTag:true,showAssetName:true,showCategory:false,showLocation:false,showCustomText:false,customText:'',showLogo:false,showBorder:true,borderRadius:0,orientation:'landscape'}};
 let settings=structuredClone(initial);
 const asset={id:'55555555-5555-4555-8555-000000000001',assetTag:'34H6CF3',name:'MTI-PC-005',snipeAssetId:7,category:{id:'cat',name:'PC Desktop'},location:{id:'site',name:'Morowali'}};

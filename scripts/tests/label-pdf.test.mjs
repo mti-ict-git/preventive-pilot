@@ -78,7 +78,10 @@ test("backend label schema preserves optional layout/logo while accepting legacy
  const legacy={config,gridColumns:1,qrPayloadMode:"assetTag"};assert(schema.safeParse(legacy).success);
  const next={...legacy,config:{...config,layout:"companyAsset",logoDataUrl:"data:image/png;base64,AAAA"}};
  assert.equal(schema.parse(next).config.layout,"companyAsset");assert.equal(schema.parse(next).config.logoDataUrl,next.config.logoDataUrl);
+ const uploaded = "data:image/png;base64," + "A".repeat(2796204);
+ assert(schema.safeParse({...next,config:{...next.config,logoDataUrl:uploaded}}).success);
+ assert(parseLabelDraft(JSON.stringify({...next,config:{...next.config,logoDataUrl:uploaded}})));
  assert(!schema.safeParse({...next,config:{...next.config,layout:"bad"}}).success);
  assert(!schema.safeParse({...next,config:{...next.config,logoDataUrl:"data:image/svg+xml;base64,AAAA"}}).success);
- assert(!schema.safeParse({...next,config:{...next.config,logoDataUrl:"x".repeat(220001)}}).success);
+ assert(!schema.safeParse({...next,config:{...next.config,logoDataUrl:"x".repeat(2800001)}}).success);
 });

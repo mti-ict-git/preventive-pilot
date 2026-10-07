@@ -373,7 +373,7 @@ components:
               description: Optional layout; omitted values use standard.
             logoDataUrl:
               type: string
-              maxLength: 220000
+              maxLength: 2800000
               pattern: ^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$
               description: >-
                 Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company
@@ -706,7 +706,7 @@ components:
               description: Optional layout; omitted values use standard.
             logoDataUrl:
               type: string
-              maxLength: 220000
+              maxLength: 2800000
               pattern: ^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$
               description: >-
                 Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company

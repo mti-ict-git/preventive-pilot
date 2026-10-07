@@ -196,8 +196,8 @@ export default function LabelDesigner() {
   const loadLogo = async (file?: File) => {
     if (!file) return;
     setLogoError(null);
-    if (!["image/png", "image/jpeg"].includes(file.type) || file.size > 160 * 1024) {
-      setLogoError("Use a PNG or JPG logo up to 160 KB."); return;
+    if (!["image/png", "image/jpeg"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setLogoError("Use a PNG or JPG logo up to 2 MB."); return;
     }
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -412,7 +412,7 @@ export default function LabelDesigner() {
                     </Select>
                   </div>
                   {config.layout === "companyAsset" && <div className="space-y-2">
-                    <Label htmlFor="company-logo">Company logo (PNG/JPG, up to 160 KB)</Label>
+                    <Label htmlFor="company-logo">Company logo (PNG/JPG, up to 2 MB)</Label>
                     <Input id="company-logo" type="file" accept="image/png,image/jpeg" disabled={controlsLocked} onChange={e => { void loadLogo(e.target.files?.[0]); e.target.value = ""; }} />
                     {logoError && <p role="alert" className="text-xs text-destructive">{logoError}</p>}
                     <p className="text-xs text-muted-foreground">{config.logoDataUrl ? "Logo included. Save Defaults to share this design." : "Using a reconstructed MTI logo from your reference. Upload the official logo to replace it."}</p>
