@@ -548,3 +548,12 @@ Objective: prevent a future persisted cursor from hiding outstanding PC/facility
 Output and challenge: record evidence in verification-q01-desktop.md; retain D2 recovery and D3 acceptance gates separately.
 
 Completed evidence: final API `95af66d` passed 186 Linux regressions and full release checks; four exact read SQL batches, two real legacy PM Now date reads and eight rollback policy rehearsals passed. Seven settings recovered through normal generation; PC-059's missing-site cursor was recovered with a guarded existing-task-only correction. Site remains unresolved and generation is not bypassed. Two final generator runs and full original-history comparison show eight corrected settings, unchanged PM/CM records and work child counts, zero remaining drift and zero active duplicates. Authenticated PC-006 now shows July 30, 2026 / Overdue and interval 180. See [verification](verification-q01-desktop.md#outstanding-pm-schedule-precedence---2026-10-07) and [release](deployment-and-environment.md#production-outstanding-pm-schedule-correction---2026-10-07). This selected D1 correction is complete; D2 recovery/D3 and deferred mobile review remain separate.
+
+### Selected D1 correction: On Track attribution audit — 2026-10-07
+
+- [x] Audit all configured contexts using deployed planned/effective read semantics; inspect every On Track history and prior reconciliation before-images.
+- [x] Reverse the two user-identified unsupported future-period attributions for PC-051/PC-052 with verified backup, transactional rehearsal/locks, compensating audit and history preservation.
+- [x] Verify normal generator stability twice and authenticated browser July-date/history acceptance; record bounded full-inventory evidence in [SC-01 verification](verification-sc01.md#complete-on-track-inventory-and-attribution-correction--2026-10-07).
+- [ ] Resolve UPS-009's UPS-to-Printer template mismatch under the deferred Q-12 mapping decision, and align list/detail handling of never-completed PM. Do not infer a replacement template or master site.
+
+Both PCs now expose their existing July 6 outstanding occurrence instead of January 2027. D2 delivery/recovery gates remain open. This is a scoped operational correction; API/web images and OpenAPI contracts remain unchanged.
