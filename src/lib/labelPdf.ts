@@ -28,7 +28,10 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       !Number.isFinite(config.qrSize) || config.qrSize < 5 ||
       !Number.isFinite(config.fontSize) || config.fontSize < 5) throw new Error("Enter valid label dimensions and sizes.");
   const width = mmToPt(dimensions.width), height = mmToPt(dimensions.height);
-  const borderInset = mmToPt(dimensions.height === 18 ? 1.5 : 0.5);
+  const requestedInset = config.borderInsetMm ?? (dimensions.height === 18 ? 1.5 : 0.5);
+  if (!Number.isFinite(requestedInset) || requestedInset < 0.5 || requestedInset > 4 || Math.abs(requestedInset*10-Math.round(requestedInset*10)) > 1e-6) throw new Error("Border inset must be between 0.5 and 4 mm, in 0.1 mm steps.");
+  // Retain the 18mm printable band after printer calibration moves the complete design.
+  const borderInset = mmToPt(Math.max(requestedInset, dimensions.height === 18 ? 1.5 + Math.abs(offsetMm) : 0.5));
   const padding = mmToPt(Math.max(config.padding, dimensions.height === 18 ? 2 : 0)), gap = mmToPt(2), qrSize = mmToPt(config.qrSize);
   const landscape = config.orientation === "landscape";
   const company = config.layout === "companyAsset";

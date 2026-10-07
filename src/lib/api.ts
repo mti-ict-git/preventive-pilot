@@ -2110,6 +2110,7 @@ export type LabelDesignerConfig = {
   logoDataUrl?: string;
   logoSizePercent?: number;
   printOffsetYmm?: number;
+  borderInsetMm?: number;
   width: number;
   height: number;
   qrSize: number;
@@ -2127,7 +2128,10 @@ export type LabelDesignerConfig = {
   orientation: "portrait" | "landscape";
 };
 
+export type LabelPaperPreset = Pick<LabelDesignerConfig, "width" | "height" | "orientation" | "qrSize" | "padding" | "showBorder"> & { name: string; borderInsetMm: number; printOffsetYmm: number };
+
 export type LabelDesignerUiSettingsResponse = {
+  paperPresets?: LabelPaperPreset[];
   qrPayloadMode: LabelDesignerQrPayloadMode;
   gridColumns: number;
   config: LabelDesignerConfig;

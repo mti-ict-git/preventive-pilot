@@ -261,3 +261,6 @@ For 18mm-height labels, the Brother PT-P750W safe print layout places the border
 
 
 Vertical print calibration is adjustable from -1 to +1mm in 0.1mm steps; positive means down on the physical page, negative up. Default/legacy value is zero. The whole design, including border/QR/logo/text, translates without changing page dimensions or scaling. A center reset returns to zero. Draft and Save Defaults preserve calibration. Out-of-page border/content offsets fail visibly; hardware alignment is established by a user test print.
+
+
+Label Designer paper presets are shared with all users and can be created by Admin/Superadmin through Save new paper preset. This action saves current defaults and a named paper snapshot (dimensions, orientation, QR size, padding, border visibility/inset and vertical offset), up to 20 unique names (case insensitive, 60 characters). Applying a preset retains logo, layout and content; it creates an unsaved draft. Old clients omitting presets retain the saved library. Layout exposes Enable border and Border inset (0.5-4mm, 0.1mm steps); on 18mm-height labels the effective inset is at least 1.5mm plus the absolute vertical calibration, preserving clearance after translation. The user reports +0.7/+0.8mm is physically aligned; horizontal clipping remains subject to a physical printer test.

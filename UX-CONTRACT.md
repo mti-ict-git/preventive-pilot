@@ -70,3 +70,6 @@ For 18mm-height labels, the shared PDF/SVG geometry enforces a 1.5mm border inse
 
 
 Vertical print position uses the named shared Slider, visible signed mm/direction, Up/Down endpoints and Center print position button. It respects controlsLocked and applies to Standard/Company Asset preview, PDF and print. Bounds failures are visible in the existing preview error flow.
+
+
+Layout owns Enable border (named shared Switch), Border inset (named shared Slider with visible mm), saved presets (shared Radix Select), labelled new preset Input and Save new paper preset Button. Preset save persists current defaults and paper library together; pending locks repeat saves, failure retains form/draft, success refetches library. Empty library and duplicate/blank names have visible guidance. Applying only paper geometry preserves logo/content. The 18mm border band automatically accommodates the vertical offset; preview/PDF stay geometrically identical.

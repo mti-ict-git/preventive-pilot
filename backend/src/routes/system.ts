@@ -420,8 +420,17 @@ const AssetsUiSettingsSchema = z.object({
 const LabelDesignerUiSettingsSchema = z.object({
   qrPayloadMode: z.enum(["assetId", "assetTag", "snipeItUrl"]),
   gridColumns: z.number().int().min(1).max(6),
+  paperPresets: z.array(z.object({
+    name: z.string().trim().min(1).max(60),
+    width: z.number().int().min(10).max(200), height: z.number().int().min(10).max(200),
+    orientation: z.enum(["portrait", "landscape"]),
+    qrSize: z.number().int().min(5).max(200), padding: z.number().int().min(0).max(20),
+    showBorder: z.boolean(), borderInsetMm: z.number().min(0.5).max(4).multipleOf(0.1),
+    printOffsetYmm: z.number().min(-1).max(1).multipleOf(0.1),
+  })).max(20).refine(items => new Set(items.map(item => item.name.toLowerCase())).size === items.length, "Preset names must be unique").optional(),
   config: z.object({
     layout: z.enum(["standard", "companyAsset"]).optional(),
+    borderInsetMm: z.number().min(0.5).max(4).multipleOf(0.1).optional(),
     printOffsetYmm: z.number().min(-1).max(1).multipleOf(0.1).optional(),
     logoSizePercent: z.number().int().min(25).max(100).optional(),
     logoDataUrl: z.string().max(2800000).regex(/^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/).optional(),
@@ -1231,9 +1240,9 @@ systemRouter.put("/ui-settings/label-designer", requireSystemAdmin, async (req, 
     return;
   }
 
-  const valueJson = JSON.stringify(parsed.data);
-
   try {
+    const existing = await loadLabelDesignerUiSettings();
+    const valueJson = JSON.stringify({ ...parsed.data, paperPresets: parsed.data.paperPresets ?? existing.paperPresets ?? [] });
     const db = await getDb();
     await db
       .request()

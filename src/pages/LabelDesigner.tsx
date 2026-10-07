@@ -40,6 +40,8 @@ import {
   apiUpdateLabelDesignerUiSettings,
   type Asset as ApiAsset,
   type LabelDesignerConfig,
+  type LabelPaperPreset,
+  type LabelDesignerUiSettingsResponse,
   type LabelDesignerQrPayloadMode,
 } from "@/lib/api";
 import { labelDraftKey, parseLabelDraft } from "@/lib/labelDraft";
@@ -136,6 +138,9 @@ export default function LabelDesigner() {
   const [config, setConfig] = useState<LabelDesignerConfig>(defaultDesignerConfig);
   const [gridColumns, setGridColumns] = useState<number>(3);
   const [qrPayloadMode, setQrPayloadMode] = useState<LabelDesignerQrPayloadMode>("assetId");
+  const [presetName, setPresetName] = useState("");
+  const [presetError, setPresetError] = useState<string | null>(null);
+  const paperPresets = settingsQuery.data?.paperPresets ?? [];
   const [tabValue, setTabValue] = useState("layout");
 
   const edited = useRef(false);
@@ -169,9 +174,9 @@ export default function LabelDesigner() {
   }, [isDirty, canEditDefaults, draftKey, config, gridColumns, qrPayloadMode]);
 
   const saveDefaultsMutation = useMutation({
-    mutationFn: (settings: { qrPayloadMode: LabelDesignerQrPayloadMode; gridColumns: number; config: LabelDesignerConfig }) => apiUpdateLabelDesignerUiSettings(settings),
+    mutationFn: (settings: LabelDesignerUiSettingsResponse) => apiUpdateLabelDesignerUiSettings(settings),
     onSuccess: async (_data, savedSettings) => {
-      if (JSON.stringify(savedSettings) === JSON.stringify({ qrPayloadMode, gridColumns, config })) {
+      if (JSON.stringify(savedSettings.config) === JSON.stringify(config) && savedSettings.qrPayloadMode === qrPayloadMode && savedSettings.gridColumns === gridColumns) {
         edited.current = false;
         setIsDirty(false);
         try { localStorage.removeItem(draftKey); setDraftStorageError(false); } catch { setDraftStorageError(true); }
@@ -218,6 +223,22 @@ export default function LabelDesigner() {
     updateConfig("height", preset.height);
     updateConfig("qrSize", Math.floor(Math.min(preset.width, preset.height) * 0.7));
     updateConfig("padding", 1);
+  };
+
+  const savePaperPreset = () => {
+    const name = presetName.trim();
+    if (!name || name.length > 60) { setPresetError("Enter a preset name, up to 60 characters."); return; }
+    if (paperPresets.some(p => p.name.toLowerCase() === name.toLowerCase())) { setPresetError("This name already exists. Choose a different name."); return; }
+    if (paperPresets.length >= 20) { setPresetError("The shared library supports up to 20 presets."); return; }
+    const preset: LabelPaperPreset = { name, width: config.width, height: config.height, orientation: config.orientation,
+      qrSize: config.qrSize, padding: config.padding, showBorder: config.showBorder,
+      borderInsetMm: config.borderInsetMm ?? (labelDimensions(config).height === 18 ? 1.5 : 0.5), printOffsetYmm: config.printOffsetYmm ?? 0 };
+    setPresetError(null);
+    saveDefaultsMutation.mutate({ qrPayloadMode, gridColumns, config, paperPresets: [...paperPresets, preset] }, { onSuccess: () => { setPresetName(""); toast.success("Paper preset saved"); } });
+  };
+  const applyPaperPreset = (preset: LabelPaperPreset) => {
+    const { name: _name, ...paper } = preset;
+    markEdited(); setConfig(prev => ({ ...prev, ...paper }));
   };
 
   const toggleAsset = (asset: Asset) => {
@@ -324,7 +345,7 @@ export default function LabelDesigner() {
                 <Button
                   variant="outline"
                   disabled={saveDefaultsMutation.isPending || settingsQuery.isLoading || settingsQuery.isError || isGenerating}
-                  onClick={() => saveDefaultsMutation.mutate({ qrPayloadMode, gridColumns, config })}
+                  onClick={() => saveDefaultsMutation.mutate({ qrPayloadMode, gridColumns, config, paperPresets })}
                   className="bg-background/80 shadow-sm"
                 >
                   <Settings2 className="h-4 w-4 mr-2" />
@@ -426,6 +447,19 @@ export default function LabelDesigner() {
                   </div>}
                   {/* Presets */}
                   <div className="space-y-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="paper-preset">Saved paper presets</Label>
+                      <Select disabled={controlsLocked || saveDefaultsMutation.isPending || paperPresets.length === 0} value="" onValueChange={name => { const preset = paperPresets.find(p => p.name === name); if (preset) applyPaperPreset(preset); }}>
+                        <SelectTrigger id="paper-preset"><SelectValue placeholder={paperPresets.length ? "Choose a paper preset" : "No saved presets"} /></SelectTrigger>
+                        <SelectContent>{paperPresets.map(p => <SelectItem key={p.name} value={p.name}>{p.name} / {p.width} x {p.height} mm</SelectItem>)}</SelectContent>
+                      </Select>
+                      <Label htmlFor="paper-preset-name">New preset name</Label>
+                      <Input id="paper-preset-name" maxLength={60} value={presetName} disabled={controlsLocked || saveDefaultsMutation.isPending} onChange={e => { setPresetName(e.target.value); setPresetError(null); }} aria-invalid={!!presetError} aria-describedby="paper-preset-help" placeholder="Brother 45x18 - calibrated" />
+                      <Button variant="outline" disabled={controlsLocked || saveDefaultsMutation.isPending} onClick={savePaperPreset}>{saveDefaultsMutation.isPending ? "Saving..." : "Save new paper preset"}</Button>
+                      <p id="paper-preset-help" className="text-xs text-muted-foreground">Saves current defaults and a shared preset with dimensions, QR size, padding, border and print position. Applying a preset keeps your logo and content.</p>
+                      {presetError && <p role="alert" className="text-sm text-destructive">{presetError}</p>}
+                    </div>
+                    <Separator />
                     <Label className="text-xs text-muted-foreground">Quick Presets</Label>
                     <div className="grid grid-cols-2 gap-2">
                       {labelPresets.map((preset) => (
@@ -488,13 +522,20 @@ export default function LabelDesigner() {
                   </div>
 
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between"><Label>Vertical print position</Label><span className="text-sm text-muted-foreground">{(config.printOffsetYmm ?? 0).toFixed(1)} mm · {(config.printOffsetYmm ?? 0) > 0 ? "Down" : (config.printOffsetYmm ?? 0) < 0 ? "Up" : "Centered"}</span></div>
+                    <div className="flex items-center justify-between"><Label>Vertical print position</Label><span className="text-sm text-muted-foreground">{(config.printOffsetYmm ?? 0).toFixed(1)} mm / {(config.printOffsetYmm ?? 0) > 0 ? "Down" : (config.printOffsetYmm ?? 0) < 0 ? "Up" : "Centered"}</span></div>
                     <Slider aria-label="Vertical print position" min={-1} max={1} step={0.1} value={[config.printOffsetYmm ?? 0]} disabled={controlsLocked} onValueChange={([value]) => updateConfig("printOffsetYmm", value)} />
                     <div className="flex justify-between text-xs text-muted-foreground"><span>Up</span><span>Down</span></div>
                     <Button variant="outline" size="sm" disabled={controlsLocked} onClick={() => updateConfig("printOffsetYmm", 0)}>Center print position</Button>
                     <p className="text-xs text-muted-foreground">Moves the entire design, including QR and border. Start with +0.2 mm if printing sits too high. Print one label to calibrate, then Save Defaults.</p>
                   </div>
                   {/* QR Size */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between"><Label htmlFor="label-border">Enable border</Label><Switch id="label-border" checked={config.showBorder} onCheckedChange={v => updateConfig("showBorder", v)} disabled={controlsLocked} /></div>
+                    <div className="flex items-center justify-between"><Label>Border inset</Label><span className="text-sm text-muted-foreground">{(config.borderInsetMm ?? (labelDimensions(config).height === 18 ? 1.5 : 0.5)).toFixed(1)} mm</span></div>
+                    <Slider aria-label="Border inset" min={0.5} max={4} step={0.1} value={[config.borderInsetMm ?? (labelDimensions(config).height === 18 ? 1.5 : 0.5)]} disabled={controlsLocked || !config.showBorder} onValueChange={([value]) => updateConfig("borderInsetMm", value)} />
+                    <p className="text-xs text-muted-foreground">Increase inset if border edges are clipped, or disable the border. On 18mm tape, extra clearance is added automatically when shifting vertically.</p>
+                  </div>
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs">QR Code Size (including clear border)</Label>
@@ -657,15 +698,6 @@ export default function LabelDesigner() {
 
                   <Separator className="bg-border/50" />
 
-                  {/* Border Toggle */}
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Show Border</Label>
-                    <Switch
-                      checked={config.showBorder}
-                      onCheckedChange={(v) => updateConfig("showBorder", v)}
-                      disabled={controlsLocked}
-                    />
-                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

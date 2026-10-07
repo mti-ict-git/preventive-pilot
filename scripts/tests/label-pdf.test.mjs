@@ -160,3 +160,30 @@ test("whole-design vertical calibration matches actual PDF translation and persi
  for(const value of [-1.1,1.1,0.15])await assert.rejects(buildLabelOutput([asset],{...config,printOffsetYmm:value},"assetTag"),/Print position/);
  await assert.rejects(buildLabelOutput([asset],{...config,height:24,printOffsetYmm:1},"assetTag"),/border outside/);
 });
+
+
+test("calibrated 18mm borders retain clearance and can be disabled", async()=>{
+ const mm=72/25.4;
+ for(const layout of ["standard","companyAsset"]) for(const offset of [0.7,0.8,-0.8]) {
+  const cfg={...config,width:45,qrSize:10,layout,showLogo:true,printOffsetYmm:offset,borderInsetMm:1.5};
+  const d=(await buildLabelOutput([asset],cfg,"assetTag")).drawings[0];
+  assert(Math.abs(d.borderInset/mm-(1.5+Math.abs(offset)))<1e-8);
+  assert(d.borderInset-Math.abs(d.verticalOffset)-0.4>=1.1*mm);
+  const off=(await buildLabelOutput([asset],{...cfg,showBorder:false},"assetTag")).drawings[0];
+  assert.equal(off.showBorder,false);assert.deepEqual(off.qr,d.qr);assert.deepEqual(off.lines,d.lines);
+ }
+ const larger=(await buildLabelOutput([asset],{...config,borderInsetMm:3},"assetTag")).drawings[0];assert.equal(larger.borderInset,3*mm);
+ for(const value of [0.4,4.1,1.55,NaN])await assert.rejects(buildLabelOutput([asset],{...config,borderInsetMm:value},"assetTag"),/Border inset/);
+});
+
+test("shared named paper library validates calibrated settings and legacy omission",()=>{
+ const source=fs.readFileSync(new URL("../../backend/src/routes/system.ts",import.meta.url),"utf8"),start=source.indexOf("const LabelDesignerUiSettingsSchema = ");
+ const expression=source.slice(start+"const LabelDesignerUiSettingsSchema = ".length,source.indexOf("\nconst WhatsAppSettingsSchema",start)).trim().replace(/;$/,"");
+ const schema=vm.runInNewContext(expression,{z:require("zod").z});
+ const preset={name:"Brother calibrated",width:45,height:18,qrSize:10,padding:1,orientation:"landscape",showBorder:false,borderInsetMm:2.5,printOffsetYmm:0.8};
+ const settings={config:{...config,borderInsetMm:2.5,printOffsetYmm:0.8,showBorder:false},gridColumns:1,qrPayloadMode:"assetTag",paperPresets:[preset]};
+ assert.deepEqual(JSON.parse(JSON.stringify(schema.parse(settings).paperPresets)),[preset]);
+ assert.equal(parseLabelDraft(JSON.stringify(settings)).config.borderInsetMm,2.5);
+ assert(schema.safeParse({...settings,paperPresets:undefined}).success);
+ for(const paperPresets of [[preset,{...preset,name:"BROTHER CALIBRATED"}],Array.from({length:21},(_,i)=>({...preset,name:String(i)})),[{...preset,name:" "}],[{...preset,printOffsetYmm:0.85}],[{...preset,borderInsetMm:4.1}]])assert(!schema.safeParse({...settings,paperPresets}).success);
+});

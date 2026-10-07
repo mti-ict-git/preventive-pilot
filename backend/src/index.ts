@@ -434,6 +434,14 @@ const openApiSpec: OpenApiSchema = {
           "visibleCategoryIds"
         ]
       },
+      "LabelPaperPreset": { "type": "object", "properties": {
+        "name": {"type":"string","minLength":1,"maxLength":60},
+        "width": {"type":"integer","minimum":10,"maximum":200}, "height": {"type":"integer","minimum":10,"maximum":200},
+        "orientation": {"type":"string","enum":["portrait","landscape"]},
+        "qrSize": {"type":"integer","minimum":5,"maximum":200}, "padding": {"type":"integer","minimum":0,"maximum":20},
+        "showBorder": {"type":"boolean"}, "borderInsetMm": {"type":"number","minimum":0.5,"maximum":4,"multipleOf":0.1},
+        "printOffsetYmm": {"type":"number","minimum":-1,"maximum":1,"multipleOf":0.1}
+      }, "required":["name","width","height","orientation","qrSize","padding","showBorder","borderInsetMm","printOffsetYmm"] },
       "LabelDesignerUiSettingsRequest": {
         "type": "object",
         "properties": {
@@ -450,6 +458,7 @@ const openApiSpec: OpenApiSchema = {
             "minimum": 1,
             "maximum": 6
           },
+          "paperPresets": { "type": "array", "maxItems": 20, "description": "Shared named paper and calibration presets; names are unique ignoring case. Omitted PUT values preserve saved presets.", "items": { "$ref": "#/components/schemas/LabelPaperPreset" } },
           "config": {
             "type": "object",
             "properties": {
@@ -506,6 +515,7 @@ const openApiSpec: OpenApiSchema = {
                 "type": "boolean"
               },
               "layout": { "type": "string", "enum": ["standard", "companyAsset"], "description": "Optional layout; omitted values use standard." },
+                "borderInsetMm": { "type": "number", "minimum": 0.5, "maximum": 4, "multipleOf": 0.1, "description": "Requested border inset; 18mm tape enforces at least 1.5mm plus absolute vertical offset." },
                 "printOffsetYmm": { "type": "number", "minimum": -1, "maximum": 1, "multipleOf": 0.1, "description": "Vertical print calibration in mm. Positive moves all artwork down; negative up. Defaults to zero." },
                 "logoSizePercent": { "type": "integer", "minimum": 25, "maximum": 100, "description": "Company Asset logo size as a percentage of its safe header area. Defaults to 100 when omitted." },
                 "logoDataUrl": { "type": "string", "maxLength": 2800000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },
@@ -886,6 +896,7 @@ const openApiSpec: OpenApiSchema = {
             "minimum": 1,
             "maximum": 6
           },
+          "paperPresets": { "type": "array", "maxItems": 20, "description": "Shared named paper and calibration presets; names are unique ignoring case. Omitted PUT values preserve saved presets.", "items": { "$ref": "#/components/schemas/LabelPaperPreset" } },
           "config": {
             "type": "object",
             "properties": {
@@ -942,6 +953,7 @@ const openApiSpec: OpenApiSchema = {
                 "type": "boolean"
               },
               "layout": { "type": "string", "enum": ["standard", "companyAsset"], "description": "Optional layout; omitted values use standard." },
+                "borderInsetMm": { "type": "number", "minimum": 0.5, "maximum": 4, "multipleOf": 0.1, "description": "Requested border inset; 18mm tape enforces at least 1.5mm plus absolute vertical offset." },
                 "printOffsetYmm": { "type": "number", "minimum": -1, "maximum": 1, "multipleOf": 0.1, "description": "Vertical print calibration in mm. Positive moves all artwork down; negative up. Defaults to zero." },
                 "logoSizePercent": { "type": "integer", "minimum": 25, "maximum": 100, "description": "Company Asset logo size as a percentage of its safe header area. Defaults to 100 when omitted." },
                 "logoDataUrl": { "type": "string", "maxLength": 2800000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },

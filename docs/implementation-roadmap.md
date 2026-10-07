@@ -612,3 +612,11 @@ Objective: let the user calibrate vertical printer alignment independently of la
 - [x] Implement persisted -1 to +1mm slider, 0.1mm steps, center reset and shared whole-design PDF/SVG translation with page-bound checks.
 - [x] Verify direction, persistence, legacy defaults, bounds, browser and exact-source API/web release.
 Output and challenge: verification-q01-desktop.md; actual calibration remains a user print test.
+
+
+### Selected D1 correction: shared paper presets and border calibration, 2026-10-07
+
+Objective: let operators disable/recess clipped borders and reuse shared calibrated paper settings. Sources: functional specification, UX-CONTRACT and label UI-settings OpenAPI.
+- [ ] Implement named shared paper presets and accessible Layout border controls; retain legacy settings and protect the shifted 18mm border band.
+- [ ] Verify persistence, duplicate-name failures, geometry and exact-source API/web release.
+Output and challenge: verification-q01-desktop.md; physical print acceptance remains a user test.
