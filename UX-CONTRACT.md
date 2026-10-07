@@ -52,3 +52,7 @@ Existing Scheduling calendar buttons, shared Badge, Radix Select/Dialog and Scro
 ## Tasks date sorting - 2026-10-06
 
 The visible labelled Sort by uses the existing shared Radix Select, with due date earliest/latest and created date oldest/newest. Authored popup matches trigger width and supports keyboard/Escape. Server sorting precedes 25-row pagination. URL sort survives tab/filter changes, reload and detail close; changing sort resets page 1. Counts retain their existing independent shared-filter scope. Existing tokens and document scroll ownership remain unchanged.
+
+## Label Designer print settings — 2026-10-07
+
+Shared Input/Label/Radix Select/Slider/Switch/Button remain control owners. Label length and tape width are named fields; Brother 18/24 mm presets use 1 mm padding. Preview/export/print share src/lib/labelPdf.ts; current values apply immediately. Defaults hydrate once and do not overwrite edits on refetch. A validated user-scoped local draft preserves unsaved edits across reloads; status distinguishes local draft from shared saved defaults. Save failure preserves edits; settings-read failure exposes Retry and blocks printing with guessed defaults. PDF overflow errors are visible in preview and toast. Asset selection is a keyboard-operable pressed button. Preview columns have no effect on PDF pages. No printer driver changes are made by the app.

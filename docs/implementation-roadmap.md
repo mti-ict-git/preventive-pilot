@@ -557,3 +557,11 @@ Completed evidence: final API `95af66d` passed 186 Linux regressions and full re
 - [ ] Resolve UPS-009's UPS-to-Printer template mismatch under the deferred Q-12 mapping decision, and align list/detail handling of never-completed PM. Do not infer a replacement template or master site.
 
 Both PCs now expose their existing July 6 outstanding occurrence instead of January 2027. D2 delivery/recovery gates remain open. This is a scoped operational correction; API/web images and OpenAPI contracts remain unchanged.
+
+### Selected D1 correction — Label Designer settings, 2026-10-07
+
+Sources: functional specification Label Designer printing, UX-CONTRACT.md, existing label UI-settings OpenAPI and permission guards. [Verification](verification-q01-desktop.md#label-designer-tape-width-and-current-settings-parity--2026-10-07).
+- [ ] Current tape-width edits survive refetch/reload and Print/Export use current settings before Save Defaults.
+- [ ] Preview/export/print exact-size parity, PDF boundary tests, browser draft/save/failure checks and production web-only release verified.
+
+The PC-006 schedule-cursor correction remains pending; inspection confirmed an open July task and January 2027 cursor. No schedule/data repair was applied in this work item. Mobile audit remains paused at the user request.

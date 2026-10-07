@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { QRCodeSVG } from "qrcode.react";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import * as QRCode from "qrcode";
+import { buildLabelPdf, labelDimensions } from "@/lib/labelPdf";
 import {
   QrCode,
   Printer,
@@ -44,7 +42,8 @@ import {
   type LabelDesignerConfig,
   type LabelDesignerQrPayloadMode,
 } from "@/lib/api";
-import { hasAnyRole } from "@/lib/auth";
+import { labelDraftKey, parseLabelDraft } from "@/lib/labelDraft";
+import { getJwtClaims, hasAnyRole } from "@/lib/auth";
 
 type Asset = ApiAsset;
 
@@ -67,6 +66,8 @@ const defaultDesignerConfig: LabelDesignerConfig = {
 };
 
 const labelPresets = [
+  { name: "Brother 18mm (50x18mm)", width: 50, height: 18 },
+  { name: "Brother 24mm (60x24mm)", width: 60, height: 24 },
   { name: "Small (30x20mm)", width: 30, height: 20 },
   { name: "Medium (50x30mm)", width: 50, height: 30 },
   { name: "Large (70x40mm)", width: 70, height: 40 },
@@ -79,7 +80,7 @@ const contentToggleItems = [
   { key: "showCategory", label: "Category" },
   { key: "showLocation", label: "Location" },
   { key: "showCustomText", label: "Custom Text" },
-  { key: "showLogo", label: "Company Logo" },
+
 ] as const satisfies ReadonlyArray<{ key: keyof LabelDesignerConfig; label: string }>;
 
 export default function LabelDesigner() {
@@ -90,8 +91,9 @@ export default function LabelDesigner() {
   const [assetPage, setAssetPage] = useState<number>(1);
   const assetPageSize = 200;
 
+  const [isGenerating, setIsGenerating] = useState(false);
   const canEditDefaults = hasAnyRole(["Superadmin", "Admin"]);
-  const controlsLocked = !canEditDefaults;
+
 
   const lookupsQuery = useQuery({
     queryKey: ["lookups"],
@@ -110,6 +112,8 @@ export default function LabelDesigner() {
     queryFn: apiGetLabelDesignerUiSettings,
     staleTime: 60_000,
   });
+
+  const controlsLocked = !canEditDefaults || settingsQuery.isLoading || settingsQuery.isError || isGenerating;
 
   const assetsQuery = useQuery({
     queryKey: ["label-designer", "assets", { assetSearch, assetCategoryId, assetPage, assetPageSize }],
@@ -133,17 +137,44 @@ export default function LabelDesigner() {
   const [qrPayloadMode, setQrPayloadMode] = useState<LabelDesignerQrPayloadMode>("assetId");
   const [tabValue, setTabValue] = useState("layout");
 
+  const edited = useRef(false);
+  const hydrated = useRef(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [draftStorageError, setDraftStorageError] = useState(false);
+  const draftKey = labelDraftKey(getJwtClaims()?.sub ?? "anonymous");
+  const markEdited = () => { edited.current = true; setIsDirty(true); };
+
   useEffect(() => {
     const data = settingsQuery.data;
-    if (!data) return;
-    setConfig(data.config);
-    setGridColumns(data.gridColumns);
-    setQrPayloadMode(data.qrPayloadMode);
-  }, [settingsQuery.data]);
+    if (!data || hydrated.current || edited.current) return;
+    hydrated.current = true;
+    let draft = null;
+    try { if (canEditDefaults) draft = parseLabelDraft(localStorage.getItem(draftKey)); }
+    catch { setDraftStorageError(true); }
+    const initial = draft ?? data;
+    setConfig(initial.config);
+    setGridColumns(initial.gridColumns);
+    setQrPayloadMode(initial.qrPayloadMode);
+    if (draft) { edited.current = true; setIsDirty(true); }
+
+  }, [settingsQuery.data, canEditDefaults, draftKey]);
+
+  useEffect(() => {
+    if (!isDirty || !canEditDefaults) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ config, gridColumns, qrPayloadMode }));
+      setDraftStorageError(false);
+    } catch { setDraftStorageError(true); }
+  }, [isDirty, canEditDefaults, draftKey, config, gridColumns, qrPayloadMode]);
 
   const saveDefaultsMutation = useMutation({
-    mutationFn: () => apiUpdateLabelDesignerUiSettings({ qrPayloadMode, gridColumns, config }),
-    onSuccess: async () => {
+    mutationFn: (settings: { qrPayloadMode: LabelDesignerQrPayloadMode; gridColumns: number; config: LabelDesignerConfig }) => apiUpdateLabelDesignerUiSettings(settings),
+    onSuccess: async (_data, savedSettings) => {
+      if (JSON.stringify(savedSettings) === JSON.stringify({ qrPayloadMode, gridColumns, config })) {
+        edited.current = false;
+        setIsDirty(false);
+        try { localStorage.removeItem(draftKey); setDraftStorageError(false); } catch { setDraftStorageError(true); }
+      }
       await queryClient.invalidateQueries({ queryKey: ["ui-settings", "label-designer"] });
       toast.success("Defaults saved");
     },
@@ -156,13 +187,15 @@ export default function LabelDesigner() {
     key: K,
     value: LabelDesignerConfig[K],
   ) => {
+    markEdited();
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 
   const applyPreset = (preset: typeof labelPresets[0]) => {
     updateConfig("width", preset.width);
     updateConfig("height", preset.height);
-    updateConfig("qrSize", Math.min(preset.width, preset.height) * 0.6);
+    updateConfig("qrSize", Math.floor(Math.min(preset.width, preset.height) * 0.7));
+    updateConfig("padding", 1);
   };
 
   const toggleAsset = (asset: Asset) => {
@@ -181,90 +214,8 @@ export default function LabelDesigner() {
       return;
     }
     try {
-      const mmToPt = (mm: number): number => mm * 2.834645669291339;
-      const doc = await PDFDocument.create();
-      const font = await doc.embedFont(StandardFonts.Helvetica);
-      const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
-
-      const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
-      const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
-
-      const tapeWidthMm = Math.min(config.width, config.height);
-      const padMm = config.padding;
-      const isLandscape = config.orientation === "landscape";
-
-      for (const asset of selectedAssets) {
-        let qrValue: string = String(asset.id);
-        if (qrPayloadMode === "assetTag" && asset.assetTag) {
-          qrValue = asset.assetTag;
-        } else if (qrPayloadMode === "snipeItUrl") {
-          if (normalizedBaseUrl && asset.snipeAssetId !== null) {
-            qrValue = `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`;
-          } else if (asset.assetTag) {
-            qrValue = asset.assetTag;
-          }
-        }
-
-        const pngDataUrl = await QRCode.toDataURL(qrValue, { margin: 0, errorCorrectionLevel: "M" });
-        const qrPng = await doc.embedPng(pngDataUrl);
-
-        const lines: Array<{ text: string; size: number; bold: boolean }> = [];
-        if (config.showAssetTag && asset.assetTag) lines.push({ text: asset.assetTag, size: config.fontSize + 2, bold: true });
-        if (config.showAssetName && asset.name) lines.push({ text: asset.name, size: config.fontSize, bold: false });
-        if (config.showCategory && asset.category.name) lines.push({ text: asset.category.name, size: config.fontSize, bold: false });
-        if (config.showLocation && asset.location.name) lines.push({ text: asset.location.name, size: config.fontSize, bold: false });
-        if (config.showCustomText && config.customText) lines.push({ text: config.customText, size: config.fontSize - 1, bold: false });
-
-        let maxLineWidthPts = 0;
-        for (const l of lines) {
-          const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
-          if (w > maxLineWidthPts) maxLineWidthPts = w;
-        }
-
-        const qrSizePts = mmToPt(config.qrSize);
-        const gapPts = mmToPt(2);
-        const padPts = mmToPt(padMm);
-        const tapeWidthPts = mmToPt(tapeWidthMm);
-        const contentSpanPts = qrSizePts + gapPts + maxLineWidthPts;
-
-        const pageWidthPts = isLandscape ? contentSpanPts + padPts * 2 : tapeWidthPts;
-        const pageHeightPts = isLandscape ? tapeWidthPts : contentSpanPts + padPts * 2;
-
-        const page = doc.addPage([pageWidthPts, pageHeightPts]);
-
-        if (config.showBorder) {
-          page.drawRectangle({ x: mmToPt(0.5), y: mmToPt(0.5), width: pageWidthPts - mmToPt(1), height: pageHeightPts - mmToPt(1), borderColor: rgb(0.89, 0.93, 0.97), borderWidth: 1 });
-        }
-
-        if (isLandscape) {
-          const qrX = padPts;
-          const qrY = (pageHeightPts - qrSizePts) / 2;
-          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
-          const textX = qrX + qrSizePts + gapPts;
-          const lineHeights = lines.map((l) => l.size * 1.25);
-          const totalTextH = lineHeights.reduce((a, b) => a + b, 0);
-          let baseY = (pageHeightPts - totalTextH) / 2 + (lineHeights[0] - (lines[0]?.size ?? 0));
-          for (let i = 0; i < lines.length; i++) {
-            const l = lines[i];
-            const y = baseY + lineHeights.slice(0, i).reduce((a, b) => a + b, 0);
-            page.drawText(l.text, { x: textX, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
-          }
-        } else {
-          const qrX = (pageWidthPts - qrSizePts) / 2;
-          const qrY = padPts;
-          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
-          const lineHeights = lines.map((l) => l.size * 1.25);
-          let y = qrY + qrSizePts + gapPts;
-          for (const l of lines) {
-            const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
-            const x = (pageWidthPts - w) / 2;
-            page.drawText(l.text, { x, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
-            y += l.size * 1.25;
-          }
-        }
-      }
-
-      const pdfBytes = await doc.save();
+      setIsGenerating(true);
+      const pdfBytes = await buildLabelPdf(selectedAssets, config, qrPayloadMode, systemStatusQuery.data?.snipeIt.baseUrl);
       const ab = new ArrayBuffer(pdfBytes.byteLength);
       new Uint8Array(ab).set(pdfBytes);
       const blob = new Blob([ab], { type: "application/pdf" });
@@ -287,9 +238,9 @@ export default function LabelDesigner() {
         }, 60_000);
       };
       toast.success("Print dialog opened");
-    } catch {
-      toast.error("Failed to print labels");
-    }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to print labels");
+    } finally { setIsGenerating(false); }
   };
 
   const handleExport = async () => {
@@ -298,90 +249,8 @@ export default function LabelDesigner() {
       return;
     }
     try {
-      const mmToPt = (mm: number): number => mm * 2.834645669291339;
-      const doc = await PDFDocument.create();
-      const font = await doc.embedFont(StandardFonts.Helvetica);
-      const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
-
-      const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
-      const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
-
-      const tapeWidthMm = Math.min(config.width, config.height);
-      const padMm = config.padding;
-      const isLandscape = config.orientation === "landscape";
-
-      for (const asset of selectedAssets) {
-        let qrValue: string = String(asset.id);
-        if (qrPayloadMode === "assetTag" && asset.assetTag) {
-          qrValue = asset.assetTag;
-        } else if (qrPayloadMode === "snipeItUrl") {
-          if (normalizedBaseUrl && asset.snipeAssetId !== null) {
-            qrValue = `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`;
-          } else if (asset.assetTag) {
-            qrValue = asset.assetTag;
-          }
-        }
-
-        const pngDataUrl = await QRCode.toDataURL(qrValue, { margin: 0, errorCorrectionLevel: "M" });
-        const qrPng = await doc.embedPng(pngDataUrl);
-
-        const lines: Array<{ text: string; size: number; bold: boolean }> = [];
-        if (config.showAssetTag && asset.assetTag) lines.push({ text: asset.assetTag, size: config.fontSize + 2, bold: true });
-        if (config.showAssetName && asset.name) lines.push({ text: asset.name, size: config.fontSize, bold: false });
-        if (config.showCategory && asset.category.name) lines.push({ text: asset.category.name, size: config.fontSize, bold: false });
-        if (config.showLocation && asset.location.name) lines.push({ text: asset.location.name, size: config.fontSize, bold: false });
-        if (config.showCustomText && config.customText) lines.push({ text: config.customText, size: config.fontSize - 1, bold: false });
-
-        let maxLineWidthPts = 0;
-        for (const l of lines) {
-          const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
-          if (w > maxLineWidthPts) maxLineWidthPts = w;
-        }
-
-        const qrSizePts = mmToPt(config.qrSize);
-        const gapPts = mmToPt(2);
-        const padPts = mmToPt(padMm);
-        const tapeWidthPts = mmToPt(tapeWidthMm);
-        const contentSpanPts = qrSizePts + gapPts + maxLineWidthPts;
-
-        const pageWidthPts = isLandscape ? contentSpanPts + padPts * 2 : tapeWidthPts;
-        const pageHeightPts = isLandscape ? tapeWidthPts : contentSpanPts + padPts * 2;
-
-        const page = doc.addPage([pageWidthPts, pageHeightPts]);
-
-        if (config.showBorder) {
-          page.drawRectangle({ x: mmToPt(0.5), y: mmToPt(0.5), width: pageWidthPts - mmToPt(1), height: pageHeightPts - mmToPt(1), borderColor: rgb(0.89, 0.93, 0.97), borderWidth: 1 });
-        }
-
-        if (isLandscape) {
-          const qrX = padPts;
-          const qrY = (pageHeightPts - qrSizePts) / 2;
-          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
-          const textX = qrX + qrSizePts + gapPts;
-          const lineHeights = lines.map((l) => l.size * 1.25);
-          const totalTextH = lineHeights.reduce((a, b) => a + b, 0);
-          let baseY = (pageHeightPts - totalTextH) / 2 + (lineHeights[0] - (lines[0]?.size ?? 0));
-          for (let i = 0; i < lines.length; i++) {
-            const l = lines[i];
-            const y = baseY + lineHeights.slice(0, i).reduce((a, b) => a + b, 0);
-            page.drawText(l.text, { x: textX, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
-          }
-        } else {
-          const qrX = (pageWidthPts - qrSizePts) / 2;
-          const qrY = padPts;
-          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
-          const lineHeights = lines.map((l) => l.size * 1.25);
-          let y = qrY + qrSizePts + gapPts;
-          for (const l of lines) {
-            const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
-            const x = (pageWidthPts - w) / 2;
-            page.drawText(l.text, { x, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
-            y += l.size * 1.25;
-          }
-        }
-      }
-
-      const pdfBytes = await doc.save();
+      setIsGenerating(true);
+      const pdfBytes = await buildLabelPdf(selectedAssets, config, qrPayloadMode, systemStatusQuery.data?.snipeIt.baseUrl);
       const ab = new ArrayBuffer(pdfBytes.byteLength);
       new Uint8Array(ab).set(pdfBytes);
       const blob = new Blob([ab], { type: "application/pdf" });
@@ -394,136 +263,13 @@ export default function LabelDesigner() {
       a.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       toast.success("PDF exported");
-    } catch (err) {
-      toast.error("Failed to export PDF");
-    }
-  };
-
-  const getPreviewScale = (widthMm: number, heightMm: number): number => {
-    const maxWidth = 260;
-    const maxHeight = 100;
-    return Math.min(4, Math.max(2, Math.min(maxWidth / widthMm, maxHeight / heightMm)));
-  };
-
-  const PdfLabelPreview = ({ asset }: { asset: Asset }) => {
-    const [url, setUrl] = useState<string | null>(null);
-    const [dimsMm, setDimsMm] = useState<{ w: number; h: number } | null>(null);
-    useEffect(() => {
-      let isMounted = true;
-      let prevUrl: string | null = null;
-      const mmToPt = (mm: number): number => mm * 2.834645669291339;
-      const ptToMm = (pt: number): number => pt / 2.834645669291339;
-
-      const run = async (): Promise<void> => {
-        const doc = await PDFDocument.create();
-        const font = await doc.embedFont(StandardFonts.Helvetica);
-        const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
-
-        const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
-        const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
-
-        let qrValue: string = String(asset.id);
-        if (qrPayloadMode === "assetTag" && asset.assetTag) {
-          qrValue = asset.assetTag;
-        } else if (qrPayloadMode === "snipeItUrl") {
-          if (normalizedBaseUrl && asset.snipeAssetId !== null) {
-            qrValue = `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`;
-          } else if (asset.assetTag) {
-            qrValue = asset.assetTag;
-          }
-        }
-
-        const pngDataUrl = await QRCode.toDataURL(qrValue, { margin: 0, errorCorrectionLevel: "M" });
-        const qrPng = await doc.embedPng(pngDataUrl);
-
-        const lines: Array<{ text: string; size: number; bold: boolean }> = [];
-        if (config.showAssetTag && asset.assetTag) lines.push({ text: asset.assetTag, size: config.fontSize + 2, bold: true });
-        if (config.showAssetName && asset.name) lines.push({ text: asset.name, size: config.fontSize, bold: false });
-        if (config.showCategory && asset.category.name) lines.push({ text: asset.category.name, size: config.fontSize, bold: false });
-        if (config.showLocation && asset.location.name) lines.push({ text: asset.location.name, size: config.fontSize, bold: false });
-        if (config.showCustomText && config.customText) lines.push({ text: config.customText, size: config.fontSize - 1, bold: false });
-
-        let maxLineWidthPts = 0;
-        for (const l of lines) {
-          const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
-          if (w > maxLineWidthPts) maxLineWidthPts = w;
-        }
-
-        const tapeWidthMm = Math.min(config.width, config.height);
-        const qrSizePts = mmToPt(config.qrSize);
-        const gapPts = mmToPt(2);
-        const padPts = mmToPt(config.padding);
-        const tapeWidthPts = mmToPt(tapeWidthMm);
-        const contentSpanPts = qrSizePts + gapPts + maxLineWidthPts;
-
-        const isLandscape = config.orientation === "landscape";
-        const pageWidthPts = isLandscape ? contentSpanPts + padPts * 2 : tapeWidthPts;
-        const pageHeightPts = isLandscape ? tapeWidthPts : contentSpanPts + padPts * 2;
-
-        const page = doc.addPage([pageWidthPts, pageHeightPts]);
-
-        if (config.showBorder) {
-          page.drawRectangle({ x: mmToPt(0.5), y: mmToPt(0.5), width: pageWidthPts - mmToPt(1), height: pageHeightPts - mmToPt(1), borderColor: rgb(0.89, 0.93, 0.97), borderWidth: 1 });
-        }
-
-        if (isLandscape) {
-          const qrX = padPts;
-          const qrY = (pageHeightPts - qrSizePts) / 2;
-          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
-          const textX = qrX + qrSizePts + gapPts;
-          const lineHeights = lines.map((l) => l.size * 1.25);
-          const totalTextH = lineHeights.reduce((a, b) => a + b, 0);
-          let baseY = (pageHeightPts - totalTextH) / 2 + (lineHeights[0] - (lines[0]?.size ?? 0));
-          for (let i = 0; i < lines.length; i++) {
-            const l = lines[i];
-            const y = baseY + lineHeights.slice(0, i).reduce((a, b) => a + b, 0);
-            page.drawText(l.text, { x: textX, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
-          }
-        } else {
-          const qrX = (pageWidthPts - qrSizePts) / 2;
-          const qrY = padPts;
-          page.drawImage(qrPng, { x: qrX, y: qrY, width: qrSizePts, height: qrSizePts });
-          const lineHeights = lines.map((l) => l.size * 1.25);
-          let y = qrY + qrSizePts + gapPts;
-          for (const l of lines) {
-            const w = (l.bold ? fontBold : font).widthOfTextAtSize(l.text, l.size);
-            const x = (pageWidthPts - w) / 2;
-            page.drawText(l.text, { x, y, size: l.size, font: l.bold ? fontBold : font, color: rgb(0, 0, 0) });
-            y += l.size * 1.25;
-          }
-        }
-
-        const pdfBytes = await doc.save();
-        const ab = new ArrayBuffer(pdfBytes.byteLength);
-        new Uint8Array(ab).set(pdfBytes);
-        const blob = new Blob([ab], { type: "application/pdf" });
-        prevUrl = URL.createObjectURL(blob);
-        if (isMounted) setUrl(prevUrl);
-        if (isMounted) setDimsMm({ w: ptToMm(pageWidthPts), h: ptToMm(pageHeightPts) });
-      };
-
-      void run();
-      return () => {
-        isMounted = false;
-        if (prevUrl) URL.revokeObjectURL(prevUrl);
-      };
-    }, [asset, config, qrPayloadMode, systemStatusQuery.data?.snipeIt.baseUrl]);
-
-    const widthMm = dimsMm?.w ?? Math.min(config.width, config.height);
-    const heightMm = dimsMm?.h ?? Math.max(config.width, config.height);
-    const scale = getPreviewScale(widthMm, heightMm);
-
-    return (
-      <div
-        className="bg-white text-slate-900 flex items-center justify-center"
-        style={{ width: widthMm * scale, height: heightMm * scale, border: config.showBorder ? "1px solid #e2e8f0" : "none" }}
-      >
-        {url ? <object data={url} type="application/pdf" className="w-full h-full" /> : <div className="text-xs text-muted-foreground">Rendering…</div>}
-      </div>
-    );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to export PDF");
+    } finally { setIsGenerating(false); }
   };
 
   const resetConfig = () => {
+    markEdited();
     setConfig(defaultDesignerConfig);
     setGridColumns(3);
     setQrPayloadMode("assetId");
@@ -531,68 +277,8 @@ export default function LabelDesigner() {
   };
 
   const handleQrPayloadModeChange = (value: string) => {
+    markEdited();
     setQrPayloadMode(value as LabelDesignerQrPayloadMode);
-  };
-
-  const LabelPreview = ({ asset }: { asset: Asset }) => {
-    const isLandscape = config.orientation === "landscape";
-    const displayWidth = isLandscape ? config.width : config.height;
-    const displayHeight = isLandscape ? config.height : config.width;
-    const scale = getPreviewScale(displayWidth, displayHeight);
-    const snipeBaseUrl = systemStatusQuery.data?.snipeIt.baseUrl ?? null;
-    const normalizedBaseUrl = snipeBaseUrl ? snipeBaseUrl.replace(/\/+$/, "") : null;
-
-    let qrValue = asset.id;
-    if (qrPayloadMode === "assetTag") {
-      qrValue = asset.assetTag;
-    } else if (qrPayloadMode === "snipeItUrl") {
-      qrValue =
-        normalizedBaseUrl && asset.snipeAssetId !== null
-          ? `${normalizedBaseUrl}/hardware/${asset.snipeAssetId}`
-          : asset.assetTag;
-    }
-
-    return (
-      <div
-        className="bg-white text-slate-900 flex items-center gap-1 print:break-inside-avoid"
-        style={{
-          width: displayWidth * scale,
-          height: displayHeight * scale,
-          padding: config.padding * scale,
-          borderRadius: config.borderRadius * scale,
-          border: config.showBorder ? "1px solid #e2e8f0" : "none",
-          fontSize: config.fontSize * (scale / 2),
-        }}
-      >
-        <QRCodeSVG
-          value={qrValue}
-          size={config.qrSize * scale}
-          level="M"
-          includeMargin={false}
-        />
-        <div className="flex flex-col justify-center flex-1 min-w-0 overflow-hidden">
-          {config.showAssetTag && (
-            <div className="font-bold truncate" style={{ fontSize: (config.fontSize + 2) * (scale / 2) }}>
-              {asset.assetTag}
-            </div>
-          )}
-          {config.showAssetName && (
-            <div className="truncate opacity-80">{asset.name}</div>
-          )}
-          {config.showCategory && (
-            <div className="truncate opacity-60">{asset.category.name ?? "—"}</div>
-          )}
-          {config.showLocation && (
-            <div className="truncate opacity-60">{asset.location.name ?? "—"}</div>
-          )}
-          {config.showCustomText && config.customText && (
-            <div className="truncate opacity-50 italic" style={{ fontSize: (config.fontSize - 1) * (scale / 2) }}>
-              {config.customText}
-            </div>
-          )}
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -615,8 +301,8 @@ export default function LabelDesigner() {
               {canEditDefaults ? (
                 <Button
                   variant="outline"
-                  disabled={saveDefaultsMutation.isPending}
-                  onClick={() => saveDefaultsMutation.mutate()}
+                  disabled={saveDefaultsMutation.isPending || settingsQuery.isLoading || settingsQuery.isError || isGenerating}
+                  onClick={() => saveDefaultsMutation.mutate({ qrPayloadMode, gridColumns, config })}
                   className="bg-background/80 shadow-sm"
                 >
                   <Settings2 className="h-4 w-4 mr-2" />
@@ -627,16 +313,24 @@ export default function LabelDesigner() {
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Reset
               </Button>
-              <Button variant="outline" onClick={handleExport} className="bg-background/80 shadow-sm">
+              <Button variant="outline" onClick={handleExport} disabled={isGenerating || settingsQuery.isLoading || settingsQuery.isError || selectedAssets.length === 0} className="bg-background/80 shadow-sm">
                 <Download className="h-4 w-4 mr-2" />
                 Export PDF
               </Button>
-              <Button onClick={handlePrint} className="bg-primary hover:bg-primary/90 shadow-sm">
+              <Button onClick={handlePrint} disabled={isGenerating || settingsQuery.isLoading || settingsQuery.isError || selectedAssets.length === 0} className="bg-primary hover:bg-primary/90 shadow-sm">
                 <Printer className="h-4 w-4 mr-2" />
                 Print Labels
               </Button>
             </div>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+          <p role="status" className="text-sm">{settingsQuery.isLoading ? "Loading saved defaults…" : settingsQuery.isError ? "Saved defaults unavailable." : isDirty ? "Unsaved changes — Print and Export use the current values. Draft retained in this browser. Save Defaults to make these the shared settings." : "Using saved defaults. Print and Export use the values shown below."}</p>
+          <p className="text-sm text-muted-foreground">PDF: {labelDimensions(config).width} × {labelDimensions(config).height} mm. One label per page. Match the printer tape width and label length; use actual size (100%).</p>
+          {saveDefaultsMutation.isError && <p role="alert" className="text-sm text-destructive">Failed to save defaults. Your current settings and browser draft are retained. Try Save Defaults again.</p>}
+          {draftStorageError && <p role="alert" className="text-sm text-destructive">Browser draft storage is unavailable. Save Defaults to retain these settings.</p>}
+          {settingsQuery.isError && <div role="alert">Failed to load saved defaults. <Button variant="outline" onClick={() => void settingsQuery.refetch()}>Retry</Button></div>}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -712,9 +406,9 @@ export default function LabelDesigner() {
                   {/* Custom Size */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-xs">Width (mm)</Label>
+                      <Label htmlFor="label-length" className="text-xs">Label Length (mm)</Label>
                       <Input
-                        type="number"
+                        id="label-length" min={10} max={200} type="number"
                         value={config.width}
                         onChange={(e) => updateConfig("width", parseInt(e.target.value) || 30)}
                         disabled={controlsLocked}
@@ -722,9 +416,9 @@ export default function LabelDesigner() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-xs">Height (mm)</Label>
+                      <Label htmlFor="label-tape-width" className="text-xs">Tape Width (mm)</Label>
                       <Input
-                        type="number"
+                        id="label-tape-width" min={10} max={200} type="number"
                         value={config.height}
                         onChange={(e) => updateConfig("height", parseInt(e.target.value) || 20)}
                         disabled={controlsLocked}
@@ -754,14 +448,15 @@ export default function LabelDesigner() {
                   {/* QR Size */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs">QR Code Size</Label>
+                      <Label className="text-xs">QR Code Size (including clear border)</Label>
                       <span className="text-xs text-muted-foreground">{config.qrSize}mm</span>
                     </div>
                     <Slider
                       value={[config.qrSize]}
                       onValueChange={([v]) => updateConfig("qrSize", v)}
-                      min={10}
-                      max={Math.min(config.width, config.height) - 5}
+                      aria-label="QR code size"
+                      min={5}
+                      max={Math.max(5, Math.min(config.width, config.height) - config.padding * 2)}
                       step={1}
                       disabled={controlsLocked}
                       className="py-2"
@@ -789,7 +484,7 @@ export default function LabelDesigner() {
                   {/* Grid Columns */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs">Print Grid Columns</Label>
+                      <Label className="text-xs">Preview Grid Columns</Label>
                       <span className="text-xs text-muted-foreground">{gridColumns}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -797,14 +492,15 @@ export default function LabelDesigner() {
                         variant="outline"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => setGridColumns(Math.max(1, gridColumns - 1))}
+                        aria-label="Fewer preview columns"
+                        onClick={() => { markEdited(); setGridColumns(Math.max(1, gridColumns - 1)); }}
                         disabled={controlsLocked}
                       >
                         <Minus className="h-3 w-3" />
                       </Button>
                       <Slider
                         value={[gridColumns]}
-                        onValueChange={([v]) => setGridColumns(v)}
+                        onValueChange={([v]) => { markEdited(); setGridColumns(v); }}
                         min={1}
                         max={6}
                         step={1}
@@ -815,7 +511,8 @@ export default function LabelDesigner() {
                         variant="outline"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => setGridColumns(Math.min(6, gridColumns + 1))}
+                        aria-label="More preview columns"
+                        onClick={() => { markEdited(); setGridColumns(Math.min(6, gridColumns + 1)); }}
                         disabled={controlsLocked}
                       >
                         <Plus className="h-3 w-3" />
@@ -909,22 +606,6 @@ export default function LabelDesigner() {
                     />
                   </div>
 
-                  {/* Border Radius */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs">Corner Radius</Label>
-                      <span className="text-xs text-muted-foreground">{config.borderRadius}mm</span>
-                    </div>
-                    <Slider
-                      value={[config.borderRadius]}
-                      onValueChange={([v]) => updateConfig("borderRadius", v)}
-                      min={0}
-                      max={10}
-                      step={1}
-                      disabled={controlsLocked}
-                    />
-                  </div>
-
                   <Separator className="bg-border/50" />
 
                   {/* Border Toggle */}
@@ -997,11 +678,12 @@ export default function LabelDesigner() {
                     availableAssets.map((asset) => {
                   const isSelected = selectedAssets.some((a) => a.id === asset.id);
                   return (
-                    <motion.div
+                    <button
+                      type="button"
+                      aria-pressed={isSelected}
+                      aria-label={`Select ${asset.name} (${asset.assetTag})`}
                       key={asset.id}
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.99 }}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors shadow-sm ${
+                      className={`w-full p-3 text-left rounded-lg border cursor-pointer transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         isSelected
                           ? "border-primary bg-primary/10"
                           : "border-border/60 bg-background/80 hover:border-border"
@@ -1027,7 +709,7 @@ export default function LabelDesigner() {
                           )}
                         </div>
                       </div>
-                    </motion.div>
+                    </button>
                   );
                     })
                   )}
@@ -1078,16 +760,16 @@ export default function LabelDesigner() {
               ) : (
                 <div
                   className="grid gap-4 p-4 rounded-xl min-h-[400px] border border-dashed border-border/60 bg-muted/30"
-                  style={{ gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }}
+                  style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}
                 >
                   {selectedAssets.map((asset) => (
                     <motion.div
                       key={asset.id}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="flex items-center justify-center"
+                      className="flex min-w-0 items-center justify-center overflow-auto"
                     >
-                      <PdfLabelPreview asset={asset} />
+                      <PdfLabelPreview asset={asset} config={config} qrPayloadMode={qrPayloadMode} snipeBaseUrl={systemStatusQuery.data?.snipeIt.baseUrl} />
                     </motion.div>
                   ))}
                 </div>
@@ -1116,4 +798,34 @@ export default function LabelDesigner() {
       </div>
     </div>
   );
+}
+
+function PdfLabelPreview({ asset, config, qrPayloadMode, snipeBaseUrl }: {
+  asset: Asset; config: LabelDesignerConfig; qrPayloadMode: LabelDesignerQrPayloadMode; snipeBaseUrl?: string | null;
+}) {
+  const [result, setResult] = useState<{ url?: string; error?: string }>({});
+  useEffect(() => {
+    let disposed = false;
+    let url: string | undefined;
+    setResult({});
+    void buildLabelPdf([asset], config, qrPayloadMode, snipeBaseUrl).then(bytes => {
+      if (disposed) return;
+      const buffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buffer).set(bytes);
+      url = URL.createObjectURL(new Blob([buffer], { type: "application/pdf" }));
+      setResult({ url });
+    }).catch(error => {
+      if (!disposed) setResult({ error: error instanceof Error ? error.message : "Preview failed." });
+    });
+    return () => { disposed = true; if (url) URL.revokeObjectURL(url); };
+  }, [asset, config, qrPayloadMode, snipeBaseUrl]);
+  const { width, height } = labelDimensions(config);
+  return <div className="w-full min-w-0 space-y-2">
+    <p className="text-xs text-muted-foreground">{width} × {height} mm</p>
+    <div className="w-full rounded border bg-white" style={{ aspectRatio: `${width} / ${height}`, minHeight: 100 }}>
+      {result.error ? <p role="alert" className="p-2 text-xs text-destructive">{result.error}</p>
+        : result.url ? <object data={result.url} type="application/pdf" className="h-full w-full" aria-label={`Label preview for ${asset.name}`}><a href={result.url}>Open label preview</a></object>
+        : <p role="status" className="p-2 text-xs text-muted-foreground">Rendering…</p>}
+    </div>
+  </div>;
 }
