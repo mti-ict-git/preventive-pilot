@@ -64,3 +64,6 @@ Company Asset Logo size uses the shared Radix Slider with an accessible name and
 
 
 Logo size now fits visible PNG/JPG content, including uploaded logos. Inline helper text explains ignored blank outer margins. Blank/unreadable/oversized images produce a preview error; the source image remains unchanged.
+
+
+For 18mm-height labels, the shared PDF/SVG geometry enforces a 1.5mm border inset and at least 2mm content padding even when stored padding is smaller. Physical page dimensions stay unchanged. Tape feed/cutter settings are outside this adjustment.

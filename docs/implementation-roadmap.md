@@ -601,6 +601,6 @@ Output and challenge: capture regression, browser and release evidence in verifi
 ### Selected D1 correction: 18mm printable area, 2026-10-07
 
 Objective: prevent clipped borders/content on Brother PT-P750W 18mm tape, retaining physical page dimensions. Sources: functional specification, UX-CONTRACT and Brother official specs (15.8mm print height).
-- [ ] Place border at 1.5mm and enforce at least 2mm artwork padding for 18mm-height labels in both renderers.
-- [ ] Verify physical page size and safe geometry, browser preview and scoped web release.
+- [x] Place border at 1.5mm and enforce at least 2mm artwork padding for 18mm-height labels in both renderers.
+- [x] Verify physical page size and safe geometry, browser preview and scoped web release.
 Output and challenge: verification-q01-desktop.md; physical printer acceptance remains with the user.
