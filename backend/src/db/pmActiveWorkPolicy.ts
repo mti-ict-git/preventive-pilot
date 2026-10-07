@@ -116,7 +116,12 @@ export const actionablePmSql = (alias: string, kind: "asset" | "facility"): stri
 export const currentPmTaskApplySql = (kind: "asset" | "facility", contextAlias: string): string => {
   const column = kind === "asset" ? "AssetId" : "FacilityId";
   return `OUTER APPLY (SELECT TOP(1) COALESCE(live.FulfilledPlannedDueAt,live.PlannedDueAt) PlannedDueAt,
-    live.ScheduledDueAt FROM pm.PMTasks live
+    COALESCE(resolution.EffectiveDueAt,covered.ScheduledDueAt,live.ScheduledDueAt) ScheduledDueAt
+    FROM pm.PMTasks live
+    LEFT JOIN pm.PMOccurrenceResolutions resolution ON resolution.FulfilledByTaskId=live.TaskId
+    LEFT JOIN pm.PMTasks covered ON covered.CancelledReason=CONCAT(N'PM_AUTO_SUPERSEDED:',CONVERT(nvarchar(36),live.TaskId))
+      AND covered.PlannedDueAt=live.FulfilledPlannedDueAt AND covered.TemplateId=live.TemplateId
+      AND covered.${column}=live.${column}
     WHERE live.${column}=${contextAlias}.${column} AND live.TemplateId=s.DefaultTemplateId
       AND ${actionablePmSql("live",kind)}
       AND (COALESCE(s.NextPlannedPMDueAt,s.NextPMDueAt) IS NULL

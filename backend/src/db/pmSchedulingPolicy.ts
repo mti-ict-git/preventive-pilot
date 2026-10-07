@@ -500,9 +500,16 @@ export const reconcilePmScheduleContext = async (input: {
   const active = await input.executor.request()
     .input("contextId", sql.UniqueIdentifier, context.contextId)
     .input("templateId", sql.UniqueIdentifier, context.templateId)
-    .query(`/* pm-active-across-dates */ SELECT TOP(1) t.TaskId,COALESCE(t.FulfilledPlannedDueAt,t.PlannedDueAt) PlannedDueAt,t.ScheduledDueAt,t.Status,t.ApprovalStatus,t.CancelledAt,t.CompletedAt
-      FROM pm.PMTasks t WHERE t.${context.kind === "asset" ? "AssetId" : "FacilityId"}=@contextId AND t.TemplateId=@templateId
-      AND ${protectedPmSql("t")} ORDER BY t.StartedAt,t.CreatedAt;`);
+    .query(`/* pm-active-across-dates */ SELECT TOP(1) t.TaskId,COALESCE(t.FulfilledPlannedDueAt,t.PlannedDueAt) PlannedDueAt,
+      COALESCE(resolution.EffectiveDueAt,covered.ScheduledDueAt,t.ScheduledDueAt) ScheduledDueAt,
+      t.Status,t.ApprovalStatus,t.CancelledAt,t.CompletedAt
+      FROM pm.PMTasks t
+      LEFT JOIN pm.PMOccurrenceResolutions resolution ON resolution.FulfilledByTaskId=t.TaskId
+      LEFT JOIN pm.PMTasks covered ON covered.CancelledReason=CONCAT(N'PM_AUTO_SUPERSEDED:',CONVERT(nvarchar(36),t.TaskId))
+        AND covered.PlannedDueAt=t.FulfilledPlannedDueAt AND covered.TemplateId=t.TemplateId
+        AND covered.${context.kind === "asset" ? "AssetId" : "FacilityId"}=t.${context.kind === "asset" ? "AssetId" : "FacilityId"}
+      WHERE t.${context.kind === "asset" ? "AssetId" : "FacilityId"}=@contextId AND t.TemplateId=@templateId
+      AND ${protectedPmSql("t")} ORDER BY t.StartedAt,t.CreatedAt,t.TaskId;`);
   const activeRow=active.recordset[0];
   if (activeRow) {
     await supersedeUntouchedPmTasks(input.executor, activeRow.TaskId as string);
