@@ -577,6 +577,6 @@ Output: reusable Company Asset preset; verification evidence in verification-q01
 ### Selected D1 correction: logo upload capacity, 2026-10-07
 
 Objective: accept PNG/JPG logos up to 2 MB. Sources: functional specification Label Designer and UI-settings OpenAPI.
-- [ ] Align browser, draft, PDF and server limits; keep other API body limits unchanged.
-- [ ] Verify boundary validation and release API/web from the same tested commit.
+- [x] Align browser, draft, PDF and server limits; keep other API body limits unchanged.
+- [x] Verify boundary validation and release API/web from the same tested commit.
 Output and challenge: document regression and release evidence in verification-q01-desktop.md.
