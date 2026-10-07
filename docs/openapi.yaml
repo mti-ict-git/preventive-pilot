@@ -371,6 +371,11 @@ components:
                 - standard
                 - companyAsset
               description: Optional layout; omitted values use standard.
+            logoSizePercent:
+              type: integer
+              minimum: 25
+              maximum: 100
+              description: Company Asset logo size as a percentage of its safe header area. Defaults to 100 when omitted.
             logoDataUrl:
               type: string
               maxLength: 2800000
@@ -704,6 +709,11 @@ components:
                 - standard
                 - companyAsset
               description: Optional layout; omitted values use standard.
+            logoSizePercent:
+              type: integer
+              minimum: 25
+              maximum: 100
+              description: Company Asset logo size as a percentage of its safe header area. Defaults to 100 when omitted.
             logoDataUrl:
               type: string
               maxLength: 2800000

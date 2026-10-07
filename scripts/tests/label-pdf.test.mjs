@@ -76,7 +76,9 @@ test("backend label schema preserves optional layout/logo while accepting legacy
  const expression=source.slice(start+"const LabelDesignerUiSettingsSchema = ".length,source.indexOf("\nconst WhatsAppSettingsSchema",start)).trim().replace(/;$/,"");
  const schema=vm.runInNewContext(expression,{z:require("zod").z});
  const legacy={config,gridColumns:1,qrPayloadMode:"assetTag"};assert(schema.safeParse(legacy).success);
- const next={...legacy,config:{...config,layout:"companyAsset",logoDataUrl:"data:image/png;base64,AAAA"}};
+ const next={...legacy,config:{...config,layout:"companyAsset",logoSizePercent:60,logoDataUrl:"data:image/png;base64,AAAA"}};
+ assert.equal(schema.parse(next).config.logoSizePercent,60);
+ for(const value of [24,101,50.5]) assert(!schema.safeParse({...next,config:{...next.config,logoSizePercent:value}}).success);
  assert.equal(schema.parse(next).config.layout,"companyAsset");assert.equal(schema.parse(next).config.logoDataUrl,next.config.logoDataUrl);
  const uploaded = "data:image/png;base64," + "A".repeat(2796204);
  assert(schema.safeParse({...next,config:{...next.config,logoDataUrl:uploaded}}).success);
@@ -84,4 +86,22 @@ test("backend label schema preserves optional layout/logo while accepting legacy
  assert(!schema.safeParse({...next,config:{...next.config,layout:"bad"}}).success);
  assert(!schema.safeParse({...next,config:{...next.config,logoDataUrl:"data:image/svg+xml;base64,AAAA"}}).success);
  assert(!schema.safeParse({...next,config:{...next.config,logoDataUrl:"x".repeat(2800001)}}).success);
+});
+
+
+test("logo size scales visible ink within a fixed safe header and survives persistence",async()=>{
+ const cfg={...config,layout:"companyAsset",showLogo:true,qrSize:12};
+ const large=await buildLabelOutput([asset],{...cfg,logoSizePercent:100},"assetTag");
+ const small=await buildLabelOutput([asset],{...cfg,logoSizePercent:25},"assetTag");
+ const a=large.drawings[0],b=small.drawings[0];
+ assert(Math.abs(a.logo.width/b.logo.width-4)<1e-8);assert(Math.abs(a.logo.height/b.logo.height-4)<1e-8);
+ assert(a.logo.viewport);assert.deepEqual(a.lines,b.lines);assert.deepEqual(a.qr,b.qr);
+ assert(a.logo.x+a.logo.width<a.qr.x);assert(a.logo.y>=a.lines.find(x=>x.text==="Company Asset").y+a.lines.find(x=>x.text==="Company Asset").size);
+ assert.equal((await PDFDocument.load(large.pdfBytes)).getPageCount(),1);
+ for(const value of [25,60,100]) assert.equal(parseLabelDraft(JSON.stringify({config:{...cfg,logoSizePercent:value},gridColumns:1,qrPayloadMode:"assetTag"})).config.logoSizePercent,value);
+ for(const value of [24,101,50.5]) {
+  assert.equal(parseLabelDraft(JSON.stringify({config:{...cfg,logoSizePercent:value},gridColumns:1,qrPayloadMode:"assetTag"})),null);
+  await assert.rejects(buildLabelOutput([asset],{...cfg,logoSizePercent:value},"assetTag"),/Logo size/);
+ }
+ const legacy=await buildLabelOutput([asset],cfg,"assetTag");assert.equal(legacy.drawings[0].logo.width,a.logo.width);
 });

@@ -580,3 +580,11 @@ Objective: accept PNG/JPG logos up to 2 MB. Sources: functional specification La
 - [x] Align browser, draft, PDF and server limits; keep other API body limits unchanged.
 - [x] Verify boundary validation and release API/web from the same tested commit.
 Output and challenge: document regression and release evidence in verification-q01-desktop.md.
+
+
+### Selected D1 correction: logo size slider, 2026-10-07
+
+Objective: let users resize Company Asset logos in the safe header. Sources: functional specification, UX-CONTRACT and label UI-settings OpenAPI.
+- [ ] Implement a persisted 25-100 percent slider, identical preview/PDF geometry and bounded built-in logo clipping.
+- [ ] Verify resizing, legacy defaults, persistence, bounds and exact-source API/web release.
+Output and challenge: record browser, regression and release evidence in verification-q01-desktop.md.

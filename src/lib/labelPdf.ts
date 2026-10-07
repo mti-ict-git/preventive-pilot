@@ -1,5 +1,5 @@
 import { companyLogoDataUrl } from "./companyLogo";
-import { PDFDocument, StandardFonts, rgb, degrees } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, degrees, pushGraphicsState, popGraphicsState, rectangle, clip, endPath } from "pdf-lib";
 import * as QRCode from "qrcode";
 import type { Asset, LabelDesignerConfig, LabelDesignerQrPayloadMode } from "./api";
 
@@ -10,13 +10,15 @@ export const labelDimensions = (config: LabelDesignerConfig) => ({
 });
 export type LabelDrawing = {
   width: number; height: number; showBorder: boolean; borderBlack?: boolean;
-  logo?: { dataUrl: string; x: number; y: number; width: number; height: number };
+  logo?: { dataUrl: string; x: number; y: number; width: number; height: number; viewport?: { x: number; y: number; width: number; height: number; imageWidth: number; imageHeight: number } };
   qr: { dataUrl: string; x: number; y: number; size: number };
   lines: Array<{ text: string; size: number; bold: boolean; x: number; y: number; rotation?: number }>;
 };
 export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerConfig,
   mode: LabelDesignerQrPayloadMode, snipeBaseUrl?: string | null): Promise<{ pdfBytes: Uint8Array; drawings: LabelDrawing[] }> => {
   const dimensions = labelDimensions(config);
+  const logoSizePercent = config.logoSizePercent ?? 100;
+  if (!Number.isInteger(logoSizePercent) || logoSizePercent < 25 || logoSizePercent > 100) throw new Error("Logo size must be between 25% and 100%.");
   if (![config.width, config.height].every(v => Number.isInteger(v) && v >= 10 && v <= 200) ||
       !Number.isFinite(config.padding) || config.padding < 0 ||
       !Number.isFinite(config.qrSize) || config.qrSize < 5 ||
@@ -62,7 +64,7 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
         return size;
       };
       let logo: LabelDrawing["logo"];
-      const headerHeight = usableHeight * 0.32;
+      const headerHeight = usableHeight * 0.40;
       const logoDataUrl = config.logoDataUrl ?? companyLogoDataUrl;
       if (config.showLogo) {
         if ((config.logoDataUrl && config.logoDataUrl.length > 2800000) || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))
@@ -70,9 +72,16 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
         let image;
         try { image = logoDataUrl.startsWith("data:image/png") ? await doc.embedPng(logoDataUrl) : await doc.embedJpg(logoDataUrl); }
         catch { throw new Error("The logo cannot be read. Upload a valid PNG or JPG image."); }
-        const scale = Math.min(leftWidth / image.width, headerHeight / image.height);
-        logo = { dataUrl: logoDataUrl, x: inset, y: height - inset - image.height * scale, width: image.width * scale, height: image.height * scale };
-        page.drawImage(image, logo);
+        // The bundled reconstruction contains transparent padding; clip only its known ink bounds.
+        const viewport = logoDataUrl === companyLogoDataUrl ? { x: 12, y: 141, width: 2143, height: 428, imageWidth: image.width, imageHeight: image.height } : undefined;
+        const visibleWidth = viewport?.width ?? image.width, visibleHeight = viewport?.height ?? image.height;
+        const scale = Math.min(leftWidth / visibleWidth, headerHeight / visibleHeight) * logoSizePercent / 100;
+        logo = { dataUrl: logoDataUrl, x: inset, y: height - inset - visibleHeight * scale, width: visibleWidth * scale, height: visibleHeight * scale, viewport };
+        if (viewport) {
+          page.pushOperators(pushGraphicsState(), rectangle(logo.x, logo.y, logo.width, logo.height), clip(), endPath());
+          page.drawImage(image, { x: logo.x - viewport.x * scale, y: logo.y - (image.height - viewport.y - viewport.height) * scale, width: image.width * scale, height: image.height * scale });
+          page.pushOperators(popGraphicsState());
+        } else page.drawImage(image, logo);
       } else {
         const text = "MERDEKA TSINGSHAN INDONESIA";
         const size = fit(text, 6, leftWidth, true);

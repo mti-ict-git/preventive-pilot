@@ -422,6 +422,7 @@ const LabelDesignerUiSettingsSchema = z.object({
   gridColumns: z.number().int().min(1).max(6),
   config: z.object({
     layout: z.enum(["standard", "companyAsset"]).optional(),
+    logoSizePercent: z.number().int().min(25).max(100).optional(),
     logoDataUrl: z.string().max(2800000).regex(/^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/).optional(),
     width: z.number().int().min(10).max(200),
     height: z.number().int().min(10).max(200),

@@ -417,6 +417,11 @@ export default function LabelDesigner() {
                     {logoError && <p role="alert" className="text-xs text-destructive">{logoError}</p>}
                     <p className="text-xs text-muted-foreground">{config.logoDataUrl ? "Logo included. Save Defaults to share this design." : "Using a reconstructed MTI logo from your reference. Upload the official logo to replace it."}</p>
                     {<Button variant="outline" size="sm" disabled={controlsLocked} onClick={() => updateConfig("showLogo", !config.showLogo)}>{config.showLogo ? "Hide logo" : "Show logo"}</Button>}
+                    <div className="space-y-2 pt-2">
+                      <div className="flex items-center justify-between"><Label>Logo size</Label><span className="text-sm text-muted-foreground">{config.logoSizePercent ?? 100}%</span></div>
+                      <Slider aria-label="Logo size" min={25} max={100} step={1} value={[config.logoSizePercent ?? 100]} disabled={controlsLocked || !config.showLogo} onValueChange={([value]) => updateConfig("logoSizePercent", value)} />
+                      <p className="text-xs text-muted-foreground">Fits the header without covering text or QR. Uploaded logos with blank margins may look smaller.</p>
+                    </div>
                     <p className="text-xs text-muted-foreground">Company Asset prints the asset name, QR, Company Asset and DON'T REMOVE. Standard content toggles apply to Standard layout.</p>
                   </div>}
                   {/* Presets */}
@@ -859,7 +864,7 @@ function PdfLabelPreview({ asset, config, qrPayloadMode, snipeBaseUrl }: {
       {result.error ? <p role="alert" className="p-2 text-xs text-destructive">{result.error}</p>
         : d ? <svg viewBox={`0 0 ${d.width} ${d.height}`} role="img" aria-label={`Label preview for ${asset.name}`} className="h-full w-full">
           {d.showBorder && <rect x={72 / 50.8} y={72 / 50.8} width={d.width - 72 / 25.4} height={d.height - 72 / 25.4} fill="none" stroke={d.borderBlack ? "#000" : "#b3b3b3"} strokeWidth={d.borderBlack ? 0.8 : 0.5} />}
-          {d.logo && <image href={d.logo.dataUrl} x={d.logo.x} y={d.height-d.logo.y-d.logo.height} width={d.logo.width} height={d.logo.height} />}
+          {d.logo && (d.logo.viewport ? <svg x={d.logo.x} y={d.height-d.logo.y-d.logo.height} width={d.logo.width} height={d.logo.height} viewBox={`${d.logo.viewport.x} ${d.logo.viewport.y} ${d.logo.viewport.width} ${d.logo.viewport.height}`} overflow="hidden"><image href={d.logo.dataUrl} width={d.logo.viewport.imageWidth} height={d.logo.viewport.imageHeight} /></svg> : <image href={d.logo.dataUrl} x={d.logo.x} y={d.height-d.logo.y-d.logo.height} width={d.logo.width} height={d.logo.height} />)}
           <image href={d.qr.dataUrl} x={d.qr.x} y={d.height - d.qr.y - d.qr.size} width={d.qr.size} height={d.qr.size} />
           {d.lines.map((line, i) => <text key={i} x={line.x} y={d.height - line.y} fontSize={line.size}
             transform={line.rotation ? `rotate(${-line.rotation} ${line.x} ${d.height-line.y})` : undefined}
