@@ -371,6 +371,14 @@ components:
                 - standard
                 - companyAsset
               description: Optional layout; omitted values use standard.
+            printOffsetYmm:
+              type: number
+              minimum: -1
+              maximum: 1
+              multipleOf: 0.1
+              description: >-
+                Vertical print calibration in mm. Positive moves all artwork down; negative up. Defaults to
+                zero.
             logoSizePercent:
               type: integer
               minimum: 25
@@ -709,6 +717,14 @@ components:
                 - standard
                 - companyAsset
               description: Optional layout; omitted values use standard.
+            printOffsetYmm:
+              type: number
+              minimum: -1
+              maximum: 1
+              multipleOf: 0.1
+              description: >-
+                Vertical print calibration in mm. Positive moves all artwork down; negative up. Defaults to
+                zero.
             logoSizePercent:
               type: integer
               minimum: 25

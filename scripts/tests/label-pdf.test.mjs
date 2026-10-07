@@ -76,8 +76,10 @@ test("backend label schema preserves optional layout/logo while accepting legacy
  const expression=source.slice(start+"const LabelDesignerUiSettingsSchema = ".length,source.indexOf("\nconst WhatsAppSettingsSchema",start)).trim().replace(/;$/,"");
  const schema=vm.runInNewContext(expression,{z:require("zod").z});
  const legacy={config,gridColumns:1,qrPayloadMode:"assetTag"};assert(schema.safeParse(legacy).success);
- const next={...legacy,config:{...config,layout:"companyAsset",logoSizePercent:60,logoDataUrl:"data:image/png;base64,AAAA"}};
+ const next={...legacy,config:{...config,layout:"companyAsset",printOffsetYmm:0.2,logoSizePercent:60,logoDataUrl:"data:image/png;base64,AAAA"}};
  assert.equal(schema.parse(next).config.logoSizePercent,60);
+ assert.equal(schema.parse(next).config.printOffsetYmm,0.2);
+ for(const value of [-1.1,1.1,0.15]) assert(!schema.safeParse({...next,config:{...next.config,printOffsetYmm:value}}).success);
  for(const value of [24,101,50.5]) assert(!schema.safeParse({...next,config:{...next.config,logoSizePercent:value}}).success);
  assert.equal(schema.parse(next).config.layout,"companyAsset");assert.equal(schema.parse(next).config.logoDataUrl,next.config.logoDataUrl);
  const uploaded = "data:image/png;base64," + "A".repeat(2796204);
@@ -139,4 +141,22 @@ test("18mm label border and artwork stay inside Brother 15.8mm print height",asy
   assert(d.lines.filter(l=>!l.rotation).every(l=>l.y>=2*mm&&l.y+l.size<=d.height-2*mm));
   const pdf=await PDFDocument.load(pdfBytes);assert(Math.abs(pdf.getPage(0).getHeight()/mm-18)<1e-8);assert(Math.abs(pdf.getPage(0).getWidth()/mm-45)<1e-8);
  }
+});
+
+
+test("whole-design vertical calibration matches actual PDF translation and persists",async()=>{
+ const {inflateSync}=require("node:zlib");
+ for(const layout of ["standard","companyAsset"])for(const offset of [-1,0,0.2,1]){
+  const cfg={...config,width:45,qrSize:10,layout,showLogo:layout==="companyAsset",printOffsetYmm:offset};
+  const out=await buildLabelOutput([asset],cfg,"assetTag"),drawing=out.drawings[0];
+  assert(Math.abs(drawing.verticalOffset-offset*72/25.4)<1e-8);
+  const pdf=await PDFDocument.load(out.pdfBytes),page=pdf.getPage(0),stream=pdf.context.lookup(page.node.Contents().get(0));
+  const commands=inflateSync(stream.contents).toString();
+  const transform=/1 0 0 1 0 ([-.0-9]+) cm/.exec(commands);assert(transform);
+  assert(Math.abs(Number(transform[1])+drawing.verticalOffset)<1e-8);
+  assert.equal(page.getWidth(),drawing.width);assert.equal(page.getHeight(),drawing.height);
+  assert.equal(parseLabelDraft(JSON.stringify({config:cfg,gridColumns:1,qrPayloadMode:"assetTag"})).config.printOffsetYmm,offset);
+ }
+ for(const value of [-1.1,1.1,0.15])await assert.rejects(buildLabelOutput([asset],{...config,printOffsetYmm:value},"assetTag"),/Print position/);
+ await assert.rejects(buildLabelOutput([asset],{...config,height:24,printOffsetYmm:1},"assetTag"),/border outside/);
 });

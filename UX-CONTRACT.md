@@ -67,3 +67,6 @@ Logo size now fits visible PNG/JPG content, including uploaded logos. Inline hel
 
 
 For 18mm-height labels, the shared PDF/SVG geometry enforces a 1.5mm border inset and at least 2mm content padding even when stored padding is smaller. Physical page dimensions stay unchanged. Tape feed/cutter settings are outside this adjustment.
+
+
+Vertical print position uses the named shared Slider, visible signed mm/direction, Up/Down endpoints and Center print position button. It respects controlsLocked and applies to Standard/Company Asset preview, PDF and print. Bounds failures are visible in the existing preview error flow.

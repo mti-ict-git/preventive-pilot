@@ -258,3 +258,6 @@ Uploaded PNG/JPG logos now omit only transparent or near-white outer margins whe
 
 
 For 18mm-height labels, the Brother PT-P750W safe print layout places the border 1.5mm inside every edge and uses at least 2mm artwork padding. Preview/PDF share these bounds; physical page dimensions remain unchanged. This accommodates the official 15.8mm print height on 18mm tape. Tape feeding/peeling margins are outside this correction.
+
+
+Vertical print calibration is adjustable from -1 to +1mm in 0.1mm steps; positive means down on the physical page, negative up. Default/legacy value is zero. The whole design, including border/QR/logo/text, translates without changing page dimensions or scaling. A center reset returns to zero. Draft and Save Defaults preserve calibration. Out-of-page border/content offsets fail visibly; hardware alignment is established by a user test print.

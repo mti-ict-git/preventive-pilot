@@ -487,6 +487,13 @@ export default function LabelDesigner() {
                     </Select>
                   </div>
 
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between"><Label>Vertical print position</Label><span className="text-sm text-muted-foreground">{(config.printOffsetYmm ?? 0).toFixed(1)} mm · {(config.printOffsetYmm ?? 0) > 0 ? "Down" : (config.printOffsetYmm ?? 0) < 0 ? "Up" : "Centered"}</span></div>
+                    <Slider aria-label="Vertical print position" min={-1} max={1} step={0.1} value={[config.printOffsetYmm ?? 0]} disabled={controlsLocked} onValueChange={([value]) => updateConfig("printOffsetYmm", value)} />
+                    <div className="flex justify-between text-xs text-muted-foreground"><span>Up</span><span>Down</span></div>
+                    <Button variant="outline" size="sm" disabled={controlsLocked} onClick={() => updateConfig("printOffsetYmm", 0)}>Center print position</Button>
+                    <p className="text-xs text-muted-foreground">Moves the entire design, including QR and border. Start with +0.2 mm if printing sits too high. Print one label to calibrate, then Save Defaults.</p>
+                  </div>
                   {/* QR Size */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -863,12 +870,14 @@ function PdfLabelPreview({ asset, config, qrPayloadMode, snipeBaseUrl }: {
     <div className="w-full rounded border bg-white" style={{ aspectRatio: `${width} / ${height}`, minHeight: 100 }}>
       {result.error ? <p role="alert" className="p-2 text-xs text-destructive">{result.error}</p>
         : d ? <svg viewBox={`0 0 ${d.width} ${d.height}`} role="img" aria-label={`Label preview for ${asset.name}`} className="h-full w-full">
+          <g transform={`translate(0 ${d.verticalOffset})`}>
           {d.showBorder && <rect x={d.borderInset} y={d.borderInset} width={d.width - d.borderInset*2} height={d.height - d.borderInset*2} fill="none" stroke={d.borderBlack ? "#000" : "#b3b3b3"} strokeWidth={d.borderBlack ? 0.8 : 0.5} />}
           {d.logo && (d.logo.viewport ? <svg x={d.logo.x} y={d.height-d.logo.y-d.logo.height} width={d.logo.width} height={d.logo.height} viewBox={`${d.logo.viewport.x} ${d.logo.viewport.y} ${d.logo.viewport.width} ${d.logo.viewport.height}`} overflow="hidden"><image href={d.logo.dataUrl} width={d.logo.viewport.imageWidth} height={d.logo.viewport.imageHeight} /></svg> : <image href={d.logo.dataUrl} x={d.logo.x} y={d.height-d.logo.y-d.logo.height} width={d.logo.width} height={d.logo.height} />)}
           <image href={d.qr.dataUrl} x={d.qr.x} y={d.height - d.qr.y - d.qr.size} width={d.qr.size} height={d.qr.size} />
           {d.lines.map((line, i) => <text key={i} x={line.x} y={d.height - line.y} fontSize={line.size}
             transform={line.rotation ? `rotate(${-line.rotation} ${line.x} ${d.height-line.y})` : undefined}
             fontWeight={line.bold ? 700 : 400} fontFamily="Helvetica, Arial, sans-serif" fill="#000">{line.text}</text>)}
+          </g>
         </svg>
         : <p role="status" className="p-2 text-xs text-muted-foreground">Renderingâ€¦</p>}
     </div>

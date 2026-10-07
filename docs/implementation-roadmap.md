@@ -604,3 +604,11 @@ Objective: prevent clipped borders/content on Brother PT-P750W 18mm tape, retain
 - [x] Place border at 1.5mm and enforce at least 2mm artwork padding for 18mm-height labels in both renderers.
 - [x] Verify physical page size and safe geometry, browser preview and scoped web release.
 Output and challenge: verification-q01-desktop.md; physical printer acceptance remains with the user.
+
+
+### Selected D1 correction: vertical print calibration, 2026-10-07
+
+Objective: let the user calibrate vertical printer alignment independently of label dimensions. Sources: Label Designer functional specification, UX-CONTRACT and UI-settings OpenAPI.
+- [ ] Implement persisted -1 to +1mm slider, 0.1mm steps, center reset and shared whole-design PDF/SVG translation with page-bound checks.
+- [ ] Verify direction, persistence, legacy defaults, bounds, browser and exact-source API/web release.
+Output and challenge: verification-q01-desktop.md; actual calibration remains a user print test.

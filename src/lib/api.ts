@@ -2109,6 +2109,7 @@ export type LabelDesignerConfig = {
   layout?: "standard" | "companyAsset";
   logoDataUrl?: string;
   logoSizePercent?: number;
+  printOffsetYmm?: number;
   width: number;
   height: number;
   qrSize: number;

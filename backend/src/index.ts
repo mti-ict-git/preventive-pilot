@@ -506,6 +506,7 @@ const openApiSpec: OpenApiSchema = {
                 "type": "boolean"
               },
               "layout": { "type": "string", "enum": ["standard", "companyAsset"], "description": "Optional layout; omitted values use standard." },
+                "printOffsetYmm": { "type": "number", "minimum": -1, "maximum": 1, "multipleOf": 0.1, "description": "Vertical print calibration in mm. Positive moves all artwork down; negative up. Defaults to zero." },
                 "logoSizePercent": { "type": "integer", "minimum": 25, "maximum": 100, "description": "Company Asset logo size as a percentage of its safe header area. Defaults to 100 when omitted." },
                 "logoDataUrl": { "type": "string", "maxLength": 2800000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },
                 "showLogo": {
@@ -941,6 +942,7 @@ const openApiSpec: OpenApiSchema = {
                 "type": "boolean"
               },
               "layout": { "type": "string", "enum": ["standard", "companyAsset"], "description": "Optional layout; omitted values use standard." },
+                "printOffsetYmm": { "type": "number", "minimum": -1, "maximum": 1, "multipleOf": 0.1, "description": "Vertical print calibration in mm. Positive moves all artwork down; negative up. Defaults to zero." },
                 "logoSizePercent": { "type": "integer", "minimum": 25, "maximum": 100, "description": "Company Asset logo size as a percentage of its safe header area. Defaults to 100 when omitted." },
                 "logoDataUrl": { "type": "string", "maxLength": 2800000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },
                 "showLogo": {

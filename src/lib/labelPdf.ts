@@ -1,6 +1,6 @@
 import { getLogoViewport } from "./logoViewport";
 import { companyLogoDataUrl } from "./companyLogo";
-import { PDFDocument, StandardFonts, rgb, degrees, pushGraphicsState, popGraphicsState, rectangle, clip, endPath } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, degrees, pushGraphicsState, popGraphicsState, rectangle, clip, endPath, concatTransformationMatrix } from "pdf-lib";
 import * as QRCode from "qrcode";
 import type { Asset, LabelDesignerConfig, LabelDesignerQrPayloadMode } from "./api";
 
@@ -10,7 +10,7 @@ export const labelDimensions = (config: LabelDesignerConfig) => ({
   height: config.orientation === "landscape" ? Math.min(config.width, config.height) : Math.max(config.width, config.height),
 });
 export type LabelDrawing = {
-  width: number; height: number; showBorder: boolean; borderBlack?: boolean; borderInset: number;
+  width: number; height: number; showBorder: boolean; borderBlack?: boolean; borderInset: number; verticalOffset: number;
   logo?: { dataUrl: string; x: number; y: number; width: number; height: number; viewport?: { x: number; y: number; width: number; height: number; imageWidth: number; imageHeight: number } };
   qr: { dataUrl: string; x: number; y: number; size: number };
   lines: Array<{ text: string; size: number; bold: boolean; x: number; y: number; rotation?: number }>;
@@ -18,6 +18,9 @@ export type LabelDrawing = {
 export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerConfig,
   mode: LabelDesignerQrPayloadMode, snipeBaseUrl?: string | null): Promise<{ pdfBytes: Uint8Array; drawings: LabelDrawing[] }> => {
   const dimensions = labelDimensions(config);
+  const offsetMm = config.printOffsetYmm ?? 0;
+  if (!Number.isFinite(offsetMm) || Math.abs(offsetMm) > 1 || Math.abs(offsetMm*10-Math.round(offsetMm*10)) > 1e-6) throw new Error("Print position must be between -1 and +1 mm, in 0.1 mm steps.");
+  const verticalOffset = mmToPt(offsetMm);
   const logoSizePercent = config.logoSizePercent ?? 100;
   if (!Number.isInteger(logoSizePercent) || logoSizePercent < 25 || logoSizePercent > 100) throw new Error("Logo size must be between 25% and 100%.");
   if (![config.width, config.height].every(v => Number.isInteger(v) && v >= 10 && v <= 200) ||
@@ -30,6 +33,8 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
   const landscape = config.orientation === "landscape";
   const company = config.layout === "companyAsset";
   if (company && !landscape) throw new Error("Company Asset requires landscape orientation.");
+  if (config.showBorder && Math.abs(verticalOffset) > borderInset - 0.4) throw new Error("Print position would move the border outside the label. Reduce the offset or hide the border.");
+  if (Math.abs(verticalOffset) > (company ? Math.max(padding, mmToPt(1.5)) : padding)) throw new Error("Print position needs more padding. Reduce the offset or increase padding.");
   const textWidth = landscape ? width - padding * 2 - qrSize - gap : width - padding * 2;
   const textHeight = landscape ? height - padding * 2 : height - padding * 2 - qrSize - gap;
   if (qrSize > Math.min(width, height) - padding * 2 || (!company && (textWidth <= 0 || textHeight <= 0)))
@@ -51,6 +56,7 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       if (leftWidth < mmToPt(18) || usableHeight < mmToPt(12))
         throw new Error("Company Asset needs more space. Use at least 60x18mm and reduce QR size or padding.");
       const page = doc.addPage([width, height]);
+      page.pushOperators(pushGraphicsState(), concatTransformationMatrix(1, 0, 0, 1, 0, -verticalOffset));
       const lines: LabelDrawing["lines"] = [];
       const add = (text: string, size: number, x: number, y: number, isBold = false, rotation = 0) => {
         const f = isBold ? bold : font;
@@ -98,7 +104,8 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       add(warning, warningSize, width - inset - warningSize, (height + bold.widthOfTextAtSize(warning, warningSize)) / 2, true, -90);
       page.drawImage(qr, { x: qrX, y: qrY, width: qrSize, height: qrSize });
       if (config.showBorder) page.drawRectangle({ x: borderInset, y: borderInset, width: width-borderInset*2, height: height-borderInset*2, borderColor: rgb(0,0,0), borderWidth: 0.8 });
-      drawings.push({ width, height, showBorder: config.showBorder, borderInset, borderBlack: true, logo, qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines });
+      drawings.push({ width, height, showBorder: config.showBorder, borderInset, verticalOffset, borderBlack: true, logo, qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines });
+      page.pushOperators(popGraphicsState());
       continue;
     }
     const lines: Array<{ text: string; size: number; bold: boolean }> = [];
@@ -120,6 +127,7 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       }
     }
     const page = doc.addPage([width, height]);
+      page.pushOperators(pushGraphicsState(), concatTransformationMatrix(1, 0, 0, 1, 0, -verticalOffset));
     if (config.showBorder) page.drawRectangle({ x: borderInset, y: borderInset,
       width: width - borderInset*2, height: height - borderInset*2, borderColor: rgb(0.7, 0.7, 0.7), borderWidth: 0.5 });
     const qrX = landscape ? padding : (width - qrSize) / 2;
@@ -134,8 +142,9 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       positionedLines.push({ ...line, x, y });
       page.drawText(line.text, { x, y, size: line.size, font: currentFont, color: rgb(0, 0, 0) });
     }
-    drawings.push({ width, height, showBorder: config.showBorder, borderInset,
+    drawings.push({ width, height, showBorder: config.showBorder, borderInset, verticalOffset,
       qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines: positionedLines });
+    page.pushOperators(popGraphicsState());
   }
   return { pdfBytes: await doc.save(), drawings };
 };
