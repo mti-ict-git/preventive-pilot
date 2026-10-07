@@ -561,7 +561,7 @@ Both PCs now expose their existing July 6 outstanding occurrence instead of Janu
 ### Selected D1 correction — Label Designer settings, 2026-10-07
 
 Sources: functional specification Label Designer printing, UX-CONTRACT.md, existing label UI-settings OpenAPI and permission guards. [Verification](verification-q01-desktop.md#label-designer-tape-width-and-current-settings-parity--2026-10-07).
-- [ ] Current tape-width edits survive refetch/reload and Print/Export use current settings before Save Defaults.
-- [ ] Preview/export/print exact-size parity, PDF boundary tests, browser draft/save/failure checks and production web-only release verified.
+- [x] Current tape-width edits survive refetch/reload and Print/Export use current settings before Save Defaults.
+- [x] Preview/export/print exact-size parity, PDF boundary tests, browser draft/save/failure checks and production web-only release verified.
 
 The preceding outstanding-PM correction is already closed by its own release evidence above (API 95af66d); this Label Designer work does not change that correction, scheduling or business data. Mobile audit remains paused at the user request.
