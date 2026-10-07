@@ -12,7 +12,7 @@ test("label logo request accepts 2MB base64 while unrelated routes retain 1MB",a
  const app=express();app.use("/api/system/ui-settings/label-designer",express.json({limit:"3mb"}));app.use(express.json({limit:"1mb"}));
  app.put("/api/system/ui-settings/label-designer",(req,res)=>res.json({length:req.body.logo.length}));
  app.put("/other",(req,res)=>res.json({ok:true}));
- app.use((err,req,res,next)=>res.status(err.status||500).end());
+ app.use((err,req,res,next)=>{void next;res.status(err.status||500).end();});
  const server=app.listen(0,"127.0.0.1");await new Promise(resolve=>server.once("listening",resolve));
  try { const url=`http://127.0.0.1:${server.address().port}`;
  const body=JSON.stringify({logo:"data:image/png;base64,"+"A".repeat(2796204)});
@@ -22,3 +22,4 @@ test("label logo request accepts 2MB base64 while unrelated routes retain 1MB",a
  assert.equal((await send("/api/system/ui-settings/label-designer",JSON.stringify({logo:"A".repeat(3200000)}))).status,413);
  } finally {await new Promise(resolve=>server.close(resolve));}
 });
+
