@@ -2106,6 +2106,8 @@ export const apiUpdateAssetsUiSettings = async (
 export type LabelDesignerQrPayloadMode = "assetId" | "assetTag" | "snipeItUrl";
 
 export type LabelDesignerConfig = {
+  layout?: "standard" | "companyAsset";
+  logoDataUrl?: string;
   width: number;
   height: number;
   qrSize: number;

@@ -1,4 +1,5 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { companyLogoDataUrl } from "./companyLogo";
+import { PDFDocument, StandardFonts, rgb, degrees } from "pdf-lib";
 import * as QRCode from "qrcode";
 import type { Asset, LabelDesignerConfig, LabelDesignerQrPayloadMode } from "./api";
 
@@ -8,9 +9,10 @@ export const labelDimensions = (config: LabelDesignerConfig) => ({
   height: config.orientation === "landscape" ? Math.min(config.width, config.height) : Math.max(config.width, config.height),
 });
 export type LabelDrawing = {
-  width: number; height: number; showBorder: boolean;
+  width: number; height: number; showBorder: boolean; borderBlack?: boolean;
+  logo?: { dataUrl: string; x: number; y: number; width: number; height: number };
   qr: { dataUrl: string; x: number; y: number; size: number };
-  lines: Array<{ text: string; size: number; bold: boolean; x: number; y: number }>;
+  lines: Array<{ text: string; size: number; bold: boolean; x: number; y: number; rotation?: number }>;
 };
 export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerConfig,
   mode: LabelDesignerQrPayloadMode, snipeBaseUrl?: string | null): Promise<{ pdfBytes: Uint8Array; drawings: LabelDrawing[] }> => {
@@ -22,9 +24,11 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
   const width = mmToPt(dimensions.width), height = mmToPt(dimensions.height);
   const padding = mmToPt(config.padding), gap = mmToPt(2), qrSize = mmToPt(config.qrSize);
   const landscape = config.orientation === "landscape";
+  const company = config.layout === "companyAsset";
+  if (company && !landscape) throw new Error("Company Asset requires landscape orientation.");
   const textWidth = landscape ? width - padding * 2 - qrSize - gap : width - padding * 2;
   const textHeight = landscape ? height - padding * 2 : height - padding * 2 - qrSize - gap;
-  if (qrSize > Math.min(width, height) - padding * 2 || textWidth <= 0 || textHeight <= 0)
+  if (qrSize > Math.min(width, height) - padding * 2 || (!company && (textWidth <= 0 || textHeight <= 0)))
     throw new Error("QR code and padding do not fit. Reduce QR size or padding, or increase label size.");
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica), bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -36,6 +40,56 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
       : mode !== "assetId" && asset.assetTag ? asset.assetTag : asset.id;
     const dataUrl = await QRCode.toDataURL(payload, { margin: 4, errorCorrectionLevel: "M" });
     const qr = await doc.embedPng(dataUrl);
+    if (company) {
+      const inset = Math.max(padding, mmToPt(1.5));
+      const qrX = width - inset - mmToPt(3) - qrSize, qrY = (height - qrSize) / 2;
+      const leftWidth = qrX - inset - mmToPt(1), usableHeight = height - inset * 2;
+      if (leftWidth < mmToPt(18) || usableHeight < mmToPt(12))
+        throw new Error("Company Asset needs more space. Use at least 60x18mm and reduce QR size or padding.");
+      const page = doc.addPage([width, height]);
+      const lines: LabelDrawing["lines"] = [];
+      const add = (text: string, size: number, x: number, y: number, isBold = false, rotation = 0) => {
+        const f = isBold ? bold : font;
+        lines.push({ text, size, x, y, bold: isBold, rotation });
+        page.drawText(text, { x, y, size, font: f, rotate: degrees(rotation), color: rgb(0,0,0) });
+      };
+      const fit = (text: string, desired: number, available: number, isBold = false) => {
+        const f = isBold ? bold : font;
+        let size: number;
+        try { size = Math.min(desired, available / Math.max(1, f.widthOfTextAtSize(text, 1))); }
+        catch { throw new Error("Label text contains unsupported characters. Use characters supported by the PDF font."); }
+        if (size < 5) throw new Error("Company Asset text is too wide. Increase label length or shorten the name.");
+        return size;
+      };
+      let logo: LabelDrawing["logo"];
+      const headerHeight = usableHeight * 0.32;
+      const logoDataUrl = config.logoDataUrl ?? companyLogoDataUrl;
+      if (config.showLogo) {
+        if ((config.logoDataUrl && config.logoDataUrl.length > 220000) || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))
+          throw new Error("Use a valid PNG or JPG logo up to 160 KB.");
+        let image;
+        try { image = logoDataUrl.startsWith("data:image/png") ? await doc.embedPng(logoDataUrl) : await doc.embedJpg(logoDataUrl); }
+        catch { throw new Error("The logo cannot be read. Upload a valid PNG or JPG image."); }
+        const scale = Math.min(leftWidth / image.width, headerHeight / image.height);
+        logo = { dataUrl: logoDataUrl, x: inset, y: height - inset - image.height * scale, width: image.width * scale, height: image.height * scale };
+        page.drawImage(image, logo);
+      } else {
+        const text = "MERDEKA TSINGSHAN INDONESIA";
+        const size = fit(text, 6, leftWidth, true);
+        add(text, size, inset, height - inset - size, true);
+      }
+      const captionSize = fit("Company Asset", Math.min(10, config.fontSize), leftWidth, true);
+      add("Company Asset", captionSize, inset, height - inset - headerHeight - captionSize - mmToPt(0.4), true);
+      const name = asset.name || asset.assetTag || asset.id;
+      const nameSize = fit(name, Math.min(24, config.fontSize + 8, usableHeight * 0.34), leftWidth, true);
+      add(name, nameSize, inset, inset + 1, true);
+      const warning = "DON'T REMOVE", warningSize = fit(warning, 6, usableHeight, true);
+      add(warning, warningSize, width - inset - warningSize, (height + bold.widthOfTextAtSize(warning, warningSize)) / 2, true, -90);
+      page.drawImage(qr, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+      if (config.showBorder) page.drawRectangle({ x: mmToPt(0.5), y: mmToPt(0.5), width: width-mmToPt(1), height: height-mmToPt(1), borderColor: rgb(0,0,0), borderWidth: 0.8 });
+      drawings.push({ width, height, showBorder: config.showBorder, borderBlack: true, logo, qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines });
+      continue;
+    }
     const lines: Array<{ text: string; size: number; bold: boolean }> = [];
     if (config.showAssetTag && asset.assetTag) lines.push({ text: asset.assetTag, size: config.fontSize + 2, bold: true });
     if (config.showAssetName && asset.name) lines.push({ text: asset.name, size: config.fontSize, bold: false });

@@ -505,7 +505,9 @@ const openApiSpec: OpenApiSchema = {
               "showBorder": {
                 "type": "boolean"
               },
-              "showLogo": {
+              "layout": { "type": "string", "enum": ["standard", "companyAsset"], "description": "Optional layout; omitted values use standard." },
+                "logoDataUrl": { "type": "string", "maxLength": 220000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },
+                "showLogo": {
                 "type": "boolean"
               },
               "orientation": {
@@ -937,7 +939,9 @@ const openApiSpec: OpenApiSchema = {
               "showBorder": {
                 "type": "boolean"
               },
-              "showLogo": {
+              "layout": { "type": "string", "enum": ["standard", "companyAsset"], "description": "Optional layout; omitted values use standard." },
+                "logoDataUrl": { "type": "string", "maxLength": 220000, "pattern": "^data:image/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$", "description": "Optional PNG/JPEG company logo data URL. Printed only when showLogo is enabled in Company Asset layout." },
+                "showLogo": {
                 "type": "boolean"
               },
               "orientation": {

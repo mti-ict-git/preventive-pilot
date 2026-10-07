@@ -66,6 +66,7 @@ const defaultDesignerConfig: LabelDesignerConfig = {
 };
 
 const labelPresets = [
+  { name: "Company Asset (82x18mm)", width: 82, height: 18 },
   { name: "Brother 18mm (50x18mm)", width: 50, height: 18 },
   { name: "Brother 24mm (60x24mm)", width: 60, height: 24 },
   { name: "Small (30x20mm)", width: 30, height: 20 },
@@ -191,7 +192,28 @@ export default function LabelDesigner() {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const loadLogo = async (file?: File) => {
+    if (!file) return;
+    setLogoError(null);
+    if (!["image/png", "image/jpeg"].includes(file.type) || file.size > 160 * 1024) {
+      setLogoError("Use a PNG or JPG logo up to 160 KB."); return;
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("read"));
+        reader.readAsDataURL(file);
+      });
+      updateConfig("logoDataUrl", dataUrl); updateConfig("showLogo", true);
+    } catch { setLogoError("Could not read the logo. Select the file again."); }
+  };
+
   const applyPreset = (preset: typeof labelPresets[0]) => {
+    const company = preset.name.startsWith("Company Asset");
+    updateConfig("layout", company ? "companyAsset" : "standard");
+    updateConfig("orientation", "landscape");
+    if (company) { updateConfig("showLogo", true); updateConfig("showBorder", true); updateConfig("fontSize", 8); }
     updateConfig("width", preset.width);
     updateConfig("height", preset.height);
     updateConfig("qrSize", Math.floor(Math.min(preset.width, preset.height) * 0.7));
@@ -382,6 +404,21 @@ export default function LabelDesigner() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="label-layout">Label layout</Label>
+                    <Select value={config.layout ?? "standard"} onValueChange={v => updateConfig("layout", v as "standard" | "companyAsset")} disabled={controlsLocked}>
+                      <SelectTrigger id="label-layout"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="standard">Standard</SelectItem><SelectItem value="companyAsset">Company Asset</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  {config.layout === "companyAsset" && <div className="space-y-2">
+                    <Label htmlFor="company-logo">Company logo (PNG/JPG, up to 160 KB)</Label>
+                    <Input id="company-logo" type="file" accept="image/png,image/jpeg" disabled={controlsLocked} onChange={e => { void loadLogo(e.target.files?.[0]); e.target.value = ""; }} />
+                    {logoError && <p role="alert" className="text-xs text-destructive">{logoError}</p>}
+                    <p className="text-xs text-muted-foreground">{config.logoDataUrl ? "Logo included. Save Defaults to share this design." : "Using a reconstructed MTI logo from your reference. Upload the official logo to replace it."}</p>
+                    {<Button variant="outline" size="sm" disabled={controlsLocked} onClick={() => updateConfig("showLogo", !config.showLogo)}>{config.showLogo ? "Hide logo" : "Show logo"}</Button>}
+                    <p className="text-xs text-muted-foreground">Company Asset prints the asset name, QR, Company Asset and DON'T REMOVE. Standard content toggles apply to Standard layout.</p>
+                  </div>}
                   {/* Presets */}
                   <div className="space-y-2">
                     <Label className="text-xs text-muted-foreground">Quick Presets</Label>
@@ -821,9 +858,11 @@ function PdfLabelPreview({ asset, config, qrPayloadMode, snipeBaseUrl }: {
     <div className="w-full rounded border bg-white" style={{ aspectRatio: `${width} / ${height}`, minHeight: 100 }}>
       {result.error ? <p role="alert" className="p-2 text-xs text-destructive">{result.error}</p>
         : d ? <svg viewBox={`0 0 ${d.width} ${d.height}`} role="img" aria-label={`Label preview for ${asset.name}`} className="h-full w-full">
-          {d.showBorder && <rect x={72 / 50.8} y={72 / 50.8} width={d.width - 72 / 25.4} height={d.height - 72 / 25.4} fill="none" stroke="#b3b3b3" strokeWidth={0.5} />}
+          {d.showBorder && <rect x={72 / 50.8} y={72 / 50.8} width={d.width - 72 / 25.4} height={d.height - 72 / 25.4} fill="none" stroke={d.borderBlack ? "#000" : "#b3b3b3"} strokeWidth={d.borderBlack ? 0.8 : 0.5} />}
+          {d.logo && <image href={d.logo.dataUrl} x={d.logo.x} y={d.height-d.logo.y-d.logo.height} width={d.logo.width} height={d.logo.height} />}
           <image href={d.qr.dataUrl} x={d.qr.x} y={d.height - d.qr.y - d.qr.size} width={d.qr.size} height={d.qr.size} />
           {d.lines.map((line, i) => <text key={i} x={line.x} y={d.height - line.y} fontSize={line.size}
+            transform={line.rotation ? `rotate(${-line.rotation} ${line.x} ${d.height-line.y})` : undefined}
             fontWeight={line.bold ? 700 : 400} fontFamily="Helvetica, Arial, sans-serif" fill="#000">{line.text}</text>)}
         </svg>
         : <p role="status" className="p-2 text-xs text-muted-foreground">Rendering…</p>}

@@ -11,7 +11,7 @@ const load = file => {
   const js = ts.transpileModule(fs.readFileSync(new URL(`../../src/lib/${file}.ts`, import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
-  vm.runInThisContext(`(function(require,module,exports){${js}\n})`)(require,m,m.exports);
+  vm.runInThisContext(`(function(require,module,exports){${js}\n})`)((name) => name.startsWith("./") ? load(name.slice(2)) : require(name),m,m.exports);
   return m.exports;
 };
 const { buildLabelPdf, buildLabelOutput } = load("labelPdf"), { parseLabelDraft, labelDraftKey } = load("labelDraft");
@@ -52,4 +52,33 @@ test("preview drawing shares exact PDF geometry and top-down text order",async()
     assert(d.qr.x>=0&&d.qr.y>=0&&d.qr.x+d.qr.size<=d.width&&d.qr.y+d.qr.size<=d.height);
     assert.match(d.qr.dataUrl,/^data:image\/png;base64,/);
   }
+});
+
+ test("Company Asset 18mm PDF has a bounded logo, right QR and rotated warning",async()=>{
+   const cfg={...config,layout:"companyAsset",qrSize:12,showLogo:true};
+   const output=await buildLabelOutput([asset],cfg,"assetTag");
+   const d=output.drawings[0],page=(await PDFDocument.load(output.pdfBytes)).getPage(0);
+   assert.equal(d.width,page.getWidth()); assert.equal(d.height,page.getHeight());
+   assert(d.logo && d.logo.x+d.logo.width<d.qr.x);
+   assert(d.qr.x>d.width/2);assert(d.lines.some(l=>l.text===asset.name));
+   const warning=d.lines.find(l=>l.text==="DON'T REMOVE");assert.equal(warning.rotation,-90);
+   assert(d.logo.y>=0&&d.logo.y+d.logo.height<=d.height);
+   assert(d.lines.filter(l=>!l.rotation).every(l=>l.x>=0&&l.y>=0&&l.y+l.size<=d.height));
+   await assert.rejects(buildLabelPdf([asset],{...cfg,orientation:"portrait"},"assetTag"),/landscape/);
+   await assert.rejects(buildLabelPdf([asset],{...cfg,logoDataUrl:"data:image/png;base64,AAAA"},"assetTag"),/logo cannot be read/);
+   assert.equal(parseLabelDraft(JSON.stringify({config:cfg,gridColumns:1,qrPayloadMode:"assetTag"})).config.layout,"companyAsset");
+   assert.equal(parseLabelDraft(JSON.stringify({config:{...cfg,logoDataUrl:"data:image/svg+xml;base64,AAAA"},gridColumns:1,qrPayloadMode:"assetTag"})),null);
+ });
+
+test("backend label schema preserves optional layout/logo while accepting legacy settings",()=>{
+ const source=fs.readFileSync(new URL("../../backend/src/routes/system.ts",import.meta.url),"utf8");
+ const start=source.indexOf("const LabelDesignerUiSettingsSchema = ");
+ const expression=source.slice(start+"const LabelDesignerUiSettingsSchema = ".length,source.indexOf("\nconst WhatsAppSettingsSchema",start)).trim().replace(/;$/,"");
+ const schema=vm.runInNewContext(expression,{z:require("zod").z});
+ const legacy={config,gridColumns:1,qrPayloadMode:"assetTag"};assert(schema.safeParse(legacy).success);
+ const next={...legacy,config:{...config,layout:"companyAsset",logoDataUrl:"data:image/png;base64,AAAA"}};
+ assert.equal(schema.parse(next).config.layout,"companyAsset");assert.equal(schema.parse(next).config.logoDataUrl,next.config.logoDataUrl);
+ assert(!schema.safeParse({...next,config:{...next.config,layout:"bad"}}).success);
+ assert(!schema.safeParse({...next,config:{...next.config,logoDataUrl:"data:image/svg+xml;base64,AAAA"}}).success);
+ assert(!schema.safeParse({...next,config:{...next.config,logoDataUrl:"x".repeat(220001)}}).success);
 });
