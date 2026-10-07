@@ -542,7 +542,9 @@ Source documents: functional-specification.md (SC-01 and outstanding PM schedule
 
 Objective: prevent a future persisted cursor from hiding outstanding PC/facility PM work.
 
-- [ ] Implement generator recovery and asset/facility list/detail precedence without changing template intervals or execution history.
-- [ ] Verify drifted half-year cases, missed/skipped/protected/future work, exact generated SQL, production scan and scoped API deployment.
+- [x] Implement generator recovery and asset/facility list/detail precedence without changing template intervals or execution history.
+- [x] Verify drifted half-year cases, missed/skipped/protected/future work, exact generated SQL, production scan and scoped API deployment.
 
 Output and challenge: record evidence in verification-q01-desktop.md; retain D2 recovery and D3 acceptance gates separately.
+
+Completed evidence: final API `95af66d` passed 186 Linux regressions and full release checks; four exact read SQL batches, two real legacy PM Now date reads and eight rollback policy rehearsals passed. Seven settings recovered through normal generation; PC-059's missing-site cursor was recovered with a guarded existing-task-only correction. Site remains unresolved and generation is not bypassed. Two final generator runs and full original-history comparison show eight corrected settings, unchanged PM/CM records and work child counts, zero remaining drift and zero active duplicates. Authenticated PC-006 now shows July 30, 2026 / Overdue and interval 180. See [verification](verification-q01-desktop.md#outstanding-pm-schedule-precedence---2026-10-07) and [release](deployment-and-environment.md#production-outstanding-pm-schedule-correction---2026-10-07). This selected D1 correction is complete; D2 recovery/D3 and deferred mobile review remain separate.
