@@ -36,3 +36,8 @@ Hide unauthorized master action triggers, preserve readable detail fields and PM
 ## Tasks list refinement — 2026-10-03
 
 Preserve the existing semantic CSS/Tailwind tokens, Inter typography and shared Card/Button/Radix Tabs owners. Task views use wrapping rectangular tabs with quiet numeric badges, visible focus and explicit selection; every tab remains visible at laptop widths. Cards keep the existing maintenance vocabulary with tighter spacing and a named keyboard-operable task opener. No new palette or global theme tokens are introduced. Counts are dataset totals rather than unread-message notifications.
+
+
+## Unified label safe area - 2026-10-08
+
+Label Designer retains existing shared Radix controls and visual tokens. PDF and SVG share one calibrated content area for logo, text, QR quiet zone and warning. On 18mm-height labels the effective border inset is at least 1.5mm plus absolute vertical offset. Content inset is the maximum of requested padding, calibrated printable clearance and effective border inset plus 0.6mm when enabled. The UI displays requested/effective margins and safe dimensions. One batch output query owns preview and print/export availability; invalid configurations show an actionable error and disable output without reducing the requested QR size. Company Asset uses reserved rows/columns; its warning splits into two vertical word columns when necessary to maintain legible type. Physical page dimensions remain unchanged.

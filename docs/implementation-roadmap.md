@@ -625,6 +625,6 @@ Output and challenge: verification-q01-desktop.md; physical print acceptance rem
 ### Selected D1 correction: unified label safe area, 2026-10-08
 
 Objective: keep all Company Asset/Standard artwork clear of border and printable edges after calibration. Sources: functional specification, UX-CONTRACT and approved user change plan.
-- [ ] Unify content geometry, reserved Company Asset columns/rows and effective margin feedback; block invalid Print/Export without silently changing QR size.
-- [ ] Verify offsets, borders, QR sizes, names, PDF/preview parity and scoped web release.
+- [x] Unify content geometry, reserved Company Asset columns/rows and effective margin feedback; block invalid Print/Export without silently changing QR size.
+- [x] Verify offsets, borders, QR sizes, names, PDF/preview parity and scoped web release.
 Output and challenge: verification-q01-desktop.md; physical printer acceptance remains separate.
