@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { buildLabelPdf, buildLabelOutput, labelDimensions, type LabelDrawing } from "@/lib/labelPdf";
+import { buildLabelPdf, buildLabelOutput, labelDimensions, labelSafeArea, type LabelDrawing } from "@/lib/labelPdf";
 import {
   QrCode,
   Printer,
@@ -142,6 +142,15 @@ export default function LabelDesigner() {
   const [presetError, setPresetError] = useState<string | null>(null);
   const paperPresets = settingsQuery.data?.paperPresets ?? [];
   const [tabValue, setTabValue] = useState("layout");
+  const safeArea = labelSafeArea(config);
+  const outputQuery = useQuery({
+    queryKey: ["label-output", selectedAssets, config, qrPayloadMode, systemStatusQuery.data?.snipeIt.baseUrl],
+    queryFn: () => buildLabelOutput(selectedAssets, config, qrPayloadMode, systemStatusQuery.data?.snipeIt.baseUrl),
+    enabled: selectedAssets.length > 0 && !settingsQuery.isLoading && !settingsQuery.isError,
+    retry: false, gcTime: 0,
+  });
+  const outputBlocked = !outputQuery.data || outputQuery.isFetching || outputQuery.isError;
+
 
   const edited = useRef(false);
   const hydrated = useRef(false);
@@ -356,11 +365,11 @@ export default function LabelDesigner() {
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Reset
               </Button>
-              <Button variant="outline" onClick={handleExport} disabled={isGenerating || settingsQuery.isLoading || settingsQuery.isError || selectedAssets.length === 0} className="bg-background/80 shadow-sm">
+              <Button variant="outline" onClick={handleExport} disabled={isGenerating || settingsQuery.isLoading || settingsQuery.isError || selectedAssets.length === 0 || outputBlocked} className="bg-background/80 shadow-sm">
                 <Download className="h-4 w-4 mr-2" />
                 Export PDF
               </Button>
-              <Button onClick={handlePrint} disabled={isGenerating || settingsQuery.isLoading || settingsQuery.isError || selectedAssets.length === 0} className="bg-primary hover:bg-primary/90 shadow-sm">
+              <Button onClick={handlePrint} disabled={isGenerating || settingsQuery.isLoading || settingsQuery.isError || selectedAssets.length === 0 || outputBlocked} className="bg-primary hover:bg-primary/90 shadow-sm">
                 <Printer className="h-4 w-4 mr-2" />
                 Print Labels
               </Button>
@@ -533,7 +542,8 @@ export default function LabelDesigner() {
                     <div className="flex items-center justify-between"><Label htmlFor="label-border">Enable border</Label><Switch id="label-border" checked={config.showBorder} onCheckedChange={v => updateConfig("showBorder", v)} disabled={controlsLocked} /></div>
                     <div className="flex items-center justify-between"><Label>Border inset</Label><span className="text-sm text-muted-foreground">{(config.borderInsetMm ?? (labelDimensions(config).height === 18 ? 1.5 : 0.5)).toFixed(1)} mm</span></div>
                     <Slider aria-label="Border inset" min={0.5} max={4} step={0.1} value={[config.borderInsetMm ?? (labelDimensions(config).height === 18 ? 1.5 : 0.5)]} disabled={controlsLocked || !config.showBorder} onValueChange={([value]) => updateConfig("borderInsetMm", value)} />
-                    <p className="text-xs text-muted-foreground">Increase inset if border edges are clipped, or disable the border. On 18mm tape, extra clearance is added automatically when shifting vertically.</p>
+                    <p className="text-xs text-muted-foreground">Requested: {safeArea.requestedBorderInsetMm.toFixed(1)} mm. Effective border inset: {config.showBorder ? `${safeArea.effectiveBorderInsetMm.toFixed(1)} mm` : "border off"}. Content inset: {safeArea.contentInsetMm.toFixed(1)} mm.</p>
+                    <p className="text-xs text-muted-foreground">Safe content area: {safeArea.widthMm.toFixed(1)} x {safeArea.heightMm.toFixed(1)} mm. Logo, text and QR share this area; QR includes its clear border. Increase label size or reduce QR/inset if it does not fit.</p>
                   </div>
 
                   <div className="space-y-2">
@@ -843,14 +853,14 @@ export default function LabelDesigner() {
                   className="grid gap-4 p-4 rounded-xl min-h-[400px] border border-dashed border-border/60 bg-muted/30"
                   style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}
                 >
-                  {selectedAssets.map((asset) => (
+                  {selectedAssets.map((asset, index) => (
                     <motion.div
                       key={asset.id}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className="flex min-w-0 items-center justify-center overflow-auto"
                     >
-                      <PdfLabelPreview asset={asset} config={config} qrPayloadMode={qrPayloadMode} snipeBaseUrl={systemStatusQuery.data?.snipeIt.baseUrl} />
+                      <PdfLabelPreview asset={asset} config={config} drawing={outputQuery.data?.drawings[index]} error={outputQuery.isError ? (outputQuery.error instanceof Error ? outputQuery.error.message : "Preview failed.") : undefined} />
                     </motion.div>
                   ))}
                 </div>
@@ -881,26 +891,15 @@ export default function LabelDesigner() {
   );
 }
 
-function PdfLabelPreview({ asset, config, qrPayloadMode, snipeBaseUrl }: {
-  asset: Asset; config: LabelDesignerConfig; qrPayloadMode: LabelDesignerQrPayloadMode; snipeBaseUrl?: string | null;
+function PdfLabelPreview({ asset, config, drawing, error }: {
+  asset: Asset; config: LabelDesignerConfig; drawing?: LabelDrawing; error?: string;
 }) {
-  const [result, setResult] = useState<{ drawing?: LabelDrawing; error?: string }>({});
-  useEffect(() => {
-    let disposed = false;
-    setResult({});
-    void buildLabelOutput([asset], config, qrPayloadMode, snipeBaseUrl).then(output => {
-      if (!disposed) setResult({ drawing: output.drawings[0] });
-    }).catch(error => {
-      if (!disposed) setResult({ error: error instanceof Error ? error.message : "Preview failed." });
-    });
-    return () => { disposed = true; };
-  }, [asset, config, qrPayloadMode, snipeBaseUrl]);
   const { width, height } = labelDimensions(config);
-  const d = result.drawing;
+  const d = drawing;
   return <div className="w-full min-w-0 space-y-2">
     <p className="text-xs text-muted-foreground">{width} × {height} mm</p>
     <div className="w-full rounded border bg-white" style={{ aspectRatio: `${width} / ${height}`, minHeight: 100 }}>
-      {result.error ? <p role="alert" className="p-2 text-xs text-destructive">{result.error}</p>
+      {error ? <p role="alert" className="p-2 text-xs text-destructive">{error}</p>
         : d ? <svg viewBox={`0 0 ${d.width} ${d.height}`} role="img" aria-label={`Label preview for ${asset.name}`} className="h-full w-full">
           <g transform={`translate(0 ${d.verticalOffset})`}>
           {d.showBorder && <rect x={d.borderInset} y={d.borderInset} width={d.width - d.borderInset*2} height={d.height - d.borderInset*2} fill="none" stroke={d.borderBlack ? "#000" : "#b3b3b3"} strokeWidth={d.borderBlack ? 0.8 : 0.5} />}

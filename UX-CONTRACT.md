@@ -73,3 +73,6 @@ Vertical print position uses the named shared Slider, visible signed mm/directio
 
 
 Layout owns Enable border (named shared Switch), Border inset (named shared Slider with visible mm), saved presets (shared Radix Select), labelled new preset Input and Save new paper preset Button. Preset save persists current defaults and paper library together; pending locks repeat saves, failure retains form/draft, success refetches library. Empty library and duplicate/blank names have visible guidance. Applying only paper geometry preserves logo/content. The 18mm border band automatically accommodates the vertical offset; preview/PDF stay geometrically identical.
+
+
+Unified safe-area correction: Label Designer shows requested/effective inset and content bounds beside Border inset. A single batch output generation owns SVG drawings and validates selected assets; Print/Export are disabled while pending or invalid. Error text directs users to adjust QR/inset/page dimensions; QR size is never silently reduced. Company Asset artwork occupies separate bounded regions within the same safe rectangle. No production preset/default mutation is part of verification.

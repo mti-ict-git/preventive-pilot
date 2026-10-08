@@ -170,9 +170,9 @@ test("calibrated 18mm borders retain clearance and can be disabled", async()=>{
   assert(Math.abs(d.borderInset/mm-(1.5+Math.abs(offset)))<1e-8);
   assert(d.borderInset-Math.abs(d.verticalOffset)-0.4>=1.1*mm);
   const off=(await buildLabelOutput([asset],{...cfg,showBorder:false},"assetTag")).drawings[0];
-  assert.equal(off.showBorder,false);assert.deepEqual(off.qr,d.qr);assert.deepEqual(off.lines,d.lines);
+  assert.equal(off.showBorder,false);assert.equal(off.qr.size,d.qr.size);if(layout === "companyAsset") assert(off.qr.x >= d.qr.x); else assert(off.qr.x <= d.qr.x);
  }
- const larger=(await buildLabelOutput([asset],{...config,borderInsetMm:3},"assetTag")).drawings[0];assert.equal(larger.borderInset,3*mm);
+ const larger=(await buildLabelOutput([asset],{...config,qrSize:10,borderInsetMm:3},"assetTag")).drawings[0];assert.equal(larger.borderInset,3*mm);
  for(const value of [0.4,4.1,1.55,NaN])await assert.rejects(buildLabelOutput([asset],{...config,borderInsetMm:value},"assetTag"),/Border inset/);
 });
 
@@ -186,4 +186,23 @@ test("shared named paper library validates calibrated settings and legacy omissi
  assert.equal(parseLabelDraft(JSON.stringify(settings)).config.borderInsetMm,2.5);
  assert(schema.safeParse({...settings,paperPresets:undefined}).success);
  for(const paperPresets of [[preset,{...preset,name:"BROTHER CALIBRATED"}],Array.from({length:21},(_,i)=>({...preset,name:String(i)})),[{...preset,name:" "}],[{...preset,printOffsetYmm:0.85}],[{...preset,borderInsetMm:4.1}]])assert(!schema.safeParse({...settings,paperPresets}).success);
+});
+
+
+test("Company Asset safe rectangles contain and separate every element at calibrated offsets",async()=>{
+ const {labelSafeArea}=load("labelPdf");const fontDoc=await PDFDocument.create(),regular=await fontDoc.embedFont("Helvetica"),bold=await fontDoc.embedFont("Helvetica-Bold"),mm=72/25.4;
+ for(const name of ["MTI-PC-005","MTI-SIM-031","MTI-NB-1234567890"])for(const offset of [0,0.7,0.8])for(const showBorder of [false,true])for(const qrSize of [10,12,14]){
+  const cfg={...config,width:45,showLogo:true,layout:"companyAsset",printOffsetYmm:offset,borderInsetMm:0.5,showBorder,qrSize};const area=labelSafeArea(cfg);
+  if(qrSize>area.heightMm){await assert.rejects(buildLabelOutput([{...asset,name}],cfg,"assetTag"),/safe area/);continue;}
+  const output=await buildLabelOutput([{...asset,name}],cfg,"assetTag"),d=output.drawings[0],inset=area.contentInsetMm*mm;
+  assert.equal(d.qr.size,qrSize*mm);
+  const boxes=[{x:d.qr.x,y:d.qr.y,w:d.qr.size,h:d.qr.size},{x:d.logo.x,y:d.logo.y,w:d.logo.width,h:d.logo.height},...d.lines.map(line=>{
+   const w=(line.bold?bold:regular).widthOfTextAtSize(line.text,line.size);
+   return line.rotation?{x:line.x-line.size*0.25,y:line.y-w,w:line.size*1.25,h:w}:{x:line.x,y:line.y-line.size*0.25,w,h:line.size*1.25};
+  })];
+  for(const b of boxes){assert(b.x>=inset-1e-6);assert(b.y>=inset-1e-6);assert(b.x+b.w<=d.width-inset+1e-6);assert(b.y+b.h<=d.height-inset+1e-6);assert(b.y-d.verticalOffset>=1.1*mm-1e-6);assert(b.y+b.h-d.verticalOffset<=d.height-1.1*mm+1e-6);}
+  for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];assert(a.x+a.w<=b.x+1e-6||b.x+b.w<=a.x+1e-6||a.y+a.h<=b.y+1e-6||b.y+b.h<=a.y+1e-6,`${name} overlapping regions ${i}/${j}`);}
+  const pdf=await PDFDocument.load(output.pdfBytes);assert(Math.abs(pdf.getPage(0).getWidth()-45*mm)<1e-8);assert(Math.abs(pdf.getPage(0).getHeight()-18*mm)<1e-8);
+ }
+ await assert.rejects(buildLabelOutput([{...asset,name:"LONG-ASSET-NAME-".repeat(10)}],{...config,width:45,showLogo:true,layout:"companyAsset",qrSize:10,printOffsetYmm:0.8},"assetTag"),/text is too wide/);
 });

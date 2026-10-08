@@ -9,6 +9,16 @@ export const labelDimensions = (config: LabelDesignerConfig) => ({
   width: config.orientation === "landscape" ? Math.max(config.width, config.height) : Math.min(config.width, config.height),
   height: config.orientation === "landscape" ? Math.min(config.width, config.height) : Math.max(config.width, config.height),
 });
+export const labelSafeArea = (config: LabelDesignerConfig) => {
+  const { width, height } = labelDimensions(config);
+  const offset = Math.abs(config.printOffsetYmm ?? 0);
+  const requestedBorderInsetMm = config.borderInsetMm ?? (height === 18 ? 1.5 : 0.5);
+  const effectiveBorderInsetMm = Math.max(requestedBorderInsetMm, height === 18 ? 1.5 + offset : 0.5);
+  const contentInsetMm = Math.max(config.padding, height === 18 ? 1.5 + offset : 0.5 + offset,
+    config.showBorder ? effectiveBorderInsetMm + 0.6 : 0);
+  return { requestedBorderInsetMm, effectiveBorderInsetMm, contentInsetMm,
+    widthMm: width - contentInsetMm * 2, heightMm: height - contentInsetMm * 2 };
+};
 export type LabelDrawing = {
   width: number; height: number; showBorder: boolean; borderBlack?: boolean; borderInset: number; verticalOffset: number;
   logo?: { dataUrl: string; x: number; y: number; width: number; height: number; viewport?: { x: number; y: number; width: number; height: number; imageWidth: number; imageHeight: number } };
@@ -31,8 +41,9 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
   const requestedInset = config.borderInsetMm ?? (dimensions.height === 18 ? 1.5 : 0.5);
   if (!Number.isFinite(requestedInset) || requestedInset < 0.5 || requestedInset > 4 || Math.abs(requestedInset*10-Math.round(requestedInset*10)) > 1e-6) throw new Error("Border inset must be between 0.5 and 4 mm, in 0.1 mm steps.");
   // Retain the 18mm printable band after printer calibration moves the complete design.
-  const borderInset = mmToPt(Math.max(requestedInset, dimensions.height === 18 ? 1.5 + Math.abs(offsetMm) : 0.5));
-  const padding = mmToPt(Math.max(config.padding, dimensions.height === 18 ? 2 : 0)), gap = mmToPt(2), qrSize = mmToPt(config.qrSize);
+  const area = labelSafeArea(config);
+  const borderInset = mmToPt(area.effectiveBorderInsetMm);
+  const padding = mmToPt(area.contentInsetMm), gap = mmToPt(2), qrSize = mmToPt(config.qrSize);
   const landscape = config.orientation === "landscape";
   const company = config.layout === "companyAsset";
   if (company && !landscape) throw new Error("Company Asset requires landscape orientation.");
@@ -41,7 +52,7 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
   const textWidth = landscape ? width - padding * 2 - qrSize - gap : width - padding * 2;
   const textHeight = landscape ? height - padding * 2 : height - padding * 2 - qrSize - gap;
   if (qrSize > Math.min(width, height) - padding * 2 || (!company && (textWidth <= 0 || textHeight <= 0)))
-    throw new Error("QR code and padding do not fit. Reduce QR size or padding, or increase label size.");
+    throw new Error(`QR code and padding do not fit the safe area (${area.widthMm.toFixed(1)} x ${area.heightMm.toFixed(1)} mm). Reduce QR size, border inset or padding, or increase label size.`);
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica), bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const drawings: LabelDrawing[] = [];
@@ -53,11 +64,14 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
     const dataUrl = await QRCode.toDataURL(payload, { margin: 4, errorCorrectionLevel: "M" });
     const qr = await doc.embedPng(dataUrl);
     if (company) {
-      const inset = Math.max(padding, mmToPt(1.5));
-      const qrX = width - inset - mmToPt(3) - qrSize, qrY = (height - qrSize) / 2;
-      const leftWidth = qrX - inset - mmToPt(1), usableHeight = height - inset * 2;
-      if (leftWidth < mmToPt(18) || usableHeight < mmToPt(12))
-        throw new Error("Company Asset needs more space. Use at least 60x18mm and reduce QR size or padding.");
+      const inset = padding, usableHeight = height - inset * 2;
+      const warning = "DON'T REMOVE";
+      const warningWords = usableHeight / bold.widthOfTextAtSize(warning, 1) >= 5 ? [warning] : ["DON'T", "REMOVE"];
+      const warningWidth = mmToPt(2.5) * warningWords.length, columnGap = mmToPt(0.8);
+      const qrX = width - inset - warningWidth - columnGap - qrSize, qrY = (height - qrSize) / 2;
+      const leftWidth = qrX - inset - columnGap;
+      if (leftWidth < mmToPt(16) || usableHeight < mmToPt(9))
+        throw new Error("Company Asset needs more safe space. Reduce QR size, border inset or padding, or increase label length.");
       const page = doc.addPage([width, height]);
       page.pushOperators(pushGraphicsState(), concatTransformationMatrix(1, 0, 0, 1, 0, -verticalOffset));
       const lines: LabelDrawing["lines"] = [];
@@ -66,16 +80,18 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
         lines.push({ text, size, x, y, bold: isBold, rotation });
         page.drawText(text, { x, y, size, font: f, rotate: degrees(rotation), color: rgb(0,0,0) });
       };
-      const fit = (text: string, desired: number, available: number, isBold = false) => {
+      const fit = (text: string, desired: number, available: number, isBold = false, availableHeight = Infinity) => {
         const f = isBold ? bold : font;
         let size: number;
-        try { size = Math.min(desired, available / Math.max(1, f.widthOfTextAtSize(text, 1))); }
+        try { size = Math.min(desired, available / Math.max(1, f.widthOfTextAtSize(text, 1)), availableHeight / 1.25); }
         catch { throw new Error("Label text contains unsupported characters. Use characters supported by the PDF font."); }
         if (size < 5) throw new Error("Company Asset text is too wide. Increase label length or shorten the name.");
         return size;
       };
       let logo: LabelDrawing["logo"];
-      const headerHeight = usableHeight * 0.40;
+      const rowGap = mmToPt(0.4);
+      const remainingHeight = usableHeight - rowGap * 2;
+      const headerHeight = remainingHeight * 0.40, captionHeight = remainingHeight * 0.25, nameHeight = remainingHeight * 0.35;
       const logoDataUrl = config.logoDataUrl ?? companyLogoDataUrl;
       if (config.showLogo) {
         if ((config.logoDataUrl && config.logoDataUrl.length > 2800000) || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl))
@@ -95,16 +111,20 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
         } else page.drawImage(image, logo);
       } else {
         const text = "MERDEKA TSINGSHAN INDONESIA";
-        const size = fit(text, 6, leftWidth, true);
+        const size = fit(text, 6, leftWidth, true, headerHeight);
         add(text, size, inset, height - inset - size, true);
       }
-      const captionSize = fit("Company Asset", Math.min(10, config.fontSize), leftWidth, true);
-      add("Company Asset", captionSize, inset, height - inset - headerHeight - captionSize - mmToPt(0.4), true);
+      const captionSize = fit("Company Asset", Math.min(10, config.fontSize), leftWidth, true, captionHeight);
+      const captionBottom = inset + nameHeight + rowGap;
+      add("Company Asset", captionSize, inset, captionBottom + captionSize * 0.25, true);
       const name = asset.name || asset.assetTag || asset.id;
-      const nameSize = fit(name, Math.min(24, config.fontSize + 8, usableHeight * 0.34), leftWidth, true);
-      add(name, nameSize, inset, inset + 1, true);
-      const warning = "DON'T REMOVE", warningSize = fit(warning, 6, usableHeight, true);
-      add(warning, warningSize, width - inset - warningSize, (height + bold.widthOfTextAtSize(warning, warningSize)) / 2, true, -90);
+      const nameSize = fit(name, Math.min(24, config.fontSize + 8), leftWidth, true, nameHeight);
+      add(name, nameSize, inset, inset + nameSize * 0.25, true);
+      warningWords.forEach((word, index) => {
+        const warningSize = fit(word, 6, usableHeight, true, warningWidth / warningWords.length);
+        const warningX = width - inset - warningWidth + mmToPt(2.5) * (index + 1) - warningSize;
+        add(word, warningSize, warningX, (height + bold.widthOfTextAtSize(word, warningSize)) / 2, true, -90);
+      });
       page.drawImage(qr, { x: qrX, y: qrY, width: qrSize, height: qrSize });
       if (config.showBorder) page.drawRectangle({ x: borderInset, y: borderInset, width: width-borderInset*2, height: height-borderInset*2, borderColor: rgb(0,0,0), borderWidth: 0.8 });
       drawings.push({ width, height, showBorder: config.showBorder, borderInset, verticalOffset, borderBlack: true, logo, qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines });
@@ -140,10 +160,11 @@ export const buildLabelOutput = async (assets: Asset[], config: LabelDesignerCon
     let y = landscape ? (height + totalHeight) / 2 : qrY - gap;
     for (const line of lines) {
       y -= line.size * 1.25;
+      const baseline = y + line.size * 0.25;
       const currentFont = line.bold ? bold : font;
       const x = landscape ? padding + qrSize + gap : (width - currentFont.widthOfTextAtSize(line.text, line.size)) / 2;
-      positionedLines.push({ ...line, x, y });
-      page.drawText(line.text, { x, y, size: line.size, font: currentFont, color: rgb(0, 0, 0) });
+      positionedLines.push({ ...line, x, y: baseline });
+      page.drawText(line.text, { x, y: baseline, size: line.size, font: currentFont, color: rgb(0, 0, 0) });
     }
     drawings.push({ width, height, showBorder: config.showBorder, borderInset, verticalOffset,
       qr: { dataUrl, x: qrX, y: qrY, size: qrSize }, lines: positionedLines });
