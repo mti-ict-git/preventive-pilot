@@ -7178,6 +7178,7 @@ paths:
     post:
       tags:
         - Tasks
+      description: PM Now returns a controlled PM_OCCURRENCE_CONFLICT (409) on occurrence uniqueness conflicts and PM_NOW_FAILED (500) on unexpected creation errors; the API process remains available.
       summary: Create an immediate PM task for an asset's default template
       requestBody:
         required: true
@@ -7816,6 +7817,8 @@ paths:
         - Tasks
       summary: Complete a task
       description: Uses the single active PM context lock; PM_ACTIVE_WORK_EXISTS returns 409 for a competing execution.
+        Submission requires in_progress and StartedAt; TASK_NOT_STARTED returns 409 before checklist writes
+        when work has not been started or is paused.
       parameters:
         - name: taskId
           in: path
@@ -7876,6 +7879,8 @@ paths:
         later detail, review, export, and resubmission flows continue to use. Any open PM work session is
         closed at the submitted timestamp so review waiting time is not counted as active execution time. Uses
         the single active PM context lock; PM_ACTIVE_WORK_EXISTS returns 409 for a competing execution.
+        Submission requires in_progress and StartedAt; TASK_NOT_STARTED returns 409 before checklist writes
+        when work has not been started or is paused.
       parameters:
         - name: taskId
           in: path
@@ -8094,6 +8099,7 @@ paths:
         - Tasks
       summary: Reject approval
       description: >-
+        Replacement uniqueness conflicts return PM_OCCURRENCE_CONFLICT (409) after rollback without terminating the API.
         Reject the submitted PM task and create or reuse one linked replacement PM task for the repeated work.
         The original rejected task keeps its history, results, evidence, and work time. A Supervisor may
         review their own submission only at PendingSupervisor; same-user review at PendingSuperadmin remains

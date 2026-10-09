@@ -60,6 +60,7 @@ import {
   apiApproveTaskBySupervisor,
   apiApproveTaskBySuperadmin,
   apiRejectTaskApproval,
+  apiReviseTaskApproval,
   apiUploadTaskChecklistEvidenceFile,
   apiUploadTaskEvidenceFile,
   type CompleteTaskChecklistResultInput,
@@ -1114,7 +1115,7 @@ export const TaskDetailDialog = (props: {
     onSuccess: async () => {
       setRejectDialogOpen(false);
       setRejectReason("");
-      await taskQuery.refetch();
+      await Promise.all([taskQuery.refetch(), queryClient.invalidateQueries({ queryKey: ["tasks"] }), queryClient.invalidateQueries({ queryKey: ["task-stats"] }), queryClient.invalidateQueries({ queryKey: ["approvals"] })]);
       toast({ title: "Approval rejected" });
     },
     onError: (err: unknown) => {
@@ -1124,6 +1125,21 @@ export const TaskDetailDialog = (props: {
         variant: "destructive",
       });
     },
+  });
+
+  const [reviseDialogOpen, setReviseDialogOpen] = useState(false);
+  const [reviseReason, setReviseReason] = useState("");
+  const reviseApprovalMutation = useMutation({
+    mutationFn: async () => {
+      if (!props.taskId || !reviseReason.trim()) throw new Error("A revision note is required");
+      return apiReviseTaskApproval({ taskId: props.taskId, reason: reviseReason.trim(), reopenTask: false });
+    },
+    onSuccess: async () => {
+      setReviseDialogOpen(false); setReviseReason("");
+      await Promise.all([taskQuery.refetch(), queryClient.invalidateQueries({queryKey:["tasks"]}), queryClient.invalidateQueries({queryKey:["task-stats"]}), queryClient.invalidateQueries({queryKey:["approvals"]})]);
+      toast({title:"Returned to technician for revision"});
+    },
+    onError: (err: unknown) => toast({title:"Revise failed",description:err instanceof Error ? err.message : "Request failed",variant:"destructive"}),
   });
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -1170,6 +1186,7 @@ export const TaskDetailDialog = (props: {
     canModify;
 
   const canSubmitForApproval =
+    normalizedStatus === "in_progress" && Boolean(task?.startedAt) &&
     canModify &&
     task?.maintenanceType === "PM" &&
     approvalStatus !== "PendingSupervisor" &&
@@ -1779,9 +1796,12 @@ export const TaskDetailDialog = (props: {
                     </Button>
                   ) : null}
                   {canRejectApproval ? (
+                    <>
+                    {(hasRole("Supervisor") || isSuperadmin()) ? <Button size="sm" variant="outline" disabled={reviseApprovalMutation.isPending || rejectApprovalMutation.isPending} onClick={() => setReviseDialogOpen(true)}>Revise</Button> : null}
                     <Button size="sm" variant="destructive" onClick={() => setRejectDialogOpen(true)}>
                       Reject
                     </Button>
+                    </>
                   ) : null}
                 </>
               ) : null}
@@ -2513,6 +2533,12 @@ export const TaskDetailDialog = (props: {
             </Button>
           </div>
         </div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={reviseDialogOpen} onOpenChange={setReviseDialogOpen}>
+      <DialogContent><DialogHeader><DialogTitle>Return for revision</DialogTitle><DialogDescription>The technician can correct this task and submit it again.</DialogDescription></DialogHeader>
+        <Label htmlFor="revision-note">Revision note</Label><Input id="revision-note" value={reviseReason} onChange={e=>setReviseReason(e.target.value)} />
+        <Button disabled={!reviseReason.trim() || reviseApprovalMutation.isPending} onClick={()=>reviseApprovalMutation.mutate()}>Confirm Revise</Button>
       </DialogContent>
     </Dialog>
     <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>

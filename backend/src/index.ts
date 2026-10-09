@@ -6740,6 +6740,7 @@ const openApiSpec: OpenApiSchema = {
       post: {
         tags: ["Tasks"],
         summary: "Create an immediate PM task for an asset's default template",
+        description: "Occurrence uniqueness conflicts return PM_OCCURRENCE_CONFLICT (409); unexpected failures return PM_NOW_FAILED (500) without terminating the API.",
         requestBody: {
           required: true,
           content: {
@@ -7240,7 +7241,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["Tasks"],
         summary: "Submit task for approval",
         description:
-          "For PM tasks, the first successful technician submission captures a frozen checklist snapshot that later detail, review, export, and resubmission flows continue to use. Any open PM work session is closed at the submitted timestamp so review waiting time is not counted as active execution time. Uses the single active PM context lock; PM_ACTIVE_WORK_EXISTS returns 409 for a competing execution.",
+          "For PM tasks, the first successful technician submission captures a frozen checklist snapshot that later detail, review, export, and resubmission flows continue to use. Any open PM work session is closed at the submitted timestamp so review waiting time is not counted as active execution time. Uses the single active PM context lock; PM_ACTIVE_WORK_EXISTS returns 409 for a competing execution. Submission requires in_progress and StartedAt; TASK_NOT_STARTED returns 409 before checklist writes when work has not been started or is paused.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],
@@ -7409,7 +7410,7 @@ const openApiSpec: OpenApiSchema = {
         tags: ["Tasks"],
         summary: "Reject approval",
         description:
-          "Reject the submitted PM task and create or reuse one linked replacement PM task for the repeated work. The original rejected task keeps its history, results, evidence, and work time. A Supervisor may review their own submission only at PendingSupervisor; same-user review at PendingSuperadmin remains forbidden. Existing route role restrictions apply.",
+          "Reject the submitted PM task and create or reuse one linked replacement PM task for the repeated work. Replacement uniqueness conflicts return PM_OCCURRENCE_CONFLICT (409) after rollback without terminating the API. The original rejected task keeps its history, results, evidence, and work time. A Supervisor may review their own submission only at PendingSupervisor; same-user review at PendingSuperadmin remains forbidden. Existing route role restrictions apply.",
         parameters: [
           { name: "taskId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
         ],

@@ -150,3 +150,20 @@ test('retired PM cannot be submitted after a stale editor remains open',async t=
  const response=await fetch(`http://127.0.0.1:${server.address().port}/api/tasks/${fixtureTaskId}/submit-for-approval`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${h.token(['Technician'])}`},body:JSON.stringify({checklistResults:[{templateChecklistItemId:mandatoryItemId,outcome:1}]})});
  assert.equal(response.status,409,await response.text());assert(!h.calls.some(c=>c.query.includes('MERGE pm.PMTaskChecklistResults')));
 });
+
+
+test('PM submission requires started and currently running work before result writes',async t=>{
+ for(const status of ['open','paused']) {
+  const h=createHarness();h.reset({taskStatus:status});const server=h.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+  try {const response=await fetch(`http://127.0.0.1:${server.address().port}/api/tasks/${fixtureTaskId}/submit-for-approval`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${h.token(['Technician'])}`},body:JSON.stringify({checklistResults:[{templateChecklistItemId:mandatoryItemId,outcome:1}]})});assert.equal(response.status,409);assert.equal((await response.json()).code,'TASK_NOT_STARTED');assert(!h.calls.some(c=>c.query.includes('MERGE pm.PMTaskChecklistResults')));assert(!h.txEvents.includes('commit'));} finally {await new Promise(r=>server.close(r));}
+ }
+});
+
+
+test('duplicate replacement insert rolls back reject and returns controlled conflict without terminating API',async t=>{
+ const h=createHarness({query(sql){if(sql.includes('INSERT INTO pm.PMTasks (') && sql.includes('@sourceTaskId'))throw Object.assign(new Error('duplicate fixture'),{number:2601});}});h.reset({approvalStatus:'PendingSupervisor',taskStatus:'in_progress'});
+ const server=h.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
+ const origin=`http://127.0.0.1:${server.address().port}`;
+ const response=await fetch(`${origin}/api/tasks/${fixtureTaskId}/reject-approval`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${h.token(['Supervisor'])}`},body:JSON.stringify({reason:'Repeat work',reopenTask:false})});assert.equal(response.status,409);assert.equal((await response.json()).code,'PM_OCCURRENCE_CONFLICT');assert(h.txEvents.includes('rollback'));assert(!h.txEvents.includes('commit'));
+ const alive=await fetch(`${origin}/api/tasks/${fixtureTaskId}/reject-approval`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${h.token(['Supervisor'])}`},body:JSON.stringify({reason:'Repeat work',reopenTask:true})});assert.equal(alive.status,400);
+});

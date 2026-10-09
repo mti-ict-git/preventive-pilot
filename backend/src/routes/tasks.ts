@@ -1868,6 +1868,7 @@ tasksRouter.get(
 );
 
 tasksRouter.post("/pm-now", requireManager, async (req, res) => {
+  try {
   const parsed = PmNowSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({
@@ -2041,6 +2042,11 @@ tasksRouter.post("/pm-now", requireManager, async (req, res) => {
   });
 
   res.status(201).json({ id: taskId });
+  } catch (err) {
+    const number = (err as { number?: number }).number;
+    console.error("PM Now failed", err);
+    res.status(number === 2601 || number === 2627 ? 409 : 500).json({ message: number === 2601 || number === 2627 ? "A task already occupies this PM occurrence. Refresh and review existing work." : "PM Now could not be created. Please retry.", code: number === 2601 || number === 2627 ? "PM_OCCURRENCE_CONFLICT" : "PM_NOW_FAILED" });
+  }
 });
 
 tasksRouter.get("/evidence/:evidenceId", async (req, res) => {
@@ -5022,9 +5028,13 @@ tasksRouter.post("/:taskId/submit-for-approval", async (req, res) => {
       await tx.rollback(); res.status(409).json({ message: "Another PM execution is already active.", code: "PM_ACTIVE_WORK_EXISTS" }); return;
     }
     const actionable=await tx.request().input("taskId",sql.UniqueIdentifier,taskId)
-      .query("SELECT Status FROM pm.PMTasks WITH(UPDLOCK,HOLDLOCK) WHERE TaskId=@taskId");
+      .query("SELECT Status, StartedAt FROM pm.PMTasks WITH(UPDLOCK,HOLDLOCK) WHERE TaskId=@taskId");
     if (!actionable.recordset[0] || ["completed","cancelled"].includes(actionable.recordset[0].Status as string)) {
       await tx.rollback(); res.status(409).json({ message: "Task is no longer actionable." }); return;
+    }
+
+    if (actionable.recordset[0].Status !== "in_progress" || !actionable.recordset[0].StartedAt) {
+      await tx.rollback(); res.status(409).json({ message: "Start or resume the task before submitting for approval.", code: "TASK_NOT_STARTED" }); return;
     }
 
     await ensureTaskChecklistSnapshot({
@@ -5881,7 +5891,9 @@ tasksRouter.post(
       res.json({ ok: true, replacementTaskId });
     } catch (err) {
       await rollbackQuietly(tx);
-      throw err;
+      const number = (err as { number?: number }).number;
+      console.error("PM rejection failed", err);
+      res.status(number === 2601 || number === 2627 ? 409 : 500).json({message:"Rejection was not saved. Refresh and retry after reviewing existing replacement work.",code:number === 2601 || number === 2627 ? "PM_OCCURRENCE_CONFLICT" : "PM_REJECTION_FAILED"});
     }
   },
 );

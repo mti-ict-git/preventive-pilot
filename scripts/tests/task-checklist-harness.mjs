@@ -233,7 +233,7 @@ export function createHarness(overrides = {}) {
             if (overridden !== undefined) return overridden;
           }
           if(query.includes('SELECT MaintenanceType,COALESCE(AssetId,FacilityId) ContextId')) return {recordset:[{MaintenanceType:maintenanceType,ContextId:fixtureTaskId}],rowsAffected:[]};
-          if(query.includes('SELECT Status FROM pm.PMTasks WITH(UPDLOCK,HOLDLOCK)')) return {recordset:[{Status:taskStatus}],rowsAffected:[]};
+          if(query.includes('SELECT Status, StartedAt FROM pm.PMTasks WITH(UPDLOCK,HOLDLOCK)')) return {recordset:[{Status:taskStatus,StartedAt:taskStatus === 'open' ? null : new Date('2026-09-16T08:15:00Z')}],rowsAffected:[]};
           if(query.includes('sp_getapplock')) return {recordset:[],rowsAffected:[]};
           if(query.includes('SELECT TOP(1) other.TaskId')) return {recordset:[],rowsAffected:[]};
           if(query.includes('UPDATE other SET') || query.includes('UPDATE t SET Status=N')) return {recordset:[{Changed:0}],rowsAffected:[0]};
