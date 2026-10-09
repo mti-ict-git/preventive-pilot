@@ -1137,7 +1137,7 @@ export const TaskDetailDialog = (props: {
     onSuccess: async () => {
       setReviseDialogOpen(false); setReviseReason("");
       await Promise.all([taskQuery.refetch(), queryClient.invalidateQueries({queryKey:["tasks"]}), queryClient.invalidateQueries({queryKey:["task-stats"]}), queryClient.invalidateQueries({queryKey:["approvals"]})]);
-      toast({title:"Returned to technician for revision"});
+      toast({title:"Task returned for revision"});
     },
     onError: (err: unknown) => toast({title:"Revise failed",description:err instanceof Error ? err.message : "Request failed",variant:"destructive"}),
   });
