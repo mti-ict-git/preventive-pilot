@@ -646,3 +646,16 @@ Scope is desktop Scheduling UI; API contracts and database remain unchanged.
 No backend permission or API contract change. Preserve existing calendar work and unrelated mobile edits.
 
 User authorized the calendar/label source and related documentation/fixture push to the existing GitHub repository and scoped web deployment on 2026-10-09. Earlier approval blocks are historical; production acceptance remains open until verified.
+
+
+## Calendar actions and technician label release - 2026-10-09
+
+Source release: `f8023cd80b8226a6c2acf8a5b09175d371398ece`. Only the web service was activated, using an isolated exact-commit Docker candidate. Mobile and the unpublished Snipe-IT fallback change were excluded.
+
+Validation passed in the candidate build: lint, both frontend TypeScript projects, 14 label PDF/draft tests, documentation checks and production build. Existing bundle-size/documentation-coverage warnings remain.
+
+Production verification passed: web healthy with the exact source revision, public HTML and JS/CSS bytes matched the candidate, scheduling/label-designer/tasks/assets routes served the release, and the nginx API documentation proxy worked. All excluded running containers retained their container IDs and images; API remained healthy. Environment and Compose files were unchanged. No database migration or business-data correction was performed.
+
+Audit: `/var/backups/preventive-pilot/calendar-label-web-20261009T085700Z/state.json`. Image: `sha256:0b7568b136c93af5f2d933d2d6787c1702327bfe4ea9998366d5310a76ff9e27`. Rollback tag: `preventive-pilot-web:rollback-calendar-label-20261009T085700Z`.
+
+Production browser interaction acceptance remains OPEN because the Codex browser kernel failed during Windows sandbox setup. Prior synthetic technician customization/draft acceptance is recorded separately and is not production-browser evidence. Calendar month/day preservation and modal keyboard interaction must still be exercised in a working browser; do not mark those checks complete based on deployment health.

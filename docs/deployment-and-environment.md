@@ -326,3 +326,16 @@ Protected release audit: `/var/backups/preventive-pilot/pm-anchor-final-20261007
 No schema migration. SQL COPY_ONLY/CHECKSUM backup 5045 and VERIFYONLY passed before any schedule correction. The checkpoint originated in `/var/backups/preventive-pilot/pm-anchor-candidate-20261007T001954Z`; final audit retains its backup metadata, original before-images and explicit origin reference. Restore was not exercised. API rollback image tag: `preventive-pilot-api:rollback-pm-history-20261007T002809Z`. Image rollback alone does not undo schedule settings; any compensating data change must use retained before-images and reviewed guards. No database restore or task/evidence deletion occurred.
 
 Seven settings were recovered through normal generation; PC-059's missing-site anchor was repaired under a context lock using its existing open task with an audit event. LocationId remains null and generation eligibility is unchanged. Two final generator passes and full before/after comparison prove unchanged task history and child counts, eight corrected asset settings, unchanged facility settings, zero remaining cursor drift and zero active duplicate groups. CIFS `/mnt/preventive-evidence` -> API `/app/shared-documents`, nested evidence root and filesystem startup guard remain intact; env/base Compose bytes are retained. Authenticated PC-006 browser acceptance shows July 30, 2026 and Overdue while retaining the 180-day template. Wider D2/D3 gates remain open.
+
+
+## Calendar actions and technician label release - 2026-10-09
+
+Source release: `f8023cd80b8226a6c2acf8a5b09175d371398ece`. Only the web service was activated, using an isolated exact-commit Docker candidate. Mobile and the unpublished Snipe-IT fallback change were excluded.
+
+Validation passed in the candidate build: lint, both frontend TypeScript projects, 14 label PDF/draft tests, documentation checks and production build. Existing bundle-size/documentation-coverage warnings remain.
+
+Production verification passed: web healthy with the exact source revision, public HTML and JS/CSS bytes matched the candidate, scheduling/label-designer/tasks/assets routes served the release, and the nginx API documentation proxy worked. All excluded running containers retained their container IDs and images; API remained healthy. Environment and Compose files were unchanged. No database migration or business-data correction was performed.
+
+Audit: `/var/backups/preventive-pilot/calendar-label-web-20261009T085700Z/state.json`. Image: `sha256:0b7568b136c93af5f2d933d2d6787c1702327bfe4ea9998366d5310a76ff9e27`. Rollback tag: `preventive-pilot-web:rollback-calendar-label-20261009T085700Z`.
+
+Production browser interaction acceptance remains OPEN because the Codex browser kernel failed during Windows sandbox setup. Prior synthetic technician customization/draft acceptance is recorded separately and is not production-browser evidence. Calendar month/day preservation and modal keyboard interaction must still be exercised in a working browser; do not mark those checks complete based on deployment health.
