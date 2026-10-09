@@ -76,3 +76,9 @@ Layout owns Enable border (named shared Switch), Border inset (named shared Slid
 
 
 Unified safe-area correction: Label Designer shows requested/effective inset and content bounds beside Border inset. A single batch output generation owns SVG drawings and validates selected assets; Print/Export are disabled while pending or invalid. Error text directs users to adjust QR/inset/page dimensions; QR size is never silently reduced. Company Asset artwork occupies separate bounded regions within the same safe rectangle. No production preset/default mutation is part of verification.
+
+## Scheduling task actions
+
+Unfinished materialized calendar events expose Task actions using the existing Tasks TaskDetailDialog owner. Completed/cancelled events and projected dates expose no task mutation trigger. Existing role/ownership/submission guards remain authoritative. Closing the dialog preserves the calendar month and selected date and refreshes scheduling, task counts/list and approval queues, including after pause/cancel/review.
+
+Technician Label Designer customization uses the existing local draft and shared controls. Local editing permission is separate from Admin/Superadmin shared-default/preset persistence. Technicians see editable layout parameters and can apply saved presets; shared save triggers are hidden and handlers remain guarded. Draft status does not instruct technicians to use unavailable Save Defaults.

@@ -628,3 +628,21 @@ Objective: keep all Company Asset/Standard artwork clear of border and printable
 - [x] Unify content geometry, reserved Company Asset columns/rows and effective margin feedback; block invalid Print/Export without silently changing QR size.
 - [x] Verify offsets, borders, QR sizes, names, PDF/preview parity and scoped web release.
 Output and challenge: verification-q01-desktop.md; physical printer acceptance remains separate.
+
+### Selected D1 correction: Scheduling task actions — 2026-10-08
+
+- [x] Reuse the existing task detail/action owner for unfinished materialized day events without changing authorization or recurrence.
+- [ ] Verify unfinished/completed/projected cases, dialog close/calendar context, builds and scoped production web release; record evidence before closing.
+
+Scope is desktop Scheduling UI; API contracts and database remain unchanged.
+
+
+### Selected D1 correction: technician label customization - 2026-10-08
+
+- [x] Separate technician local layout/parameter/draft access from administrator shared defaults/preset persistence.
+- [x] Verify frontend typecheck/build, 14 PDF/draft regressions and synthetic technician browser customization/reload; see verification-q01-desktop.md. Full lint is limited by unrelated mobile errors and TSX exclusion.
+- [ ] Complete authorized scoped web release and production acceptance; prior push/deployment approval remains pending.
+
+No backend permission or API contract change. Preserve existing calendar work and unrelated mobile edits.
+
+User authorized the calendar/label source and related documentation/fixture push to the existing GitHub repository and scoped web deployment on 2026-10-09. Earlier approval blocks are historical; production acceptance remains open until verified.
