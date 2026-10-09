@@ -1,0 +1,10 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+const source=ts.transpileModule(fs.readFileSync(new URL('../../backend/src/jobs/snipeSitePolicy.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
+const {resolveSnipeSiteId:r}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+test('actual location wins over default',()=>assert.equal(r({location:{id:3},rtd_location:{id:2}}),3));
+test('unassigned assets retain their default site',()=>assert.equal(r({location:null,rtd_location:{id:2}}),2));
+test('invalid actual id falls back',()=>{for(const id of [0,-1,NaN,1.5])assert.equal(r({location:{id},rtd_location:{id:2}}),2)});
+test('missing site remains missing; never invent a site',()=>{assert.equal(r({}),null);assert.equal(r({location:null,rtd_location:{id:0}}),null)});

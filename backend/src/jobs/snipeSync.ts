@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { resolveSnipeSiteId } from "./snipeSitePolicy.js";
 import { env } from "../config/env.js";
 import { writeAuditLog } from "../db/auditLog.js";
 import { getDb } from "../db/mssql.js";
@@ -41,6 +42,7 @@ type SnipeHardware = {
   model?: { name?: string | null } | null;
   category?: { id?: number | null; name?: string | null } | null;
   location?: { id?: number | null; name?: string | null } | null;
+  rtd_location?: { id?: number | null; name?: string | null } | null;
   custom_fields?: Record<string, SnipeCustomFieldValue | null> | null;
   assigned_to?: {
     name?: string | null;
@@ -416,7 +418,7 @@ const upsertAssets = async (
     const snipeCategoryId = typeof a.category?.id === "number" ? a.category.id : null;
     const categoryId = snipeCategoryId ? categoryIdBySnipeCategoryId.get(snipeCategoryId) ?? null : null;
 
-    const snipeLocationId = typeof a.location?.id === "number" ? a.location.id : null;
+    const snipeLocationId = resolveSnipeSiteId(a);
     const locationId = snipeLocationId ? locationIdBySnipeLocationId.get(snipeLocationId) ?? null : null;
 
     const manufacturer = a.manufacturer?.name ?? null;
