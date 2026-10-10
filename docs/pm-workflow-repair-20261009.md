@@ -21,3 +21,7 @@ OpenAPI YAML and embedded API documentation updated for TASK_NOT_STARTED and occ
 ## Final local validation and gates
 
 Web Vite build and backend tsc build passed. Desktop tsconfig.app.json and mobile tsconfig.json typechecks passed after removing a stale mobile state setter. Scheduling/site suites passed 17 tests. Execution suite passed 10 tests including injected SQL2601 rollback and continued API availability; approval boundaries previously passed eight tests. Diff whitespace check passed. Browser verification was unavailable because the Windows sandbox helper failed during CUA initialization. Existing build warnings remain. The SQL Server rehearsal run is waiting_for_approval; exact SQL parsing and migration rollout are NOT verified. Production release and original record recovery remain pending. No real PM Now/reject/approve action was executed.
+
+## Authorized production release - 2026-10-10
+
+Historical pending gates above are superseded for API/web: exact runtime c789ff3 is deployed, SQL backup 5047 VERIFYONLY and exact migration passed, 19 table fingerprints unchanged, and both services healthy. Full evidence and remaining browser/mobile limitations are recorded in [deployment reference](deployment-and-environment.md#production-pm-workflow-and-site-repair---2026-10-10). No original failed rejection was automatically replayed; reviewers may retry it. Mobile APK remains separate.

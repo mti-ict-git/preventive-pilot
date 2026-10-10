@@ -667,7 +667,7 @@ Reference: [PM workflow repair](pm-workflow-repair-20261009.md) and [site fallba
 - [x] Implement started/running submission guards, desktop revision action, rejection queue refresh and controlled SQL errors; update OpenAPI.
 - [x] Implement actual/default Snipe-IT site precedence without inventing unmapped sites.
 - [x] Run 36 targeted execution, approval, scheduling and site regressions on the integrated tracked candidate.
-- [ ] Execute exact SQL migration rehearsal and production duplicate preflight.
-- [ ] Verify backup and perform scoped API/web release, record revision/images and acceptance.
+- [x] Execute exact SQL migration rehearsal and production duplicate preflight.
+- [x] Verify backup and perform scoped API/web release, record revision/images and health/SQL/public acceptance.
 
-Production release remains pending verification; mobile APK changes are separate and not included in this tracked release.
+Production API/web release c789ff3 verified: backup 5047, exact SQL migration, 19 unchanged table fingerprints, zero duplicates and healthy services. See deployment reference. Interactive browser acceptance remains unperformed because the CUA helper failed; mobile APK changes are separate and not included in this tracked release.
