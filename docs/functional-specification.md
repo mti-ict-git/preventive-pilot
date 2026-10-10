@@ -269,3 +269,12 @@ Label Designer paper presets are shared with all users and can be created by Adm
 Unified label safe area (2026-10-08) supersedes prior independent border/content geometry. Effective content inset is the maximum of requested padding, the calibration-aware printable margin, and (when enabled) effective border inset plus 0.6mm. On 18mm tape the printable margin is 1.5mm plus absolute vertical offset. Company Asset reserves distinct logo/header, caption, asset name, QR including quiet zone, and rotated-warning regions. Text may fit within its region down to 5pt; QR retains the requested size and invalid configurations fail with guidance. Preview generation validates the entire selected batch; Print/Export remain disabled while rendering or invalid. Requested/effective border inset and effective content dimensions are displayed. Saved preset values remain unchanged and are revalidated on application. No backend/API/schema changes.
 
 The vertical warning uses one line when it fits at 5pt or larger; otherwise its two words use separate reserved vertical columns. It never overlaps QR or drops below 5pt.
+
+### Calendar task actions — 2026-10-08
+
+The Scheduling day-event card exposes Task actions for unfinished materialized tasks. It opens the existing task detail/execution/review dialog in place; all status, role and ownership restrictions match PM Tasks. Completed/cancelled tasks and projected occurrences do not receive this trigger. Closing preserves the selected calendar month/day and refreshes calendar events/capacity, task lists/counts and approval queues. No calendar click starts, cancels or approves a task automatically.
+
+
+### Technician label customization - 2026-10-08
+
+Technicians can use Standard/Company Asset layouts, built-in or saved paper presets, and change all local label parameters (dimensions, orientation, QR/content, logo, border, print offset and preview columns) for printing/export. Validated drafts remain user-scoped in browser storage across reloads. Save Defaults and creation of shared paper presets remain Admin/Superadmin-only; no shared settings API authorization is broadened. Existing loading/error/generation and output-validation guards still apply.

@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  ClipboardList,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,8 @@ import {
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { isManager, isSuperadmin } from "@/lib/auth";
+
+import { TaskDetailDialog } from "@/pages/Tasks";
 
 const DAILY_CAPACITY_MINUTES = 480;
 
@@ -76,6 +79,15 @@ const Scheduling = () => {
   });
 
   const queryClient = useQueryClient();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const refreshTaskViews = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["scheduling"] }),
+      queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+      queryClient.invalidateQueries({ queryKey: ["task-stats"] }),
+      queryClient.invalidateQueries({ queryKey: ["approvals"] }),
+    ]);
+  };
 
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
@@ -878,6 +890,10 @@ const Scheduling = () => {
                           const badgeVariant =
                             item.bucket === "overdue" ? "destructive" : item.bucket === "due" ? "secondary" : "outline";
 
+                          const actionableTask = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)
+                            && !item.completedAt && item.status !== "completed" && item.status !== "cancelled"
+                            && !item.bucket.startsWith("completed");
+
                           return (
                             <div
                               key={item.id}
@@ -904,6 +920,20 @@ const Scheduling = () => {
                                 </div>
                                 <div className="text-xs text-muted-foreground whitespace-nowrap capitalize">{item.bucket === "pending" ? "Awaiting review" : item.status.replace(/_/g, " ")}</div>
                               </div>
+                              {actionableTask && (
+                                <div className="mt-3 border-t border-border/60 pt-3">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    aria-label={`Task actions for ${item.taskNumber}`}
+                                    onClick={() => setSelectedTaskId(item.id)}
+                                  >
+                                    <ClipboardList className="mr-2 h-4 w-4" aria-hidden="true" />
+                                    Task actions
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -916,6 +946,20 @@ const Scheduling = () => {
           </div>
         </div>
       </div>
+
+      <TaskDetailDialog
+        key={selectedTaskId ?? "calendar-task"}
+        open={selectedTaskId !== null}
+        taskId={selectedTaskId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedTaskId(null);
+            void refreshTaskViews();
+          }
+        }}
+        onStarted={refreshTaskViews}
+        onCompleted={refreshTaskViews}
+      />
 
       <Dialog
         open={ruleDialogOpen}

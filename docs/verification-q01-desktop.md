@@ -174,3 +174,30 @@ Fourteen targeted tests and 201 pinned-source Linux tests passed, including lint
 Authenticated production verified MTI-PC-005 at 45x18mm/+0.7mm: requested inset 0.5mm, effective border 2.2mm, content inset 2.8mm, safe area 39.4x12.4mm. QR14 stayed selected and blocked Print/Export; QR12 restored both and a visually clear preview. SVG translation +1.984251968503937pt and border inset 6.236220472440945pt match the shared geometry. Screenshot: label-unified-safe-area-production-view.png. No shared production defaults, business data or physical print jobs changed. Physical printer acceptance requires one user print test.
 
 Runtime source 4b072690ad998007fbc28d5d3546551bfd2f6c0b; web image sha256:d4e8144788c766a3c8435ca3a1e7cc15ef26444d1873176496ca9e3bbfb90de9. Audit /var/backups/preventive-pilot/pm-company-label-candidate-20261008T003314Z is runtime-verified. Web container 7121042e9927b25ff6b0a5cdf38702d716aa382eaf6d7ee47f8246a3ace8485e healthy, zero restarts. API image sha256:713849f102eabe8872919a2c084275d5dcc0a347254eb2e23960a80619c5a45f and container a1a812aebe4df229a405938fe7b8628153f5a8317921a750f8aab290661f09d7 unchanged, zero restarts. Public HTML/assets/SPA/404/proxy checks passed; environment/Compose, CIFS and excluded service containers preserved. Web rollback tag rollback-pm-history-20261008T003314Z retained, not exercised. Existing chunk-size/Browserslist warnings and 14 undocumented API operations remain. Global UI audit reports 59 existing findings, not globally clean; its LabelDesigner native-select finding targets imported Radix Select. Private audit: pm-unified-label-ui-audit.json.
+## Scheduling day-event task actions - 2026-10-08
+
+Locally implemented: Scheduling.tsx exposes Task actions for unfinished materialized tasks, reusing the existing Tasks TaskDetailDialog. Completed/cancelled events and projected occurrences are excluded. Calendar month/day remains mounted; start/completion callbacks and modal close refresh scheduling, tasks, task-stats and approvals. No backend, SQL, permission or API contract change; OpenAPI reviewed and unchanged.
+
+Final frontend app/node typechecks, lint, production Vite build, documentation/OpenAPI parity and diff whitespace checks passed. An initial misplaced guard was caught by typecheck and corrected before repeated verification. Existing large-bundle warning remains. Premium strict static audit reports 58 existing ownership/form findings; no premium compliance pass is claimed.
+
+Release blocked: automatic approval review rejected commit/push to the existing mti-ict-git/preventive-pilot GitHub repository, requesting explicit exact-payload/destination authorization. No commit, push or activation occurred. Browser state/keyboard/completed/projected acceptance and scoped web release remain pending; roadmap acceptance remains open.
+
+
+## Technician label customization - 2026-10-08
+
+Local layout permission now includes Technician independently of Admin/Superadmin shared persistence. Browser hydration and autosave use that local permission; Save Defaults and new shared preset controls/handlers remain administrator-only. Backend requireSystemAdmin and OpenAPI unchanged. Synthetic fixture supports Technician and rejects its shared-settings PUT.
+
+Evidence: all 14 label PDF/draft tests pass. Frontend app typecheck passes. Synthetic technician browser verifies editable size changed to 60x18, Print/Export enabled after asset selection, restored 60x18 draft after reload, Standard/Company Asset popup and switching, no Save Defaults/new shared preset triggers. Screenshot: label-technician-custom-20261008.png. Production not modified. Full lint currently fails on 22 no-undef errors in unrelated mobile/pm-tech/scripts/session-tests.mjs; scoped lint skips TSX under the current ESLint config, so no TSX lint pass is claimed. Release still pending the previously requested explicit push/deployment approval.
+
+
+## Calendar actions and technician label release - 2026-10-09
+
+Source release: `f8023cd80b8226a6c2acf8a5b09175d371398ece`. Only the web service was activated, using an isolated exact-commit Docker candidate. Mobile and the unpublished Snipe-IT fallback change were excluded.
+
+Validation passed in the candidate build: lint, both frontend TypeScript projects, 14 label PDF/draft tests, documentation checks and production build. Existing bundle-size/documentation-coverage warnings remain.
+
+Production verification passed: web healthy with the exact source revision, public HTML and JS/CSS bytes matched the candidate, scheduling/label-designer/tasks/assets routes served the release, and the nginx API documentation proxy worked. All excluded running containers retained their container IDs and images; API remained healthy. Environment and Compose files were unchanged. No database migration or business-data correction was performed.
+
+Audit: `/var/backups/preventive-pilot/calendar-label-web-20261009T085700Z/state.json`. Image: `sha256:0b7568b136c93af5f2d933d2d6787c1702327bfe4ea9998366d5310a76ff9e27`. Rollback tag: `preventive-pilot-web:rollback-calendar-label-20261009T085700Z`.
+
+Production browser interaction acceptance remains OPEN because the Codex browser kernel failed during Windows sandbox setup. Prior synthetic technician customization/draft acceptance is recorded separately and is not production-browser evidence. Calendar month/day preservation and modal keyboard interaction must still be exercised in a working browser; do not mark those checks complete based on deployment health.
