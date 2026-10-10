@@ -671,3 +671,5 @@ Reference: [PM workflow repair](pm-workflow-repair-20261009.md) and [site fallba
 - [x] Verify backup and perform scoped API/web release, record revision/images and health/SQL/public acceptance.
 
 Production API/web release c789ff3 verified: backup 5047, exact SQL migration, 19 unchanged table fingerprints, zero duplicates and healthy services. See deployment reference. Interactive browser acceptance remains unperformed because the CUA helper failed; mobile APK changes are separate and not included in this tracked release.
+
+Web login follow-up 2026-10-10: corrected wrong build argument /api to established Compose /. Web-only image 297aacc deployed; compiled public login URL and empty-body endpoint validation passed. Prior health-only acceptance missed the functional URL problem. Password login confirmation is pending user verification; no backend/schema change.
