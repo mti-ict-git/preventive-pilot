@@ -659,3 +659,15 @@ Production verification passed: web healthy with the exact source revision, publ
 Audit: `/var/backups/preventive-pilot/calendar-label-web-20261009T085700Z/state.json`. Image: `sha256:0b7568b136c93af5f2d933d2d6787c1702327bfe4ea9998366d5310a76ff9e27`. Rollback tag: `preventive-pilot-web:rollback-calendar-label-20261009T085700Z`.
 
 Production browser interaction acceptance remains OPEN because the Codex browser kernel failed during Windows sandbox setup. Prior synthetic technician customization/draft acceptance is recorded separately and is not production-browser evidence. Calendar month/day preservation and modal keyboard interaction must still be exercised in a working browser; do not mark those checks complete based on deployment health.
+
+### Selected PM workflow and site correction - 2026-10-10
+
+Reference: [PM workflow repair](pm-workflow-repair-20261009.md) and [site fallback](snipe-site-fallback-20261009.md). User authorized push, isolated SQL rehearsal, backup/migration and scoped API/web release. Preserve the calendar and label changes already published on main.
+
+- [x] Implement started/running submission guards, desktop revision action, rejection queue refresh and controlled SQL errors; update OpenAPI.
+- [x] Implement actual/default Snipe-IT site precedence without inventing unmapped sites.
+- [x] Run 36 targeted execution, approval, scheduling and site regressions on the integrated tracked candidate.
+- [ ] Execute exact SQL migration rehearsal and production duplicate preflight.
+- [ ] Verify backup and perform scoped API/web release, record revision/images and acceptance.
+
+Production release remains pending verification; mobile APK changes are separate and not included in this tracked release.

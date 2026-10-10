@@ -278,3 +278,7 @@ The Scheduling day-event card exposes Task actions for unfinished materialized t
 ### Technician label customization - 2026-10-08
 
 Technicians can use Standard/Company Asset layouts, built-in or saved paper presets, and change all local label parameters (dimensions, orientation, QR/content, logo, border, print offset and preview columns) for printing/export. Validated drafts remain user-scoped in browser storage across reloads. Save Defaults and creation of shared paper presets remain Admin/Superadmin-only; no shared settings API authorization is broadened. Existing loading/error/generation and output-validation guards still apply.
+
+### PM submission and review correction - 2026-10-10
+
+A technician must Start or Resume PM before submitting: submission requires in_progress and StartedAt. Open or paused work returns TASK_NOT_STARTED (409). Supervisor and Superadmin task review includes Revise with a required reason and the established stage routing. Reject preserves original history and creates one linked replacement for the technician; transaction failure leaves the original queue unchanged and reports failure. Actual Snipe-IT location takes precedence over rtd_location; a valid mapped default site is used only when actual location is absent. Unknown sites remain unresolved.
