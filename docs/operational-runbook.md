@@ -57,3 +57,9 @@ Run the committed CI commands from [.github/workflows/verify.yml](../.github/wor
 ## Existing Git publication credential — 2026-10-05
 
 The selected Preventive Pilot checkout already has `PAT_GIT` in its untracked runtime `.env`. Check for that key before attempting a new GitHub connector or interactive credential flow. For an authorized push to the verified repository remote, use a short-lived per-process Git HTTP authorization header derived from that PAT; do not put it in the remote URL, command arguments, persistent Git config, output, release archive or documentation. Clear credential helpers for that invocation if they trigger an unexpected prompt. Verify the resulting remote SHA. The token value must remain private.
+
+## Desktop web build arguments and login gate - 2026-10-10
+
+Desktop VITE_API_BASE_URL is an origin/base before the API prefix. src/lib/api.ts appends /api/auth/login and /api/auth/refresh itself. The established Compose build argument is /, normalized to an empty same-origin base; never substitute /api. An isolated exact-commit Docker build must copy the resolved Compose build arguments, not infer them from the proxy route. Record arguments beside image/source digests; image revision alone does not identify a frontend configuration.
+
+Before activation, verify the built login URL contains exactly one /api prefix. Public HTML/assets and /api/docs.json health do not prove the frontend login destination. Verify request routing with an empty login payload (400 Invalid request, no real credential attempt); interactive successful login remains a separate acceptance step. Retain API identity for a web-only configuration correction.
