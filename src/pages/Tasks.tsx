@@ -42,9 +42,7 @@ import {
   apiDeleteEvidence,
   apiDownloadChecklistEvidence,
   apiDownloadEvidence,
-  apiAssignTask,
   apiClaimTask,
-  apiGetLookups,
   apiListAssignableUsers,
   ApiError,
   apiGetTask,
@@ -67,14 +65,14 @@ import {
   type TaskListItem,
   type TaskView,
   type TaskSort,
-  type LookupRole,
-  type UserSummary,
 } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { isManager, isSuperadmin, hasRole, getJwtClaims } from "@/lib/auth";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ReportBreakdownDialog } from "@/components/workorders/ReportBreakdownDialog";
+
+import { TaskAssignmentDialog } from "@/components/tasks/TaskAssignmentDialog";
+import { getTaskAssignmentLockReason } from "@/lib/taskAssignment";
 
 const Tasks = () => {
   const navigate = useNavigate();
@@ -179,76 +177,8 @@ const Tasks = () => {
     if (tasksQuery.isSuccess && page > pageCount) setPage(pageCount);
   }, [tasksQuery.isSuccess, page, pageCount]);
 
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assignTaskId, setAssignTaskId] = useState<string | null>(null);
-  const [assignMode, setAssignMode] = useState<"user" | "role" | "unassigned">("user");
-  const [assignUserId, setAssignUserId] = useState<string>("");
-  const [assignRoleId, setAssignRoleId] = useState<string>("");
-
-  const lookupsQuery = useQuery({
-    queryKey: ["lookups"],
-    queryFn: apiGetLookups,
-    enabled: assignDialogOpen,
-  });
-
-  const usersQuery = useQuery({
-    queryKey: ["assignable-users", { page: 1, pageSize: 500, isActive: true }],
-    queryFn: () => apiListAssignableUsers({ page: 1, pageSize: 500, isActive: true }),
-    enabled: assignDialogOpen,
-  });
-
-  const technicianOptions = useMemo(() => {
-    const users = usersQuery.data?.items ?? [];
-    return users
-      .filter((u) => u.roles.some((role) => role.trim().toLowerCase() === "technician"))
-      .slice()
-      .sort((a, b) => (a.displayName ?? a.username).localeCompare(b.displayName ?? b.username));
-  }, [usersQuery.data?.items]);
-
-  const openAssignDialogFor = (taskId: string) => {
-    setAssignTaskId(taskId);
-    const full = (tasksQuery.data?.items ?? []).find((t) => t.id === taskId);
-    if (full?.assignedTo.userId) {
-      setAssignMode("user");
-      setAssignUserId(full.assignedTo.userId);
-      setAssignRoleId("");
-    } else if (full?.assignedTo.roleId) {
-      setAssignMode("role");
-      setAssignRoleId(full.assignedTo.roleId);
-      setAssignUserId("");
-    } else {
-      setAssignMode("unassigned");
-      setAssignUserId("");
-      setAssignRoleId("");
-    }
-    setAssignDialogOpen(true);
-  };
-
-  const assignMutation = useMutation({
-    mutationFn: async () => {
-      if (!assignTaskId) throw new Error("No task selected");
-      if (assignMode === "user") {
-        if (!assignUserId) throw new Error("Select technician");
-        return apiAssignTask({ taskId: assignTaskId, assignedToUserId: assignUserId, assignedToRoleId: null });
-      }
-      if (assignMode === "role") {
-        if (!assignRoleId) throw new Error("Select role");
-        return apiAssignTask({ taskId: assignTaskId, assignedToRoleId: assignRoleId, assignedToUserId: null });
-      }
-      return apiAssignTask({ taskId: assignTaskId, assignedToUserId: null, assignedToRoleId: null });
-    },
-    onSuccess: async () => {
-      setAssignDialogOpen(false);
-      setAssignTaskId(null);
-      toast({ title: "Task assigned" });
-      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      await statsQuery.refetch();
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed";
-      toast({ title: "Assign failed", description: message, variant: "destructive" });
-    },
-  });
+  const openAssignDialogFor = (taskId: string) => setAssignTaskId(taskId);
 
   const claimMutation = useMutation({
     mutationFn: (taskId: string) => apiClaimTask(taskId),
@@ -338,11 +268,7 @@ const Tasks = () => {
 				const assetName = task.asset.name ?? (task.facility ? task.facility.locationName ?? task.facility.name ?? "" : "");
         const progress = task.checklistTotal > 0 ? Math.round((task.checklistCompleted / task.checklistTotal) * 100) : 0;
 				const isAssigned = Boolean(task.assignedTo.userId || task.assignedTo.roleId);
-                                const assignmentLocked =
-                                        task.maintenanceType === "PM" &&
-                                        (task.status === "completed" || task.status === "cancelled" || (task.approvalStatus ?? "None") === "PendingSupervisor" ||
-                                                (task.approvalStatus ?? "None") === "PendingSuperadmin" ||
-                                                (task.approvalStatus ?? "None") === "Approved");
+                                const assignmentLocked = !!getTaskAssignmentLockReason(task);
                                 const canClaim =
                                         task.maintenanceType === "PM" &&
                                         task.assignedTo.userId === null &&
@@ -723,80 +649,11 @@ const Tasks = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={assignDialogOpen} onOpenChange={(o) => setAssignDialogOpen(o)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Assign Task</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Assignment Target</Label>
-              <RadioGroup value={assignMode} onValueChange={(v) => setAssignMode(v as "user" | "role" | "unassigned")}
-                className="grid grid-cols-12 gap-2">
-                <div className="col-span-12 md:col-span-4 flex items-center gap-2">
-                  <RadioGroupItem id="assign-user" value="user" />
-                  <Label htmlFor="assign-user">User</Label>
-                </div>
-                <div className="col-span-12 md:col-span-4 flex items-center gap-2">
-                  <RadioGroupItem id="assign-role" value="role" />
-                  <Label htmlFor="assign-role">Role</Label>
-                </div>
-                <div className="col-span-12 md:col-span-4 flex items-center gap-2">
-                  <RadioGroupItem id="assign-unassigned" value="unassigned" />
-                  <Label htmlFor="assign-unassigned">Unassign</Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {assignMode === "user" ? (
-              <div className="space-y-2">
-                <Label>Technician</Label>
-                <Select value={assignUserId} onValueChange={(v) => setAssignUserId(v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select user" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {technicianOptions.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {(u.displayName ?? u.username) ?? u.username}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : assignMode === "role" ? (
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select value={assignRoleId} onValueChange={(v) => setAssignRoleId(v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(lookupsQuery.data?.roles ?? [])
-                      .slice()
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
-              <Button
-                onClick={() => assignMutation.mutate()}
-                disabled={assignMutation.isPending || (assignMode === "user" && !assignUserId) || (assignMode === "role" && !assignRoleId)}
-              >
-                {assignMutation.isPending ? "Saving…" : "Save"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <TaskAssignmentDialog
+        open={assignTaskId !== null}
+        onOpenChange={open => { if (!open) setAssignTaskId(null); }}
+        task={(tasksQuery.data?.items ?? []).find(task => task.id === assignTaskId) ?? null}
+      />
     </div>
   );
 };
@@ -809,6 +666,8 @@ export const TaskDetailDialog = (props: {
   onCompleted?: () => Promise<void> | void;
 }) => {
   const queryClient = useQueryClient();
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  useEffect(() => { setAssignmentOpen(false); }, [props.open, props.taskId]);
   const formatDurationLabel = (totalSeconds: number): string => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -1164,6 +1023,7 @@ export const TaskDetailDialog = (props: {
     task?.approvalStatus !== "Approved" &&
     normalizedStatus !== "completed" &&
     normalizedStatus !== "cancelled";
+  const assignmentLockReason = task ? getTaskAssignmentLockReason(task) : null;
   const canStart = canModify && (normalizedStatus === "open" || normalizedStatus === "scheduled");
         const canPause = canModify && normalizedStatus === "in_progress";
         const canResume = canModify && normalizedStatus === "paused";
@@ -1671,6 +1531,7 @@ export const TaskDetailDialog = (props: {
   return (
     <>
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <TaskAssignmentDialog key={props.taskId} open={props.open && assignmentOpen} onOpenChange={setAssignmentOpen} task={task ?? null} onAssigned={props.onStarted} />
       <DialogContent className="w-[95vw] max-w-5xl h-[90vh] bg-card border border-border/60 shadow-xl flex flex-col">
         <DialogHeader className="pb-4 border-b border-border">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1684,6 +1545,11 @@ export const TaskDetailDialog = (props: {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end w-full lg:w-auto">
+              {isManager() && (
+                <Button size="sm" variant="outline" disabled={!task || !!assignmentLockReason} aria-describedby={assignmentLockReason ? "task-assignment-lock" : undefined} onClick={() => setAssignmentOpen(true)}>
+                  {task?.assignedTo.userId || task?.assignedTo.roleId ? "Reassign" : "Assign"}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -1939,6 +1805,7 @@ export const TaskDetailDialog = (props: {
                       </div>
                     </div>
 
+                    {isManager() && assignmentLockReason && <p id="task-assignment-lock" className="mt-3 text-xs text-muted-foreground">{assignmentLockReason}</p>}
                     <p className="text-xs text-muted-foreground mt-3">Assigned</p>
                     <p className="text-sm text-foreground mt-1">
                       {task.assignedTo.displayName ?? task.assignedTo.roleName ?? "Unassigned"}

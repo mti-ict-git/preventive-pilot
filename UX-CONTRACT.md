@@ -82,3 +82,10 @@ Unified safe-area correction: Label Designer shows requested/effective inset and
 Unfinished materialized calendar events expose Task actions using the existing Tasks TaskDetailDialog owner. Completed/cancelled events and projected dates expose no task mutation trigger. Existing role/ownership/submission guards remain authoritative. Closing the dialog preserves the calendar month and selected date and refreshes scheduling, task counts/list and approval queues, including after pause/cancel/review.
 
 Technician Label Designer customization uses the existing local draft and shared controls. Local editing permission is separate from Admin/Superadmin shared-default/preset persistence. Technicians see editable layout parameters and can apply saved presets; shared save triggers are hidden and handlers remain guarded. Draft status does not instruct technicians to use unavailable Save Defaults.
+
+
+## Shared task assignment - 2026-10-16
+
+TaskAssignmentDialog owns Assign/Reassign for PM Tasks list and shared TaskDetailDialog, including the calendar entry point. It reuses Radix Dialog/Select/RadioGroup, shared Button/Label and the existing assignment API. Supervisor/Admin/Superadmin triggers remain manager-only. PendingSupervisor/PendingSuperadmin PM work displays a revision-first explanation; Approved/completed/cancelled PM history stays locked. No server permission is widened.
+
+Existing user/role assignment prepopulates once per open task without overwriting edits during polling. Select values cannot be cleared by the native form bridge during asynchronous option loading. Options expose loading, empty and inline failure/Retry states. Save disables repeat submission; failure keeps selections and the popup; success closes only assignment, updates task/list/count/approval queries and invokes the owning calendar refresh. The outer task, URL filters and selected calendar context remain mounted. Escape/Cancel restore focus to the invoking control. Instance-specific field IDs avoid nested-modal collisions. The authored Select owner is src/components/ui/select.tsx, not an OS-owned native select.

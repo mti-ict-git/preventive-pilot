@@ -708,3 +708,17 @@ Output: corrected local mobile web preview. Earlier debug APK is unchanged. Nati
 
 
 - [x] Fix mobile approval checklist precedence and refresh; TypeScript/checklist-state regressions passed (2026-10-08). APK rebuild verification follows in apk-publish.md.
+
+
+### Workspace reconciliation and desktop assignment parity - 2026-10-16
+
+Objective: integrate existing upstream releases without losing local corrections, and expose manager assignment in the shared desktop task detail.
+Sources: AGENTS.md, README, AS-01 functional/security rules, UX-CONTRACT.md, OpenAPI and TRAE read-only inspection.
+
+- [x] Fetch existing origin/main and preserve tracked local edits in safety/local-workspace-20261016 (3400b6f); integrate upstream fe34f78 without rewriting published history.
+- [x] Reconcile mobile evidence with upstream release records; clarify independent mobile/pm-tech Git ownership. Mobile tracked patch hashes and status before/after match; its 18 local changes remain untouched.
+- [x] Reuse one assignment dialog for list/detail/calendar; retain manager roles, pending-review locks, editable values and context after mutation.
+- [x] Pass eight targeted assignment regressions, frontend typecheck/build and synthetic browser assignment, prefill, failure, permission, keyboard and narrow-dialog checks; see verification-q01-desktop.md.
+- [ ] Publish the selected commits and perform scoped web production release/interactive acceptance; no new production assignment was performed.
+
+Output: reviewed local merge and desktop UI candidate. Backend/schema/OpenAPI unchanged after explicit contract review. Broader D2/D3 and native-mobile publication remain separate.

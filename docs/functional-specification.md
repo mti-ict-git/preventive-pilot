@@ -295,3 +295,8 @@ Task and Work Order screens fit 320px-wide phone viewports without horizontal do
 ## Mobile approval checklist stale draft fix - 2026-10-08
 
 Task detail now prioritizes submitted server outcomes and notes over local checklist cache. PendingSupervisor, PendingSuperadmin, Approved, completed and cancelled views ignore local checklist overrides. Task object refresh recalculates visible checklist state instead of initializing once per task ID. Unsubmitted editable drafts remain available locally when no result exists. Locked views do not auto-write checklist cache; incomplete initialization is not persisted. No server data mutation or API contract change. Typecheck and checklist-state regressions passed: all three approval phases with stale local pass/fail/blank values, absent server results, editable draft preservation and refreshed server notes. This change does not implement cross-device server draft saving for work not yet submitted.
+
+
+### Desktop assignment entry-point parity - 2026-10-16
+
+Managers can open the same Assign/Reassign dialog from a task list card or task detail, including task detail opened by Scheduling. The task can target one technician, one role queue, or be unassigned. Task detail retains its surrounding context after success. Pending PM approval requires revision before reassignment; approved/completed/cancelled PM history is unavailable. Existing backend authorization and API payloads remain unchanged. Technician role claiming remains a separate operation.
