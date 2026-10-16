@@ -722,3 +722,14 @@ Sources: AGENTS.md, README, AS-01 functional/security rules, UX-CONTRACT.md, Ope
 - [ ] Publish the selected commits and perform scoped web production release/interactive acceptance; no new production assignment was performed.
 
 Output: reviewed local merge and desktop UI candidate. Backend/schema/OpenAPI unchanged after explicit contract review. Broader D2/D3 and native-mobile publication remain separate.
+
+### 2026-10-16 desktop assignment production release
+
+- Published and deployed source `f8650361355ef5a1dc2363268471bffe19a78883` after the preserved-workspace merge. The independent mobile repository was not changed or published.
+- Web-only image: `sha256:c28e1d8118d3755ff5e7cd9a6a6fe52b5df320773ae21c4ff11606e10af113a6`, revision label matches source. Built from a pinned Git archive with Compose's `VITE_API_BASE_URL=/`; activated without rebuild/pull/dependencies.
+- API image remains `sha256:111c6edc212649f746e0318160ebacba30fae91c9f6762ca09a320c10155efef`. API and every excluded running container retained their identities. Both application services healthy. Environment and Compose hashes unchanged, including runtime mount protection.
+- Public HTML and both referenced JS/CSS assets match active-image bytes. Nginx API docs proxy succeeds; empty login payload returns expected HTTP 400. No credentials or business records were submitted by verification.
+- Authenticated production Superadmin browser: opened overdue PM-20261006-206361B2 detail, opened its new Assign button, switched to User, confirmed six technician options loaded, then cancelled. Task detail and overdue state retained. No assignment was saved. Screenshot: task-assignment-production-20261016.jpg in the local review artifacts.
+- Pre-release checks: eight assignment policy/UI tests, application TypeScript check and production build passed; synthetic browser success/failure/permission/focus/narrow-layout checks recorded in desktop verification. Full premium audit retains existing debt; this is not a blanket accessibility certification.
+- Protected host evidence: `/var/backups/preventive-pilot/assignment-20261016-f865036`. Retained rollback tag: `preventive-pilot-web:rollback-20261016` (not exercised). No database migration or API activation required; OpenAPI unchanged because this is a frontend-only change.
+- Host pull, build, activation and checks executed directly by Codex using the established pinned SSH relay. This release was not executed by Hermes.
