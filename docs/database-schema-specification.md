@@ -116,3 +116,8 @@ Automatic PM retirement uses existing PMTasks cancellation fields and AuditLog; 
 The generator may restore an untouched automatically superseded future occurrence when it becomes the current need and no protected execution remains. It reuses the same task ID to respect unique occurrence indexes, retains the previous cancellation reason in an audit event, and never restores missed, skipped, manually cancelled or worked records. User-facing reopen remains blocked for automatic history. Evidence writes fence the task row; draft writes share the context lock and recheck editable status.
 
 Reviewed legacy ongoing PM Now may carry its canonical period in existing FulfilledPlannedDueAt without a CompletedAt value; this field is a period reference, not proof of completion. Raw PlannedDueAt and ScheduledDueAt remain immutable where existing unique indexes include cancelled original tasks. Finalization uses the period reference first. Calendar joins the corresponding automatically superseded original to obtain its effective scheduled date. Approved reconciliations still use PMOccurrenceResolutions.
+
+
+### Occurrence/rework uniqueness repair candidate - 2026-10-09
+
+Migration 20261009-pm-occurrence-rework-indexes.sql narrows four asset/facility scheduled/planned uniqueness filters to normal noncancelled, nonrejected rows with SourceTaskId null. Historical cancelled/rejected rows and source-linked rework retain original dates. PMReplacementSourceTask remains unique. Production activation is pending; see pm-workflow-repair-20261009.md.

@@ -8,7 +8,29 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-mobile
+# Mobile web source is versioned; native packaging ownership remains Q-06/Q-07.
+/mobile/*
+!/mobile/pm-tech/
+/mobile/pm-tech/*
+!/mobile/pm-tech/App.tsx
+!/mobile/pm-tech/index.tsx
+!/mobile/pm-tech/index.html
+!/mobile/pm-tech/index.css
+!/mobile/pm-tech/types.ts
+!/mobile/pm-tech/capacitor.config.ts
+!/mobile/pm-tech/vite.config.ts
+!/mobile/pm-tech/tailwind.config.ts
+!/mobile/pm-tech/postcss.config.cjs
+!/mobile/pm-tech/tsconfig.json
+!/mobile/pm-tech/package.json
+!/mobile/pm-tech/package-lock.json
+!/mobile/pm-tech/README.md
+!/mobile/pm-tech/components/
+!/mobile/pm-tech/providers/
+!/mobile/pm-tech/pages/
+!/mobile/pm-tech/lib/
+!/mobile/pm-tech/assets/
+!/mobile/pm-tech/scripts/
 dist
 dist-ssr
 *.local

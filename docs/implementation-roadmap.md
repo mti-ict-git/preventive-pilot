@@ -628,3 +628,78 @@ Objective: keep all Company Asset/Standard artwork clear of border and printable
 - [x] Unify content geometry, reserved Company Asset columns/rows and effective margin feedback; block invalid Print/Export without silently changing QR size.
 - [x] Verify offsets, borders, QR sizes, names, PDF/preview parity and scoped web release.
 Output and challenge: verification-q01-desktop.md; physical printer acceptance remains separate.
+
+### Selected D1 correction: Scheduling task actions — 2026-10-08
+
+- [x] Reuse the existing task detail/action owner for unfinished materialized day events without changing authorization or recurrence.
+- [ ] Verify unfinished/completed/projected cases, dialog close/calendar context, builds and scoped production web release; record evidence before closing.
+
+Scope is desktop Scheduling UI; API contracts and database remain unchanged.
+
+
+### Selected mobile correction: session restoration and task completeness - 2026-10-08
+
+User resumed mobile web review and authorized session/task fixes. This supersedes desktop-only deferral for this slice; native delivery and other mobile gates remain open. Sources: functional specification, security/access model, existing OpenAPI task/auth contracts, Q-06/Q-07/Q-11.
+
+- [x] Fix non-recursive single-flight refresh, restoration loading/retry, optional biometric failure isolation and production API fallback.
+- [x] Use server task views/search/sort/counts and pagination; retain historical records in All and assignment scope in My tasks.
+- [x] Verify synthetic session failures/concurrency, typecheck/build and authenticated read-only web review; retain APK/device acceptance separately.
+
+Output: tracked mobile web source and repeatable session tests. Native project/signing/publication and offline isolation remain unresolved. Verification is recorded below in the existing desktop verification ledger to preserve a single chronological repository trail.
+
+### Selected D1 correction: technician label customization - 2026-10-08
+
+- [x] Separate technician local layout/parameter/draft access from administrator shared defaults/preset persistence.
+- [x] Verify frontend typecheck/build, 14 PDF/draft regressions and synthetic technician browser customization/reload; see verification-q01-desktop.md. Full lint is limited by unrelated mobile errors and TSX exclusion.
+- [ ] Complete authorized scoped web release and production acceptance; prior push/deployment approval remains pending.
+
+No backend permission or API contract change. Preserve existing calendar work and unrelated mobile edits.
+
+
+### Selected mobile delivery: local debug APK - 2026-10-08
+
+User requested an APK from the corrected local mobile source. Sources: APK publication guide, mobile README and session/task verification.
+- [x] Build current web source and sync into the existing Android project.
+- [x] Compile debug APK, verify signature/package and embedded API, record artifact hash.
+Output: local installable debug artifact. No production publication, release-key signing or device acceptance implied.
+
+### Selected mobile correction: phone layouts - 2026-10-08
+
+Objective: resolve the user-reviewed clipping and overlapping controls. Sources: functional specification, DESIGN.md, mobile layout owners.
+
+- [x] Repair Work Order header, task/detail actions, wrapping filters, flexible bottom navigation and safe-area spacing.
+- [x] Verify mobile typecheck/build and browser phone layout evidence; see verification-q01-desktop.md.
+
+Output: local mobile web preview. Previously generated APK remains unchanged; native keyboard/notch testing and new APK delivery are separate.
+
+
+### Selected mobile correction: phone layouts - 2026-10-08
+
+Objective: resolve reviewed clipping and overlapping controls. Sources: functional specification, DESIGN.md and mobile layout owners.
+
+- [x] Repair Work Order header, wrapping task filters/detail metadata, flexible bottom navigation and execution footer.
+- [x] Verify typecheck/build, session regressions and browser phone widths; evidence in verification-q01-desktop.md.
+
+Output: corrected local mobile web preview. Earlier debug APK is unchanged. Native keyboard/notch verification and new APK delivery remain separate.
+
+
+- [x] Regenerate local debug APK after mobile phone layout corrections; build/signature/bundle evidence in apk-publish.md (2026-10-08). Native installation and publication remain open.
+
+
+- [x] Fix mobile approval checklist precedence and refresh; TypeScript/checklist-state regressions passed (2026-10-08). APK rebuild verification follows in apk-publish.md.
+
+
+### Selected integration correction: Snipe-IT default site fallback - 2026-10-09
+
+Source and verification: [site fallback correction](snipe-site-fallback-20261009.md).
+
+- [x] Add valid actual-location-first, default-location-second mapping and pass four regressions plus backend typecheck.
+- [ ] Push isolated release commit to origin/main, deploy API and run authorized normal sync; automatic approval review requires explicit remote-main authorization.
+- [ ] Verify master locations for PC-051/PC-127 and retained PM/task history after sync.
+
+
+### Selected PM workflow repair - 2026-10-09
+
+Reference: [PM workflow repair](pm-workflow-repair-20261009.md). Local candidate covers Submit-before-Start, missing task-dialog Revise, failed Reject queue refresh, controlled SQL failures and corrected occurrence indexes. Production release and migration are pending explicit remote-main authorization and SQL rehearsal evidence.
+
+Production release closure 2026-10-10: API/web c789ff3 deployed; backup 5047, exact migration and fingerprint checks passed. See deployment-and-environment.md production PM workflow and site repair. Browser and APK acceptance remain separate.

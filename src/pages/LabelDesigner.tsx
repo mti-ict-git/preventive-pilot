@@ -96,6 +96,7 @@ export default function LabelDesigner() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const canEditDefaults = hasAnyRole(["Superadmin", "Admin"]);
+  const canCustomizeLayout = canEditDefaults || hasAnyRole(["Technician"]);
 
 
   const lookupsQuery = useQuery({
@@ -116,7 +117,7 @@ export default function LabelDesigner() {
     staleTime: 60_000,
   });
 
-  const controlsLocked = !canEditDefaults || settingsQuery.isLoading || settingsQuery.isError || isGenerating;
+  const controlsLocked = !canCustomizeLayout || settingsQuery.isLoading || settingsQuery.isError || isGenerating;
 
   const assetsQuery = useQuery({
     queryKey: ["label-designer", "assets", { assetSearch, assetCategoryId, assetPage, assetPageSize }],
@@ -164,7 +165,7 @@ export default function LabelDesigner() {
     if (!data || hydrated.current || edited.current) return;
     hydrated.current = true;
     let draft = null;
-    try { if (canEditDefaults) draft = parseLabelDraft(localStorage.getItem(draftKey)); }
+    try { if (canCustomizeLayout) draft = parseLabelDraft(localStorage.getItem(draftKey)); }
     catch { setDraftStorageError(true); }
     const initial = draft ?? data;
     setConfig(initial.config);
@@ -172,18 +173,21 @@ export default function LabelDesigner() {
     setQrPayloadMode(initial.qrPayloadMode);
     if (draft) { edited.current = true; setIsDirty(true); }
 
-  }, [settingsQuery.data, canEditDefaults, draftKey]);
+  }, [settingsQuery.data, canCustomizeLayout, draftKey]);
 
   useEffect(() => {
-    if (!isDirty || !canEditDefaults) return;
+    if (!isDirty || !canCustomizeLayout) return;
     try {
       localStorage.setItem(draftKey, JSON.stringify({ config, gridColumns, qrPayloadMode }));
       setDraftStorageError(false);
     } catch { setDraftStorageError(true); }
-  }, [isDirty, canEditDefaults, draftKey, config, gridColumns, qrPayloadMode]);
+  }, [isDirty, canCustomizeLayout, draftKey, config, gridColumns, qrPayloadMode]);
 
   const saveDefaultsMutation = useMutation({
-    mutationFn: (settings: LabelDesignerUiSettingsResponse) => apiUpdateLabelDesignerUiSettings(settings),
+    mutationFn: (settings: LabelDesignerUiSettingsResponse) => {
+      if (!canEditDefaults) throw new Error("Only Admin/Superadmin can save shared defaults.");
+      return apiUpdateLabelDesignerUiSettings(settings);
+    },
     onSuccess: async (_data, savedSettings) => {
       if (JSON.stringify(savedSettings.config) === JSON.stringify(config) && savedSettings.qrPayloadMode === qrPayloadMode && savedSettings.gridColumns === gridColumns) {
         edited.current = false;
@@ -235,6 +239,7 @@ export default function LabelDesigner() {
   };
 
   const savePaperPreset = () => {
+    if (!canEditDefaults) return;
     const name = presetName.trim();
     if (!name || name.length > 60) { setPresetError("Enter a preset name, up to 60 characters."); return; }
     if (paperPresets.some(p => p.name.toLowerCase() === name.toLowerCase())) { setPresetError("This name already exists. Choose a different name."); return; }
@@ -378,10 +383,10 @@ export default function LabelDesigner() {
         </div>
 
         <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-          <p role="status" className="text-sm">{settingsQuery.isLoading ? "Loading saved defaults…" : settingsQuery.isError ? "Saved defaults unavailable." : isDirty ? "Unsaved changes — Print and Export use the current values. Draft retained in this browser. Save Defaults to make these the shared settings." : "Using saved defaults. Print and Export use the values shown below."}</p>
+          <p role="status" className="text-sm">{settingsQuery.isLoading ? "Loading saved defaults…" : settingsQuery.isError ? "Saved defaults unavailable." : isDirty ? "Unsaved changes — Print and Export use the current values. Draft retained in this browser." : "Using saved defaults. Print and Export use the values shown below."}</p>
           <p className="text-sm text-muted-foreground">PDF: {labelDimensions(config).width} × {labelDimensions(config).height} mm. One label per page. Match the printer tape width and label length; use actual size (100%).</p>
           {saveDefaultsMutation.isError && <p role="alert" className="text-sm text-destructive">Failed to save defaults. Your current settings and browser draft are retained. Try Save Defaults again.</p>}
-          {draftStorageError && <p role="alert" className="text-sm text-destructive">Browser draft storage is unavailable. Save Defaults to retain these settings.</p>}
+          {draftStorageError && <p role="alert" className="text-sm text-destructive">Browser draft storage is unavailable. Your changes may be lost when you leave this page.</p>}
           {settingsQuery.isError && <div role="alert">Failed to load saved defaults. <Button variant="outline" onClick={() => void settingsQuery.refetch()}>Retry</Button></div>}
         </div>
 
@@ -462,10 +467,12 @@ export default function LabelDesigner() {
                         <SelectTrigger id="paper-preset"><SelectValue placeholder={paperPresets.length ? "Choose a paper preset" : "No saved presets"} /></SelectTrigger>
                         <SelectContent>{paperPresets.map(p => <SelectItem key={p.name} value={p.name}>{p.name} / {p.width} x {p.height} mm</SelectItem>)}</SelectContent>
                       </Select>
+                      {canEditDefaults && <>
                       <Label htmlFor="paper-preset-name">New preset name</Label>
                       <Input id="paper-preset-name" maxLength={60} value={presetName} disabled={controlsLocked || saveDefaultsMutation.isPending} onChange={e => { setPresetName(e.target.value); setPresetError(null); }} aria-invalid={!!presetError} aria-describedby="paper-preset-help" placeholder="Brother 45x18 - calibrated" />
                       <Button variant="outline" disabled={controlsLocked || saveDefaultsMutation.isPending} onClick={savePaperPreset}>{saveDefaultsMutation.isPending ? "Saving..." : "Save new paper preset"}</Button>
-                      <p id="paper-preset-help" className="text-xs text-muted-foreground">Saves current defaults and a shared preset with dimensions, QR size, padding, border and print position. Applying a preset keeps your logo and content.</p>
+                      </>}
+                      <p id="paper-preset-help" className="text-xs text-muted-foreground">{canEditDefaults ? "Saves current defaults and a shared preset with dimensions, QR size, padding, border and print position. Applying a preset keeps your logo and content." : "Apply a shared preset, then customize it for your print. Your changes stay in your personal browser draft."}</p>
                       {presetError && <p role="alert" className="text-sm text-destructive">{presetError}</p>}
                     </div>
                     <Separator />
@@ -535,7 +542,7 @@ export default function LabelDesigner() {
                     <Slider aria-label="Vertical print position" min={-1} max={1} step={0.1} value={[config.printOffsetYmm ?? 0]} disabled={controlsLocked} onValueChange={([value]) => updateConfig("printOffsetYmm", value)} />
                     <div className="flex justify-between text-xs text-muted-foreground"><span>Up</span><span>Down</span></div>
                     <Button variant="outline" size="sm" disabled={controlsLocked} onClick={() => updateConfig("printOffsetYmm", 0)}>Center print position</Button>
-                    <p className="text-xs text-muted-foreground">Moves the entire design, including QR and border. Start with +0.2 mm if printing sits too high. Print one label to calibrate, then Save Defaults.</p>
+                    <p className="text-xs text-muted-foreground">Moves the entire design, including QR and border. Start with +0.2 mm if printing sits too high. Print one label to calibrate.</p>
                   </div>
                   {/* QR Size */}
                   <div className="space-y-3">

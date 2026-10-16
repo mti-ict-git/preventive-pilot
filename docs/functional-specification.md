@@ -269,3 +269,35 @@ Label Designer paper presets are shared with all users and can be created by Adm
 Unified label safe area (2026-10-08) supersedes prior independent border/content geometry. Effective content inset is the maximum of requested padding, the calibration-aware printable margin, and (when enabled) effective border inset plus 0.6mm. On 18mm tape the printable margin is 1.5mm plus absolute vertical offset. Company Asset reserves distinct logo/header, caption, asset name, QR including quiet zone, and rotated-warning regions. Text may fit within its region down to 5pt; QR retains the requested size and invalid configurations fail with guidance. Preview generation validates the entire selected batch; Print/Export remain disabled while rendering or invalid. Requested/effective border inset and effective content dimensions are displayed. Saved preset values remain unchanged and are revalidated on application. No backend/API/schema changes.
 
 The vertical warning uses one line when it fits at 5pt or larger; otherwise its two words use separate reserved vertical columns. It never overlaps QR or drops below 5pt.
+
+### Calendar task actions — 2026-10-08
+
+The Scheduling day-event card exposes Task actions for unfinished materialized tasks. It opens the existing task detail/execution/review dialog in place; all status, role and ownership restrictions match PM Tasks. Completed/cancelled tasks and projected occurrences do not receive this trigger. Closing preserves the selected calendar month/day and refreshes calendar events/capacity, task lists/counts and approval queues. No calendar click starts, cancels or approves a task automatically.
+
+
+### Mobile session/task clarification - 2026-10-08
+
+Selected mobile web scope resumed by user direction. Session restoration completes before protected-route rendering. Temporary network/server errors preserve saved tokens and offer retry; explicit logout or rejected refresh ends authentication. Concurrent expired requests share one refresh. Biometric storage is optional to successful password login. Token lifetimes and backend authorization are unchanged. Task lists use canonical server views/search/sort/counts and 25-row pagination; All retains historical/backdate records with Created newest first by default. My tasks shows authenticated assignment scope. Native APK/device acceptance remains separate.
+
+### Technician label customization - 2026-10-08
+
+Technicians can use Standard/Company Asset layouts, built-in or saved paper presets, and change all local label parameters (dimensions, orientation, QR/content, logo, border, print offset and preview columns) for printing/export. Validated drafts remain user-scoped in browser storage across reloads. Save Defaults and creation of shared paper presets remain Admin/Superadmin-only; no shared settings API authorization is broadened. Existing loading/error/generation and output-validation guards still apply.
+
+### Mobile phone layout - 2026-10-08
+
+Mobile task and Work Order screens must fit 320px-wide phone viewports without document-level horizontal scrolling. Task filters wrap, Work Order search occupies its own row, and bottom navigation uses five flexible columns. Task evidence upload is in content flow; task execution buttons retain existing permissions and use a full-width submission row. The unimplemented floating comment action and static offline-ready overlay are removed. No API or approval workflow changes.
+
+
+### Mobile phone layout - 2026-10-08
+
+Task and Work Order screens fit 320px-wide phone viewports without horizontal document scrolling. Task tabs wrap and the header scrolls with content. Work Order search occupies its own row. Bottom navigation has five flexible columns with safe-area padding. Task metadata wraps; submission has its own full-width row. Evidence upload is in content flow. Nonfunctional comment and hardcoded offline-ready overlays are removed. Permissions and API workflows remain unchanged.
+
+
+## Mobile approval checklist stale draft fix - 2026-10-08
+
+Task detail now prioritizes submitted server outcomes and notes over local checklist cache. PendingSupervisor, PendingSuperadmin, Approved, completed and cancelled views ignore local checklist overrides. Task object refresh recalculates visible checklist state instead of initializing once per task ID. Unsubmitted editable drafts remain available locally when no result exists. Locked views do not auto-write checklist cache; incomplete initialization is not persisted. No server data mutation or API contract change. Typecheck and checklist-state regressions passed: all three approval phases with stale local pass/fail/blank values, absent server results, editable draft preservation and refreshed server notes. This change does not implement cross-device server draft saving for work not yet submitted.
+
+
+### PM workflow guard repair - 2026-10-09
+
+Submission requires started in-progress work; open/paused submissions return TASK_NOT_STARTED. Task dialog exposes revision to Supervisor/Superadmin, preserving stage rules. Rejection creates linked replacement work and retains historical source. Failed rejection rolls back and must show failure, retaining the prior pending state. Controlled PM_OCCURRENCE_CONFLICT prevents SQL duplicate errors from terminating the API. See pm-workflow-repair-20261009.md for candidate/release status.
