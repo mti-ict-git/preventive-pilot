@@ -23,7 +23,7 @@ Focus first on the browser-based desktop application and its supporting backend/
 - Technician execution, attachments, supervisor review, and superadmin approval.
 - CM work orders with breakdown context, impact, downtime, and resolution.
 - Reports, task PDF/CSV outputs, mail/WhatsApp/push integration, and background jobs.
-- PM Tech mobile source is available in this local workspace; its version-control/delivery status is unresolved because `mobile` is ignored by Git.
+- PM Tech at `mobile/pm-tech` is a separate repository (`mti-ict-git/pm-tech`), intentionally ignored by this parent repository. Clone and manage it independently; a clone of Preventive Pilot does not include mobile source. Latest local mobile corrections still require their own reviewed commit.
 
 See the [functional specification](docs/functional-specification.md) for workflow semantics and known differences between product intent and existing behavior.
 

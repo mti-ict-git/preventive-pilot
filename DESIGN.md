@@ -41,3 +41,12 @@ Preserve the existing semantic CSS/Tailwind tokens, Inter typography and shared 
 ## Unified label safe area - 2026-10-08
 
 Label Designer retains existing shared Radix controls and visual tokens. PDF and SVG share one calibrated content area for logo, text, QR quiet zone and warning. On 18mm-height labels the effective border inset is at least 1.5mm plus absolute vertical offset. Content inset is the maximum of requested padding, calibrated printable clearance and effective border inset plus 0.6mm when enabled. The UI displays requested/effective margins and safe dimensions. One batch output query owns preview and print/export availability; invalid configurations show an actionable error and disable output without reducing the requested QR size. Company Asset uses reserved rows/columns; its warning splits into two vertical word columns when necessary to maintain legible type. Physical page dimensions remain unchanged.
+
+
+## Mobile session/task slice - 2026-10-08
+
+Preserve the existing mobile Tailwind tokens, Layout/BottomNav and Tasks search/sort owners. AuthProvider owns restoration loading, connection retry and invalid-session feedback; no cached profile grants access. Tasks/API owns server pagination and filtered counts. Existing native controls and unrelated mobile UI debt are outside this slice. Web review does not certify native camera, push, biometric or APK installation.
+
+## Mobile phone layout correction - 2026-10-08
+
+Preserve mobile colors and typography. BottomNav owns a five-column shell with flexible widths, single-line labels and safe-area padding. Work Orders uses separate title/actions and search rows. Task filters wrap into accessible 44px controls; the task list header scrolls with content to avoid obscuring cards on short phones. Task detail wraps metadata and keeps Start/Save on one row and Submit on a full-width row. Evidence upload remains in document flow; remove the nonfunctional comment affordance and hardcoded offline-ready overlay. Browser zoom is enabled.

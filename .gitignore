@@ -8,7 +8,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-mobile
+# PM Tech is an independent Git repository; never stage it as an accidental gitlink.
+/mobile/
+
 dist
 dist-ssr
 *.local

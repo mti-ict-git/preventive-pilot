@@ -275,6 +275,10 @@ The vertical warning uses one line when it fits at 5pt or larger; otherwise its 
 The Scheduling day-event card exposes Task actions for unfinished materialized tasks. It opens the existing task detail/execution/review dialog in place; all status, role and ownership restrictions match PM Tasks. Completed/cancelled tasks and projected occurrences do not receive this trigger. Closing preserves the selected calendar month/day and refreshes calendar events/capacity, task lists/counts and approval queues. No calendar click starts, cancels or approves a task automatically.
 
 
+### Mobile session/task clarification - 2026-10-08
+
+Selected mobile web scope resumed by user direction. Session restoration completes before protected-route rendering. Temporary network/server errors preserve saved tokens and offer retry; explicit logout or rejected refresh ends authentication. Concurrent expired requests share one refresh. Biometric storage is optional to successful password login. Token lifetimes and backend authorization are unchanged. Task lists use canonical server views/search/sort/counts and 25-row pagination; All retains historical/backdate records with Created newest first by default. My tasks shows authenticated assignment scope. Native APK/device acceptance remains separate.
+
 ### Technician label customization - 2026-10-08
 
 Technicians can use Standard/Company Asset layouts, built-in or saved paper presets, and change all local label parameters (dimensions, orientation, QR/content, logo, border, print offset and preview columns) for printing/export. Validated drafts remain user-scoped in browser storage across reloads. Save Defaults and creation of shared paper presets remain Admin/Superadmin-only; no shared settings API authorization is broadened. Existing loading/error/generation and output-validation guards still apply.
@@ -282,3 +286,12 @@ Technicians can use Standard/Company Asset layouts, built-in or saved paper pres
 ### PM submission and review correction - 2026-10-10
 
 A technician must Start or Resume PM before submitting: submission requires in_progress and StartedAt. Open or paused work returns TASK_NOT_STARTED (409). Supervisor and Superadmin task review includes Revise with a required reason and the established stage routing. Reject preserves original history and creates one linked replacement for the technician; transaction failure leaves the original queue unchanged and reports failure. Actual Snipe-IT location takes precedence over rtd_location; a valid mapped default site is used only when actual location is absent. Unknown sites remain unresolved.
+
+### Mobile phone layout - 2026-10-08
+
+Task and Work Order screens fit 320px-wide phone viewports without horizontal document scrolling. Task tabs wrap and the header scrolls with content. Work Order search occupies its own row. Bottom navigation has five flexible columns with safe-area padding. Task metadata wraps; submission has its own full-width row. Evidence upload is in content flow. Nonfunctional comment and hardcoded offline-ready overlays are removed. Permissions and API workflows remain unchanged.
+
+
+## Mobile approval checklist stale draft fix - 2026-10-08
+
+Task detail now prioritizes submitted server outcomes and notes over local checklist cache. PendingSupervisor, PendingSuperadmin, Approved, completed and cancelled views ignore local checklist overrides. Task object refresh recalculates visible checklist state instead of initializing once per task ID. Unsubmitted editable drafts remain available locally when no result exists. Locked views do not auto-write checklist cache; incomplete initialization is not persisted. No server data mutation or API contract change. Typecheck and checklist-state regressions passed: all three approval phases with stale local pass/fail/blank values, absent server results, editable draft preservation and refreshed server notes. This change does not implement cross-device server draft saving for work not yet submitted.

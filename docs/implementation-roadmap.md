@@ -632,16 +632,28 @@ Output and challenge: verification-q01-desktop.md; physical printer acceptance r
 ### Selected D1 correction: Scheduling task actions — 2026-10-08
 
 - [x] Reuse the existing task detail/action owner for unfinished materialized day events without changing authorization or recurrence.
-- [ ] Verify unfinished/completed/projected cases, dialog close/calendar context, builds and scoped production web release; record evidence before closing.
+- [x] Complete scoped production web release and recorded build/health checks (f8023cd, 2026-10-09).
+- [ ] Verify unfinished/completed/projected interactions and dialog close/calendar context in a working production browser.
 
 Scope is desktop Scheduling UI; API contracts and database remain unchanged.
 
+
+### Selected mobile correction: session restoration and task completeness - 2026-10-08
+
+User resumed mobile web review and authorized session/task fixes. This supersedes desktop-only deferral for this slice; native delivery and other mobile gates remain open. Sources: functional specification, security/access model, existing OpenAPI task/auth contracts, Q-06/Q-07/Q-11.
+
+- [x] Fix non-recursive single-flight refresh, restoration loading/retry, optional biometric failure isolation and production API fallback.
+- [x] Use server task views/search/sort/counts and pagination; retain historical records in All and assignment scope in My tasks.
+- [x] Verify synthetic session failures/concurrency, typecheck/build and authenticated read-only web review; retain APK/device acceptance separately.
+
+Output: local mobile web corrections and repeatable session tests in the separate pm-tech repository; latest corrections are not committed yet. Native project/signing/publication and offline isolation remain unresolved. Verification is recorded below in the existing desktop verification ledger to preserve a single chronological repository trail.
 
 ### Selected D1 correction: technician label customization - 2026-10-08
 
 - [x] Separate technician local layout/parameter/draft access from administrator shared defaults/preset persistence.
 - [x] Verify frontend typecheck/build, 14 PDF/draft regressions and synthetic technician browser customization/reload; see verification-q01-desktop.md. Full lint is limited by unrelated mobile errors and TSX exclusion.
-- [ ] Complete authorized scoped web release and production acceptance; prior push/deployment approval remains pending.
+- [x] Complete authorized scoped web release (f8023cd, 2026-10-09).
+- [ ] Complete interactive production-browser acceptance; the earlier push approval gate is resolved.
 
 No backend permission or API contract change. Preserve existing calendar work and unrelated mobile edits.
 
@@ -673,3 +685,26 @@ Reference: [PM workflow repair](pm-workflow-repair-20261009.md) and [site fallba
 Production API/web release c789ff3 verified: backup 5047, exact SQL migration, 19 unchanged table fingerprints, zero duplicates and healthy services. See deployment reference. Interactive browser acceptance remains unperformed because the CUA helper failed; mobile APK changes are separate and not included in this tracked release.
 
 Web login follow-up 2026-10-10: corrected wrong build argument /api to established Compose /. Web-only image 297aacc deployed; compiled public login URL and empty-body endpoint validation passed. Prior health-only acceptance missed the functional URL problem. Password login confirmation is pending user verification; no backend/schema change.
+
+
+### Selected mobile delivery: local debug APK - 2026-10-08
+
+User requested an APK from the corrected local mobile source. Sources: APK publication guide, mobile README and session/task verification.
+- [x] Build current web source and sync into the existing Android project.
+- [x] Compile debug APK, verify signature/package and embedded API, record artifact hash.
+Output: local installable debug artifact. No production publication, release-key signing or device acceptance implied.
+
+### Selected mobile correction: phone layouts - 2026-10-08
+
+Objective: resolve reviewed clipping and overlapping controls. Sources: functional specification, DESIGN.md and mobile layout owners.
+
+- [x] Repair Work Order header, wrapping task filters/detail metadata, flexible bottom navigation and execution footer.
+- [x] Verify typecheck/build, session regressions and browser phone widths; evidence in verification-q01-desktop.md.
+
+Output: corrected local mobile web preview. Earlier debug APK is unchanged. Native keyboard/notch verification and new APK delivery remain separate.
+
+
+- [x] Regenerate local debug APK after mobile phone layout corrections; build/signature/bundle evidence in apk-publish.md (2026-10-08). Native installation and publication remain open.
+
+
+- [x] Fix mobile approval checklist precedence and refresh; TypeScript/checklist-state regressions passed (2026-10-08). APK rebuild verification follows in apk-publish.md.
